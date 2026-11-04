@@ -383,7 +383,7 @@ export default function AgentConfigurationPicker({ value, options, loading = fal
           {selected?.roles && (
             <div className="mt-1 border-t border-border px-2.5 pt-2 pb-1">
               <p className="mb-1 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
-                현재: {selected.label}
+                {t('input.agentConfigurationCurrent')}: {selected.label}
               </p>
               <div className="grid grid-cols-[4.25rem_1fr] gap-x-2 gap-y-1">
                 {Object.entries(ROLE_LABELS).map(([role, label]) => {

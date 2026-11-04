@@ -104,7 +104,7 @@ export default function ProviderQuotaRing({ entry, now = Date.now(), tooltipPosi
         role="img"
         aria-label={summary}
         data-testid={`quota-ring-${entry.provider}`}
-        className={cn('relative flex shrink-0 items-center justify-center', hasReading ? '' : 'opacity-60')}
+        className={cn('relative flex shrink-0 items-center justify-center', hasReading && remaining !== 0 ? '' : 'opacity-60')}
         style={{ width: SIZE, height: SIZE }}
       >
         <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} className="-rotate-90" aria-hidden>
@@ -116,16 +116,15 @@ export default function ProviderQuotaRing({ entry, now = Date.now(), tooltipPosi
             strokeWidth={STROKE}
             className="stroke-border"
             data-testid={`quota-track-${entry.provider}`}
-            {...(hasReading ? {} : { strokeDasharray: TRACK_DASH })}
+            {...(!hasReading || remaining === 0 ? { strokeDasharray: TRACK_DASH } : {})}
           />
-          {remaining === undefined ? null : (
+          {remaining === undefined || remaining === 0 ? null : (
             <circle
               cx={center}
               cy={center}
               r={RADIUS}
               fill="none"
               strokeWidth={STROKE}
-              strokeLinecap="round"
               strokeDasharray={`${(CIRCUMFERENCE * remaining) / 100} ${CIRCUMFERENCE}`}
               className={cn('transition-[stroke-dasharray] duration-500', isLow ? 'stroke-destructive' : 'stroke-primary')}
               data-testid={`quota-arc-${entry.provider}`}

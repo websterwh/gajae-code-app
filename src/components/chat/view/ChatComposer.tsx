@@ -84,6 +84,7 @@ interface ChatComposerProps {
       | KeyboardEvent<HTMLTextAreaElement>,
   ) => void;
   onSteer: (event: MouseEvent<HTMLButtonElement>) => void;
+  onBtw?: () => void;
   isDragActive: boolean;
   /** Model pinned to this session, if any; outranks the last-run model. */
   sessionPinnedModel?: string | null;
@@ -162,6 +163,7 @@ export default function ChatComposer({
   onShowTokenUsage,
   onSubmit,
   onSteer,
+  onBtw,
   isDragActive,
   sessionPinnedModel,
   sessionLocationControl,
@@ -525,6 +527,17 @@ export default function ChatComposer({
 
           <div data-slot="prompt-input-actions" className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
             <ContextUsageRing sessionState={sessionState} onClick={onShowTokenUsage} />
+            {onBtw && (
+              <PromptInputButton
+                onClick={() => onBtw()}
+                disabled={composerFrozen}
+                tooltip={{ content: t('input.btw') }}
+                aria-label={t('input.btw')}
+                className="shrink-0 rounded-full border border-border/70 bg-background/70 px-2 text-[10px] font-semibold text-muted-foreground hover:border-primary/30 hover:text-foreground"
+              >
+                btw
+              </PromptInputButton>
+            )}
             {canSteer && (
               <PromptInputButton
                 onClick={onSteer}

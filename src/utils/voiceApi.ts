@@ -12,11 +12,12 @@ export function voiceConfigSignature(): string {
 export function transcribeVoice(blob: Blob, filename: string): Promise<Response> {
   const config = readVoiceConfig();
   const body = new FormData();
+  const sttUrl = (config.sttBaseUrl.trim() || config.baseUrl.trim());
 
-  if (config.baseUrl.trim()) {
+  if (sttUrl) {
     body.append('file', blob, filename);
     body.append('model', config.sttModel || 'whisper-1');
-    return fetch(directUrl(config.baseUrl.trim(), '/audio/transcriptions'), {
+    return fetch(directUrl(sttUrl, '/audio/transcriptions'), {
       method: 'POST',
       headers: config.apiKey ? { Authorization: `Bearer ${config.apiKey}` } : {},
       body,
@@ -33,9 +34,10 @@ export function transcribeVoice(blob: Blob, filename: string): Promise<Response>
 
 export function synthesizeVoice(text: string, signal: AbortSignal): Promise<Response> {
   const config = readVoiceConfig();
+  const ttsUrl = (config.ttsBaseUrl.trim() || config.baseUrl.trim());
 
-  if (config.baseUrl.trim()) {
-    return fetch(directUrl(config.baseUrl.trim(), '/audio/speech'), {
+  if (ttsUrl) {
+    return fetch(directUrl(ttsUrl, '/audio/speech'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
