@@ -94,12 +94,11 @@ export type SessionModelGroup = { group: string; available: boolean; models: Ses
 
 /**
  * Every model the presets name, grouped by provider, with the runtime's word
- * on which of them can run with the stored subscriptions. A model the
- * runtime did not list is still shown - dimmed and unselectable - so a
- * person sees what signing in to that provider would unlock, instead of a
- * provider that silently has no models. When the runtime could not be asked
- * (`availabilityKnown` false: no `MODELS`, worker startup failure, stale
- * cache) nothing is dimmed; the preset selectors keep the picker usable.
+ * on which of them can run with the stored subscriptions. Once the runtime
+ * answers, it is authoritative: only its usable model rows are shown. When
+ * the runtime could not be asked (`availabilityKnown` false: no `MODELS`,
+ * worker startup failure, stale cache), preset selectors keep the picker
+ * usable.
  */
 export function deriveSessionModelOptions(
   modelOptions: ProviderModelOption[],
@@ -117,7 +116,9 @@ export function deriveSessionModelOptions(
       // profile name leaking out of config.yml) is not a selectable model.
       if (typeof selector !== 'string') continue;
       const model = stripEffortSuffix(selector.trim());
-      if (model.includes('/') && !seen.has(model)) seen.set(model, { value: model, label: compactModel(model), available: !availabilityKnown });
+      if (!availabilityKnown && model.includes('/') && !seen.has(model)) {
+        seen.set(model, { value: model, label: compactModel(model), available: true });
+      }
     }
   }
   const groups = new Map<string, SessionModelChoice[]>();
