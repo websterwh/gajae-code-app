@@ -566,11 +566,7 @@ async function configuredDefaultModelId(
   if (roleModelId) return roleModelId;
 
   const profileName = settings.get('modelProfile.default');
-  if (typeof profileName !== 'string' || !profileName) {
-    const fallback = availableModels[0];
-    if (fallback) return `${fallback.provider}/${fallback.id}`;
-    throw new GjcModelResolutionError();
-  }
+  if (typeof profileName !== 'string' || !profileName) throw new GjcModelResolutionError();
 
   // ModelRegistry loads models.yml user profiles and merges them with builtins.
   const profile = modelRegistry.getModelProfile(profileName) ?? mergeModelProfiles().get(profileName);
@@ -877,6 +873,10 @@ export class GjcBunSdkAdapter implements GjcWorkerRuntime {
   }
 
   async #modelCatalog() {
+    // OAuth-backed providers such as Google Antigravity discover their models
+    // after credentials are loaded. Refresh before filtering so the picker
+    // reflects a CLI login made after this worker started.
+    await this.modelRegistry.refresh();
     const seen = new Set<string>();
     const models = [];
     const candidates = await modelsForCredential(this.authStorage, this.modelRegistry, { kind: 'stored' });
