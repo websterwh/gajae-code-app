@@ -296,6 +296,7 @@ async function fixture(
     /** Providers `peekApiKey` reports a key for (models.yml apiKey/apiKeyEnv, env fallback). */
     resolvableProviders: new Set<string>(),
     exportSnapshot() { return { credentials: this.credentials }; },
+    async reload() { trace.push('authStorage.reload'); },
     async peekApiKey(provider: string) { return this.resolvableProviders.has(provider) ? 'peeked-key' : undefined; },
     /** The stored row the runtime's own account selection settled on, per provider. */
     sessionRows: new Map<string, number>(),
@@ -932,7 +933,7 @@ test('model catalog refreshes OAuth-discovered models before filtering providers
     assert.deepEqual((await f.adapter.modelCatalog()).models.map((model) => model.value), [
       'google-antigravity/gemini-3.8-flash-tiered',
     ]);
-    assert.deepEqual(f.trace, ['modelRegistry.refresh']);
+    assert.deepEqual(f.trace, ['authStorage.reload', 'modelRegistry.refresh']);
   } finally {
     await f.close();
   }
