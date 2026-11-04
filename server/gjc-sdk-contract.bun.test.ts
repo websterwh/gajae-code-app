@@ -316,6 +316,7 @@ async function fixture(
     getAll: () => models,
     getAvailable: () => models,
     getCanonicalId: (model: typeof models[number]): string | undefined => model.id,
+    isCredentiallessProvider: () => false,
     getCanonicalModelSelections: (query: { candidates?: typeof models } = {}) => {
       // The SDK selects one concrete provider per canonical record. Returning
       // every candidate here hid the catalog's original variant collapse.
@@ -911,6 +912,27 @@ test('model catalog honors registry availability and credential changes independ
     assert.deepEqual((await f.adapter.modelCatalog()).models.map((model) => model.value), ['cliproxy/gpt-6-astra']);
     f.authStorage.resolvableProviders.clear();
     assert.deepEqual((await f.adapter.modelCatalog()).models, []);
+  } finally {
+    await f.close();
+  }
+});
+
+test('model catalog refreshes OAuth-discovered models before filtering providers', async () => {
+  const antigravity = { id: 'gemini-3.8-flash-tiered', provider: 'google-antigravity' };
+  const f = await fixture('google-antigravity/gemini-3.8-flash-tiered', undefined, antigravity);
+  let discovered = false;
+  try {
+    f.authStorage.credentials.push({ id: 11, provider: 'google-antigravity' });
+    f.modelRegistry.getAvailable = () => discovered ? [antigravity] : [];
+    f.modelRegistry.refresh = async () => {
+      discovered = true;
+      f.trace.push('modelRegistry.refresh');
+    };
+
+    assert.deepEqual((await f.adapter.modelCatalog()).models.map((model) => model.value), [
+      'google-antigravity/gemini-3.8-flash-tiered',
+    ]);
+    assert.deepEqual(f.trace, ['modelRegistry.refresh']);
   } finally {
     await f.close();
   }
