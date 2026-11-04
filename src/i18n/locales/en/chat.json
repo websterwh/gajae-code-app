@@ -86,6 +86,7 @@
       "noMatches": "No configurations match.",
       "signInRequired": "Sign in to {{provider}} in Settings to use this preset"
     },
+    "agentConfigurationCurrent": "Current",
     "attachImages": "Add images",
     "attachment": {
       "onlyImages": "Only images can be attached, so {{names}} was not added. Reference a text file with @ instead, or paste its contents.",
@@ -96,6 +97,7 @@
       "dismiss": "Dismiss this notice"
     },
     "send": "Send",
+    "btw": "By the way — send a side note to the agent",
     "stop": "Stop",
     "hintText": {
       "ctrlEnter": "Send with Ctrl+Enter • newline with Shift+Enter • change modes with Tab • commands with /",

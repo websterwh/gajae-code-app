@@ -28,6 +28,10 @@ export default function VoiceSettingsTab() {
   const backend = (
     <SettingsSection title={t('voiceSettings.backendTitle')} description={t('voiceSettings.backendDescription')}>
       <div className="space-y-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <VoiceInput label={t('voiceSettings.sttBaseUrl')} placeholder="https://my-phonon-host/v1" value={voice.sttBaseUrl} onChange={(event) => updateVoice({ sttBaseUrl: event.target.value })} />
+          <VoiceInput label={t('voiceSettings.ttsBaseUrl')} placeholder="https://my-kokoro-host/v1" value={voice.ttsBaseUrl} onChange={(event) => updateVoice({ ttsBaseUrl: event.target.value })} />
+        </div>
         <VoiceInput label={t('voiceSettings.baseUrl')} placeholder="https://api.openai.com/v1" value={voice.baseUrl} onChange={(event) => updateVoice({ baseUrl: event.target.value })} />
         <VoiceInput label={t('voiceSettings.apiKey')} type="password" autoComplete="off" placeholder="sk-…" value={voice.apiKey} onChange={(event) => updateVoice({ apiKey: event.target.value })} />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">

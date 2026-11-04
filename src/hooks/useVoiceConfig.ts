@@ -1,7 +1,10 @@
 import { useState } from 'react';
 
 export type VoiceConfig = {
+  /** Shared fallback for both STT and TTS when the specific URL is empty. */
   baseUrl: string;
+  sttBaseUrl: string;
+  ttsBaseUrl: string;
   apiKey: string;
   sttModel: string;
   ttsModel: string;
@@ -10,7 +13,7 @@ export type VoiceConfig = {
 };
 
 const STORAGE_KEY = 'voiceConfig';
-const EMPTY_CONFIG: VoiceConfig = { baseUrl: '', apiKey: '', sttModel: '', ttsModel: '', ttsVoice: '', ttsFormat: '' };
+const EMPTY_CONFIG: VoiceConfig = { baseUrl: '', sttBaseUrl: '', ttsBaseUrl: '', apiKey: '', sttModel: '', ttsModel: '', ttsVoice: '', ttsFormat: '' };
 const configFields = Object.keys(EMPTY_CONFIG) as (keyof VoiceConfig)[];
 export const VOICE_CONFIG_SYNC_EVENT = 'voice-config:sync';
 
