@@ -63,31 +63,28 @@ test('a missing runtime catalog falls back to preset roles instead of an empty p
   assert.ok(groups.every((group) => group.available));
 });
 
-test('when the runtime has answered, preset models it did not list are shown dimmed and unselectable', () => {
+test('when the runtime has answered, the picker hides preset models it did not list', () => {
   const groups = deriveSessionModelOptions(
     [{ value: 'cursor/composer-2.5', label: 'Composer 2.5' }],
     catalog,
     true,
   );
 
-  // The signed-in provider first and available; the rest still listed, but not selectable.
+  // Only the signed-in provider remains selectable and visible.
   assert.deepEqual(groups[0], {
     group: 'cursor',
     available: true,
     models: [{ value: 'cursor/composer-2.5', label: 'Composer 2.5', available: true }],
   });
-  const openai = groups.find((group) => group.group === 'openai');
-  assert.equal(openai?.available, false);
-  assert.deepEqual(openai?.models, [{ value: 'openai/gpt-5.6-sol', label: 'gpt-5.6-sol', available: false }]);
-  assert.equal(groups.find((group) => group.group === 'anthropic')?.available, false);
+  assert.equal(groups.find((group) => group.group === 'openai'), undefined);
+  assert.equal(groups.find((group) => group.group === 'anthropic'), undefined);
 });
 
-test('nobody signed in: the runtime answers with nothing and every preset model is dimmed', () => {
+test('nobody signed in: the runtime answers with nothing and the picker is empty', () => {
   const groups = deriveSessionModelOptions([], catalog, true);
   const all = groups.flatMap((group) => group.models);
-  assert.equal(all.length, 3);
-  assert.ok(all.every((model) => model.available === false));
-  assert.ok(groups.every((group) => group.available === false));
+  assert.equal(all.length, 0);
+  assert.equal(groups.length, 0);
 });
 
 test('effort suffixes never leak into runtime model rows', () => {
