@@ -876,6 +876,7 @@ export class GjcBunSdkAdapter implements GjcWorkerRuntime {
     // OAuth-backed providers such as Google Antigravity discover their models
     // after credentials are loaded. Refresh before filtering so the picker
     // reflects a CLI login made after this worker started.
+    await this.authStorage.reload();
     await this.modelRegistry.refresh();
     const seen = new Set<string>();
     const models = [];
