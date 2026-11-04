@@ -497,33 +497,9 @@ export class GjcProviderModels implements IProviderModels {
 
   async getSupportedModels(): Promise<ProviderModelsDefinition> {
     const runtimeCatalog = await this.loadRuntimeModels?.().catch(() => undefined);
-    const { catalog, configuredProfiles, configuredCustom } = await getGjcPresetCatalog(this.homeDir, runtimeCatalog);
+    const { catalog } = await getGjcPresetCatalog(this.homeDir, runtimeCatalog);
     const base = catalog.OPTIONS.length > 1 ? catalog : GJC_FALLBACK_MODELS;
-    const referencedModels = new Set([
-      ...base.OPTIONS.flatMap((option) =>
-        Object.values(option.roles ?? {}).map((selector) =>
-          selector.replace(/:(?:off|minimal|low|medium|high|xhigh|max)$/, ''),
-        ),
-      ),
-      ...configuredProfiles.flatMap((profile) =>
-        profile.allModels.map((selector) =>
-          selector.replace(/:(?:off|minimal|low|medium|high|xhigh|max)$/, ''),
-        ),
-      ),
-      ...configuredCustom.models,
-    ]);
-    const referencedCanonicalIds = new Set(
-      [...referencedModels].map((selector) => selector.split('/').pop() ?? selector),
-    );
-    const customProviders = new Set(configuredCustom.providers);
-
     const models = parseRuntimeModels(runtimeCatalog)
-      .filter((model) =>
-        referencedModels.has(model.value)
-        || (model.group && customProviders.has(model.group))
-        || customProviders.has(model.value.split('/')[0])
-        || (model.canonicalId !== undefined && referencedCanonicalIds.has(model.canonicalId)),
-      )
       .map((model) => ({
         value: model.value,
         label: model.label,

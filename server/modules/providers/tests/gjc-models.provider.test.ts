@@ -202,7 +202,7 @@ test('runtime model metadata carries each model supported reasoning efforts', as
   ]);
 });
 
-test('runtime canonical models map stale preset providers to an active subscription', async (t) => {
+test('runtime catalog exposes every model available to an active subscription', async (t) => {
   const homeDir = await mkdtemp(path.join(os.tmpdir(), 'gajae-model-subscription-'));
   t.after(() => rm(homeDir, { recursive: true, force: true }));
   const agentDir = path.join(homeDir, '.gjc', 'agent');
@@ -233,7 +233,10 @@ test('runtime canonical models map stale preset providers to an active subscript
     },
   })).getSupportedModels();
 
-  assert.deepEqual(catalog.MODELS?.map((model) => model.value), ['cursor/gpt-5.6-sol-high']);
+  assert.deepEqual(catalog.MODELS?.map((model) => model.value), [
+    'cursor/gpt-5.6-sol-high',
+    'cursor/unreferenced-model',
+  ]);
   assert.equal(catalog.MODELS?.[0]?.effort?.default, 'high');
 });
 
@@ -338,12 +341,13 @@ profiles:
   assert.equal(teamFlow.roles?.default, 'custom-proxy/model-a:high');
   assert.equal(teamFlow.roles?.executor, 'custom-proxy/model-a:max');
 
-  // Both fallback models and all custom provider models should be retained
+  // Runtime availability is authoritative: every authenticated provider model
+  // remains selectable without requiring an entry in models.yml.
   const modelValues = catalog.MODELS?.map((m) => m.value) ?? [];
   assert.ok(modelValues.includes('custom-proxy/model-a'));
   assert.ok(modelValues.includes('custom-proxy/model-b'));
   assert.ok(modelValues.includes('custom-proxy/unreferenced-custom'));
-  assert.ok(!modelValues.includes('unrelated/model'));
+  assert.ok(modelValues.includes('unrelated/model'));
 });
 test('parseModelProfileConfig parses proxyProvider and proxyMode correctly', () => {
   const yaml = `
