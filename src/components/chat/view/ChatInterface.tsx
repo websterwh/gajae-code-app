@@ -378,8 +378,8 @@ function ChatInterface({
                     <button
                       type="button"
                       onClick={session.scrollToBottomAndReset}
-                      aria-label={t('input.scrollToBottom', { defaultValue: 'Scroll to bottom' })}
-                      title={t('input.scrollToBottom', { defaultValue: 'Scroll to bottom' })}
+                      aria-label={t('input.scrollToBottom', { defaultValue: 'Jump to latest' })}
+                      title={t('input.scrollToBottom', { defaultValue: 'Jump to latest' })}
                       className={session.hasNewMessagesBelow
                         ? 'pointer-events-auto flex h-8 items-center gap-1.5 rounded-full border border-primary/30 bg-primary px-3 text-xs font-medium text-primary-foreground shadow-md transition-all duration-200 hover:brightness-110'
                         : 'pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card/90 text-muted-foreground shadow-md backdrop-blur-sm transition-colors duration-150 hover:bg-accent hover:text-foreground'}

@@ -499,7 +499,10 @@ async function modelsForCredential(
   // pinned providerId/credentialId is an assertion, not a search: no probe.
   if (credential.providerId === undefined && credential.credentialId === undefined) {
     for (const provider of new Set(available.map((model) => model.provider))) {
-      if (!eligibleProviders.has(provider) && await authStorage.peekApiKey(provider) !== undefined) {
+      if (
+        !eligibleProviders.has(provider)
+        && (modelRegistry.isCredentiallessProvider(provider) || await authStorage.peekApiKey(provider) !== undefined)
+      ) {
         eligibleProviders.add(provider);
       }
     }
@@ -563,7 +566,11 @@ async function configuredDefaultModelId(
   if (roleModelId) return roleModelId;
 
   const profileName = settings.get('modelProfile.default');
-  if (typeof profileName !== 'string' || !profileName) throw new GjcModelResolutionError();
+  if (typeof profileName !== 'string' || !profileName) {
+    const fallback = availableModels[0];
+    if (fallback) return `${fallback.provider}/${fallback.id}`;
+    throw new GjcModelResolutionError();
+  }
 
   // ModelRegistry loads models.yml user profiles and merges them with builtins.
   const profile = modelRegistry.getModelProfile(profileName) ?? mergeModelProfiles().get(profileName);
@@ -622,6 +629,7 @@ async function credentialFor(
   authStorage: AuthStorage,
   credential: ExactCredentialRef,
   model: ReturnType<ModelRegistry['getAll']>[number],
+  modelRegistry: ModelRegistry,
 ): Promise<{ credentialSelector?: { provider: string; selector: { kind: 'id'; value: string }; raw: string }; credential?: { kind: 'stored'; providerId: string; credentialId: number }; dispose(): void }> {
   if (credential.kind === 'stored') {
     // The provider is derived deterministically from the pinned model; an
@@ -637,7 +645,10 @@ async function credentialFor(
       // `apiKeyEnv` pin or the env fallback, which is how the CLI runs these
       // providers. When nothing resolves either, name the model problem
       // instead of failing as a generic worker error.
-      if (await authStorage.peekApiKey(model.provider) === undefined) throw new GjcModelResolutionError();
+      if (
+        !modelRegistry.isCredentiallessProvider(model.provider)
+        && await authStorage.peekApiKey(model.provider) === undefined
+      ) throw new GjcModelResolutionError();
       return { dispose() {} };
     }
     // Without an explicit row the runtime selects the account itself, exactly
@@ -1244,7 +1255,7 @@ export class GjcBunSdkAdapter implements GjcWorkerRuntime {
       settings.override('goal.enabled', goalEnabled);
       const askController = new GjcBunAskController(writer);
       const model = await modelForWithRefresh(this.modelRegistry, configuredModelId);
-      const resolvedCredential = await credentialFor(this.authStorage, config.credential, model);
+      const resolvedCredential = await credentialFor(this.authStorage, config.credential, model, this.modelRegistry);
       let delegation: GjcDelegationExecutor | undefined;
       try {
         const permissionProvider = config.permissions
