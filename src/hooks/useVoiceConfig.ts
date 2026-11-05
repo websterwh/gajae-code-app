@@ -5,7 +5,8 @@ import { authenticatedFetch } from '../utils/api';
 export type VoiceConfig = {
   sttBaseUrl: string;
   ttsBaseUrl: string;
-  apiKey: string;
+  sttApiKey: string;
+  ttsApiKey: string;
   sttModel: string;
   ttsModel: string;
   ttsVoice: string;
@@ -13,7 +14,7 @@ export type VoiceConfig = {
 };
 
 const STORAGE_KEY = 'voiceConfig';
-const EMPTY_CONFIG: VoiceConfig = { sttBaseUrl: '', ttsBaseUrl: '', apiKey: '', sttModel: '', ttsModel: '', ttsVoice: '', ttsFormat: '' };
+const EMPTY_CONFIG: VoiceConfig = { sttBaseUrl: '', ttsBaseUrl: '', sttApiKey: '', ttsApiKey: '', sttModel: '', ttsModel: '', ttsVoice: '', ttsFormat: '' };
 const configFields = Object.keys(EMPTY_CONFIG) as (keyof VoiceConfig)[];
 export const VOICE_CONFIG_SYNC_EVENT = 'voice-config:sync';
 
@@ -28,6 +29,11 @@ function validStoredConfig(value: unknown): VoiceConfig {
   for (const field of configFields) {
     const entry = (value as Record<string, unknown>)[field];
     if (typeof entry === 'string') restored[field] = entry;
+  }
+  const legacyApiKey = (value as Record<string, unknown>).apiKey;
+  if (typeof legacyApiKey === 'string') {
+    if (!restored.sttApiKey) restored.sttApiKey = legacyApiKey;
+    if (!restored.ttsApiKey) restored.ttsApiKey = legacyApiKey;
   }
   return restored;
 }
@@ -48,7 +54,8 @@ export function voiceConfigHeaders(): Record<string, string> {
   const config = readVoiceConfig();
   const headers: Record<string, string> = {};
   const fields: Array<[keyof VoiceConfig, string]> = [
-    ['apiKey', 'x-voice-api-key'],
+    ['sttApiKey', 'x-voice-stt-api-key'],
+    ['ttsApiKey', 'x-voice-tts-api-key'],
     ['sttModel', 'x-voice-stt-model'],
     ['ttsModel', 'x-voice-tts-model'],
     ['ttsVoice', 'x-voice-tts-voice'],
@@ -85,7 +92,7 @@ export function useVoiceConfig() {
         if (disposed || !saved || typeof saved !== 'object') return;
         setConfig((current) => ({
           ...current,
-          ...validStoredConfig({ ...saved, apiKey: current.apiKey }),
+          ...validStoredConfig({ ...saved, sttApiKey: current.sttApiKey, ttsApiKey: current.ttsApiKey }),
         }));
       })
       .catch(() => {});
@@ -100,7 +107,7 @@ export function useVoiceConfig() {
       } catch {
         // Browser storage may be unavailable or full.
       }
-      const { apiKey: _apiKey, ...serverConfig } = replacement;
+      const { sttApiKey: _sttApiKey, ttsApiKey: _ttsApiKey, ...serverConfig } = replacement;
       void authenticatedFetch('/api/voice/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },

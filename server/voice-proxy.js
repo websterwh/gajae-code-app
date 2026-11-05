@@ -58,7 +58,7 @@ function voiceConfig() {
  * Resolve the voice backend config for a request. Client headers (set from the
  * user's in-app voice settings) take precedence over the server env defaults.
  * @param {import('express').Request} req
- * @returns {{sttBaseUrl: string, ttsBaseUrl: string, apiKey: string, sttModel: string, ttsModel: string, ttsVoice: string, ttsFormat: string}}
+ * @returns {{sttBaseUrl: string, ttsBaseUrl: string, sttApiKey: string, ttsApiKey: string, sttModel: string, ttsModel: string, ttsVoice: string, ttsFormat: string}}
  */
 function resolveConfig(req) {
   const h = req.headers;
@@ -68,7 +68,8 @@ function resolveConfig(req) {
     // Always use the server-side configured base URLs.
     sttBaseUrl: saved.sttBaseUrl,
     ttsBaseUrl: saved.ttsBaseUrl,
-    apiKey: String(h['x-voice-api-key'] || '') || ENV.apiKey,
+    sttApiKey: String(h['x-voice-stt-api-key'] || h['x-voice-api-key'] || '') || ENV.apiKey,
+    ttsApiKey: String(h['x-voice-tts-api-key'] || h['x-voice-api-key'] || '') || ENV.apiKey,
     sttModel: String(h['x-voice-stt-model'] || '') || saved.sttModel,
     ttsModel: String(h['x-voice-tts-model'] || '') || saved.ttsModel,
     ttsVoice: String(h['x-voice-tts-voice'] || '') || saved.ttsVoice,
@@ -270,7 +271,7 @@ router.post('/transcribe', asyncHandler(async (req, res) => {
     fd.append('model', cfg.sttModel);
     const r = await fetchWithTimeout(`${cfg.sttBaseUrl}/audio/transcriptions`, {
       method: 'POST',
-      headers: authHeader(cfg.apiKey),
+      headers: authHeader(cfg.sttApiKey),
       body: fd,
     });
     const text = await r.text();
@@ -296,7 +297,7 @@ router.post('/tts', asyncHandler(async (req, res) => {
   try {
     const r = await fetchWithTimeout(`${cfg.ttsBaseUrl}/audio/speech`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeader(cfg.apiKey) },
+      headers: { 'Content-Type': 'application/json', ...authHeader(cfg.ttsApiKey) },
       body: JSON.stringify({
         model: cfg.ttsModel,
         voice: cfg.ttsVoice,
