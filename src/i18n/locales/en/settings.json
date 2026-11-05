@@ -88,16 +88,15 @@
     "enable": "Turn on voice",
     "enableDescription": "Add microphone and read-aloud controls to messages.",
     "backendTitle": "Backend",
-    "backendDescription": "Use OpenAI, Groq, or a local service such as LocalAI, Speaches, or Kokoro-FastAPI. Leave empty for the server default.",
+    "backendDescription": "Configure separate server-side OpenAI-compatible endpoints for speech recognition and speech synthesis.",
     "sttBaseUrl": "Speech recognition URL",
     "ttsBaseUrl": "Speech synthesis URL",
-    "baseUrl": "Shared fallback URL",
     "apiKey": "Service API key",
     "sttModel": "Speech recognition model",
     "ttsModel": "Speech synthesis model",
     "voice": "Voice",
     "format": "Sound file format",
-    "note": "The browser contacts a custom base URL directly, so it must allow CORS. Leave it empty to use the server backend."
+    "note": "The app server stores endpoint URLs under its persistent data volume and proxies audio requests, so local services do not need browser CORS support."
   },
   "preferences": {
     "sections": {

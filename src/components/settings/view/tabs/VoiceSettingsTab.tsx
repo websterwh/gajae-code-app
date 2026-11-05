@@ -32,7 +32,6 @@ export default function VoiceSettingsTab() {
           <VoiceInput label={t('voiceSettings.sttBaseUrl')} placeholder="https://my-phonon-host/v1" value={voice.sttBaseUrl} onChange={(event) => updateVoice({ sttBaseUrl: event.target.value })} />
           <VoiceInput label={t('voiceSettings.ttsBaseUrl')} placeholder="https://my-kokoro-host/v1" value={voice.ttsBaseUrl} onChange={(event) => updateVoice({ ttsBaseUrl: event.target.value })} />
         </div>
-        <VoiceInput label={t('voiceSettings.baseUrl')} placeholder="https://api.openai.com/v1" value={voice.baseUrl} onChange={(event) => updateVoice({ baseUrl: event.target.value })} />
         <VoiceInput label={t('voiceSettings.apiKey')} type="password" autoComplete="off" placeholder="sk-…" value={voice.apiKey} onChange={(event) => updateVoice({ apiKey: event.target.value })} />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
           <VoiceInput label={t('voiceSettings.sttModel')} placeholder="whisper-1" value={voice.sttModel} onChange={(event) => updateVoice({ sttModel: event.target.value })} />
@@ -60,7 +59,7 @@ export default function VoiceSettingsTab() {
           />
         </div>
       </SettingsSection>
-      {ui.voiceEnabled && backend}
+      {backend}
     </div>
   );
 }

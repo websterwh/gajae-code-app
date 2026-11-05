@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-import { readVoiceConfig, VOICE_CONFIG_SYNC_EVENT } from '../../../hooks/useVoiceConfig';
+import { VOICE_CONFIG_SYNC_EVENT } from '../../../hooks/useVoiceConfig';
 import { authenticatedFetch } from '../../../utils/api';
 
 const PREFERENCES_KEY = 'uiPreferences';
@@ -58,11 +58,6 @@ export function useVoiceAvailable(): boolean {
     const refreshBackend = async () => {
       if (!preferenceEnabled) {
         setBackendAvailable(false);
-        return;
-      }
-
-      if (readVoiceConfig().baseUrl.trim()) {
-        setBackendAvailable(true);
         return;
       }
 

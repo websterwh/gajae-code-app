@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+
+import { authenticatedFetch } from '../utils/api';
 
 export type VoiceConfig = {
-  /** Shared fallback for both STT and TTS when the specific URL is empty. */
-  baseUrl: string;
   sttBaseUrl: string;
   ttsBaseUrl: string;
   apiKey: string;
@@ -13,7 +13,7 @@ export type VoiceConfig = {
 };
 
 const STORAGE_KEY = 'voiceConfig';
-const EMPTY_CONFIG: VoiceConfig = { baseUrl: '', sttBaseUrl: '', ttsBaseUrl: '', apiKey: '', sttModel: '', ttsModel: '', ttsVoice: '', ttsFormat: '' };
+const EMPTY_CONFIG: VoiceConfig = { sttBaseUrl: '', ttsBaseUrl: '', apiKey: '', sttModel: '', ttsModel: '', ttsVoice: '', ttsFormat: '' };
 const configFields = Object.keys(EMPTY_CONFIG) as (keyof VoiceConfig)[];
 export const VOICE_CONFIG_SYNC_EVENT = 'voice-config:sync';
 
@@ -77,6 +77,21 @@ export function useVoiceConfig() {
     typeof window === 'undefined' ? blankConfig() : readVoiceConfig()
   ));
 
+  useEffect(() => {
+    let disposed = false;
+    void authenticatedFetch('/api/voice/config')
+      .then(async (response) => response.ok ? await response.json() : null)
+      .then((saved) => {
+        if (disposed || !saved || typeof saved !== 'object') return;
+        setConfig((current) => ({
+          ...current,
+          ...validStoredConfig({ ...saved, apiKey: current.apiKey }),
+        }));
+      })
+      .catch(() => {});
+    return () => { disposed = true; };
+  }, []);
+
   const update = (patch: Partial<VoiceConfig>) => {
     setConfig((current) => {
       const replacement = { ...current, ...patch };
@@ -85,6 +100,12 @@ export function useVoiceConfig() {
       } catch {
         // Browser storage may be unavailable or full.
       }
+      const { apiKey: _apiKey, ...serverConfig } = replacement;
+      void authenticatedFetch('/api/voice/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(serverConfig),
+      }).catch(() => {});
       return replacement;
     });
   };
