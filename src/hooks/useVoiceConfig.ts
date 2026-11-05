@@ -8,13 +8,12 @@ export type VoiceConfig = {
   sttApiKey: string;
   ttsApiKey: string;
   sttModel: string;
-  ttsModel: string;
   ttsVoice: string;
   ttsFormat: string;
 };
 
 const STORAGE_KEY = 'voiceConfig';
-const EMPTY_CONFIG: VoiceConfig = { sttBaseUrl: '', ttsBaseUrl: '', sttApiKey: '', ttsApiKey: '', sttModel: '', ttsModel: '', ttsVoice: '', ttsFormat: '' };
+const EMPTY_CONFIG: VoiceConfig = { sttBaseUrl: '', ttsBaseUrl: '', sttApiKey: '', ttsApiKey: '', sttModel: '', ttsVoice: '', ttsFormat: '' };
 const configFields = Object.keys(EMPTY_CONFIG) as (keyof VoiceConfig)[];
 export const VOICE_CONFIG_SYNC_EVENT = 'voice-config:sync';
 
@@ -57,7 +56,6 @@ export function voiceConfigHeaders(): Record<string, string> {
     ['sttApiKey', 'x-voice-stt-api-key'],
     ['ttsApiKey', 'x-voice-tts-api-key'],
     ['sttModel', 'x-voice-stt-model'],
-    ['ttsModel', 'x-voice-tts-model'],
     ['ttsVoice', 'x-voice-tts-voice'],
   ];
 
