@@ -37,8 +37,7 @@ export default function VoiceSettingsTab() {
           <div className="space-y-4">
             <VoiceInput label={t('voiceSettings.ttsBaseUrl')} placeholder="https://my-kokoro-host/v1" value={voice.ttsBaseUrl} onChange={(event) => updateVoice({ ttsBaseUrl: event.target.value })} />
             <VoiceInput label={t('voiceSettings.ttsApiKey')} type="password" autoComplete="off" placeholder="TTS API key" value={voice.ttsApiKey} onChange={(event) => updateVoice({ ttsApiKey: event.target.value })} />
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <VoiceInput label={t('voiceSettings.ttsModel')} placeholder="kokoro" value={voice.ttsModel} onChange={(event) => updateVoice({ ttsModel: event.target.value })} />
+            <div className="grid grid-cols-2 gap-4">
               <VoiceInput label={t('voiceSettings.voice')} placeholder="af_heart" value={voice.ttsVoice} onChange={(event) => updateVoice({ ttsVoice: event.target.value })} />
               <VoiceInput label={t('voiceSettings.format')} placeholder="mp3" value={voice.ttsFormat} onChange={(event) => updateVoice({ ttsFormat: event.target.value })} />
             </div>

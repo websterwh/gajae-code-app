@@ -26,7 +26,7 @@ const ENV = {
   baseUrl: (process.env.VOICE_API_BASE_URL || '').replace(/\/$/, ''),
   apiKey: process.env.VOICE_API_KEY || '',
   sttModel: process.env.VOICE_STT_MODEL || 'whisper-1',
-  ttsModel: process.env.VOICE_TTS_MODEL || 'tts-1',
+  ttsModel: process.env.VOICE_TTS_MODEL || 'kokoro',
   ttsVoice: process.env.VOICE_TTS_VOICE || 'alloy',
 };
 
@@ -49,7 +49,6 @@ function voiceConfig() {
     sttBaseUrl: text(saved.sttBaseUrl) || ENV.baseUrl,
     ttsBaseUrl: text(saved.ttsBaseUrl) || ENV.baseUrl,
     sttModel: text(saved.sttModel, 128) || ENV.sttModel,
-    ttsModel: text(saved.ttsModel, 128) || ENV.ttsModel,
     ttsVoice: text(saved.ttsVoice, 128) || ENV.ttsVoice,
     ttsFormat: text(saved.ttsFormat, 32),
   };
@@ -72,7 +71,7 @@ function resolveConfig(req) {
     sttApiKey: String(h['x-voice-stt-api-key'] || h['x-voice-api-key'] || '') || ENV.apiKey,
     ttsApiKey: String(h['x-voice-tts-api-key'] || h['x-voice-api-key'] || '') || ENV.apiKey,
     sttModel: String(h['x-voice-stt-model'] || '') || saved.sttModel,
-    ttsModel: String(h['x-voice-tts-model'] || '') || saved.ttsModel,
+    ttsModel: ENV.ttsModel,
     ttsVoice: String(h['x-voice-tts-voice'] || '') || saved.ttsVoice,
     ttsFormat: String(h['x-voice-tts-format'] || '').trim() || saved.ttsFormat,
   };
@@ -269,7 +268,6 @@ router.put('/config', asyncHandler((req, res) => {
     sttBaseUrl: text(candidate.sttBaseUrl),
     ttsBaseUrl: text(candidate.ttsBaseUrl),
     sttModel: text(candidate.sttModel, 128),
-    ttsModel: text(candidate.ttsModel, 128),
     ttsVoice: text(candidate.ttsVoice, 128),
     ttsFormat: text(candidate.ttsFormat, 32),
   };

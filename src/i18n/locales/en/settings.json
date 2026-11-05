@@ -94,7 +94,7 @@
     "sttApiKey": "Speech recognition API key",
     "ttsApiKey": "Speech synthesis API key",
     "sttModel": "Speech recognition model",
-    "ttsModel": "Speech synthesis model",
+
     "voice": "Voice",
     "format": "Sound file format",
     "note": "The app server stores endpoint URLs under its persistent data volume and proxies audio requests, so local services do not need browser CORS support."

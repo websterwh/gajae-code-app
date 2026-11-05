@@ -16,9 +16,10 @@ export function transcribeVoice(blob: Blob, filename: string): Promise<Response>
 }
 
 export function synthesizeVoice(text: string, signal: AbortSignal): Promise<Response> {
+  const boundedText = text.trim().slice(0, 2_000);
   return authenticatedFetch('/api/voice/tts', {
     method: 'POST',
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ text: boundedText }),
     headers: voiceConfigHeaders(),
     signal,
   });
