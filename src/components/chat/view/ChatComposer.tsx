@@ -11,7 +11,7 @@ import type {
   TouchEvent,
 } from 'react';
 import type { DropzoneInputProps, DropzoneRootProps } from 'react-dropzone';
-import { PlusIcon, Loader2, ArrowUpIcon, ForwardIcon, AlertTriangleIcon, XIcon } from 'lucide-react';
+import { PlusIcon, Loader2, ArrowUpIcon, ForwardIcon, MessageCircleIcon, AlertTriangleIcon, XIcon } from 'lucide-react';
 
 import { classifyCommandInput, isAutoSendable } from '../commandDispatchPolicy';
 import { isComposerSealed, registerComposerInputValue, subscribeComposerFreeze } from '../../../shared/composerFreeze';
@@ -533,9 +533,9 @@ export default function ChatComposer({
                 disabled={composerFrozen}
                 tooltip={{ content: t('input.btw') }}
                 aria-label={t('input.btw')}
-                className="shrink-0 rounded-full border border-border/70 bg-background/70 px-2 text-[10px] font-semibold text-muted-foreground hover:border-primary/30 hover:text-foreground"
+                className="shrink-0 rounded-full border border-border/70 bg-background/70 text-muted-foreground hover:border-primary/30 hover:text-foreground"
               >
-                btw
+                <MessageCircleIcon className="size-4" />
               </PromptInputButton>
             )}
             {canSteer && (

@@ -12,6 +12,7 @@ import { Readable, Writable } from 'node:stream';
 import { finished, pipeline } from 'node:stream/promises';
 import { readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { spawn } from 'node:child_process';
 
 import express from 'express';
 
@@ -212,6 +213,42 @@ function authHeader(apiKey) {
 }
 
 /**
+ * Phonon accepts WAV reliably while browser MediaRecorder output is usually
+ * WebM/Opus. Convert in memory so the frontend remains browser-native and no
+ * temporary audio files are retained on disk. A missing FFmpeg falls back to
+ * the original bytes for backends that accept browser audio directly.
+ * @param {Buffer} input
+ * @returns {Promise<{ bytes: Buffer, type: string, filename: string }>}
+ */
+async function transcriptionAudio(input) {
+  try {
+    const result = await new Promise((resolve, reject) => {
+      const process = spawn('ffmpeg', [
+        '-hide_banner', '-loglevel', 'error',
+        '-i', 'pipe:0',
+        '-ar', '16000', '-ac', '1',
+        '-f', 'wav', 'pipe:1',
+      ], { stdio: ['pipe', 'pipe', 'pipe'] });
+      const chunks = [];
+      const errors = [];
+      process.stdout.on('data', (chunk) => chunks.push(chunk));
+      process.stderr.on('data', (chunk) => errors.push(chunk));
+      process.once('error', reject);
+      process.once('close', (code) => {
+        if (code === 0) resolve(Buffer.concat(chunks));
+        else reject(new Error(Buffer.concat(errors).toString('utf8').trim() || 'Audio conversion failed.'));
+      });
+      process.stdin.end(input);
+    });
+    return { bytes: result, type: 'audio/wav', filename: 'recording.wav' };
+  } catch {
+    // A backend that accepts a browser-native codec should receive the source
+    // bytes rather than being blocked by a failed optional conversion.
+    return { bytes: input, type: 'audio/webm', filename: 'recording.webm' };
+  }
+}
+
+/**
  * GET /api/voice/health -> { configured } (true when a backend base URL is set).
  */
 router.get('/health', asyncHandler((req, res) => {
@@ -262,11 +299,12 @@ router.post('/transcribe', asyncHandler(async (req, res) => {
   }
   if (!req.file) return res.status(400).json({ error: 'No audio uploaded' });
   try {
+    const audio = await transcriptionAudio(req.file.buffer);
     const fd = new FormData();
     fd.append(
       'file',
-      new Blob([req.file.buffer], { type: req.file.mimetype || 'audio/webm' }),
-      req.file.originalname || 'recording.webm',
+      new Blob([audio.bytes], { type: audio.type }),
+      audio.filename,
     );
     fd.append('model', cfg.sttModel);
     const r = await fetchWithTimeout(`${cfg.sttBaseUrl}/audio/transcriptions`, {
