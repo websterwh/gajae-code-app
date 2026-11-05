@@ -3,6 +3,8 @@ import { Router, type Request, type Response } from 'express';
 import { GJC_BROWSER_BACKENDS } from '@/gjc-engine.js';
 import { asyncHandler } from '@/shared/utils.js';
 
+import packageInfo from '../../../package.json' with { type: 'json' };
+
 import { safeSessionId, type BrowserCommand } from './browser-protocol.js';
 import { isCuaSafeTool } from './cua-client.js';
 import { automationService, type AutomationService } from './automation.service.js';
@@ -124,7 +126,11 @@ export function createAutomationRouter(service: AutomationService = automationSe
   }));
 
   router.get('/remote-computers', asyncHandler((_request, response) => {
-    const template = process.env.GAJAE_COMPANION_DOWNLOAD_TEMPLATE;
+    const configuredTemplate = process.env.GAJAE_COMPANION_DOWNLOAD_TEMPLATE;
+    const repository = packageInfo.repository?.url;
+    const repositoryUrl = typeof repository === 'string' ? repository.replace(/^git\+/u, '').replace(/\.git$/u, '') : '';
+    const template = configuredTemplate || (repositoryUrl.startsWith('https://github.com/')
+      ? `${repositoryUrl}/releases/latest/download/gajae-cua-companion-{platform}` : undefined);
     response.json({
       devices: service.remoteDevices.list(), selectedDeviceId: service.remoteDevices.selectedDeviceId(),
       ...(typeof template === 'string' && /^https:\/\//u.test(template) && template.includes('{platform}')
