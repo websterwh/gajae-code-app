@@ -8,10 +8,12 @@
   "type": "module",
   "main": "dist-server/server/index.js",
   "bin": {
-    "gajae-app": "dist-server/server/cli.js"
+    "gajae-app": "dist-server/server/cli.js",
+    "gajae-cua-companion": "companion/cua-companion.mjs"
   },
   "files": [
     "server/",
+    "companion/",
     "shared/",
     "public/api-docs.html",
     "dist/",
