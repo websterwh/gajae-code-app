@@ -74,8 +74,7 @@ const GROUP_B: readonly Row[] = [
   ['B14', '/debug e2e-arg', 'notice'],
   ['B15', '/copy', 'notice'],
   ['B16', '/copy e2e-arg', 'notice'],
-  ['B17', '/btw', 'notice'],
-  ['B18', '/btw e2e-arg', 'notice'],
+
   ['B19', '/drop', 'notice'],
   ['B20', '/drop e2e-arg', 'notice'],
   ['B21', '/hotkeys', 'notice'],
@@ -313,11 +312,11 @@ test('runtime forms, skills and forms the app has never seen all reach the runti
 
 test('the matrix has not silently shrunk', () => {
   assert.equal(GROUP_A.length, 15);
-  assert.equal(GROUP_B.length, 28);
+  assert.equal(GROUP_B.length, 26);
   assert.equal(GROUP_C.length, 20);
   assert.equal(GROUP_D.length, 87);
   assert.equal(GROUP_E.length, 24);
   assert.equal(GROUP_F.length, 4);
   assert.equal(GROUP_G.length, 2);
-  assert.equal(MATRIX.length, 180);
+  assert.equal(MATRIX.length, 178);
 });
