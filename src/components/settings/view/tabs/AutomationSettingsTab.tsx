@@ -55,6 +55,11 @@ type RemoteDevice = {
 };
 
 const selectClass = 'touch-manipulation rounded-lg border border-input bg-card p-2.5 text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary';
+function companionPlatform(): string {
+  const platform = navigator.userAgent.includes('Windows') ? 'windows-x64.exe'
+    : navigator.userAgent.includes('Mac') ? 'darwin-arm64' : 'linux-x64';
+  return platform;
+}
 
 export default function AutomationSettingsTab() {
   const { t } = useTranslation('settings');
@@ -72,6 +77,7 @@ export default function AutomationSettingsTab() {
   const [remoteDevices, setRemoteDevices] = useState<RemoteDevice[]>([]);
   const [selectedRemoteDeviceId, setSelectedRemoteDeviceId] = useState<string | undefined>();
   const [pairingCommand, setPairingCommand] = useState<string | null>(null);
+  const [companionDownloadTemplate, setCompanionDownloadTemplate] = useState<string | null>(null);
   const [testingEgoConnection, setTestingEgoConnection] = useState(false);
   const [builtinBrowserStatus, setBuiltinBrowserStatus] = useState<string | null>(null);
   const selectedProjectId = useAppShellStore((state) => state.selectedProject?.projectId);
@@ -112,9 +118,10 @@ export default function AutomationSettingsTab() {
         setComputerUse((await computerUseResponse.json() as { enabled?: boolean }).enabled === true);
       }
       if (remoteDevicesResponse.ok) {
-        const remote = await remoteDevicesResponse.json() as { devices?: RemoteDevice[]; selectedDeviceId?: string };
+        const remote = await remoteDevicesResponse.json() as { devices?: RemoteDevice[]; selectedDeviceId?: string; companionDownloadTemplate?: string };
         setRemoteDevices(Array.isArray(remote.devices) ? remote.devices : []);
         setSelectedRemoteDeviceId(remote.selectedDeviceId);
+        setCompanionDownloadTemplate(typeof remote.companionDownloadTemplate === 'string' ? remote.companionDownloadTemplate : null);
       }
     } finally {
       setLoading(false);
@@ -185,7 +192,8 @@ export default function AutomationSettingsTab() {
     const response = await fetch('/api/automation/remote-computers/pairings', { method: 'POST' });
     if (!response.ok) return;
     const pairing = await response.json() as { token: string };
-    setPairingCommand(`gajae-cua-companion --server=${window.location.origin.replace(/^http/u, 'ws')}/remote-cua --pair=${pairing.token}`);
+    const server = `${window.location.origin.replace(/^http/u, 'ws')}/remote-cua`;
+    setPairingCommand(`gajae-cua://pair?server=${encodeURIComponent(server)}&token=${encodeURIComponent(pairing.token)}`);
   };
 
   const updateRemoteDevice = async (id: string, patch: { enabled?: boolean; name?: string }) => {
@@ -375,12 +383,15 @@ export default function AutomationSettingsTab() {
               <p className="text-sm font-medium text-foreground">Remote devices</p>
               <p className="mt-1 text-xs text-muted-foreground">Pair a laptop running the CUA companion. Only an enabled, currently connected device with a valid readiness report can be selected.</p>
             </div>
-            <button type="button" onClick={() => void pairRemoteComputer()} className="rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted">Pair this computer</button>
+            <div className="flex items-center gap-2">
+              {companionDownloadTemplate ? <a href={companionDownloadTemplate.replace('{platform}', companionPlatform())} className="rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted">Download companion</a> : null}
+              <button type="button" onClick={() => void pairRemoteComputer()} className="rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted">Pair this computer</button>
+            </div>
           </div>
           {pairingCommand ? (
             <div className="border-t border-border p-4">
-              <p className="mb-2 text-xs text-muted-foreground">Run this command on the laptop. The pairing token expires in ten minutes and is shown only now.</p>
-              <code className="block rounded bg-muted p-3 text-xs break-all text-foreground">{pairingCommand}</code>
+              <p className="mb-2 text-xs text-muted-foreground">Open this one-time pairing link on the laptop after installing the companion. The token expires in ten minutes and is shown only now.</p>
+              <a href={pairingCommand} className="block rounded bg-muted p-3 text-xs break-all text-primary hover:underline">{pairingCommand}</a>
             </div>
           ) : null}
           <div className="border-t border-border p-4">

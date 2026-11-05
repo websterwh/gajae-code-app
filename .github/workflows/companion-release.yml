@@ -1,0 +1,37 @@
+name: Publish CUA Companion
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Immutable release tag (for example cua-companion-v0.1.0)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.0"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: mkdir -p dist-native && ln -s "$(command -v bun)" dist-native/bun && node scripts/build-cua-companion.mjs
+      - run: |
+          cd release/companion
+          sha256sum gajae-cua-companion-* > SHA256SUMS
+          sha256sum --check SHA256SUMS
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          gh release create "$TAG" --target "$GITHUB_SHA" --title "Gajae CUA Companion $TAG" --generate-notes release/companion/*

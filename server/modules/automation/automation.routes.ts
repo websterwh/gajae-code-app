@@ -124,7 +124,12 @@ export function createAutomationRouter(service: AutomationService = automationSe
   }));
 
   router.get('/remote-computers', asyncHandler((_request, response) => {
-    response.json({ devices: service.remoteDevices.list(), selectedDeviceId: service.remoteDevices.selectedDeviceId() });
+    const template = process.env.GAJAE_COMPANION_DOWNLOAD_TEMPLATE;
+    response.json({
+      devices: service.remoteDevices.list(), selectedDeviceId: service.remoteDevices.selectedDeviceId(),
+      ...(typeof template === 'string' && /^https:\/\//u.test(template) && template.includes('{platform}')
+        ? { companionDownloadTemplate: template } : {}),
+    });
   }));
   router.post('/remote-computers/pairings', asyncHandler((_request, response) => {
     response.status(201).json(service.remoteDevices.issuePairing());

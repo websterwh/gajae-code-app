@@ -8,12 +8,18 @@ The companion lets a Gajae server use the existing reviewed `computer` actions o
 2. On the laptop with `cua-driver` installed and its OS permissions granted, run:
 
 ```sh
-npx gajae-app gajae-cua-companion --server=wss://gajae.example/remote-cua --pair=PAIRING_TOKEN
+gajae-cua-companion --server=wss://gajae.example/remote-cua --pair=PAIRING_TOKEN
 ```
 
 The companion stores its device credential at `~/.config/gajae-cua-companion/device.json` with mode `0600`. Pairing tokens are single-use and expire after ten minutes. Enable the paired device from Settings before it can authenticate after reconnecting.
 
 Production servers must expose `wss://` (TLS). Plain `ws://` is accepted only for explicit non-production localhost development. LAN, VPN, and reverse-tunnel deployments still require TLS and device credentials; network location is not authentication.
+
+Set `GAJAE_COMPANION_DOWNLOAD_TEMPLATE` on the server to the public release URL
+template, with `{platform}` as a placeholder (for example,
+`https://github.com/OWNER/REPO/releases/latest/download/gajae-cua-companion-{platform}`).
+This is deployment configuration, not source code. The Settings download button is
+shown only when the template is configured.
 
 ## Safety and incident response
 
