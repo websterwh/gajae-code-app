@@ -14,4 +14,6 @@ export {
   type EgoActivityResponse,
 } from './ego-activity.js';
 export { CUA_SAFE_TOOLS, type CuaSafeTool } from './cua-client.js';
+export { LocalComputerTransport, RemoteComputerTransport, type ComputerTransport } from './computer-transport.js';
+export { RemoteComputerDeviceRegistry } from './remote-computer-devices.js';
 export type { BrowserCommand, BrowserSessionState } from './browser-protocol.js';

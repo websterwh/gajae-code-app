@@ -123,6 +123,36 @@ export function createAutomationRouter(service: AutomationService = automationSe
     }
   }));
 
+  router.get('/remote-computers', asyncHandler((_request, response) => {
+    response.json({ devices: service.remoteDevices.list(), selectedDeviceId: service.remoteDevices.selectedDeviceId() });
+  }));
+  router.post('/remote-computers/pairings', asyncHandler((_request, response) => {
+    response.status(201).json(service.remoteDevices.issuePairing());
+  }));
+  router.put('/remote-computers/selected', asyncHandler((request, response) => {
+    try {
+      const id = request.body?.deviceId;
+      if (id !== undefined && typeof id !== 'string') throw new Error('deviceId must be a string.');
+      service.remoteDevices.select(id);
+      response.json({ selectedDeviceId: service.remoteDevices.selectedDeviceId() });
+    } catch (error) { response.status(400).json({ error: error instanceof Error ? error.message : 'Invalid remote computer selection.' }); }
+  }));
+  router.patch('/remote-computers/:deviceId', asyncHandler((request, response) => {
+    try {
+      const { name, enabled } = request.body ?? {};
+      if (name !== undefined && typeof name !== 'string') throw new Error('name must be a string.');
+      if (enabled !== undefined && typeof enabled !== 'boolean') throw new Error('enabled must be true or false.');
+      service.remoteDevices.update(request.params.deviceId, { ...(name !== undefined ? { name } : {}), ...(enabled !== undefined ? { enabled } : {}) });
+      response.json({ devices: service.remoteDevices.list(), selectedDeviceId: service.remoteDevices.selectedDeviceId() });
+    } catch (error) { response.status(400).json({ error: error instanceof Error ? error.message : 'Invalid remote computer device.' }); }
+  }));
+  router.delete('/remote-computers/:deviceId', asyncHandler((request, response) => {
+    try {
+      service.remoteDevices.revoke(request.params.deviceId);
+      response.status(204).end();
+    } catch (error) { response.status(404).json({ error: error instanceof Error ? error.message : 'Remote computer device was not found.' }); }
+  }));
+
   router.get('/ego-readiness', asyncHandler((_request, response) => {
     try {
       response.json(service.egoReadiness());

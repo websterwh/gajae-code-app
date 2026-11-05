@@ -38,6 +38,22 @@ type Grants = {
   always: { origins: string[]; applications: string[] };
 };
 
+type RemoteDevice = {
+  id: string;
+  name: string;
+  os: string;
+  enabled: boolean;
+  revoked: boolean;
+  lastSeenAt?: number;
+  readiness?: {
+    driverVersion?: string;
+    schemaSupported: boolean;
+    daemon: 'running' | 'stopped' | 'unknown';
+    accessibility?: boolean;
+    screenRecording?: boolean;
+  };
+};
+
 const selectClass = 'touch-manipulation rounded-lg border border-input bg-card p-2.5 text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary';
 
 export default function AutomationSettingsTab() {
@@ -53,6 +69,9 @@ export default function AutomationSettingsTab() {
   const [egoActivity, setEgoActivity] = useState(false);
   const [egoFrames, setEgoFrames] = useState(false);
   const [computerUse, setComputerUse] = useState(false);
+  const [remoteDevices, setRemoteDevices] = useState<RemoteDevice[]>([]);
+  const [selectedRemoteDeviceId, setSelectedRemoteDeviceId] = useState<string | undefined>();
+  const [pairingCommand, setPairingCommand] = useState<string | null>(null);
   const [testingEgoConnection, setTestingEgoConnection] = useState(false);
   const [builtinBrowserStatus, setBuiltinBrowserStatus] = useState<string | null>(null);
   const selectedProjectId = useAppShellStore((state) => state.selectedProject?.projectId);
@@ -62,7 +81,7 @@ export default function AutomationSettingsTab() {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const [statusResponse, grantsResponse, backendResponse, egoReadinessResponse, egoActivityResponse, computerUseResponse] = await Promise.all([
+      const [statusResponse, grantsResponse, backendResponse, egoReadinessResponse, egoActivityResponse, computerUseResponse, remoteDevicesResponse] = await Promise.all([
         fetch('/api/automation/status'),
         fetch('/api/automation/grants'),
         fetch('/api/automation/browser-backend'),
@@ -71,6 +90,7 @@ export default function AutomationSettingsTab() {
         // observes a browser.
         fetch('/api/automation/ego-activity'),
         fetch('/api/automation/computer-use'),
+        fetch('/api/automation/remote-computers'),
       ]);
       if (statusResponse.ok) setStatus(await statusResponse.json() as Status);
       if (grantsResponse.ok) setGrants(await grantsResponse.json() as Grants);
@@ -90,6 +110,11 @@ export default function AutomationSettingsTab() {
       }
       if (computerUseResponse.ok) {
         setComputerUse((await computerUseResponse.json() as { enabled?: boolean }).enabled === true);
+      }
+      if (remoteDevicesResponse.ok) {
+        const remote = await remoteDevicesResponse.json() as { devices?: RemoteDevice[]; selectedDeviceId?: string };
+        setRemoteDevices(Array.isArray(remote.devices) ? remote.devices : []);
+        setSelectedRemoteDeviceId(remote.selectedDeviceId);
       }
     } finally {
       setLoading(false);
@@ -154,6 +179,32 @@ export default function AutomationSettingsTab() {
       return;
     }
     setComputerUse((await response.json() as { enabled?: boolean }).enabled === true);
+  };
+
+  const pairRemoteComputer = async () => {
+    const response = await fetch('/api/automation/remote-computers/pairings', { method: 'POST' });
+    if (!response.ok) return;
+    const pairing = await response.json() as { token: string };
+    setPairingCommand(`gajae-cua-companion --server=${window.location.origin.replace(/^http/u, 'ws')}/remote-cua --pair=${pairing.token}`);
+  };
+
+  const updateRemoteDevice = async (id: string, patch: { enabled?: boolean; name?: string }) => {
+    const response = await fetch(`/api/automation/remote-computers/${encodeURIComponent(id)}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
+    });
+    if (response.ok) await refresh();
+  };
+
+  const selectRemoteDevice = async (deviceId: string | undefined) => {
+    const response = await fetch('/api/automation/remote-computers/selected', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deviceId }),
+    });
+    if (response.ok) await refresh();
+  };
+
+  const removeRemoteDevice = async (id: string) => {
+    const response = await fetch(`/api/automation/remote-computers/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (response.ok) await refresh();
   };
 
   const testEgoConnection = async () => {
@@ -317,6 +368,52 @@ export default function AutomationSettingsTab() {
             <span>{t('automation.accessibility')}: {statusValue(status?.cua.accessibility)}</span>
             <span>{t('automation.screenRecording')}: {statusValue(status?.cua.screenRecording)}</span>
           </div>
+        </SettingsCard>
+        <SettingsCard className="mt-3">
+          <div className="flex items-center justify-between gap-4 p-4">
+            <div>
+              <p className="text-sm font-medium text-foreground">Remote devices</p>
+              <p className="mt-1 text-xs text-muted-foreground">Pair a laptop running the CUA companion. Only an enabled, currently connected device with a valid readiness report can be selected.</p>
+            </div>
+            <button type="button" onClick={() => void pairRemoteComputer()} className="rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted">Pair this computer</button>
+          </div>
+          {pairingCommand ? (
+            <div className="border-t border-border p-4">
+              <p className="mb-2 text-xs text-muted-foreground">Run this command on the laptop. The pairing token expires in ten minutes and is shown only now.</p>
+              <code className="block rounded bg-muted p-3 text-xs break-all text-foreground">{pairingCommand}</code>
+            </div>
+          ) : null}
+          <div className="border-t border-border p-4">
+            <label className="block text-xs text-muted-foreground" htmlFor="remote-computer-target">Computer target</label>
+            <select id="remote-computer-target" className={`mt-2 w-full ${selectClass}`} value={selectedRemoteDeviceId ?? ''} onChange={(event) => void selectRemoteDevice(event.target.value || undefined)}>
+              <option value="">Local driver</option>
+              {remoteDevices.filter((device) => device.enabled && !device.revoked).map((device) => (
+                <option key={device.id} value={device.id}>{device.name}</option>
+              ))}
+            </select>
+          </div>
+          {remoteDevices.length === 0 ? <p className="border-t border-border p-4 text-xs text-muted-foreground">No paired remote devices.</p> : remoteDevices.map((device) => {
+            const ready = device.enabled && !device.revoked && Boolean(device.lastSeenAt) && device.readiness?.schemaSupported === true;
+            const state = device.revoked ? 'Revoked' : !device.enabled ? 'Disabled' : !device.lastSeenAt ? 'Offline' : ready ? 'Ready' : 'CUA unsupported or permissions missing';
+            return (
+              <div key={device.id} className="border-t border-border p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-foreground">{device.name}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{device.os} · {state}{device.readiness?.driverVersion ? ` · CUA Driver ${device.readiness.driverVersion}` : ''}</p>
+                  </div>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <button type="button" onClick={() => void updateRemoteDevice(device.id, { enabled: !device.enabled })} disabled={device.revoked} className="rounded border border-input px-2 py-1 text-xs text-foreground hover:bg-muted disabled:opacity-50">{device.enabled ? 'Disable' : 'Enable'}</button>
+                    <button type="button" onClick={() => {
+                      const name = window.prompt('Remote device name', device.name);
+                      if (name) void updateRemoteDevice(device.id, { name });
+                    }} disabled={device.revoked} className="rounded border border-input px-2 py-1 text-xs text-foreground hover:bg-muted disabled:opacity-50">Rename</button>
+                    <button type="button" onClick={() => void removeRemoteDevice(device.id)} className="rounded border border-destructive px-2 py-1 text-xs text-destructive hover:bg-destructive/10">Remove</button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </SettingsCard>
         <button type="button" onClick={() => void refresh()} disabled={loading} className="mt-3 inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs text-foreground hover:bg-muted disabled:opacity-50">
           <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} /> {t('automation.refresh')}

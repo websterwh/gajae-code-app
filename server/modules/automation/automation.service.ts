@@ -27,6 +27,8 @@ import { egoActivityReader, egoActivityStore, type EgoActivityResponse } from '.
 import { TauriBrowserClient } from './tauri-browser-client.js';
 import { automationOrigin } from './automation-url.js';
 import { CuaDriverClient, isCuaSafeTool, type CuaSafeTool } from './cua-client.js';
+import { RemoteComputerDeviceRegistry } from './remote-computer-devices.js';
+import { RemoteComputerHub } from './remote-computer-hub.js';
 import {
   guardCuaCall,
   readRequestedPid,
@@ -144,6 +146,9 @@ export class AutomationService {
   readonly egoActivity = egoActivityStore;
   /** Opt-in native application control through CUA Driver; off by default. */
   readonly computerUse = computerUseStore;
+  /** Pairing state for outbound-only CUA companions. */
+  readonly remoteDevices = new RemoteComputerDeviceRegistry();
+  readonly remoteComputerHub = new RemoteComputerHub(this.remoteDevices);
   private readonly egoActivityReader = egoActivityReader;
   private readonly capabilities = automationSupport(process.platform, process.arch, process.env);
   get supported(): boolean { return this.browser.isReady(); }
