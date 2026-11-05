@@ -531,7 +531,6 @@ export default function ChatComposer({
               <PromptInputButton
                 onClick={() => onBtw()}
                 disabled={composerFrozen}
-                tooltip={{ content: t('input.btw') }}
                 aria-label={t('input.btw')}
                 className="shrink-0 rounded-full border border-border/70 bg-background/70 text-muted-foreground hover:border-primary/30 hover:text-foreground"
               >
