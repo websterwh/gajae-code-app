@@ -160,7 +160,7 @@ export const TUI_ONLY_COMMAND_HINTS: Readonly<Record<string, string>> = {
   '/background': 'App sessions already keep running when you navigate away.',
   '/debug': '',
   '/copy': 'Each message has a copy button, offering plain text or markdown.',
-  '/btw': '',
+
   '/drop': 'Delete a session from the sidebar; hover it for archive and delete.',
   '/hotkeys': 'Open the command palette (Cmd/Ctrl+K) to see what is available.',
   '/theme': 'Use the command palette (Cmd/Ctrl+K) to toggle the theme.',
