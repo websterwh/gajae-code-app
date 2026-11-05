@@ -32,8 +32,11 @@ export default function VoiceSettingsTab() {
           <VoiceInput label={t('voiceSettings.sttBaseUrl')} placeholder="https://my-phonon-host/v1" value={voice.sttBaseUrl} onChange={(event) => updateVoice({ sttBaseUrl: event.target.value })} />
           <VoiceInput label={t('voiceSettings.ttsBaseUrl')} placeholder="https://my-kokoro-host/v1" value={voice.ttsBaseUrl} onChange={(event) => updateVoice({ ttsBaseUrl: event.target.value })} />
         </div>
-        <VoiceInput label={t('voiceSettings.apiKey')} type="password" autoComplete="off" placeholder="sk-…" value={voice.apiKey} onChange={(event) => updateVoice({ apiKey: event.target.value })} />
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <VoiceInput label={t('voiceSettings.sttApiKey')} type="password" autoComplete="off" placeholder="STT API key" value={voice.sttApiKey} onChange={(event) => updateVoice({ sttApiKey: event.target.value })} />
+          <VoiceInput label={t('voiceSettings.ttsApiKey')} type="password" autoComplete="off" placeholder="TTS API key" value={voice.ttsApiKey} onChange={(event) => updateVoice({ ttsApiKey: event.target.value })} />
+        </div>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <VoiceInput label={t('voiceSettings.sttModel')} placeholder="whisper-1" value={voice.sttModel} onChange={(event) => updateVoice({ sttModel: event.target.value })} />
           <VoiceInput label={t('voiceSettings.ttsModel')} placeholder="tts-1" value={voice.ttsModel} onChange={(event) => updateVoice({ ttsModel: event.target.value })} />
           <VoiceInput label={t('voiceSettings.voice')} placeholder="alloy" value={voice.ttsVoice} onChange={(event) => updateVoice({ ttsVoice: event.target.value })} />
