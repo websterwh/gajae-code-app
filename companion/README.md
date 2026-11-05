@@ -17,3 +17,7 @@ node cua-companion.mjs --install-driver=system
 `portable` uses CUA's supported `--prefix` and `--no-modify-path` options.
 `system` delegates to CUA's current official installer. Both install only the
 driver and require its signatures where CUA publishes them.
+
+Run `--register-protocol` once after downloading the CLI on Linux or Windows;
+it registers `gajae-cua://` for one-click pairing in the browser. macOS release
+packages use an app bundle, whose first launch registers the scheme.

@@ -56,8 +56,34 @@ async function installDriver(mode) {
   await run('/bin/bash', ['-c', 'curl -fsSL https://cua.ai/install.sh | sh -s -- "$@"', 'gajae-cua-installer', ...options]);
 }
 
+async function registerProtocol() {
+  const executable = process.execPath;
+  if (process.platform === 'linux') {
+    const applications = join(homedir(), '.local', 'share', 'applications');
+    await mkdir(applications, { recursive: true, mode: 0o700 });
+    const desktop = join(applications, 'gajae-cua-companion.desktop');
+    await writeFile(desktop, `[Desktop Entry]\nType=Application\nName=Gajae CUA Companion\nExec=${executable} %u\nMimeType=x-scheme-handler/gajae-cua;\nNoDisplay=true\n`, { mode: 0o600 });
+    await run('xdg-mime', ['default', 'gajae-cua-companion.desktop', 'x-scheme-handler/gajae-cua']);
+    return;
+  }
+  if (process.platform === 'win32') {
+    await run('reg.exe', ['add', 'HKCU\\Software\\Classes\\gajae-cua', '/ve', '/d', 'URL:Gajae CUA Companion', '/f']);
+    await run('reg.exe', ['add', 'HKCU\\Software\\Classes\\gajae-cua', '/v', 'URL Protocol', '/d', '', '/f']);
+    await run('reg.exe', ['add', 'HKCU\\Software\\Classes\\gajae-cua\\shell\\open\\command', '/ve', '/d', `"${executable}" "%1"`, '/f']);
+    return;
+  }
+  if (process.platform === 'darwin') {
+    throw new Error('On macOS, open the released Gajae CUA Companion.app once to register gajae-cua links.');
+  }
+  throw new Error(`Unsupported platform: ${process.platform}`);
+}
+
 if (args['install-driver']) {
   await installDriver(args['install-driver']);
+  process.exit(0);
+}
+if (args['register-protocol']) {
+  await registerProtocol();
   process.exit(0);
 }
 if (!server) throw new Error('Usage: gajae-cua-companion --server=wss://gajae.example/remote-cua --pair=TOKEN');
