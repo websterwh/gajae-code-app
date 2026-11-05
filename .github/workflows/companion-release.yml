@@ -1,6 +1,14 @@
 name: Publish CUA Companion
 
 on:
+  push:
+    branches: [feat/remote-cua-companion]
+    paths:
+      - companion/**
+      - scripts/build-cua-companion.mjs
+      - package.json
+      - package-lock.json
+      - .github/workflows/companion-release.yml
   workflow_dispatch:
     inputs:
       tag:
@@ -32,6 +40,6 @@ jobs:
           sha256sum --check SHA256SUMS
       - env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.tag }}
+          TAG: ${{ inputs.tag || format('cua-companion-dev-{0}', github.sha) }}
         run: |
           gh release create "$TAG" --target "$GITHUB_SHA" --title "Gajae CUA Companion $TAG" --generate-notes release/companion/*
