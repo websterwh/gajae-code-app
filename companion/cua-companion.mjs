@@ -17,9 +17,49 @@ const args = Object.fromEntries(process.argv.slice(2).map(value => {
   const [key, ...rest] = value.replace(/^--/, '').split('=');
   return [key, rest.join('=')];
 }));
+const deepLink = process.argv.slice(2).find(value => value.startsWith('gajae-cua://'));
+if (deepLink) {
+  const link = new URL(deepLink);
+  if (link.hostname !== 'pair') throw new Error('Unsupported Gajae CUA link.');
+  args.server = link.searchParams.get('server') ?? '';
+  args.pair = link.searchParams.get('token') ?? '';
+}
 const server = args.server;
 const pairingToken = args.pair;
 const statePath = args.state ?? join(homedir(), '.config', 'gajae-cua-companion', 'device.json');
+
+function run(command, commandArgs) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, commandArgs, { stdio: 'inherit' });
+    child.once('error', reject);
+    child.once('exit', code => code === 0 ? resolve() : reject(new Error(`${command} exited with ${code}`)));
+  });
+}
+
+async function installDriver(mode) {
+  if (mode !== 'portable' && mode !== 'system') throw new Error('--install-driver must be portable or system.');
+  const portable = mode === 'portable';
+  const prefix = args['portable-dir'] ?? join(homedir(), 'Gajae CUA');
+  if (process.platform === 'win32') {
+    const options = portable
+      ? ` -Prefix '${prefix.replace(/'/gu, "''")}' -NoPathUpdate -RequireSignature`
+      : ' -RequireSignature';
+    await run('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command',
+      `& ([scriptblock]::Create((irm https://cua.ai/driver/install.ps1)))${options}`]);
+    return;
+  }
+  // CUA publishes this installer and its release manifest. The documented
+  // options keep portable installations entirely below the selected prefix.
+  const options = portable
+    ? ['--only', 'cua-driver', '--prefix', prefix, '--no-modify-path', '--require-signature', '--yes']
+    : ['--only', 'cua-driver', '--require-signature', '--yes'];
+  await run('/bin/bash', ['-c', 'curl -fsSL https://cua.ai/install.sh | sh -s -- "$@"', 'gajae-cua-installer', ...options]);
+}
+
+if (args['install-driver']) {
+  await installDriver(args['install-driver']);
+  process.exit(0);
+}
 if (!server) throw new Error('Usage: gajae-cua-companion --server=wss://gajae.example/remote-cua --pair=TOKEN');
 const url = new URL(server);
 if (url.protocol !== 'wss:' && !(url.protocol === 'ws:' && ['localhost', '127.0.0.1', '::1'].includes(url.hostname))) {
