@@ -45,14 +45,14 @@ async function installDriver(mode) {
       ? ` -Prefix '${prefix.replace(/'/gu, "''")}' -NoPathUpdate -RequireSignature`
       : ' -RequireSignature';
     await run('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command',
-      `& ([scriptblock]::Create((irm https://cua.ai/driver/install.ps1)))${options}`]);
+      `& ([scriptblock]::Create((irm https://cua.ai/install.ps1))) -Only cua-driver -NoOnboarding${options}`]);
     return;
   }
   // CUA publishes this installer and its release manifest. The documented
   // options keep portable installations entirely below the selected prefix.
   const options = portable
-    ? ['--only', 'cua-driver', '--prefix', prefix, '--no-modify-path', '--require-signature', '--yes']
-    : ['--only', 'cua-driver', '--require-signature', '--yes'];
+    ? ['--only', 'cua-driver', '--no-onboarding', '--prefix', prefix, '--no-modify-path', '--require-signature', '--yes']
+    : ['--only', 'cua-driver', '--no-onboarding', '--require-signature', '--yes'];
   await run('/bin/bash', ['-c', 'curl -fsSL https://cua.ai/install.sh | sh -s -- "$@"', 'gajae-cua-installer', ...options]);
 }
 
