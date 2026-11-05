@@ -121,7 +121,10 @@ export function useVoiceInput(
         try {
           if (audio.size < 800) { report('Recording too short'); return; }
           const response = await transcribeVoice(audio, `recording.${extensionFor(recordedType)}`);
-          if (!response.ok) throw new Error(`transcribe ${response.status}`);
+          if (!response.ok) {
+            const detail = await response.text().catch(() => '');
+            throw new Error(`transcribe ${response.status}${detail ? `: ${detail.slice(0, 240)}` : ''}`);
+          }
 
           const payload = await response.json();
           const transcript = String(payload?.text || '').trim();
