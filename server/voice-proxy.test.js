@@ -178,10 +178,13 @@ test('voice validation stays unchanged when no backend is configured', async (t)
   const server = await serve(t, async () => { throw new Error('must not call backend'); }, '');
   const health = await server.request('/health');
   assert.deepEqual(await health.json(), { configured: false });
-  for (const route of ['/transcribe', '/tts']) {
+  for (const [route, message] of [
+    ['/transcribe', 'No speech recognition backend configured'],
+    ['/tts', 'No speech synthesis backend configured'],
+  ]) {
     const response = await server.request(route, json({ text: 'hello' }));
     assert.equal(response.status, 503);
-    assert.equal((await response.json()).error, 'No voice backend configured');
+    assert.equal((await response.json()).error, message);
   }
   await server.idle();
 });

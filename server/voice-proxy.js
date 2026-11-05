@@ -10,11 +10,17 @@
 // falling back to server env defaults. Mounted at /api/voice behind authenticateToken.
 import { Readable, Writable } from 'node:stream';
 import { finished, pipeline } from 'node:stream/promises';
+import { readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 
 import express from 'express';
 
 import { asyncHandler } from './shared/utils.js';
 
+const CONFIG_PATH = join(
+  dirname(process.env.DATABASE_PATH || join(process.env.HOME || '/root', '.gajae-app', 'auth.db')),
+  'voice-config.json',
+);
 const ENV = {
   baseUrl: (process.env.VOICE_API_BASE_URL || '').replace(/\/$/, ''),
   apiKey: process.env.VOICE_API_KEY || '',
@@ -23,23 +29,50 @@ const ENV = {
   ttsVoice: process.env.VOICE_TTS_VOICE || 'alloy',
 };
 
+function text(value, maxLength = 512) {
+  return typeof value === 'string' ? value.trim().slice(0, maxLength) : '';
+}
+
+function savedConfig() {
+  try {
+    const value = JSON.parse(readFileSync(CONFIG_PATH, 'utf8'));
+    return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  } catch {
+    return {};
+  }
+}
+
+function voiceConfig() {
+  const saved = savedConfig();
+  return {
+    sttBaseUrl: text(saved.sttBaseUrl) || ENV.baseUrl,
+    ttsBaseUrl: text(saved.ttsBaseUrl) || ENV.baseUrl,
+    sttModel: text(saved.sttModel, 128) || ENV.sttModel,
+    ttsModel: text(saved.ttsModel, 128) || ENV.ttsModel,
+    ttsVoice: text(saved.ttsVoice, 128) || ENV.ttsVoice,
+    ttsFormat: text(saved.ttsFormat, 32),
+  };
+}
+
 /**
  * Resolve the voice backend config for a request. Client headers (set from the
  * user's in-app voice settings) take precedence over the server env defaults.
  * @param {import('express').Request} req
- * @returns {{baseUrl: string, apiKey: string, sttModel: string, ttsModel: string, ttsVoice: string, ttsFormat: string}}
+ * @returns {{sttBaseUrl: string, ttsBaseUrl: string, apiKey: string, sttModel: string, ttsModel: string, ttsVoice: string, ttsFormat: string}}
  */
 function resolveConfig(req) {
   const h = req.headers;
+  const saved = voiceConfig();
   return {
     // Security: do not allow clients to control the outbound backend host.
-    // Always use the server-side configured base URL.
-    baseUrl: ENV.baseUrl,
+    // Always use the server-side configured base URLs.
+    sttBaseUrl: saved.sttBaseUrl,
+    ttsBaseUrl: saved.ttsBaseUrl,
     apiKey: String(h['x-voice-api-key'] || '') || ENV.apiKey,
-    sttModel: String(h['x-voice-stt-model'] || '') || ENV.sttModel,
-    ttsModel: String(h['x-voice-tts-model'] || '') || ENV.ttsModel,
-    ttsVoice: String(h['x-voice-tts-voice'] || '') || ENV.ttsVoice,
-    ttsFormat: String(h['x-voice-tts-format'] || '').trim(),
+    sttModel: String(h['x-voice-stt-model'] || '') || saved.sttModel,
+    ttsModel: String(h['x-voice-tts-model'] || '') || saved.ttsModel,
+    ttsVoice: String(h['x-voice-tts-voice'] || '') || saved.ttsVoice,
+    ttsFormat: String(h['x-voice-tts-format'] || '').trim() || saved.ttsFormat,
   };
 }
 
@@ -181,7 +214,36 @@ function authHeader(apiKey) {
  * GET /api/voice/health -> { configured } (true when a backend base URL is set).
  */
 router.get('/health', asyncHandler((req, res) => {
-  res.json({ configured: Boolean(resolveConfig(req).baseUrl) });
+  const cfg = resolveConfig(req);
+  res.json({ configured: Boolean(cfg.sttBaseUrl || cfg.ttsBaseUrl) });
+}));
+
+router.get('/config', asyncHandler((_req, res) => {
+  res.json(voiceConfig());
+}));
+
+router.put('/config', asyncHandler((req, res) => {
+  const candidate = req.body;
+  if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+    return res.status(400).json({ error: 'Voice configuration must be an object.' });
+  }
+  const config = {
+    sttBaseUrl: text(candidate.sttBaseUrl),
+    ttsBaseUrl: text(candidate.ttsBaseUrl),
+    sttModel: text(candidate.sttModel, 128),
+    ttsModel: text(candidate.ttsModel, 128),
+    ttsVoice: text(candidate.ttsVoice, 128),
+    ttsFormat: text(candidate.ttsFormat, 32),
+  };
+  for (const baseUrl of [config.sttBaseUrl, config.ttsBaseUrl]) {
+    if (baseUrl && !isAllowedBackendUrl(baseUrl)) {
+      return res.status(400).json({ error: 'Voice backend URLs must be http or https and cannot use link-local metadata addresses.' });
+    }
+  }
+  const temporary = `${CONFIG_PATH}.${process.pid}.tmp`;
+  writeFileSync(temporary, `${JSON.stringify(config)}\n`, { mode: 0o600 });
+  renameSync(temporary, CONFIG_PATH);
+  res.json(config);
 }));
 
 /**
@@ -190,8 +252,8 @@ router.get('/health', asyncHandler((req, res) => {
  */
 router.post('/transcribe', asyncHandler(async (req, res) => {
   const cfg = resolveConfig(req);
-  if (!cfg.baseUrl) return res.status(503).json({ error: 'No voice backend configured' });
-  if (!isAllowedBackendUrl(cfg.baseUrl)) return res.status(400).json({ error: 'Invalid voice backend URL.' });
+  if (!cfg.sttBaseUrl) return res.status(503).json({ error: 'No speech recognition backend configured' });
+  if (!isAllowedBackendUrl(cfg.sttBaseUrl)) return res.status(400).json({ error: 'Invalid speech recognition backend URL.' });
   try {
     await receiveAudio(req, res);
   } catch (err) {
@@ -206,7 +268,7 @@ router.post('/transcribe', asyncHandler(async (req, res) => {
       req.file.originalname || 'recording.webm',
     );
     fd.append('model', cfg.sttModel);
-    const r = await fetchWithTimeout(`${cfg.baseUrl}/audio/transcriptions`, {
+    const r = await fetchWithTimeout(`${cfg.sttBaseUrl}/audio/transcriptions`, {
       method: 'POST',
       headers: authHeader(cfg.apiKey),
       body: fd,
@@ -227,12 +289,12 @@ router.post('/transcribe', asyncHandler(async (req, res) => {
  */
 router.post('/tts', asyncHandler(async (req, res) => {
   const cfg = resolveConfig(req);
-  if (!cfg.baseUrl) return res.status(503).json({ error: 'No voice backend configured' });
-  if (!isAllowedBackendUrl(cfg.baseUrl)) return res.status(400).json({ error: 'Invalid voice backend URL.' });
+  if (!cfg.ttsBaseUrl) return res.status(503).json({ error: 'No speech synthesis backend configured' });
+  if (!isAllowedBackendUrl(cfg.ttsBaseUrl)) return res.status(400).json({ error: 'Invalid speech synthesis backend URL.' });
   const text = req.body?.text;
   if (typeof text !== 'string' || !text.trim()) return res.status(400).json({ error: 'text required' });
   try {
-    const r = await fetchWithTimeout(`${cfg.baseUrl}/audio/speech`, {
+    const r = await fetchWithTimeout(`${cfg.ttsBaseUrl}/audio/speech`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeader(cfg.apiKey) },
       body: JSON.stringify({
