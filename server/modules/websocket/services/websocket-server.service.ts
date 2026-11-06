@@ -31,6 +31,28 @@ function connectionPath(request: AuthenticatedWebSocketRequest): string {
   return new URL(request.url ?? '/', 'http://localhost').pathname;
 }
 
+/**
+ * Whether a `/remote-cua` upgrade arrived over an actually-encrypted
+ * transport, either directly or through a trusted reverse proxy.
+ *
+ * `x-forwarded-proto` is attacker-controllable on any request that reaches
+ * this process directly (this is a raw Node upgrade handler, not an Express
+ * `req`; `trust proxy` does not gate it), so it is only honored when the
+ * deployer has explicitly set `GAJAE_TRUST_PROXY_TLS=1` - the same opt-in
+ * shape as `ALLOWED_HOSTS` and `GAJAE_ALLOW_UNAUTH_REMOTE`.
+ */
+export function isEncryptedRemoteCuaUpgrade(
+  info: { req: { headers: Record<string, string | string[] | undefined>; socket: { encrypted?: boolean } } },
+  env: { trustProxyTls?: string; nodeEnv?: string } = { trustProxyTls: process.env.GAJAE_TRUST_PROXY_TLS, nodeEnv: process.env.NODE_ENV },
+): boolean {
+  const host = String(info.req.headers.host ?? '').split(':', 1)[0];
+  const localhost = host === 'localhost' || host === '127.0.0.1' || host === '::1';
+  const behindTlsProxy = env.trustProxyTls === '1' || env.trustProxyTls === 'true';
+  const forwardedHttps = behindTlsProxy
+    && String(info.req.headers['x-forwarded-proto'] ?? '').split(',', 1)[0].trim() === 'https';
+  return Boolean(info.req.socket.encrypted) || forwardedHttps || (localhost && env.nodeEnv !== 'production');
+}
+
 export function createWebSocketServer(server: HttpServer, dependencies: GatewayDependencies): WebSocketServer {
   const verification = {
     // The companion has no API key. It authenticates its device credential in
@@ -38,9 +60,7 @@ export function createWebSocketServer(server: HttpServer, dependencies: GatewayD
     verifyClient: (info: Parameters<VerifyClientCallbackSync<AuthenticatedWebSocketRequest>>[0]) => {
       const path = new URL(info.req.url ?? '/', 'http://localhost').pathname;
       if (path !== '/remote-cua') return verifyWebSocketClient(info, dependencies.verifyClient);
-      const host = String(info.req.headers.host ?? '').split(':', 1)[0];
-      const localhost = host === 'localhost' || host === '127.0.0.1' || host === '::1';
-      return Boolean((info.req.socket as { encrypted?: boolean }).encrypted) || (localhost && process.env.NODE_ENV !== 'production');
+      return isEncryptedRemoteCuaUpgrade(info as never);
     },
   };
   const gateway = new WebSocketServer({ ...verification, server });

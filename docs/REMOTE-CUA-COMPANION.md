@@ -16,6 +16,8 @@ The companion stores its device credential at `~/.config/gajae-cua-companion/dev
 
 Production servers must expose `wss://` (TLS). Plain `ws://` is accepted only for explicit non-production localhost development. LAN, VPN, and reverse-tunnel deployments still require TLS and device credentials; network location is not authentication.
 
+If a reverse proxy (nginx, godoxy, Caddy, etc.) terminates TLS and forwards plain HTTP to this server - a normal, secure setup - set `GAJAE_TRUST_PROXY_TLS=1` so the server honors the proxy's `X-Forwarded-Proto: https` header for this check. Without it, every `/remote-cua` upgrade behind such a proxy is rejected, since the socket this process sees is never directly encrypted. This variable must only be set when every path that can reach this process is in fact behind that proxy; otherwise a direct connection could forge the header and bypass the TLS requirement entirely.
+
 If the server uses a locally-signed certificate (common for LAN/VPN deployments), the OS or browser trusting it is not enough: Node/Bun's own TLS stack does not consult the OS trust store. Pass the CA certificate explicitly with `--ca-cert=/path/to/ca.pem` (or set `NODE_EXTRA_CA_CERTS`), or the companion will fail to connect with a TLS handshake error.
 
 The Settings download button's URL is baked into the Docker image at build
