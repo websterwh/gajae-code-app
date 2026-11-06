@@ -85,7 +85,9 @@ export default function AutomationSettingsTab() {
   const [selectedRemoteDeviceId, setSelectedRemoteDeviceId] = useState<string | undefined>();
   const [pairingCommand, setPairingCommand] = useState<string | null>(null);
   const [pairingCliCommand, setPairingCliCommand] = useState<string | null>(null);
+  const [pairingToken, setPairingToken] = useState<string | null>(null);
   const [pairingCopied, setPairingCopied] = useState(false);
+  const [tokenCopied, setTokenCopied] = useState(false);
   const [companionDownloadTemplate, setCompanionDownloadTemplate] = useState<string | null>(null);
   const [testingEgoConnection, setTestingEgoConnection] = useState(false);
   const [builtinBrowserStatus, setBuiltinBrowserStatus] = useState<string | null>(null);
@@ -206,7 +208,9 @@ export default function AutomationSettingsTab() {
     // The deep-link opens a running companion on Linux and Windows today. The
     // CLI form works everywhere, including macOS until its GUI handler ships.
     setPairingCliCommand(`gajae-cua-companion --server=${server} --pair=${pairing.token}`);
+    setPairingToken(pairing.token);
     setPairingCopied(false);
+    setTokenCopied(false);
   };
 
   const copyPairingCommand = async () => {
@@ -214,6 +218,14 @@ export default function AutomationSettingsTab() {
     try {
       await navigator.clipboard.writeText(pairingCliCommand);
       setPairingCopied(true);
+    } catch { /* Clipboard access can be denied by the browser; the text stays selectable. */ }
+  };
+
+  const copyPairingToken = async () => {
+    if (!pairingToken) return;
+    try {
+      await navigator.clipboard.writeText(pairingToken);
+      setTokenCopied(true);
     } catch { /* Clipboard access can be denied by the browser; the text stays selectable. */ }
   };
 
@@ -414,14 +426,13 @@ export default function AutomationSettingsTab() {
           </div>
           {pairingCommand ? (
             <div className="border-t border-border p-4">
-              <p className="mb-2 text-xs text-muted-foreground">Pair the companion with either option below. The token expires in ten minutes and is shown only now.</p>
-              <p className="mb-1 text-xs font-medium text-foreground">CLI (works on every platform; required on macOS until its app is ready):</p>
-              <div className="mb-3 flex items-start gap-2">
-                <code className="block flex-1 rounded bg-muted p-3 text-xs break-all text-foreground">{pairingCliCommand}</code>
-                <button type="button" onClick={() => void copyPairingCommand()} className="shrink-0 rounded border border-input px-2 py-1 text-xs text-foreground hover:bg-muted">{pairingCopied ? 'Copied' : 'Copy'}</button>
+              <p className="mb-3 text-xs text-muted-foreground">This token expires in ten minutes and is shown only now.</p>
+              <div className="flex flex-wrap gap-2">
+                <a href={pairingCommand} className="inline-flex items-center gap-1 rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted"><ExternalLink className="h-3.5 w-3.5" />Open in companion</a>
+                <button type="button" onClick={() => void copyPairingToken()} className="rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted">{tokenCopied ? 'Token copied' : 'Copy token'}</button>
+                <button type="button" onClick={() => void copyPairingCommand()} className="rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted">{pairingCopied ? 'CLI command copied' : 'Copy CLI command'}</button>
               </div>
-              <p className="mb-1 text-xs font-medium text-foreground">Deep link (opens an already-running companion on Linux/Windows):</p>
-              <a href={pairingCommand} className="block rounded bg-muted p-3 text-xs break-all text-primary hover:underline">{pairingCommand}</a>
+              <p className="mt-2 text-xs text-muted-foreground">“Open in companion” works with an already-running companion on Linux/Windows. On macOS (no GUI handler yet) or for a first run anywhere, copy the token or CLI command and pass it to the companion in a terminal.</p>
             </div>
           ) : null}
           <div className="border-t border-border p-4">
