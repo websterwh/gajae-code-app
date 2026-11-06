@@ -97,6 +97,12 @@ function fakeApi(options: ApiOptions = {}) {
       }
       return new Response(JSON.stringify({ enabled: computerUse }));
     }
+    if (path === '/api/automation/remote-computers') {
+      return new Response(JSON.stringify({ devices: [], companionDownloadTemplate: null }));
+    }
+    if (path === '/api/automation/remote-computers/pairings' && method === 'POST') {
+      return new Response(JSON.stringify({ token: 'fake-pairing-token' }));
+    }
     if (path.startsWith('/api/browser/') && method === 'POST') {
       if (options.browserOpen instanceof Error) throw options.browserOpen;
       return options.browserOpen ?? new Response(JSON.stringify({
@@ -350,6 +356,27 @@ test('desktop bridge keeps launch disabled until the app server reports browser 
   fireEvent.click(button);
   assert.equal(calls.some((call) => call.path.startsWith('/api/browser/')), false);
   assert.ok(screen.getByText('1.2.3 · running'));
+});
+
+test('pairing shows an open-in-companion button and copy buttons instead of raw text', async () => {
+  const writeTextCalls: string[] = [];
+  Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (value: string) => { writeTextCalls.push(value); } }, configurable: true });
+  fakeApi();
+  await mount();
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Pair this computer' }));
+  const openLink = await screen.findByRole('link', { name: /Open in companion/u }) as HTMLAnchorElement;
+  assert.ok(openLink.href.startsWith('gajae-cua://pair?server='));
+  assert.ok(openLink.href.includes('fake-pairing-token'));
+
+  fireEvent.click(screen.getByRole('button', { name: 'Copy token' }));
+  await waitFor(() => assert.deepEqual(writeTextCalls, ['fake-pairing-token']));
+  assert.ok(screen.getByRole('button', { name: 'Token copied' }));
+
+  fireEvent.click(screen.getByRole('button', { name: 'Copy CLI command' }));
+  await waitFor(() => assert.equal(writeTextCalls.length, 2));
+  assert.ok(writeTextCalls[1].includes('--pair=fake-pairing-token'));
+  assert.ok(screen.getByRole('button', { name: 'CLI command copied' }));
 });
 
 test('browser routing wording keys have parity across all ten settings locales', () => {
