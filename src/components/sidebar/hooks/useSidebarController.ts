@@ -202,7 +202,12 @@ export function useSidebarController(args: UseSidebarControllerArgs) {
     setSessionDeleteConfirmation(null);
     try {
       const response = await api.deleteSession(sessionId, hardDelete);
-      if (!response.ok) { console.error('[Sidebar] Failed to delete session:', { status: response.status, error: await response.text() }); showErrorToast(t('messages.deleteSessionFailed')); return; }
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        console.error('[Sidebar] Failed to delete session:', { status: response.status, error: body });
+        showErrorToast(errorMessage(body, t('messages.deleteSessionFailed')));
+        return;
+      }
       forgetSessionStorage(sessionId);
       onSessionDelete?.(sessionId);
       await fetchArchivedSessions();
@@ -215,7 +220,12 @@ export function useSidebarController(args: UseSidebarControllerArgs) {
   const archiveSession = useCallback(async (sessionId: string) => {
     try {
       const response = await api.deleteSession(sessionId, false);
-      if (!response.ok) { console.error('[Sidebar] Failed to archive session:', { status: response.status, error: await response.text() }); showErrorToast(t('messages.archiveSessionFailed', 'Could not archive the conversation. Try again.')); return; }
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        console.error('[Sidebar] Failed to archive session:', { status: response.status, error: body });
+        showErrorToast(errorMessage(body, t('messages.archiveSessionFailed', 'Could not archive the conversation. Try again.')));
+        return;
+      }
       forgetSessionStorage(sessionId);
       onSessionDelete?.(sessionId);
       await fetchArchivedSessions();
