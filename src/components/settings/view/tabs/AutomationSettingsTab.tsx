@@ -57,7 +57,7 @@ type RemoteDevice = {
 const selectClass = 'touch-manipulation rounded-lg border border-input bg-card p-2.5 text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary';
 function companionPlatform(): string {
   const platform = navigator.userAgent.includes('Windows') ? 'windows-x64.exe'
-    : navigator.userAgent.includes('Mac') ? 'darwin-arm64.app.zip' : 'linux-x64';
+    : navigator.userAgent.includes('Mac') ? 'macos-universal.dmg' : 'linux-x64';
   return platform;
 }
 
