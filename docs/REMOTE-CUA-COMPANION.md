@@ -9,8 +9,10 @@ The companion lets a Gajae server use the existing reviewed `computer` actions o
 
 ```sh
 ./gajae-cua-companion --install-driver=portable   # or --install-driver=system
-./gajae-cua-companion --server=wss://gajae.example/remote-cua --pair=PAIRING_TOKEN
+./gajae-cua-companion --server=gajae.example --pair=PAIRING_TOKEN
 ```
+
+`--server` accepts a bare domain; `wss://` and the `/remote-cua` path are filled in automatically. Pass a full URL instead (e.g. with a non-default port or path, or explicit `ws://` for local development) and it is used as given.
 
 The companion stores its device credential at `~/.config/gajae-cua-companion/device.json` with mode `0600`. Pairing tokens are single-use and expire after ten minutes. Enable the paired device from Settings before it can authenticate after reconnecting.
 
@@ -19,6 +21,14 @@ Production servers must expose `wss://` (TLS). Plain `ws://` is accepted only fo
 If a reverse proxy (nginx, godoxy, Caddy, etc.) terminates TLS and forwards plain HTTP to this server - a normal, secure setup - set `GAJAE_TRUST_PROXY_TLS=1` so the server honors the proxy's `X-Forwarded-Proto: https` header for this check. Without it, every `/remote-cua` upgrade behind such a proxy is rejected, since the socket this process sees is never directly encrypted. This variable must only be set when every path that can reach this process is in fact behind that proxy; otherwise a direct connection could forge the header and bypass the TLS requirement entirely.
 
 If the server uses a locally-signed certificate (common for LAN/VPN deployments), the OS or browser trusting it is not enough: Node/Bun's own TLS stack does not consult the OS trust store. Pass the CA certificate explicitly with `--ca-cert=/path/to/ca.pem` (or set `NODE_EXTRA_CA_CERTS`), or the companion will fail to connect with a TLS handshake error.
+
+If the public hostname sits behind SSO/OIDC middleware (Pocket ID, Authelia, Authentik, etc.), exclude the `/remote-cua` path from it. The companion authenticates with its own pairing token or device credential in the first protocol frame; it has no browser to complete a login redirect, so the middleware's rejection (401/403) looks identical to a misconfigured server and the companion now exits immediately instead of retrying forever. For godoxy specifically, add a path-scoped bypass, e.g. in the route's labels:
+
+```yaml
+proxy.gjc.middlewares.auth.exclude: /remote-cua
+```
+
+(the exact label name depends on your godoxy OIDC middleware config - the requirement is only that `/remote-cua` reaches the app without the SSO challenge).
 
 The Settings download button's URL is baked into the Docker image at build
 time, derived from the `APP_REPOSITORY` build argument used to build it (see

@@ -162,8 +162,13 @@ if (args['register-protocol']) {
     process.exit(1);
   }
 }
-if (!server) throw new Error('Usage: gajae-cua-companion --server=wss://gajae.example/remote-cua --pair=TOKEN');
-const url = new URL(server);
+if (!server) throw new Error('Usage: gajae-cua-companion --server=gjc.example.com --pair=TOKEN');
+// Accept a bare domain (the common case) as well as a full URL, so a user
+// never has to know this needs wss:// and /remote-cua: both get filled in
+// unless the caller already supplied them (e.g. a non-default port, or an
+// explicit ws:// for local development).
+const url = /^wss?:\/\//iu.test(server) ? new URL(server) : new URL(`wss://${server}`);
+if (url.pathname === '/' || url.pathname === '') url.pathname = '/remote-cua';
 if (url.protocol !== 'wss:' && !(url.protocol === 'ws:' && ['localhost', '127.0.0.1', '::1'].includes(url.hostname))) {
   throw new Error('The companion requires wss://; ws:// is limited to localhost development.');
 }
@@ -261,7 +266,7 @@ function readiness() {
 }
 let retryCount = 0;
 function connect() {
-  console.error(`[info] Connecting to ${server} ...`);
+  console.error(`[info] Connecting to ${url} ...`);
   let confirmedAuth = false;
   let lastError;
   let httpStatus;
@@ -294,7 +299,14 @@ function connect() {
       console.error('[info] Paired and connected. This device is now available to the server.');
     }
     if (message.type === 'pong' && !confirmedAuth) { confirmedAuth = true; retryCount = 0; console.error('[info] Connected and authenticated with the server.'); }
-    if (message.type === 'pong' || message.type === 'paired') socket.send(JSON.stringify(readiness()));
+    if (message.type === 'pong' || message.type === 'paired') {
+      const current = readiness();
+      socket.send(JSON.stringify(current));
+      const r = current.readiness;
+      const driverState = r.schemaSupported ? `${color.green}CUA Driver ready${r.driverVersion ? ` (v${r.driverVersion})` : ''}${color.reset}`
+        : `${color.yellow}CUA Driver not available - tool calls will fail${color.reset}`;
+      console.error(`[info] Status: device "${r.deviceName}" (${r.os}) - ${driverState} - ${r.safeTools.length} tools reviewed.`);
+    }
     if (message.type === 'disconnect') { console.error(`[info] Server disconnected this device: ${message.reason}`); socket.close(4003, message.reason); }
     if (message.type !== 'computer.request') return;
     const error = !state || message.deviceId !== state.deviceId ? 'device ID mismatch'
@@ -302,11 +314,16 @@ function connect() {
         : Date.now() >= message.deadline ? 'expired deadline'
           : !allowed(message.tool, message.arguments) ? 'CUA policy denied this request' : null;
     completed.add(message.requestId);
+    if (error) console.error(`${color.yellow}[warn] Refused ${message.tool}: ${error}${color.reset}`);
+    else console.error(`[info] Running ${message.tool} ...`);
     try {
       const result = error ? undefined : await driver.call(message.tool, message.arguments);
+      if (!error) console.error(`[info] ${message.tool} completed.`);
       socket.send(JSON.stringify({ type: 'computer.result', protocolVersion: VERSION, requestId: message.requestId, deviceId: message.deviceId, ...(error ? { error } : { result }) }));
     } catch (cause) {
-      socket.send(JSON.stringify({ type: 'computer.result', protocolVersion: VERSION, requestId: message.requestId, deviceId: message.deviceId, error: cause instanceof Error ? cause.message : 'CUA Driver failed' }));
+      const failureMessage = cause instanceof Error ? cause.message : 'CUA Driver failed';
+      console.error(`${color.red}[error] ${message.tool} failed: ${failureMessage}${color.reset}`);
+      socket.send(JSON.stringify({ type: 'computer.result', protocolVersion: VERSION, requestId: message.requestId, deviceId: message.deviceId, error: failureMessage }));
     }
   });
   socket.on('close', (code, reasonBuffer) => {
@@ -324,7 +341,7 @@ function connect() {
     }
     if (code === 1008) { console.error(`${color.red}[error] Server rejected this connection${reason ? `: ${reason}` : '.'} Check the pairing token or server URL.${color.reset}`); process.exit(1); }
     else if (code === 1015 || (code === 1006 && /certificate|tls|ssl/iu.test(lastError ?? ''))) {
-      console.error(`${color.yellow}[warn] TLS handshake failed connecting to ${server}${detail}. If this server uses a locally-signed certificate, pass --ca-cert=/path/to/ca.pem (or set NODE_EXTRA_CA_CERTS). Retrying in 2s...${color.reset}`);
+      console.error(`${color.yellow}[warn] TLS handshake failed connecting to ${url}${detail}. If this server uses a locally-signed certificate, pass --ca-cert=/path/to/ca.pem (or set NODE_EXTRA_CA_CERTS). Retrying in 2s...${color.reset}`);
     } else {
       const statusNote = httpStatus ? ` (HTTP ${httpStatus})` : '';
       console.error(`[info] Disconnected (code ${code}${statusNote}${reason ? `: ${reason}` : ''}${detail}). Retrying in 2s...`);
