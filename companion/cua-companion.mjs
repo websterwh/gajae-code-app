@@ -108,39 +108,78 @@ function allowed(tool, value) {
     && typeof value.pid === 'number' && Number.isSafeInteger(value.pid) && value.pid > 0;
 }
 function startDriver() {
-  const child = spawn(process.env.CUA_DRIVER_PATH ?? 'cua-driver', ['mcp'], { stdio: ['pipe', 'pipe', 'pipe'] });
+  // `spawn` for a missing executable never throws synchronously: it returns
+  // an object immediately and only emits an async 'error' (ENOENT) shortly
+  // after. Until that settles (or the driver proves itself by replying),
+  // treat readiness as unknown rather than assuming success.
+  let child;
+  let launchError;
+  let confirmed = false;
+  try {
+    child = spawn(process.env.CUA_DRIVER_PATH ?? 'cua-driver', ['mcp'], { stdio: ['pipe', 'pipe', 'pipe'] });
+  } catch (cause) {
+    launchError = cause instanceof Error ? cause.message : 'CUA Driver failed to start';
+  }
   let sequence = 0; const pending = new Map();
   let buffer = '';
-  child.stdout.on('data', chunk => {
-    buffer += chunk;
-    for (;;) {
-      const index = buffer.indexOf('\n'); if (index < 0) break;
-      const line = buffer.slice(0, index); buffer = buffer.slice(index + 1);
-      try {
-        const message = JSON.parse(line); const call = pending.get(String(message.id));
-        if (!call) continue; pending.delete(String(message.id));
-        message.error ? call.reject(new Error(message.error.message ?? 'CUA Driver error')) : call.resolve(message.result);
-      } catch { /* malformed driver output cannot become a capability */ }
-    }
-  });
+  if (child) {
+    // A listener here is required: Node re-throws an unhandled 'error' event
+    // as a process-crashing exception, which is what killed the process when
+    // cua-driver was missing.
+    child.on('error', cause => {
+      launchError = cause instanceof Error ? cause.message : 'CUA Driver failed to start';
+      for (const call of pending.values()) call.reject(new Error(launchError));
+      pending.clear();
+    });
+    child.on('exit', code => {
+      if (code !== 0 && !launchError) launchError = `CUA Driver exited with code ${code}`;
+    });
+    child.stdout.on('data', chunk => {
+      confirmed = true;
+      buffer += chunk;
+      for (;;) {
+        const index = buffer.indexOf('\n'); if (index < 0) break;
+        const line = buffer.slice(0, index); buffer = buffer.slice(index + 1);
+        try {
+          const message = JSON.parse(line); const call = pending.get(String(message.id));
+          if (!call) continue; pending.delete(String(message.id));
+          message.error ? call.reject(new Error(message.error.message ?? 'CUA Driver error')) : call.resolve(message.result);
+        } catch { /* malformed driver output cannot become a capability */ }
+      }
+    });
+  }
   return {
+    get ready() { return Boolean(child) && !launchError; },
+    get confirmed() { return confirmed; },
     call(tool, parameters) {
+      if (!child || launchError) {
+        return Promise.reject(new Error(launchError ?? 'CUA Driver is not installed. Run with --install-driver=portable or --install-driver=system first.'));
+      }
       const id = String(++sequence);
       return new Promise((resolve, reject) => {
         pending.set(id, { resolve, reject });
         child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: tool, arguments: parameters } })}\n`);
       });
     },
-    close: () => child.kill('SIGTERM'),
+    close: () => child?.kill('SIGTERM'),
   };
 }
 
+// Started lazily, after the usage/validation checks above, so a missing CUA
+// Driver install never crashes the whole process before pairing can even run.
 const driver = startDriver();
+// spawn()'s ENOENT surfaces asynchronously; give it a tick before reporting.
+setTimeout(() => {
+  if (!driver.ready) {
+    console.error('[warn] CUA Driver is not available yet; pairing and connection will proceed, but tool calls will fail.');
+    console.error('[warn] Install it with: gajae-cua-companion --install-driver=portable   (or --install-driver=system)');
+  }
+}, 250);
 let state = await loadState();
 const completed = new Set();
 function readiness() {
   return { type: 'readiness', protocolVersion: VERSION, readiness: {
-    driverVersion: process.env.CUA_DRIVER_VERSION, schemaSupported: true, daemon: 'unknown',
+    driverVersion: process.env.CUA_DRIVER_VERSION, schemaSupported: driver.ready, daemon: driver.ready ? 'running' : 'stopped',
     safeTools: [...SAFE_TOOLS], deviceName: args.name ?? hostname(), os: `${platform()} ${process.arch}`,
   }};
 }
