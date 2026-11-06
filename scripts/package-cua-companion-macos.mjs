@@ -13,9 +13,13 @@ const dmg = join(output, 'gajae-cua-companion-macos-universal.dmg');
 
 await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });
+// x64 needs -baseline: Bun's default x64 build assumes AVX2, which crashes
+// with an illegal-instruction panic on older/budget x64 CPUs (confirmed on
+// an Intel MacBook Air). arm64 has no baseline variant.
 for (const architecture of ['x64', 'arm64']) {
+  const target = architecture === 'x64' ? 'bun-darwin-x64-baseline' : 'bun-darwin-arm64';
   const result = spawnSync('bun', [
-    'build', '--compile', '--target', `bun-darwin-${architecture}`, 'companion/cua-companion.mjs',
+    'build', '--compile', '--target', target, 'companion/cua-companion.mjs',
     '--outfile', join(output, `gajae-cua-companion-darwin-${architecture}`),
   ], { stdio: 'inherit' });
   if (result.status !== 0) process.exit(result.status ?? 1);

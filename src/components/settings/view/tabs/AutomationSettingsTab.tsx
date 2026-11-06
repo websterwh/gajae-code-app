@@ -405,7 +405,7 @@ export default function AutomationSettingsTab() {
             <div className="flex items-center gap-2">
               {companionDownloadTemplate ? <a href={companionDownloadTemplate.replace('{platform}', companionPlatform())} className="rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted">Download companion</a> : null}
               {companionDownloadTemplate && navigator.userAgent.includes('Mac')
-                ? <a href={companionDownloadTemplate.replace('{platform}', companionMacCliPlatform())} className="rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted">Download CLI binary (Terminal)</a>
+                ? <a href={companionDownloadTemplate.replace('{platform}', companionMacCliPlatform())} className="rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted">Download CLI</a>
                 : null}
               <button type="button" onClick={() => void pairRemoteComputer()} className="rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted">Pair this computer</button>
             </div>
