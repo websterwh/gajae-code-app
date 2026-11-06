@@ -84,9 +84,7 @@ export default function AutomationSettingsTab() {
   const [remoteDevices, setRemoteDevices] = useState<RemoteDevice[]>([]);
   const [selectedRemoteDeviceId, setSelectedRemoteDeviceId] = useState<string | undefined>();
   const [pairingCommand, setPairingCommand] = useState<string | null>(null);
-  const [pairingCliCommand, setPairingCliCommand] = useState<string | null>(null);
   const [pairingToken, setPairingToken] = useState<string | null>(null);
-  const [pairingCopied, setPairingCopied] = useState(false);
   const [tokenCopied, setTokenCopied] = useState(false);
   const [companionDownloadTemplate, setCompanionDownloadTemplate] = useState<string | null>(null);
   const [testingEgoConnection, setTestingEgoConnection] = useState(false);
@@ -205,20 +203,8 @@ export default function AutomationSettingsTab() {
     const pairing = await response.json() as { token: string };
     const server = `${window.location.origin.replace(/^http/u, 'ws')}/remote-cua`;
     setPairingCommand(`gajae-cua://pair?server=${encodeURIComponent(server)}&token=${encodeURIComponent(pairing.token)}`);
-    // The deep-link opens a running companion on Linux and Windows today. The
-    // CLI form works everywhere, including macOS until its GUI handler ships.
-    setPairingCliCommand(`gajae-cua-companion --server=${server} --pair=${pairing.token}`);
     setPairingToken(pairing.token);
-    setPairingCopied(false);
     setTokenCopied(false);
-  };
-
-  const copyPairingCommand = async () => {
-    if (!pairingCliCommand) return;
-    try {
-      await navigator.clipboard.writeText(pairingCliCommand);
-      setPairingCopied(true);
-    } catch { /* Clipboard access can be denied by the browser; the text stays selectable. */ }
   };
 
   const copyPairingToken = async () => {
@@ -430,9 +416,8 @@ export default function AutomationSettingsTab() {
               <div className="flex flex-wrap gap-2">
                 <a href={pairingCommand} className="inline-flex items-center gap-1 rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted"><ExternalLink className="h-3.5 w-3.5" />Open in companion</a>
                 <button type="button" onClick={() => void copyPairingToken()} className="rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted">{tokenCopied ? 'Token copied' : 'Copy token'}</button>
-                <button type="button" onClick={() => void copyPairingCommand()} className="rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted">{pairingCopied ? 'CLI command copied' : 'Copy CLI command'}</button>
               </div>
-              <p className="mt-2 text-xs text-muted-foreground">“Open in companion” works with an already-running companion on Linux/Windows. On macOS (no GUI handler yet) or for a first run anywhere, copy the token or CLI command and pass it to the companion in a terminal.</p>
+              <p className="mt-2 text-xs text-muted-foreground">“Open in companion” works with an already-running companion on Linux/Windows. On macOS (no GUI handler yet) or for a first run, copy the token and pass it to the companion with <code className="rounded bg-muted px-1">--pair=TOKEN</code>.</p>
             </div>
           ) : null}
           <div className="border-t border-border p-4">

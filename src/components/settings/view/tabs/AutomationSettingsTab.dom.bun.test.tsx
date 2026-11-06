@@ -372,11 +372,6 @@ test('pairing shows an open-in-companion button and copy buttons instead of raw 
   fireEvent.click(screen.getByRole('button', { name: 'Copy token' }));
   await waitFor(() => assert.deepEqual(writeTextCalls, ['fake-pairing-token']));
   assert.ok(screen.getByRole('button', { name: 'Token copied' }));
-
-  fireEvent.click(screen.getByRole('button', { name: 'Copy CLI command' }));
-  await waitFor(() => assert.equal(writeTextCalls.length, 2));
-  assert.ok(writeTextCalls[1].includes('--pair=fake-pairing-token'));
-  assert.ok(screen.getByRole('button', { name: 'CLI command copied' }));
 });
 
 test('browser routing wording keys have parity across all ten settings locales', () => {
