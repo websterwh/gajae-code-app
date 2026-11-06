@@ -44,3 +44,12 @@ chmod +x gajae-cua-companion-darwin-arm64
 The `.app`/`.dmg` release currently wraps this same binary with no GUI
 pairing/settings screen yet; it must still be run from Terminal, so prefer the
 raw CLI binary above until the real GUI ships.
+
+Released x64 binaries target the Nehalem/SSE4.2 baseline (not AVX2), since a
+modern-only build panics with an illegal-instruction crash on older or
+budget x64 CPUs (confirmed on an Intel MacBook Air).
+
+If the server certificate is locally-signed (common for LAN/VPN setups), pass
+`--ca-cert=/path/to/ca.pem` (or set `NODE_EXTRA_CA_CERTS`); the OS/browser
+trusting it is not enough because this runtime's TLS stack does not consult
+the OS trust store.

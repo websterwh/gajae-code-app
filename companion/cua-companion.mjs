@@ -4,7 +4,7 @@
  * filesystem, browser, clipboard, or generic MCP forwarding surface.
  */
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir, hostname, platform } from 'node:os';
 import { join } from 'node:path';
@@ -28,6 +28,10 @@ if (deepLink) {
 const server = args.server;
 const pairingToken = args.pair;
 const statePath = args.state ?? join(homedir(), '.config', 'gajae-cua-companion', 'device.json');
+// Node/Bun's TLS stack does not consult the OS/browser trust store (unlike
+// Safari/Chrome), so a locally-signed cert that's trusted system-wide still
+// fails verification here unless its CA is handed to us explicitly.
+const caCertPath = args['ca-cert'] ?? process.env.NODE_EXTRA_CA_CERTS;
 
 // A portable install deliberately skips the shell PATH (that's the point of
 // --prefix/--no-modify-path), so look in the default and last-used portable
@@ -258,7 +262,8 @@ function readiness() {
 function connect() {
   console.error(`[info] Connecting to ${server} ...`);
   let confirmedAuth = false;
-  const socket = new WebSocket(url);
+  let lastError;
+  const socket = new WebSocket(url, caCertPath ? { ca: readFileSync(caCertPath) } : undefined);
   socket.on('open', () => {
     console.error('[info] Connected. Authenticating...');
     socket.send(JSON.stringify({
@@ -292,11 +297,17 @@ function connect() {
   });
   socket.on('close', (code, reasonBuffer) => {
     const reason = reasonBuffer?.toString() || '';
-    if (code === 1008) console.error(`[error] Server rejected this connection${reason ? `: ${reason}` : '.'} Check the pairing token or server URL.`);
-    else console.error(`[info] Disconnected (code ${code}${reason ? `: ${reason}` : ''}). Reconnecting in 2s...`);
+    const detail = lastError ? ` (${lastError})` : '';
+    if (code === 1008) console.error(`${color.red}[error] Server rejected this connection${reason ? `: ${reason}` : '.'} Check the pairing token or server URL.${color.reset}`);
+    else if (code === 1015 || (code === 1006 && /certificate|tls|ssl/iu.test(lastError ?? ''))) {
+      console.error(`${color.yellow}[warn] TLS handshake failed connecting to ${server}${detail}. If this server uses a locally-signed certificate, pass --ca-cert=/path/to/ca.pem (or set NODE_EXTRA_CA_CERTS). Retrying in 2s...${color.reset}`);
+    } else console.error(`[info] Disconnected (code ${code}${reason ? `: ${reason}` : ''}${detail}). Retrying in 2s...`);
     setTimeout(connect, 2_000);
   });
-  socket.on('error', cause => console.error(`[error] Connection error: ${cause instanceof Error ? cause.message : cause}`));
+  // Some runtimes (Bun) surface TLS/network failures as a bare ErrorEvent
+  // with no message; Node's ws gives a real message. Keep whichever we get
+  // and report it alongside 'close', which always fires right after.
+  socket.on('error', cause => { lastError = cause instanceof Error ? cause.message : undefined; });
 }
 process.on('SIGINT', () => { driver.close(); process.exit(0); });
 connect();

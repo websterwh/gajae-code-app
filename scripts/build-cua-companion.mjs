@@ -7,11 +7,17 @@ const targets = requestedTargets.length ? requestedTargets : ['linux-x64', 'linu
 const output = join('release', 'companion');
 await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });
+// x64 targets need -baseline: Bun's default x64 build assumes AVX2, which
+// crashes with an illegal-instruction panic on older/budget x64 CPUs
+// (confirmed on an Intel MacBook Air). arm64 has no baseline variant.
+function compileTarget(platform) {
+  return platform.endsWith('-x64') ? `bun-${platform}-baseline` : `bun-${platform}`;
+}
 for (const platform of targets) {
   const extension = platform.startsWith('windows-') ? '.exe' : '';
   const outfile = join(output, `gajae-cua-companion-${platform}${extension}`);
   const result = spawnSync('dist-native/bun', [
-    'build', '--compile', '--target', `bun-${platform}`, 'companion/cua-companion.mjs', '--outfile', outfile,
+    'build', '--compile', '--target', compileTarget(platform), 'companion/cua-companion.mjs', '--outfile', outfile,
   ], { stdio: 'inherit' });
   if (result.status !== 0) process.exit(result.status ?? 1);
   if (platform.startsWith('darwin-')) {
