@@ -3,6 +3,27 @@
  * Outbound-only CUA Driver companion. It deliberately exposes no shell,
  * filesystem, browser, clipboard, or generic MCP forwarding surface.
  */
+
+// Bun's JIT emits AVX2 instructions on macOS x64 regardless of a -baseline
+// compile target: -baseline only gates ahead-of-time-compiled code, and this
+// is JIT-emitted at runtime once WebSocket/networking code paths tier up, so
+// it crashes with an illegal-instruction panic on any Mac without AVX2
+// (confirmed on an Intel MacBook Air; see Bun's own
+// scripts/verify-baseline-static/CLAUDE.md, which documents JIT-emitted code
+// as explicitly out of scope of its baseline verifier). There is no AVX
+// feature flag reachable from JS, so this disables the JIT unconditionally
+// for this exact combination - a compiled standalone executable running on
+// macOS x64 - rather than gambling on CPUID detection; the cost is a slower
+// start for a short-lived process that is not otherwise CPU-bound.
+if (process.versions.bun && process.platform === 'darwin' && process.arch === 'x64' && !process.env.BUN_JSC_useJIT) {
+  const { spawnSync } = await import('node:child_process');
+  const result = spawnSync(process.execPath, process.argv.slice(2), {
+    stdio: 'inherit',
+    env: { ...process.env, BUN_JSC_useJIT: '0' },
+  });
+  process.exit(result.status ?? 1);
+}
+
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
