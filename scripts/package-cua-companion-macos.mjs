@@ -38,5 +38,6 @@ const packaged = spawnSync('hdiutil', [
 if (packaged.status !== 0) process.exit(packaged.status ?? 1);
 await rm(stage, { recursive: true, force: true });
 await rm(universal, { force: true });
-await rm(join(output, 'gajae-cua-companion-darwin-x64'), { force: true });
-await rm(join(output, 'gajae-cua-companion-darwin-arm64'), { force: true });
+// Keep the raw per-architecture binaries alongside the DMG: a plain CLI
+// binary runnable from a terminal is the current supported macOS artifact
+// while the app bundle's own pairing/settings UI is still unbuilt.
