@@ -678,6 +678,25 @@ test('permanent deletion with discardWorktree discards uncommitted changes inste
   await assert.rejects(readFile(path.join(cwd, 'README.md')), { code: 'ENOENT' }, 'the whole worktree is gone, discarded changes included');
 });
 
+test('permanent deletion surfaces a clean error, not a raw 500, when the repository\'s .git has been removed by hand', async (t) => {
+  const f = await fixture(t);
+  const run = f.makeTicket().run('fixture turn', runOptions, f.writer);
+  await until(() => f.workers.length === 1);
+  f.workers[0].finish();
+  await run;
+
+  // Simulates a user manually deleting files, including .git, from a
+  // registered project's root (the reported scenario: a Scratch workspace
+  // whose .git vanished alongside hand-deleted session files).
+  await rm(path.join(f.repository, '.git'), { recursive: true, force: true });
+
+  await assert.rejects(
+    sessionsService.deleteOrArchiveSessionById(f.created.sessionId, { force: true }),
+    (error: unknown) => error instanceof Error && 'code' in error && (error as { code?: string }).code === 'SESSION_WORKTREE_REPOSITORY_UNAVAILABLE' && 'statusCode' in error && (error as { statusCode?: number }).statusCode === 409,
+  );
+  assert.ok(sessionsDb.getSessionById(f.created.sessionId), 'a refused release does not delete the session row');
+});
+
 test('permanent deletion refuses while the session\'s job is running, and does not touch the worktree', async (t) => {
   const f = await fixture(t);
   const run = f.makeTicket().run('fixture turn', runOptions, f.writer);
