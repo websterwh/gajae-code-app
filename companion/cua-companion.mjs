@@ -40,19 +40,25 @@ async function installDriver(mode) {
   if (mode !== 'portable' && mode !== 'system') throw new Error('--install-driver must be portable or system.');
   const portable = mode === 'portable';
   const prefix = args['portable-dir'] ?? join(homedir(), 'Gajae CUA');
+  // CUA's installer always verifies sha256 regardless of this flag; strict
+  // --require-signature additionally needs minisign/cosign on the machine,
+  // which most machines don't have, and otherwise hard-fails with no
+  // fallback. Require it only when the caller explicitly opts in.
+  const requireSignature = args['require-signature'] === 'true';
   if (process.platform === 'win32') {
-    const options = portable
-      ? ` -Prefix '${prefix.replace(/'/gu, "''")}' -NoPathUpdate -RequireSignature`
-      : ' -RequireSignature';
+    const options = `${portable ? ` -Prefix '${prefix.replace(/'/gu, "''")}' -NoPathUpdate` : ''}${requireSignature ? ' -RequireSignature' : ''}`;
     await run('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command',
       `& ([scriptblock]::Create((irm https://cua.ai/install.ps1))) -Only cua-driver -NoOnboarding${options}`]);
     return;
   }
   // CUA publishes this installer and its release manifest. The documented
   // options keep portable installations entirely below the selected prefix.
-  const options = portable
-    ? ['--only', 'cua-driver', '--no-onboarding', '--prefix', prefix, '--no-modify-path', '--require-signature', '--yes']
-    : ['--only', 'cua-driver', '--no-onboarding', '--require-signature', '--yes'];
+  const options = [
+    '--only', 'cua-driver', '--no-onboarding',
+    ...(portable ? ['--prefix', prefix, '--no-modify-path'] : []),
+    ...(requireSignature ? ['--require-signature'] : []),
+    '--yes',
+  ];
   await run('/bin/bash', ['-c', 'curl -fsSL https://cua.ai/install.sh | sh -s -- "$@"', 'gajae-cua-installer', ...options]);
 }
 
@@ -79,12 +85,23 @@ async function registerProtocol() {
 }
 
 if (args['install-driver']) {
-  await installDriver(args['install-driver']);
-  process.exit(0);
+  try {
+    await installDriver(args['install-driver']);
+    process.exit(0);
+  } catch (cause) {
+    console.error(`[error] ${cause instanceof Error ? cause.message : 'CUA Driver installation failed.'}`);
+    console.error('[hint] If this fails with a signature error, retry with --require-signature=true once minisign or cosign is installed, or omit it to rely on sha256 verification alone.');
+    process.exit(1);
+  }
 }
 if (args['register-protocol']) {
-  await registerProtocol();
-  process.exit(0);
+  try {
+    await registerProtocol();
+    process.exit(0);
+  } catch (cause) {
+    console.error(`[error] ${cause instanceof Error ? cause.message : 'Protocol registration failed.'}`);
+    process.exit(1);
+  }
 }
 if (!server) throw new Error('Usage: gajae-cua-companion --server=wss://gajae.example/remote-cua --pair=TOKEN');
 const url = new URL(server);

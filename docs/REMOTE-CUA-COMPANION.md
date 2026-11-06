@@ -5,10 +5,11 @@ The companion lets a Gajae server use the existing reviewed `computer` actions o
 ## Pair and run
 
 1. In **Settings → Automation → Computer use**, keep the master switch off until native application automation is intended. Create a pairing code under **Remote devices**.
-2. On the laptop with `cua-driver` installed and its OS permissions granted, run:
+2. Install CUA Driver, then run the companion with the generated command. On Linux and Windows the downloaded CLI binary is a normal executable. On macOS, download the raw CLI binary (`gajae-cua-companion-darwin-arm64`/`-x64`) rather than the `.app`/`.dmg`: the app bundle currently wraps the same CLI with no pairing/settings GUI, so it still has to be run from Terminal.
 
 ```sh
-gajae-cua-companion --server=wss://gajae.example/remote-cua --pair=PAIRING_TOKEN
+./gajae-cua-companion --install-driver=portable   # or --install-driver=system
+./gajae-cua-companion --server=wss://gajae.example/remote-cua --pair=PAIRING_TOKEN
 ```
 
 The companion stores its device credential at `~/.config/gajae-cua-companion/device.json` with mode `0600`. Pairing tokens are single-use and expire after ten minutes. Enable the paired device from Settings before it can authenticate after reconnecting.

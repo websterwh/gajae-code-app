@@ -56,7 +56,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: companion-macos
-          path: release/companion/gajae-cua-companion-macos-universal.dmg
+          path: |
+            release/companion/gajae-cua-companion-macos-universal.dmg
+            release/companion/gajae-cua-companion-darwin-x64
+            release/companion/gajae-cua-companion-darwin-arm64
           if-no-files-found: error
 
   publish:
