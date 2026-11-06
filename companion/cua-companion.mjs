@@ -259,11 +259,24 @@ function readiness() {
     safeTools: [...SAFE_TOOLS], deviceName: args.name ?? hostname(), os: `${platform()} ${process.arch}`,
   }};
 }
+let retryCount = 0;
 function connect() {
   console.error(`[info] Connecting to ${server} ...`);
   let confirmedAuth = false;
   let lastError;
+  let httpStatus;
   const socket = new WebSocket(url, caCertPath ? { ca: readFileSync(caCertPath) } : undefined);
+  // Reverse proxies and auth middleware (OIDC, basic auth, etc.) in front of
+  // the server reject the upgrade at the HTTP layer before ws ever completes
+  // the handshake; that response is only visible on 'unexpected-response',
+  // not on 'close'/'error'.
+  socket.on('unexpected-response', (_request, response) => {
+    httpStatus = response.statusCode;
+    response.resume();
+    // ws does not close the connection on its own here; without this the
+    // process hangs forever instead of reaching 'close' or giving up.
+    socket.terminate();
+  });
   socket.on('open', () => {
     console.error('[info] Connected. Authenticating...');
     socket.send(JSON.stringify({
@@ -277,9 +290,10 @@ function connect() {
     if (message.type === 'paired') {
       state = { deviceId: message.deviceId, credential: message.credential };
       await saveState(state);
+      retryCount = 0;
       console.error('[info] Paired and connected. This device is now available to the server.');
     }
-    if (message.type === 'pong' && !confirmedAuth) { confirmedAuth = true; console.error('[info] Connected and authenticated with the server.'); }
+    if (message.type === 'pong' && !confirmedAuth) { confirmedAuth = true; retryCount = 0; console.error('[info] Connected and authenticated with the server.'); }
     if (message.type === 'pong' || message.type === 'paired') socket.send(JSON.stringify(readiness()));
     if (message.type === 'disconnect') { console.error(`[info] Server disconnected this device: ${message.reason}`); socket.close(4003, message.reason); }
     if (message.type !== 'computer.request') return;
@@ -298,10 +312,23 @@ function connect() {
   socket.on('close', (code, reasonBuffer) => {
     const reason = reasonBuffer?.toString() || '';
     const detail = lastError ? ` (${lastError})` : '';
-    if (code === 1008) console.error(`${color.red}[error] Server rejected this connection${reason ? `: ${reason}` : '.'} Check the pairing token or server URL.${color.reset}`);
+    if (httpStatus === 401 || httpStatus === 403 || httpStatus === 404) {
+      console.error(`${color.red}[error] The server rejected the connection before the WebSocket handshake (HTTP ${httpStatus}).${color.reset}`);
+      console.error(`${color.red}[error] This is usually a reverse proxy or auth middleware (OIDC, basic auth, etc.) blocking the /remote-cua path, not the companion itself. The companion authenticates with its own pairing token/device credential and cannot complete a login page or SSO challenge. Exclude /remote-cua from that middleware, then retry.${color.reset}`);
+      process.exit(1);
+    }
+    retryCount += 1;
+    if (retryCount >= 10 && httpStatus !== undefined) {
+      console.error(`${color.red}[error] Giving up after ${retryCount} failed attempts (last HTTP status: ${httpStatus}). Fix the server/proxy configuration and rerun.${color.reset}`);
+      process.exit(1);
+    }
+    if (code === 1008) { console.error(`${color.red}[error] Server rejected this connection${reason ? `: ${reason}` : '.'} Check the pairing token or server URL.${color.reset}`); process.exit(1); }
     else if (code === 1015 || (code === 1006 && /certificate|tls|ssl/iu.test(lastError ?? ''))) {
       console.error(`${color.yellow}[warn] TLS handshake failed connecting to ${server}${detail}. If this server uses a locally-signed certificate, pass --ca-cert=/path/to/ca.pem (or set NODE_EXTRA_CA_CERTS). Retrying in 2s...${color.reset}`);
-    } else console.error(`[info] Disconnected (code ${code}${reason ? `: ${reason}` : ''}${detail}). Retrying in 2s...`);
+    } else {
+      const statusNote = httpStatus ? ` (HTTP ${httpStatus})` : '';
+      console.error(`[info] Disconnected (code ${code}${statusNote}${reason ? `: ${reason}` : ''}${detail}). Retrying in 2s...`);
+    }
     setTimeout(connect, 2_000);
   });
   // Some runtimes (Bun) surface TLS/network failures as a bare ErrorEvent
