@@ -9,6 +9,7 @@ import test from 'node:test';
 import { AutomationGrantStore } from './automation-grants.js';
 import { AutomationService, automationSupport } from './automation.service.js';
 import { ComputerUseStore } from './computer-use.js';
+import { RemoteComputerDeviceRegistry } from './remote-computer-devices.js';
 
 function memoryStorage() {
   const values = new Map<string, string>();
@@ -369,6 +370,50 @@ test('computer use is off by default and every computer path refuses until the u
     service.computerUse.set(true);
     await assert.doesNotReject(service.callComputer('session-a', 'list_apps', {}));
     assert.ok(driverCalls > 0);
+  } finally {
+    if (previous === undefined) delete process.env.GAJAE_AUTOMATION;
+    else process.env.GAJAE_AUTOMATION = previous;
+  }
+});
+
+test('selecting a paired remote device routes computer calls to it instead of the local driver', async () => {
+  const previous = process.env.GAJAE_AUTOMATION;
+  process.env.GAJAE_AUTOMATION = '1';
+  try {
+    const service = withComputerUse(new AutomationService());
+    Object.defineProperty(service, 'grants', { value: new AutomationGrantStore(memoryStorage()) });
+    const registry = new RemoteComputerDeviceRegistry(memoryStorage());
+    Object.defineProperty(service, 'remoteDevices', { value: registry });
+    const paired = registry.consumePairing(registry.issuePairing().token, 'Laptop', 'darwin');
+    registry.update(paired.device.id, { enabled: true });
+    registry.select(paired.device.id);
+
+    let localCalls = 0;
+    const remoteTools: string[] = [];
+    service.cua.call = async () => { localCalls += 1; return { ok: true }; };
+    Object.defineProperty(service, 'remoteComputerHub', {
+      value: {
+        call: async (deviceId: string, appSessionId: string, tool: string) => {
+          remoteTools.push(tool);
+          assert.equal(deviceId, paired.device.id);
+          assert.equal(appSessionId, 'session-a');
+          if (tool === 'start_session') return { ok: true };
+          return { apps: [] };
+        },
+        readiness: () => undefined,
+        devices: registry,
+      },
+    });
+
+    await service.callComputer('session-a', 'list_apps', {});
+    assert.deepEqual(remoteTools, ['start_session', 'list_apps'], 'the selected remote device received every call');
+    assert.equal(localCalls, 0, 'the local driver was never consulted while a device is selected');
+
+    // Disabling the selected device after selection falls back to local
+    // instead of throwing, since dispatchable() re-checks on every call.
+    registry.update(paired.device.id, { enabled: false });
+    await service.callComputer('session-a', 'list_apps', {});
+    assert.ok(localCalls > 0, 'a disabled selected device falls back to the local driver');
   } finally {
     if (previous === undefined) delete process.env.GAJAE_AUTOMATION;
     else process.env.GAJAE_AUTOMATION = previous;

@@ -26,7 +26,8 @@ import { computerUseStore } from './computer-use.js';
 import { egoActivityReader, egoActivityStore, type EgoActivityResponse } from './ego-activity.js';
 import { TauriBrowserClient } from './tauri-browser-client.js';
 import { automationOrigin } from './automation-url.js';
-import { CuaDriverClient, isCuaSafeTool, type CuaSafeTool } from './cua-client.js';
+import { CuaDriverClient, isCuaSafeTool, type CuaSafeTool, type CuaStatus } from './cua-client.js';
+import { LocalComputerTransport, RemoteComputerTransport, type ComputerTransport } from './computer-transport.js';
 import { RemoteComputerDeviceRegistry } from './remote-computer-devices.js';
 import { RemoteComputerHub } from './remote-computer-hub.js';
 import {
@@ -149,6 +150,25 @@ export class AutomationService {
   /** Pairing state for outbound-only CUA companions. */
   readonly remoteDevices = new RemoteComputerDeviceRegistry();
   readonly remoteComputerHub = new RemoteComputerHub(this.remoteDevices);
+  private readonly localTransport = new LocalComputerTransport(this.cua);
+
+  /**
+   * The transport computer calls route through: the paired remote companion
+   * selected in Settings when one is selected and enabled, otherwise this
+   * server's own local CUA Driver. Re-read on every call rather than cached,
+   * so disabling or switching the selected device in Settings takes effect
+   * on the very next call with no restart.
+   */
+  private transport(): ComputerTransport {
+    const deviceId = this.remoteDevices.selectedDeviceId();
+    if (!deviceId) return this.localTransport;
+    try {
+      this.remoteDevices.dispatchable(deviceId);
+    } catch {
+      return this.localTransport;
+    }
+    return new RemoteComputerTransport(deviceId, this.remoteComputerHub);
+  }
   private readonly egoActivityReader = egoActivityReader;
   private readonly capabilities = automationSupport(process.platform, process.arch, process.env);
   get supported(): boolean { return this.browser.isReady(); }
@@ -211,8 +231,8 @@ export class AutomationService {
       const [browser, cua] = await Promise.all([
         this.browser.status().catch(() => ({ state: 'unavailable' as const, ready: false, engine: 'webview' as const })),
         this.capabilities.computer
-          ? this.cua.status()
-          : Promise.resolve({ installed: false, daemon: 'unknown' as const }),
+          ? this.transport().status()
+          : Promise.resolve({ installed: false, daemon: 'unknown' as const } as CuaStatus),
       ]);
       return {
         supported: browser.ready,
@@ -351,6 +371,7 @@ export class AutomationService {
       // resolving inventory, prompting, or materializing an application grant.
       const { arguments: args } = guardCuaCall(payload.tool, rawArgs);
       const { application, label } = await this.resolveComputerApplication(
+        sessionId,
         payload.tool,
         args,
         typeof payload.application === 'string' ? payload.application.trim() : '',
@@ -382,6 +403,7 @@ export class AutomationService {
    * (enforce), so approval and execution always agree on the target.
    */
   private async resolveComputerApplication(
+    sessionId: string,
     tool: CuaSafeTool,
     args: Record<string, unknown>,
     hint: string,
@@ -402,7 +424,9 @@ export class AutomationService {
       || windowId !== undefined
       || (tool === 'list_windows' && args.pid !== undefined);
     if (!application && needsInventory) {
-      const inventory = await this.cua.call(
+      const transport = this.transport();
+      const inventory = await transport.call(
+        sessionId,
         pid === undefined && windowId !== undefined ? 'list_windows' : 'list_apps',
         {},
         signal,
@@ -415,7 +439,7 @@ export class AutomationService {
       }
       let apps = applicationRecords(inventory);
       if (pid !== undefined && apps.length === 0) {
-        apps = applicationRecords(await this.cua.call('list_apps', {}, signal));
+        apps = applicationRecords(await transport.call(sessionId, 'list_apps', {}, signal));
       }
       const requestedName = typeof args.name === 'string' ? args.name.trim().toLocaleLowerCase() : '';
       const match = apps.find((app) => (
@@ -449,7 +473,7 @@ export class AutomationService {
       // re-resolved from the live driver inventory on each call, so a pid that
       // no longer belongs to the approved application fails closed.
       if (requiresApplicationIdentity(tool, scopedArgs)) {
-        const { application, label } = await this.resolveComputerApplication(tool, scopedArgs, '', signal);
+        const { application, label } = await this.resolveComputerApplication(sessionId, tool, scopedArgs, '', signal);
         if (!application || !this.grants.has('application', application, sessionId)) {
           throw new Error(`Computer access to ${label ?? application ?? 'this application'} was not granted.`);
         }
@@ -461,7 +485,7 @@ export class AutomationService {
         signal,
       );
       if (tool === 'start_session') return result;
-      return await this.cua.call(tool, { ...scopedArgs, session: label }, signal);
+      return await this.transport().call(sessionId, tool, { ...scopedArgs, session: label }, signal);
     } finally { release(); }
   }
 
@@ -551,7 +575,8 @@ export class AutomationService {
     const owned = session;
     this.activityRevision++;
     owned.starting = (async () => {
-      let result = await this.cua.call('start_session', { ...args, session: owned.label }, signal);
+      const transport = this.transport();
+      let result = await transport.call(sessionId, 'start_session', { ...args, session: owned.label }, signal);
       let error = cuaToolError(result);
       if (error && hadLabel) {
         // Named sessions belong to one MCP transport lease. If cua-driver or the
@@ -560,7 +585,7 @@ export class AutomationService {
         // old transport-session owner independently in its original request.
         owned.label = this.newComputerSessionLabel();
         this.activityRevision++;
-        result = await this.cua.call('start_session', { ...args, session: owned.label }, signal);
+        result = await transport.call(sessionId, 'start_session', { ...args, session: owned.label }, signal);
         error = cuaToolError(result);
       }
       if (error) {
@@ -585,7 +610,7 @@ export class AutomationService {
     this.activityRevision++;
     session.ending = (async () => {
       if (session.starting) await session.starting.catch(() => {});
-      const result = await this.cua.call('end_session', { session: session.label }, signal);
+      const result = await this.transport().call(sessionId, 'end_session', { session: session.label }, signal);
       const error = cuaToolError(result);
       if (error) throw new Error(error);
       if (!result || typeof result !== 'object' || Array.isArray(result) || object(result).ok === false || object(result).ended === false) {
