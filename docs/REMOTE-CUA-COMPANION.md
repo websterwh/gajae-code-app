@@ -15,11 +15,15 @@ The companion stores its device credential at `~/.config/gajae-cua-companion/dev
 
 Production servers must expose `wss://` (TLS). Plain `ws://` is accepted only for explicit non-production localhost development. LAN, VPN, and reverse-tunnel deployments still require TLS and device credentials; network location is not authentication.
 
-Set `GAJAE_COMPANION_DOWNLOAD_TEMPLATE` on the server to the public release URL
-template, with `{platform}` as a placeholder (for example,
-`https://github.com/OWNER/REPO/releases/latest/download/gajae-cua-companion-{platform}`).
-This is deployment configuration, not source code. The Settings download button is
-shown only when the template is configured.
+The Settings download button's URL is baked into the Docker image at build
+time, derived from the `APP_REPOSITORY` build argument used to build it (see
+`docker/Dockerfile`), so each fork's image points at that fork's own GitHub
+Releases automatically with no runtime configuration. Override it only if
+needed by setting `GAJAE_COMPANION_DOWNLOAD_TEMPLATE` on the server to a URL
+template containing a `{platform}` placeholder, for example
+`https://github.com/OWNER/REPO/releases/latest/download/gajae-cua-companion-{platform}`.
+The button is hidden only if neither the baked-in default nor an override
+resolves to a valid template.
 
 ## Safety and incident response
 
