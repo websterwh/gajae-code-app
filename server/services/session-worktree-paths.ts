@@ -8,6 +8,7 @@ import type { SessionWorktreeRow } from '../modules/database/repositories/sessio
 import { AppError } from '../shared/utils.js';
 
 import { GjcGitClient, GjcNativeRequestError } from './gjc-git-client.js';
+import { GjcNativeUnavailableError } from './gjc-native-diagnostics.js';
 import { getProductionJobAuthority } from './gjc-job-orchestrator.js';
 import { GjcJobsClientError } from './gjc-jobs-client.js';
 
@@ -54,8 +55,12 @@ export async function releaseSessionWorktree(
   // repeat prune below finds nothing left to refuse.
   if (deps.discardWorktree) {
     const run = deps.execFileImpl ?? execFile;
-    await run('git', ['reset', '--hard', 'HEAD'], { cwd: row.worktree_path });
-    await run('git', ['clean', '-fdx'], { cwd: row.worktree_path });
+    try {
+      await run('git', ['reset', '--hard', 'HEAD'], { cwd: row.worktree_path });
+      await run('git', ['clean', '-fdx'], { cwd: row.worktree_path });
+    } catch {
+      throw new AppError('The session\'s worktree could not be reset; its checkout may be missing or corrupted.', { code: 'SESSION_WORKTREE_REPOSITORY_UNAVAILABLE', statusCode: 409 });
+    }
   }
   // An injected client is the caller's to close; one made here is closed here.
   const owned = deps.git ? undefined : new GjcGitClient({ workdir: row.repository_root });
@@ -73,6 +78,14 @@ export async function releaseSessionWorktree(
     await jobs.unarchive({ jobId: row.job_id }).catch(() => undefined);
     if (error instanceof GjcNativeRequestError && error.code === 'dirty_worktree') {
       throw new AppError('The session\'s worktree has uncommitted changes. Commit or discard them in the checkout before deleting the session.', { code: 'SESSION_WORKTREE_DIRTY', statusCode: 409 });
+    }
+    // The underlying git command (and, separately, the native helper itself)
+    // fails this way when the repository root is not a usable git repository
+    // anymore - most commonly its .git was removed by hand outside the app -
+    // a clean message here, not a raw 500, since re-initializing the
+    // repository is something the user can actually act on.
+    if (error instanceof GjcNativeUnavailableError || (error instanceof GjcNativeRequestError && error.code === 'git_failed')) {
+      throw new AppError('The session\'s repository is not a usable git repository anymore (its .git directory may have been removed). Re-initialize it with "git init", or discard the worktree session instead.', { code: 'SESSION_WORKTREE_REPOSITORY_UNAVAILABLE', statusCode: 409 });
     }
     throw error;
   } finally {
