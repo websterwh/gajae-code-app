@@ -77,6 +77,8 @@ export default function AutomationSettingsTab() {
   const [remoteDevices, setRemoteDevices] = useState<RemoteDevice[]>([]);
   const [selectedRemoteDeviceId, setSelectedRemoteDeviceId] = useState<string | undefined>();
   const [pairingCommand, setPairingCommand] = useState<string | null>(null);
+  const [pairingCliCommand, setPairingCliCommand] = useState<string | null>(null);
+  const [pairingCopied, setPairingCopied] = useState(false);
   const [companionDownloadTemplate, setCompanionDownloadTemplate] = useState<string | null>(null);
   const [testingEgoConnection, setTestingEgoConnection] = useState(false);
   const [builtinBrowserStatus, setBuiltinBrowserStatus] = useState<string | null>(null);
@@ -194,6 +196,18 @@ export default function AutomationSettingsTab() {
     const pairing = await response.json() as { token: string };
     const server = `${window.location.origin.replace(/^http/u, 'ws')}/remote-cua`;
     setPairingCommand(`gajae-cua://pair?server=${encodeURIComponent(server)}&token=${encodeURIComponent(pairing.token)}`);
+    // The deep-link opens a running companion on Linux and Windows today. The
+    // CLI form works everywhere, including macOS until its GUI handler ships.
+    setPairingCliCommand(`gajae-cua-companion --server=${server} --pair=${pairing.token}`);
+    setPairingCopied(false);
+  };
+
+  const copyPairingCommand = async () => {
+    if (!pairingCliCommand) return;
+    try {
+      await navigator.clipboard.writeText(pairingCliCommand);
+      setPairingCopied(true);
+    } catch { /* Clipboard access can be denied by the browser; the text stays selectable. */ }
   };
 
   const updateRemoteDevice = async (id: string, patch: { enabled?: boolean; name?: string }) => {
@@ -390,7 +404,13 @@ export default function AutomationSettingsTab() {
           </div>
           {pairingCommand ? (
             <div className="border-t border-border p-4">
-              <p className="mb-2 text-xs text-muted-foreground">Open this one-time pairing link on the laptop after installing the companion. The token expires in ten minutes and is shown only now.</p>
+              <p className="mb-2 text-xs text-muted-foreground">Pair the companion with either option below. The token expires in ten minutes and is shown only now.</p>
+              <p className="mb-1 text-xs font-medium text-foreground">CLI (works on every platform; required on macOS until its app is ready):</p>
+              <div className="mb-3 flex items-start gap-2">
+                <code className="block flex-1 rounded bg-muted p-3 text-xs break-all text-foreground">{pairingCliCommand}</code>
+                <button type="button" onClick={() => void copyPairingCommand()} className="shrink-0 rounded border border-input px-2 py-1 text-xs text-foreground hover:bg-muted">{pairingCopied ? 'Copied' : 'Copy'}</button>
+              </div>
+              <p className="mb-1 text-xs font-medium text-foreground">Deep link (opens an already-running companion on Linux/Windows):</p>
               <a href={pairingCommand} className="block rounded bg-muted p-3 text-xs break-all text-primary hover:underline">{pairingCommand}</a>
             </div>
           ) : null}
