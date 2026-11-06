@@ -117,7 +117,8 @@
     "archiveSessionNotice": "L’archivage retire la conversation de la liste tout en conservant son historique.",
     "archivedSessionNotice": "Cette conversation est déjà archivée. Gardez-la masquée ou supprimez-la définitivement.",
     "archiveSession": "Archiver la conversation",
-    "deleteSessionPermanently": "Supprimer définitivement"
+    "deleteSessionPermanently": "Supprimer définitivement",
+    "deleteAnywayDiscardWorktree": "Annuler les modifications et supprimer quand même"
   },
   "navigation": {
     "primary": "Navigation principale"

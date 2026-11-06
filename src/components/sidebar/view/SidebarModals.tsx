@@ -20,7 +20,7 @@ type SidebarModalsProps = {
   onProjectCreated: () => void;
   sessionDeleteConfirmation: SessionDeleteConfirmation | null;
   onCancelDeleteSession: () => void;
-  onConfirmDeleteSession: (hardDelete?: boolean) => void;
+  onConfirmDeleteSession: (hardDelete?: boolean, discardWorktree?: boolean) => void;
   t: TFunction;
 };
 
@@ -103,6 +103,11 @@ export default function SidebarModals({
                         ? t('deleteConfirmation.archivedSessionNotice')
                         : t('deleteConfirmation.archiveSessionNotice')}
                     </p>
+                    {sessionDeleteConfirmation.dirtyWorktreeReason && (
+                      <p className="mt-3 rounded-md border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">
+                        {sessionDeleteConfirmation.dirtyWorktreeReason}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -120,10 +125,12 @@ export default function SidebarModals({
                 <Button
                   variant="destructive"
                   className="w-full justify-start"
-                  onClick={() => onConfirmDeleteSession(true)}
+                  onClick={() => onConfirmDeleteSession(true, Boolean(sessionDeleteConfirmation.dirtyWorktreeReason))}
                 >
                   <Trash2 className="mr-2 h-4 w-4" />
-                  {t('deleteConfirmation.deleteSessionPermanently')}
+                  {sessionDeleteConfirmation.dirtyWorktreeReason
+                    ? t('deleteConfirmation.deleteAnywayDiscardWorktree')
+                    : t('deleteConfirmation.deleteSessionPermanently')}
                 </Button>
                 <Button variant="ghost" className="w-full" onClick={onCancelDeleteSession}>
                   {t('actions.cancel')}

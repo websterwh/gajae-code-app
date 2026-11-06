@@ -117,7 +117,8 @@
     "archiveSessionNotice": "アーカイブすると履歴を残したまま一覧から外します。",
     "archivedSessionNotice": "この会話はすでにアーカイブされています。非表示のままにするか、完全に削除できます。",
     "archiveSession": "会話をアーカイブ",
-    "deleteSessionPermanently": "完全に削除"
+    "deleteSessionPermanently": "完全に削除",
+    "deleteAnywayDiscardWorktree": "変更を捨てて削除する"
   },
   "navigation": {
     "primary": "メインナビゲーション"

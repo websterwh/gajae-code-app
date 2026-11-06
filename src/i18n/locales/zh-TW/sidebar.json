@@ -117,7 +117,8 @@
     "archiveSessionNotice": "封存會將對話移出清單，同時保留其歷史。",
     "archivedSessionNotice": "此對話已封存。可以繼續隱藏，也可以永久刪除。",
     "archiveSession": "封存對話",
-    "deleteSessionPermanently": "永久刪除"
+    "deleteSessionPermanently": "永久刪除",
+    "deleteAnywayDiscardWorktree": "放棄變更並仍要刪除"
   },
   "navigation": {
     "primary": "主要導覽"

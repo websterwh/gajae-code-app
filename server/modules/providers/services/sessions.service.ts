@@ -181,15 +181,16 @@ export const sessionsService = {
     };
   },
 
-  async deleteOrArchiveSessionById(sessionId: string, options: { force?: boolean; deletedFromDisk?: boolean } = {}): Promise<{ sessionId: string; action: 'archived' | 'deleted'; deletedFromDisk: boolean }> {
+  async deleteOrArchiveSessionById(sessionId: string, options: { force?: boolean; deletedFromDisk?: boolean; discardWorktree?: boolean } = {}): Promise<{ sessionId: string; action: 'archived' | 'deleted'; deletedFromDisk: boolean }> {
     const row = requiredSession(sessionId);
     if (!options.force) {
       sessionsDb.updateSessionIsArchived(sessionId, true);
       return { sessionId, action: 'archived', deletedFromDisk: false };
     }
     // A worktree session's checkout and job ref go with the session; a refusal
-    // (running, uncommitted changes) leaves the session in place and says why.
-    await releaseWorktreeSession(sessionId);
+    // (running, uncommitted changes) leaves the session in place and says why,
+    // unless the caller has already confirmed discarding those changes.
+    await releaseWorktreeSession(sessionId, { discardWorktree: options.discardWorktree });
     const deletedFromDisk = options.deletedFromDisk && row.jsonl_path ? await unlinkWhenPresent(row.jsonl_path) : false;
     if (!sessionsDb.deleteSessionById(sessionId)) throw sessionNotFound(sessionId);
     return { sessionId, action: 'deleted', deletedFromDisk };

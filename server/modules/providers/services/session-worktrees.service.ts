@@ -10,7 +10,7 @@ type Services = {
   validateRepository(root: string): Promise<void>;
   readLocation(sessionId: string): SessionLocation;
   resolveWorkspace(projectId: string, sessionId: string): Promise<string>;
-  release(row: SessionWorktreeRow): Promise<{ released: boolean; branchRetained: boolean }>;
+  release(row: SessionWorktreeRow, options?: { discardWorktree?: boolean }): Promise<{ released: boolean; branchRetained: boolean }>;
 };
 let services: Services | undefined;
 export function configureSessionWorktrees(value: Services): void { services = value; }
@@ -31,10 +31,10 @@ export function sessionTranscriptWorkspace(sessionId: string, projectPath: strin
  * the project checkout has nothing to release. Refusals (running, dirty) are
  * AppErrors the route surfaces; the session row is untouched in that case.
  */
-export async function releaseWorktreeSession(sessionId: string): Promise<{ released: boolean; branchRetained: boolean } | null> {
+export async function releaseWorktreeSession(sessionId: string, options: { discardWorktree?: boolean } = {}): Promise<{ released: boolean; branchRetained: boolean } | null> {
   const binding = sessionWorktreesDb.get(sessionId);
   if (!binding) return null;
-  return requireServices().release(binding);
+  return requireServices().release(binding, options);
 }
 export function resolveSessionCommandWorkspace(projectId: string | undefined, sessionId: string): Promise<string> {
   if (!projectId) throw new AppError('projectId is required for a session workspace.', { code: 'PROJECT_ID_REQUIRED', statusCode: 400 });

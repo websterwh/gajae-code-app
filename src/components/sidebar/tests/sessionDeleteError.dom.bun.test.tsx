@@ -17,6 +17,11 @@ import { useSidebarController } from '../hooks/useSidebarController';
  * the generic "Could not delete the conversation. Try again." toast,
  * discarding that message, which left a stuck worktree session
  * impossible to diagnose from the UI.
+ *
+ * A dirty-worktree refusal specifically is not a dead end: the dialog
+ * re-opens with the server's reason and a "delete anyway" escalation
+ * that discards the worktree's changes (`discardWorktree=true`) instead
+ * of only toasting.
  */
 
 // Stable identity across renders: the controller re-triggers effects keyed
@@ -26,8 +31,13 @@ const projects: never[] = [];
 const originalFetch = globalThis.fetch;
 afterEach(() => { cleanup(); resetToasts(); globalThis.fetch = originalFetch; });
 
-function installFetch(body: unknown, status = 409): void {
-  globalThis.fetch = (async () => Response.json(body, { status })) as typeof globalThis.fetch;
+function installFetch(body: unknown, status = 409): { requests: Array<{ url: string }> } {
+  const requests: Array<{ url: string }> = [];
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    requests.push({ url: typeof input === 'string' ? input : input.toString() });
+    return Response.json(body, { status });
+  }) as typeof globalThis.fetch;
+  return { requests };
 }
 
 function Harness() {
@@ -61,21 +71,31 @@ async function setup() {
   });
 }
 
-test("a refused worktree delete surfaces the server's real reason, not a generic message", async () => {
+test("a refused worktree delete re-opens the dialog with the server's real reason instead of a dead-end toast", async () => {
   installFetch({ error: { code: 'SESSION_WORKTREE_DIRTY', message: 'The worktree has uncommitted changes. Commit or discard them before deleting the session.' } });
   const { result } = await setup();
 
   act(() => { result.current.showDeleteSessionConfirmation(null, 'session-1', 'check current time'); });
   await act(async () => { await result.current.confirmDeleteSession(true); });
 
-  await waitFor(() => assert.equal(useToastStore.getState().toasts.length, 1));
-  const [toast] = useToastStore.getState().toasts;
-  assert.equal(toast.tone, 'error');
-  assert.equal(toast.message, 'The worktree has uncommitted changes. Commit or discard them before deleting the session.');
-  assert.notEqual(toast.message, enSidebar.messages.deleteSessionFailed);
+  // No dead-end toast: the dialog is still open, now carrying the reason.
+  assert.equal(useToastStore.getState().toasts.length, 0);
+  await waitFor(() => assert.ok(result.current.sessionDeleteConfirmation));
+  assert.equal(result.current.sessionDeleteConfirmation?.dirtyWorktreeReason, 'The worktree has uncommitted changes. Commit or discard them before deleting the session.');
 });
 
-test('a refused worktree archive also surfaces the server\'s real reason', async () => {
+test('confirming again with discardWorktree sends the discard flag and clears the dialog on success', async () => {
+  const { requests } = installFetch({ success: true, data: { sessionId: 'session-1', action: 'deleted', deletedFromDisk: false } }, 200);
+  const { result } = await setup();
+
+  act(() => { result.current.showDeleteSessionConfirmation(null, 'session-1', 'check current time'); });
+  await act(async () => { await result.current.confirmDeleteSession(true, true); });
+
+  assert.equal(result.current.sessionDeleteConfirmation, null);
+  assert.ok(requests[0]?.url.includes('discardWorktree=true'), requests[0]?.url);
+});
+
+test('a refused worktree archive surfaces the server\'s real reason as a toast (archive has no discard escalation)', async () => {
   installFetch({ error: { code: 'SESSION_WORKTREE_RUNNING', message: 'The session is still running. Stop it before deleting it.' } });
   const { result } = await setup();
 

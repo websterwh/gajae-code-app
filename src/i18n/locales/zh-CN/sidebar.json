@@ -117,7 +117,8 @@
     "archiveSessionNotice": "归档会将对话移出列表，同时保留其历史。",
     "archivedSessionNotice": "此对话已归档。可以继续隐藏，也可以永久删除。",
     "archiveSession": "归档对话",
-    "deleteSessionPermanently": "永久删除"
+    "deleteSessionPermanently": "永久删除",
+    "deleteAnywayDiscardWorktree": "放弃更改并仍要删除"
   },
   "navigation": {
     "primary": "主导航"

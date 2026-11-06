@@ -129,7 +129,8 @@
     "archiveSessionNotice": "Архивация убирает разговор из списка, сохраняя его историю.",
     "archivedSessionNotice": "Этот разговор уже в архиве. Оставьте его скрытым или удалите навсегда.",
     "archiveSession": "Архивировать разговор",
-    "deleteSessionPermanently": "Удалить навсегда"
+    "deleteSessionPermanently": "Удалить навсегда",
+    "deleteAnywayDiscardWorktree": "Отменить изменения и всё равно удалить"
   },
   "navigation": {
     "primary": "Основная навигация"
