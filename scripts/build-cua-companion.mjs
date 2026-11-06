@@ -26,5 +26,6 @@ for (const platform of targets) {
     const zipped = spawnSync('zip', ['-qry', archive, `Gajae CUA Companion-${platform}.app`], { cwd: output, stdio: 'inherit' });
     if (zipped.status !== 0) process.exit(zipped.status ?? 1);
     await rm(app, { recursive: true, force: true });
+    await rm(outfile, { force: true });
   }
 }
