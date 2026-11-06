@@ -4,6 +4,7 @@
  * filesystem, browser, clipboard, or generic MCP forwarding surface.
  */
 import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir, hostname, platform } from 'node:os';
 import { join } from 'node:path';
@@ -28,6 +29,21 @@ const server = args.server;
 const pairingToken = args.pair;
 const statePath = args.state ?? join(homedir(), '.config', 'gajae-cua-companion', 'device.json');
 
+// A portable install deliberately skips the shell PATH (that's the point of
+// --prefix/--no-modify-path), so look in the default and last-used portable
+// locations before falling back to PATH. Remembering the last install
+// location means a later run doesn't need --portable-dir repeated.
+function resolveDriverPath() {
+  if (process.env.CUA_DRIVER_PATH) return process.env.CUA_DRIVER_PATH;
+  const exe = process.platform === 'win32' ? 'cua-driver.exe' : 'cua-driver';
+  const candidates = [
+    args['portable-dir'] ? join(args['portable-dir'], 'bin', exe) : null,
+    join(homedir(), '.gajae-cua', 'bin', exe),
+  ].filter(Boolean);
+  for (const candidate of candidates) if (existsSync(candidate)) return candidate;
+  return exe;
+}
+
 function run(command, commandArgs) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, commandArgs, { stdio: 'inherit' });
@@ -36,10 +52,45 @@ function run(command, commandArgs) {
   });
 }
 
+const color = { dim: '[2m', green: '[32m', yellow: '[33m', red: '[31m', reset: '[0m' };
+
+// CUA's installer prints a lot of telemetry-disclosure and onboarding text
+// that is noise for this one-shot driver-only install. Keep the few lines
+// that matter (progress, warnings, the final install line, errors) visible
+// and in color; push the rest to --verbose-install only.
+const INSTALL_SIGNAL = /^(==>|warning:|error:|note:|Installed |cua-driver-rs .* installed)/u;
+function runInstaller(command, commandArgs) {
+  const verbose = args['verbose-install'] === 'true';
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, commandArgs, { stdio: verbose ? 'inherit' : ['ignore', 'pipe', 'pipe'] });
+    if (!verbose) {
+      let buffer = '';
+      const onChunk = chunk => {
+        buffer += chunk;
+        for (;;) {
+          const index = buffer.indexOf('\n'); if (index < 0) break;
+          const line = buffer.slice(0, index); buffer = buffer.slice(index + 1);
+          if (!INSTALL_SIGNAL.test(line)) continue;
+          const tint = /^error:/u.test(line) ? color.red : /^warning:/u.test(line) ? color.yellow
+            : /^(Installed |cua-driver-rs .* installed)/u.test(line) ? color.green : color.dim;
+          console.error(`${tint}${line}${color.reset}`);
+        }
+      };
+      child.stdout.on('data', onChunk);
+      child.stderr.on('data', onChunk);
+    }
+    child.once('error', reject);
+    child.once('exit', code => code === 0 ? resolve() : reject(new Error(`${command} exited with ${code}`)));
+  });
+}
+
 async function installDriver(mode) {
   if (mode !== 'portable' && mode !== 'system') throw new Error('--install-driver must be portable or system.');
   const portable = mode === 'portable';
-  const prefix = args['portable-dir'] ?? join(homedir(), 'Gajae CUA');
+  // No space in the default prefix: a space here forces every later shell
+  // invocation (install.sh args, PATH export snippets, saved state) to get
+  // quoting right, and it's an easy way to break a copy-pasted command.
+  const prefix = args['portable-dir'] ?? join(homedir(), '.gajae-cua');
   // CUA's installer always verifies sha256 regardless of this flag; strict
   // --require-signature additionally needs minisign/cosign on the machine,
   // which most machines don't have, and otherwise hard-fails with no
@@ -47,8 +98,10 @@ async function installDriver(mode) {
   const requireSignature = args['require-signature'] === 'true';
   if (process.platform === 'win32') {
     const options = `${portable ? ` -Prefix '${prefix.replace(/'/gu, "''")}' -NoPathUpdate` : ''}${requireSignature ? ' -RequireSignature' : ''}`;
-    await run('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command',
+    console.error(`${color.dim}[info] Installing CUA Driver (${mode})...${color.reset}`);
+    await runInstaller('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command',
       `& ([scriptblock]::Create((irm https://cua.ai/install.ps1))) -Only cua-driver -NoOnboarding${options}`]);
+    console.error(`${color.green}[info] CUA Driver installed.${color.reset}`);
     return;
   }
   // CUA publishes this installer and its release manifest. The documented
@@ -59,7 +112,9 @@ async function installDriver(mode) {
     ...(requireSignature ? ['--require-signature'] : []),
     '--yes',
   ];
-  await run('/bin/bash', ['-c', 'curl -fsSL https://cua.ai/install.sh | sh -s -- "$@"', 'gajae-cua-installer', ...options]);
+  console.error(`${color.dim}[info] Installing CUA Driver (${mode}) to ${portable ? prefix : 'the system default location'}...${color.reset}`);
+  await runInstaller('/bin/bash', ['-c', 'curl -fsSL https://cua.ai/install.sh | sh -s -- "$@"', 'gajae-cua-installer', ...options]);
+  console.error(`${color.green}[info] CUA Driver installed. Run with --server=... --pair=... to connect; the companion locates it automatically.${color.reset}`);
 }
 
 async function registerProtocol() {
@@ -133,7 +188,7 @@ function startDriver() {
   let launchError;
   let confirmed = false;
   try {
-    child = spawn(process.env.CUA_DRIVER_PATH ?? 'cua-driver', ['mcp'], { stdio: ['pipe', 'pipe', 'pipe'] });
+    child = spawn(resolveDriverPath(), ['mcp'], { stdio: ['pipe', 'pipe', 'pipe'] });
   } catch (cause) {
     launchError = cause instanceof Error ? cause.message : 'CUA Driver failed to start';
   }
@@ -201,17 +256,27 @@ function readiness() {
   }};
 }
 function connect() {
+  console.error(`[info] Connecting to ${server} ...`);
+  let confirmedAuth = false;
   const socket = new WebSocket(url);
-  socket.on('open', () => socket.send(JSON.stringify({
-    type: 'hello', protocolVersion: VERSION,
-    ...(state ? { deviceId: state.deviceId, credential: state.credential } : { pairingToken, deviceName: args.name ?? hostname(), os: `${platform()} ${process.arch}` }),
-  })));
+  socket.on('open', () => {
+    console.error('[info] Connected. Authenticating...');
+    socket.send(JSON.stringify({
+      type: 'hello', protocolVersion: VERSION,
+      ...(state ? { deviceId: state.deviceId, credential: state.credential } : { pairingToken, deviceName: args.name ?? hostname(), os: `${platform()} ${process.arch}` }),
+    }));
+  });
   socket.on('message', async raw => {
     let message; try { message = JSON.parse(raw.toString()); } catch { socket.close(1008, 'invalid JSON'); return; }
     if (message.protocolVersion !== VERSION) { socket.close(1008, 'unsupported protocol'); return; }
-    if (message.type === 'paired') { state = { deviceId: message.deviceId, credential: message.credential }; await saveState(state); }
+    if (message.type === 'paired') {
+      state = { deviceId: message.deviceId, credential: message.credential };
+      await saveState(state);
+      console.error('[info] Paired and connected. This device is now available to the server.');
+    }
+    if (message.type === 'pong' && !confirmedAuth) { confirmedAuth = true; console.error('[info] Connected and authenticated with the server.'); }
     if (message.type === 'pong' || message.type === 'paired') socket.send(JSON.stringify(readiness()));
-    if (message.type === 'disconnect') socket.close(4003, message.reason);
+    if (message.type === 'disconnect') { console.error(`[info] Server disconnected this device: ${message.reason}`); socket.close(4003, message.reason); }
     if (message.type !== 'computer.request') return;
     const error = !state || message.deviceId !== state.deviceId ? 'device ID mismatch'
       : completed.has(message.requestId) ? 'duplicate request ID'
@@ -225,8 +290,13 @@ function connect() {
       socket.send(JSON.stringify({ type: 'computer.result', protocolVersion: VERSION, requestId: message.requestId, deviceId: message.deviceId, error: cause instanceof Error ? cause.message : 'CUA Driver failed' }));
     }
   });
-  socket.on('close', () => setTimeout(connect, 2_000));
-  socket.on('error', () => {});
+  socket.on('close', (code, reasonBuffer) => {
+    const reason = reasonBuffer?.toString() || '';
+    if (code === 1008) console.error(`[error] Server rejected this connection${reason ? `: ${reason}` : '.'} Check the pairing token or server URL.`);
+    else console.error(`[info] Disconnected (code ${code}${reason ? `: ${reason}` : ''}). Reconnecting in 2s...`);
+    setTimeout(connect, 2_000);
+  });
+  socket.on('error', cause => console.error(`[error] Connection error: ${cause instanceof Error ? cause.message : cause}`));
 }
 process.on('SIGINT', () => { driver.close(); process.exit(0); });
 connect();

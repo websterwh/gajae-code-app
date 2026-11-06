@@ -10,9 +10,14 @@ node cua-companion.mjs --server=wss://gajae.example/remote-cua --pair=TOKEN
 Install CUA Driver through the companion instead of copying shell snippets:
 
 ```sh
-node cua-companion.mjs --install-driver=portable --portable-dir="$HOME/Gajae CUA"
+node cua-companion.mjs --install-driver=portable
 node cua-companion.mjs --install-driver=system
 ```
+
+The portable default is `~/.gajae-cua` (no space, so it's always safe to use
+unquoted in scripts). Override with `--portable-dir=PATH`. The companion
+locates an already-installed driver at that path automatically on later runs
+(or at `$CUA_DRIVER_PATH` if set); you never need to touch `PATH`.
 
 `portable` uses CUA's supported `--prefix` and `--no-modify-path` options.
 `system` delegates to CUA's current official installer. Both install only the
