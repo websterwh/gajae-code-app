@@ -42,9 +42,9 @@ jobs:
           if-no-files-found: error
 
   macos:
-    # Intel runner is sufficient: Bun cross-compiles both architectures and
-    # `lipo` merges them into one universal app before `hdiutil` creates the DMG.
-    runs-on: macos-13
+    # Bun cross-compiles both architectures and `lipo` merges them into one
+    # universal app before `hdiutil` creates the DMG.
+    runs-on: macos-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
