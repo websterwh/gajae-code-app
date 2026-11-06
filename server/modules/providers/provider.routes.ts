@@ -195,6 +195,7 @@ router.delete('/sessions/:sessionId', asyncHandler(async (req: Request, res: Res
   const result = await sessionsService.deleteOrArchiveSessionById(sessionFrom(req.params.sessionId), {
     force,
     deletedFromDisk: queryFlag(req.query.deletedFromDisk, 'deletedFromDisk') ?? force,
+    discardWorktree: queryFlag(req.query.discardWorktree, 'discardWorktree') ?? false,
   });
   res.json(createApiSuccessResponse(result));
 }));

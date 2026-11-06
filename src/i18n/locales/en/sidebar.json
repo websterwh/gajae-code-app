@@ -117,7 +117,8 @@
     "archiveSessionNotice": "Archive keeps the conversation out of the list while preserving its history.",
     "archivedSessionNotice": "This conversation is already archived. Keep it hidden or delete it permanently.",
     "archiveSession": "Archive conversation",
-    "deleteSessionPermanently": "Delete permanently"
+    "deleteSessionPermanently": "Delete permanently",
+    "deleteAnywayDiscardWorktree": "Discard changes and delete anyway"
   },
   "navigation": {
     "primary": "Primary navigation"

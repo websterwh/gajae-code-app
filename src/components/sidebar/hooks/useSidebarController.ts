@@ -196,16 +196,24 @@ export function useSidebarController(args: UseSidebarControllerArgs) {
   }, [editingName, palette]);
 
   const showDeleteSessionConfirmation = useCallback((projectId: string | null, sessionId: string, sessionTitle: string, provider: SessionDeleteConfirmation['provider'] = 'gjc', options: { isArchived?: boolean } = {}) => setSessionDeleteConfirmation({ projectId, sessionId, sessionTitle, provider, isArchived: Boolean(options.isArchived) }), []);
-  const confirmDeleteSession = useCallback(async (hardDelete = false) => {
+  const confirmDeleteSession = useCallback(async (hardDelete = false, discardWorktree = false) => {
     if (!sessionDeleteConfirmation) return;
-    const { sessionId } = sessionDeleteConfirmation;
+    const { sessionId, projectId, sessionTitle, provider, isArchived } = sessionDeleteConfirmation;
     setSessionDeleteConfirmation(null);
     try {
-      const response = await api.deleteSession(sessionId, hardDelete);
+      const response = await api.deleteSession(sessionId, hardDelete, { discardWorktree });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
         console.error('[Sidebar] Failed to delete session:', { status: response.status, error: body });
-        showErrorToast(errorMessage(body, t('messages.deleteSessionFailed')));
+        const code = typeof body?.error === 'object' ? body.error?.code : undefined;
+        const message = errorMessage(body, t('messages.deleteSessionFailed'));
+        // A dirty worktree is not the end of the road: offer to discard those
+        // changes and delete anyway, instead of only toasting a dead end.
+        if (code === 'SESSION_WORKTREE_DIRTY') {
+          setSessionDeleteConfirmation({ projectId, sessionId, sessionTitle, provider, isArchived, dirtyWorktreeReason: message });
+          return;
+        }
+        showErrorToast(message);
         return;
       }
       forgetSessionStorage(sessionId);

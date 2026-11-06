@@ -117,7 +117,8 @@
     "archiveSessionNotice": "L’archiviazione toglie la conversazione dall’elenco conservandone la cronologia.",
     "archivedSessionNotice": "Questa conversazione è già archiviata. Tienila nascosta o eliminala definitivamente.",
     "archiveSession": "Archivia conversazione",
-    "deleteSessionPermanently": "Elimina definitivamente"
+    "deleteSessionPermanently": "Elimina definitivamente",
+    "deleteAnywayDiscardWorktree": "Scarta le modifiche ed elimina comunque"
   },
   "navigation": {
     "primary": "Navigazione principale"

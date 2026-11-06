@@ -71,7 +71,7 @@ async function fixture(t: test.TestContext, options: { delayPreparation?: boolea
   // The release reaches the same authority and repository client the
   // orchestrator below is given, never the production ones.
   configureSessionWorktrees({ validateRepository: validateSessionRepository, readLocation: readSessionLocation, resolveWorkspace: resolveSessionWorkspacePath,
-    release: (row) => releaseSessionWorktree(row, { jobs, git: () => git }) });
+    release: (row, options) => releaseSessionWorktree(row, { jobs, git: () => git, discardWorktree: options?.discardWorktree }) });
   const created = await createWorktreeSession(alias);
   const preparation = deferred<void>();
   let preparing = false;
@@ -658,6 +658,24 @@ test('permanent deletion keeps a job ref whose commits exist nowhere else, and r
   await assert.rejects(readFile(path.join(cwd, 'work.md')), { code: 'ENOENT' });
   assert.deepEqual(await branches(f.repository), [`job/${location.jobId}`], 'unlanded commits are evidence, not noise');
   assert.equal(sessionsDb.getSessionById(f.created.sessionId), null);
+});
+
+test('permanent deletion with discardWorktree discards uncommitted changes instead of refusing', async (t) => {
+  const f = await fixture(t);
+  const run = f.makeTicket().run('fixture turn', runOptions, f.writer);
+  await until(() => f.workers.length === 1);
+  f.workers[0].finish();
+  await run;
+  const location = readSessionLocation(f.created.sessionId);
+  const cwd = location.cwd!;
+  await writeFile(path.join(cwd, 'README.md'), 'uncommitted change\n');
+  await writeFile(path.join(cwd, 'untracked.md'), 'untracked file\n');
+
+  const result = await sessionsService.deleteOrArchiveSessionById(f.created.sessionId, { force: true, discardWorktree: true });
+
+  assert.equal(result.action, 'deleted');
+  assert.equal(sessionsDb.getSessionById(f.created.sessionId), null);
+  await assert.rejects(readFile(path.join(cwd, 'README.md')), { code: 'ENOENT' }, 'the whole worktree is gone, discarded changes included');
 });
 
 test('permanent deletion refuses while the session\'s job is running, and does not touch the worktree', async (t) => {

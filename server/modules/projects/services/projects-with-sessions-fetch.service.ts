@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import { projectsDb, sessionsDb } from '@/modules/database/index.js';
-import { sessionSynchronizerService } from '@/modules/providers/index.js';
+import { pruneSessionsWithMissingTranscripts, sessionSynchronizerService } from '@/modules/providers/index.js';
 import { WS_OPEN_STATE, connectedClients } from '@/modules/websocket/index.js';
 import type { RealtimeClientConnection } from '@/shared/types.js';
 import { AppError } from '@/shared/utils.js';
@@ -106,7 +106,14 @@ function configuredProjectName(customName: string | null | undefined): string | 
 }
 
 export async function getProjectsWithSessions(options: GetProjectsWithSessionsOptions = {}): Promise<ProjectListItem[]> {
-  if (!options.skipSynchronization) await sessionSynchronizerService.synchronizeSessions();
+  if (options.skipSynchronization) {
+    // The full forward scan is skipped, but a transcript deleted by hand
+    // outside the app is a cheap stat() per session, not a rescan - cheap
+    // enough to run on every list fetch so Refresh always clears it.
+    pruneSessionsWithMissingTranscripts();
+  } else {
+    await sessionSynchronizerService.synchronizeSessions();
+  }
 
   const projects = projectsDb.getProjectPaths() as Array<{ project_id: string; project_path: string; custom_project_name?: string | null; origin?: 'legacy' | 'explicit' | 'auto' | null; isStarred?: number }>;
   const sessionLimit = Math.min(Math.max(1, options.sessionsLimit ?? initialPageSize), maxPageSize);
@@ -141,7 +148,11 @@ export async function getProjectsWithSessions(options: GetProjectsWithSessionsOp
 }
 
 export async function getArchivedProjectsWithSessions(options: Pick<GetProjectsWithSessionsOptions, 'skipSynchronization' | 'sessionsLimit' | 'sessionsOffset'> = {}): Promise<ArchivedProjectListItem[]> {
-  if (!options.skipSynchronization) await sessionSynchronizerService.synchronizeSessions();
+  if (options.skipSynchronization) {
+    pruneSessionsWithMissingTranscripts();
+  } else {
+    await sessionSynchronizerService.synchronizeSessions();
+  }
 
   const projects = projectsDb.getArchivedProjectPaths() as Array<{ project_id: string; project_path: string; custom_project_name?: string | null; origin?: 'legacy' | 'explicit' | 'auto' | null; isStarred?: number }>;
   const result: ArchivedProjectListItem[] = [];

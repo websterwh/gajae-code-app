@@ -125,10 +125,13 @@ export const api = {
   // Session deletion now mirrors project deletion:
   // - default: archive only (`isArchived = 1`)
   // - hardDelete: remove the row and, by default, its persisted transcript file
-  deleteSession: (sessionId: string, hardDelete: boolean = false) => {
+  deleteSession: (sessionId: string, hardDelete: boolean = false, options: { discardWorktree?: boolean } = {}) => {
     const params = new URLSearchParams();
     if (hardDelete) {
       params.set('force', 'true');
+    }
+    if (options.discardWorktree) {
+      params.set('discardWorktree', 'true');
     }
     const qs = params.toString();
     return authenticatedFetch(`/api/providers/sessions/${sessionId}${qs ? `?${qs}` : ''}`, {

@@ -1,9 +1,30 @@
-import { scanStateDb } from '@/modules/database/index.js';
+import { existsSync } from 'node:fs';
+
+import { scanStateDb, sessionsDb, sessionWorktreesDb } from '@/modules/database/index.js';
 import { providerRegistry } from '@/modules/providers/provider.registry.js';
 import type { LLMProvider } from '@/shared/types.js';
 
-type SessionSynchronizeResult = { processedByProvider: Record<LLMProvider, number>; failures: string[] };
+type SessionSynchronizeResult = { processedByProvider: Record<LLMProvider, number>; failures: string[]; pruned: number };
 type ProviderScan = { provider: LLMProvider; processed: number };
+
+/**
+ * The forward scan below only ever discovers sessions, never un-discovers
+ * them: a transcript deleted by hand outside the app leaves its DB row
+ * behind forever, reappearing on every refresh with nothing to open. A
+ * worktree-bound session keeps its row regardless of jsonl_path, because its
+ * checkout (not the transcript file) is the thing that makes it real, and
+ * deleting that goes through the worktree release path with its own
+ * dirty/running checks - never silently here.
+ */
+export function pruneSessionsWithMissingTranscripts(): number {
+  let pruned = 0;
+  for (const row of sessionsDb.getAllSessionsWithTranscriptPath()) {
+    if (!row.jsonl_path || existsSync(row.jsonl_path)) continue;
+    if (sessionWorktreesDb.get(row.session_id)) continue;
+    if (sessionsDb.deleteSessionById(row.session_id)) pruned += 1;
+  }
+  return pruned;
+}
 
 function failureMessage(reason: unknown): string {
   return reason instanceof Error ? reason.message : String(reason);
@@ -13,14 +34,14 @@ async function scanProvider(provider: ReturnType<typeof providerRegistry.listPro
   return { provider: provider.id, processed: await provider.sessionSynchronizer.synchronize(since) };
 }
 
-function scanSummary(results: PromiseSettledResult<ProviderScan>[]): SessionSynchronizeResult {
+function scanSummary(results: PromiseSettledResult<ProviderScan>[], pruned: number): SessionSynchronizeResult {
   const processedByProvider: Record<LLMProvider, number> = { gjc: 0 };
   const failures: string[] = [];
   for (const outcome of results) {
     if (outcome.status === 'fulfilled') processedByProvider[outcome.value.provider] = outcome.value.processed;
     else failures.push(failureMessage(outcome.reason));
   }
-  return { processedByProvider, failures };
+  return { processedByProvider, failures, pruned };
 }
 
 export const sessionSynchronizerService = {
@@ -28,7 +49,7 @@ export const sessionSynchronizerService = {
     const since = scanStateDb.getLastScannedAt() ?? undefined;
     const completedAt = new Date();
     const outcomes = await Promise.allSettled(providerRegistry.listProviders().map((provider) => scanProvider(provider, since)));
-    const summary = scanSummary(outcomes);
+    const summary = scanSummary(outcomes, pruneSessionsWithMissingTranscripts());
     if (summary.failures.length === 0) {
       scanStateDb.updateLastScannedAt(completedAt);
     } else {

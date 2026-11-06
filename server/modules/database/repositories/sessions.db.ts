@@ -156,6 +156,15 @@ export const sessionsDb = {
     return selectMany(`SELECT ${rowColumns} FROM sessions WHERE isArchived = 0`);
   },
 
+  /**
+   * Every session (archived or not) that has a transcript path on record,
+   * for the refresh-time orphan sweep: a path recorded once but gone from
+   * disk now means the session is unrecoverable regardless of archive state.
+   */
+  getAllSessionsWithTranscriptPath(): SessionRow[] {
+    return selectMany(`SELECT ${rowColumns} FROM sessions WHERE jsonl_path IS NOT NULL`);
+  },
+
   getArchivedSessions(): SessionRow[] {
     return selectMany(`SELECT ${rowColumns} FROM sessions WHERE isArchived = 1 ORDER BY ${recency} DESC, session_id DESC`);
   },

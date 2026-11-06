@@ -32,7 +32,7 @@ type WorktreePruner = { prune(params: Record<string, unknown>): Promise<unknown>
  */
 export async function releaseSessionWorktree(
   row: SessionWorktreeRow,
-  deps: { jobs?: JobArchival; git?: (root: string) => WorktreePruner } = {},
+  deps: { jobs?: JobArchival; git?: (root: string) => WorktreePruner; discardWorktree?: boolean; execFileImpl?: typeof execFile } = {},
 ): Promise<{ released: boolean; branchRetained: boolean }> {
   if (!row.worktree_path) return { released: false, branchRetained: false };
   const authority = deps.jobs ?? getProductionJobAuthority();
@@ -47,6 +47,15 @@ export async function releaseSessionWorktree(
       throw new AppError('The session is still running. Stop it before deleting it.', { code: 'SESSION_WORKTREE_RUNNING', statusCode: 409 });
     }
     throw error;
+  }
+  // A caller-confirmed discard clears the exact dirty-check git itself runs
+  // (status --porcelain -z --untracked-files=all --ignored=matching), scoped
+  // to only this registered worktree path - never the repository root - so a
+  // repeat prune below finds nothing left to refuse.
+  if (deps.discardWorktree) {
+    const run = deps.execFileImpl ?? execFile;
+    await run('git', ['reset', '--hard', 'HEAD'], { cwd: row.worktree_path });
+    await run('git', ['clean', '-fdx'], { cwd: row.worktree_path });
   }
   // An injected client is the caller's to close; one made here is closed here.
   const owned = deps.git ? undefined : new GjcGitClient({ workdir: row.repository_root });
