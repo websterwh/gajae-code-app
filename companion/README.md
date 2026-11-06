@@ -24,5 +24,6 @@ packages use an app bundle, whose first launch registers the scheme.
 
 Linux executables deliberately have no filename extension; mark them executable
 after downloading (`chmod +x gajae-cua-companion-linux-x64`). Windows releases
-end in `.exe`. Download the macOS `.app.zip`, extract it, move the app to
-Applications, and open it once before opening a pairing link.
+end in `.exe`. The macOS universal `.dmg` supports both Apple Silicon and Intel;
+mount it, move the app to Applications, and open it once before opening a
+pairing link.
