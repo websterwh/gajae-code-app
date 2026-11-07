@@ -335,7 +335,7 @@ export function createGjcAutomationTools(
   const computer: NonNullable<AutomationTools['computer']> = {
     name: 'computer',
     label: 'Computer',
-    description: 'Control a reviewed native macOS application through CUA Driver. Inspect apps/windows before acting and verify mutations with a fresh get_window_state call. This path is background-only and the server enforces it: input is bound to an approved application window, delivery_mode is always background, and desktop-scoped input, foreground delivery and real pointer movement are rejected. invoke_menu resolves menus through accessibility APIs without fronting the app. Browser pages belong in the browser tool.',
+    description: 'Control a reviewed native macOS application through CUA Driver. Inspect apps/windows before acting and verify mutations with a fresh get_window_state call. This path is background-only and the server enforces it: input is bound to an approved application window, delivery_mode is always background, and desktop-scoped input, foreground delivery and real pointer movement are rejected. invoke_menu resolves menus through accessibility APIs without fronting the app. Browser pages belong in the browser tool. Every input action (click, type_text, press_key, hotkey, scroll) requires arguments.pid naming the target process - get it from the pid a prior launch_app or list_windows call already returned for that app, do not omit it. A `cua_policy_denied: <tool> requires a bound target pid` error means to retry the exact same call with that pid added, not to give up on this tool.',
     parameters: computerSchema as any,
     concurrency: 'exclusive',
     async execute(_toolCallId: string, rawParams: unknown, signal?: AbortSignal) {
