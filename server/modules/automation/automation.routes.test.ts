@@ -138,7 +138,7 @@ test('automation routes exercise a fake CUA backend and persistent grant revoke 
   const calls: RecordedCall[] = [];
   const server = await serve(createAutomationRouter(fakeService(calls)));
   try {
-    const call = await server.request('/computer/qa-session/call', json({ tool: 'list_apps', arguments: {} }));
+    const call = await server.request('/computer/qa-session/call', json({ tool: 'desktop_list_apps', arguments: {} }));
     assert.equal(call.status, 200);
     assert.deepEqual(await call.json(), { content: [{ type: 'text', text: 'fake CUA result' }] });
 
@@ -158,7 +158,7 @@ test('automation routes exercise a fake CUA backend and persistent grant revoke 
     assert.equal(revoked.status, 200);
     assert.deepEqual(await revoked.json(), []);
     assert.deepEqual(calls, [
-      { method: 'computer:list_apps', sessionId: 'qa-session', payload: {} },
+      { method: 'computer:desktop_list_apps', sessionId: 'qa-session', payload: {} },
       { method: 'grant', payload: { kind: 'application', value: 'com.apple.TextEdit', scope: 'always' } },
       { method: 'revoke', payload: { kind: 'application', value: 'com.apple.TextEdit' } },
     ]);
