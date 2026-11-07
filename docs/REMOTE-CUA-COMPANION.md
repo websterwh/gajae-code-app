@@ -11,9 +11,15 @@ The companion lets a Gajae server use the existing reviewed `computer` tool on a
 ./gajae-agent-desktop-companion --server=gajae.example --pair=PAIRING_TOKEN
 ```
 
+A pairing token is a convenience, not a requirement: running with only `--server` (no `--pair`) also registers a brand-new device - it still starts out needing approval exactly like a token pairing does, so skipping the token only skips copying it out of Settings first, it never skips the Trust step below.
+
+```sh
+./gajae-agent-desktop-companion --server=gajae.example
+```
+
 `--server` accepts a bare domain; `wss://` and the `/remote-cua` path are filled in automatically. Pass a full URL instead (e.g. with a non-default port or path, or explicit `ws://` for local development) and it is used as given. Pass `--executable=/path/to/agent-desktop` if the `agent-desktop` CLI is not on `PATH`.
 
-The companion stores its device credential under its OS config directory (`device.json`, mode `0600` on Unix). Pairing tokens are single-use and expire after ten minutes. A device that just paired shows up in Settings as "Needs approval" - click **Trust** before it can run anything; it authenticates and reconnects fine before that, it just cannot be selected as a computer target or dispatch any tool call until trusted. **Remove** (or **Decline** before trusting) deletes the device immediately and disconnects any live companion session using its credential; pair again with a fresh token to reconnect.
+The companion stores its device credential under its OS config directory (`device.json`, mode `0600` on Unix). Pairing tokens are single-use and expire after ten minutes. A device that just paired or registered shows up in Settings as "Needs approval" - click **Trust** before it can run anything; it authenticates and reconnects fine before that (the terminal prints `Connected but not yet approved - check the web UI's Settings > Automation > Remote devices page and Trust this device.`), it just cannot be selected as a computer target or dispatch any tool call until trusted. **Decline** (before trusting) or **Remove** (after) deletes the device immediately and disconnects any live companion session using its credential - the companion is not blocked from ever reconnecting afterward: run it again (with `--server` alone, or a fresh `--pair` token) and it registers as a new device needing approval again, the same as a first-time pairing.
 
 Run `./gajae-agent-desktop-companion --grant-permissions` once per machine before pairing (or any time later if a tool call fails on a permission error) to check the OS's current accessibility/screen-recording state and trigger the native permission prompt if anything is missing. It does not need `--server` or `--pair`. The companion also runs this check once automatically at the start of every normal connect, so first-time setup rarely needs it run by hand.
 

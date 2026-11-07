@@ -34,7 +34,13 @@ export type RemoteCuaMessage =
   | RemoteCuaComputerRequest
   | { type: 'computer.result'; protocolVersion: typeof REMOTE_CUA_PROTOCOL_VERSION; requestId: string; deviceId: string; result?: unknown; error?: string }
   | { type: 'cancel'; protocolVersion: typeof REMOTE_CUA_PROTOCOL_VERSION; requestId: string; deviceId: string }
-  | { type: 'ping' | 'pong'; protocolVersion: typeof REMOTE_CUA_PROTOCOL_VERSION }
+  | { type: 'ping'; protocolVersion: typeof REMOTE_CUA_PROTOCOL_VERSION }
+  // pendingApproval marks a connection that authenticated with a real,
+  // still-registered credential (fresh pairing, unattended registration, or
+  // a previously-approved device not yet Trusted) but cannot dispatch calls
+  // until a human approves it in Settings - distinct from a hard rejection
+  // (dead/unknown credential), which closes the socket instead.
+  | { type: 'pong'; protocolVersion: typeof REMOTE_CUA_PROTOCOL_VERSION; pendingApproval?: boolean }
   | { type: 'disconnect'; protocolVersion: typeof REMOTE_CUA_PROTOCOL_VERSION; reason: 'revoked' | 'disabled' };
 
 export function isRemoteCuaMessage(value: unknown): value is RemoteCuaMessage {

@@ -358,7 +358,7 @@ test('desktop bridge keeps launch disabled until the app server reports browser 
   assert.ok(screen.getByText('1.2.3 · running'));
 });
 
-test('pairing shows the ready-to-run companion command and a copy button', async () => {
+test('pairing shows an open-in-companion link, the ready-to-run command, and copy token/command buttons', async () => {
   const writeTextCalls: string[] = [];
   Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (value: string) => { writeTextCalls.push(value); } }, configurable: true });
   fakeApi();
@@ -367,11 +367,17 @@ test('pairing shows the ready-to-run companion command and a copy button', async
   fireEvent.click(await screen.findByRole('button', { name: 'Pair this computer' }));
   const command = await screen.findByText(/--pair=fake-pairing-token/u);
   assert.ok(command.textContent?.startsWith('./gajae-agent-desktop-companion --server='));
+  assert.ok(screen.getByRole('link', { name: /Open in companion/u }));
+
+  fireEvent.click(screen.getByRole('button', { name: 'Copy token' }));
+  await waitFor(() => assert.equal(writeTextCalls.length, 1));
+  assert.equal(writeTextCalls[0], 'fake-pairing-token');
+  assert.ok(screen.getByRole('button', { name: 'Token copied' }));
 
   fireEvent.click(screen.getByRole('button', { name: 'Copy command' }));
-  await waitFor(() => assert.equal(writeTextCalls.length, 1));
-  assert.ok(writeTextCalls[0].includes('--pair=fake-pairing-token'));
-  assert.ok(screen.getByRole('button', { name: 'Copied' }));
+  await waitFor(() => assert.equal(writeTextCalls.length, 2));
+  assert.ok(writeTextCalls[1].includes('--pair=fake-pairing-token'));
+  assert.ok(screen.getByRole('button', { name: 'Command copied' }));
 });
 
 test('browser routing wording keys have parity across all ten settings locales', () => {

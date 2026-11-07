@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { RefreshCw, ShieldCheck, Trash2 } from 'lucide-react';
+import { ExternalLink, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { useAppShellStore } from '../../../../stores/useAppShellStore';
@@ -85,7 +85,9 @@ export default function AutomationSettingsTab() {
   const [remoteDevices, setRemoteDevices] = useState<RemoteDevice[]>([]);
   const [selectedRemoteDeviceId, setSelectedRemoteDeviceId] = useState<string | undefined>();
   const [pairingToken, setPairingToken] = useState<string | null>(null);
+  const [pairingDeepLink, setPairingDeepLink] = useState<string | null>(null);
   const [tokenCopied, setTokenCopied] = useState(false);
+  const [commandCopied, setCommandCopied] = useState(false);
   const [companionDownloadTemplate, setCompanionDownloadTemplate] = useState<string | null>(null);
   const [testingEgoConnection, setTestingEgoConnection] = useState(false);
   const [builtinBrowserStatus, setBuiltinBrowserStatus] = useState<string | null>(null);
@@ -201,8 +203,16 @@ export default function AutomationSettingsTab() {
     const response = await fetch('/api/automation/remote-computers/pairings', { method: 'POST' });
     if (!response.ok) return;
     const pairing = await response.json() as { token: string };
+    const server = `${window.location.origin.replace(/^http/u, 'ws')}/remote-cua`;
+    // No OS protocol handler is registered by the Rust companion rewrite
+    // (the old --register-protocol flag was never ported), so this link
+    // only ever does anything once that ships; kept so the control exists
+    // rather than disappearing, with the always-working copyable command
+    // beside it for right now.
+    setPairingDeepLink(`gajae-cua://pair?server=${encodeURIComponent(server)}&token=${encodeURIComponent(pairing.token)}`);
     setPairingToken(pairing.token);
     setTokenCopied(false);
+    setCommandCopied(false);
   };
 
   const companionPairCommand = (token: string) =>
@@ -211,8 +221,16 @@ export default function AutomationSettingsTab() {
   const copyPairingToken = async () => {
     if (!pairingToken) return;
     try {
-      await navigator.clipboard.writeText(companionPairCommand(pairingToken));
+      await navigator.clipboard.writeText(pairingToken);
       setTokenCopied(true);
+    } catch { /* Clipboard access can be denied by the browser; the text stays selectable. */ }
+  };
+
+  const copyPairingCommand = async () => {
+    if (!pairingToken) return;
+    try {
+      await navigator.clipboard.writeText(companionPairCommand(pairingToken));
+      setCommandCopied(true);
     } catch { /* Clipboard access can be denied by the browser; the text stays selectable. */ }
   };
 
@@ -402,10 +420,12 @@ export default function AutomationSettingsTab() {
             <div className="border-t border-border p-4">
               <p className="mb-3 text-xs text-muted-foreground">This token expires in ten minutes and is shown only now. Run the companion with it on the device you want to pair:</p>
               <div className="flex flex-wrap items-center gap-2">
-                <code className="min-w-0 flex-1 overflow-x-auto rounded bg-muted px-2 py-1.5 text-xs text-foreground">{companionPairCommand(pairingToken)}</code>
-                <button type="button" onClick={() => void copyPairingToken()} className="shrink-0 rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted">{tokenCopied ? 'Copied' : 'Copy command'}</button>
+                {pairingDeepLink ? <a href={pairingDeepLink} className="inline-flex items-center gap-1 rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted"><ExternalLink className="h-3.5 w-3.5" />Open in companion</a> : null}
+                <button type="button" onClick={() => void copyPairingToken()} className="rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted">{tokenCopied ? 'Token copied' : 'Copy token'}</button>
+                <button type="button" onClick={() => void copyPairingCommand()} className="rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted">{commandCopied ? 'Command copied' : 'Copy command'}</button>
               </div>
-              <p className="mt-2 text-xs text-muted-foreground">The device will appear below once it connects, and needs to be Trusted here before it can run anything.</p>
+              <code className="mt-2 block overflow-x-auto rounded bg-muted px-2 py-1.5 text-xs text-foreground">{companionPairCommand(pairingToken)}</code>
+              <p className="mt-2 text-xs text-muted-foreground">"Open in companion" requires an OS protocol handler the companion does not register yet - use the token or command for now. The device will appear below once it connects, and needs to be Trusted here before it can run anything. It is also safe to run the companion with only --server and no token at all; it registers itself and shows up below needing the same approval.</p>
             </div>
           ) : null}
           <div className="border-t border-border p-4">
