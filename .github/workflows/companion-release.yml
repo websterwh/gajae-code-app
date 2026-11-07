@@ -1,19 +1,18 @@
-name: Publish CUA Companion
+name: Publish agent-desktop Companion
 
 on:
   push:
-    branches: [feat/remote-cua-companion]
+    branches: [feat/agent-desktop-companion]
     paths:
-      - companion/**
-      - scripts/build-cua-companion.mjs
-      - scripts/package-cua-companion-macos.mjs
+      - companion-rs/**
+      - scripts/build-agent-desktop-companion.mjs
       - package.json
       - package-lock.json
       - .github/workflows/companion-release.yml
   workflow_dispatch:
     inputs:
       tag:
-        description: Immutable release tag (for example cua-companion-v0.1.0)
+        description: Immutable release tag (for example agent-desktop-companion-v0.1.0)
         required: true
         type: string
 
@@ -21,49 +20,62 @@ permissions:
   contents: write
 
 jobs:
-  linux-windows:
+  # Rust cross-compilation needs a matching OS (plus linker) for macOS/
+  # Windows targets, so each target builds on its native runner instead of
+  # cross-compiling from one box - there is no reliable way to produce a
+  # macOS binary from Linux CI without osxcross, and this project has no
+  # need to carry that complexity for a release workflow that already has
+  # free native runners for every target OS.
+  linux:
     runs-on: ubuntu-22.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          bun-version: "1.4.0"
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - run: mkdir -p dist-native && ln -s "$(command -v bun)" dist-native/bun && node scripts/build-cua-companion.mjs linux-x64 linux-arm64 windows-x64
+          targets: x86_64-unknown-linux-gnu,aarch64-unknown-linux-gnu
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu
+      - env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+        run: node scripts/build-agent-desktop-companion.mjs linux-x64 linux-arm64
       - uses: actions/upload-artifact@v4
         with:
-          name: companion-linux-windows
-          path: release/companion/*
+          name: companion-linux
+          path: release/companion-rs/gajae-agent-desktop-companion-linux-*
           if-no-files-found: error
 
   macos:
-    # Bun cross-compiles both architectures and `lipo` merges them into one
-    # universal app before `hdiutil` creates the DMG.
     runs-on: macos-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          bun-version: "1.4.0"
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - run: node scripts/package-cua-companion-macos.mjs
+          targets: x86_64-apple-darwin,aarch64-apple-darwin
+      - run: node scripts/build-agent-desktop-companion.mjs darwin-x64 darwin-arm64
       - uses: actions/upload-artifact@v4
         with:
           name: companion-macos
-          path: |
-            release/companion/gajae-cua-companion-macos-universal.dmg
-            release/companion/gajae-cua-companion-darwin-x64
-            release/companion/gajae-cua-companion-darwin-arm64
+          path: release/companion-rs/gajae-agent-desktop-companion-darwin-*
+          if-no-files-found: error
+
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - run: node scripts/build-agent-desktop-companion.mjs windows-x64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: companion-windows
+          path: release/companion-rs/gajae-agent-desktop-companion-windows-x64.exe
           if-no-files-found: error
 
   publish:
-    needs: [linux-windows, macos]
+    needs: [linux, macos, windows]
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     steps:
@@ -71,14 +83,14 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           pattern: companion-*
-          path: release/companion
+          path: release/companion-rs
           merge-multiple: true
       - run: |
-          cd release/companion
-          sha256sum gajae-cua-companion-* > SHA256SUMS
+          cd release/companion-rs
+          sha256sum gajae-agent-desktop-companion-* > SHA256SUMS
           sha256sum --check SHA256SUMS
       - env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.tag || format('cua-companion-dev-{0}', github.sha) }}
+          TAG: ${{ inputs.tag || format('agent-desktop-companion-dev-{0}', github.sha) }}
         run: |
-          gh release create "$TAG" --target "$GITHUB_SHA" --title "Gajae CUA Companion $TAG" --generate-notes release/companion/*
+          gh release create "$TAG" --target "$GITHUB_SHA" --title "Gajae agent-desktop Companion $TAG" --generate-notes release/companion-rs/*
