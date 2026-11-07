@@ -1,26 +1,23 @@
-# Remote CUA Driver companion
+# Remote agent-desktop companion
 
-The companion lets a Gajae server use the existing reviewed `computer` actions on a paired laptop. It opens one authenticated outbound WebSocket to the server. It never opens a listener, mounts a display socket, or provides a general MCP, shell, filesystem, clipboard, browser, or remote-desktop proxy.
+The companion lets a Gajae server use the existing reviewed `computer` tool on a paired laptop. It opens one authenticated outbound WebSocket to the server. It never opens a listener, mounts a display socket, or provides a general MCP, shell, filesystem, clipboard, browser, or remote-desktop proxy.
 
 ## Pair and run
 
 1. In **Settings → Automation → Computer use**, keep the master switch off until native application automation is intended. Create a pairing code under **Remote devices**.
-2. Install CUA Driver, then run the companion with the generated command. On Linux and Windows the downloaded CLI binary is a normal executable. On macOS, download the raw CLI binary (`gajae-cua-companion-darwin-arm64`/`-x64`) rather than the `.app`/`.dmg`: the app bundle currently wraps the same CLI with no pairing/settings GUI, so it still has to be run from Terminal.
+2. Install [`agent-desktop`](https://github.com/vercel-labs/agent-desktop) (`npm install -g agent-desktop`, or `brew install vercel-labs/tap/agent-desktop` on macOS), then run the companion with the generated command. The companion binary (`gajae-agent-desktop-companion-<platform>`) is a plain CLI executable on every platform - there is no app bundle.
 
 ```sh
-./gajae-cua-companion --install-driver=portable   # or --install-driver=system
-./gajae-cua-companion --server=gajae.example --pair=PAIRING_TOKEN
+./gajae-agent-desktop-companion --server=gajae.example --pair=PAIRING_TOKEN
 ```
 
-`--server` accepts a bare domain; `wss://` and the `/remote-cua` path are filled in automatically. Pass a full URL instead (e.g. with a non-default port or path, or explicit `ws://` for local development) and it is used as given.
+`--server` accepts a bare domain; `wss://` and the `/remote-cua` path are filled in automatically. Pass a full URL instead (e.g. with a non-default port or path, or explicit `ws://` for local development) and it is used as given. Pass `--executable=/path/to/agent-desktop` if the `agent-desktop` CLI is not on `PATH`.
 
-The companion stores its device credential at `~/.config/gajae-cua-companion/device.json` with mode `0600`. Pairing tokens are single-use and expire after ten minutes. Enable the paired device from Settings before it can authenticate after reconnecting.
+The companion stores its device credential under its OS config directory (`device.json`, mode `0600` on Unix). Pairing tokens are single-use and expire after ten minutes. Enable the paired device from Settings before it can authenticate after reconnecting.
 
 Production servers must expose `wss://` (TLS). Plain `ws://` is accepted only for explicit non-production localhost development. LAN, VPN, and reverse-tunnel deployments still require TLS and device credentials; network location is not authentication.
 
 If a reverse proxy (nginx, godoxy, Caddy, etc.) terminates TLS and forwards plain HTTP to this server - a normal, secure setup - set `GAJAE_TRUST_PROXY_TLS=1` so the server honors the proxy's `X-Forwarded-Proto: https` header for this check. Without it, every `/remote-cua` upgrade behind such a proxy is rejected, since the socket this process sees is never directly encrypted. This variable must only be set when every path that can reach this process is in fact behind that proxy; otherwise a direct connection could forge the header and bypass the TLS requirement entirely.
-
-If the server uses a locally-signed certificate (common for LAN/VPN deployments), the OS or browser trusting it is not enough: Node/Bun's own TLS stack does not consult the OS trust store. Pass the CA certificate explicitly with `--ca-cert=/path/to/ca.pem` (or set `NODE_EXTRA_CA_CERTS`), or the companion will fail to connect with a TLS handshake error.
 
 If the public hostname sits behind SSO/OIDC middleware (Pocket ID, Authelia, Authentik, etc.), exclude the `/remote-cua` path from it. The companion authenticates with its own pairing token or device credential in the first protocol frame; it has no browser to complete a login redirect, so the middleware's rejection (401/403) looks identical to a misconfigured server and the companion now exits immediately instead of retrying forever. For godoxy specifically, add a path-scoped bypass, e.g. in the route's labels:
 
@@ -36,14 +33,14 @@ time, derived from the `APP_REPOSITORY` build argument used to build it (see
 Releases automatically with no runtime configuration. Override it only if
 needed by setting `GAJAE_COMPANION_DOWNLOAD_TEMPLATE` on the server to a URL
 template containing a `{platform}` placeholder, for example
-`https://github.com/OWNER/REPO/releases/latest/download/gajae-cua-companion-{platform}`.
+`https://github.com/OWNER/REPO/releases/latest/download/gajae-agent-desktop-companion-{platform}`.
 The button is hidden only if neither the baked-in default nor an override
 resolves to a valid template.
 
 ## Safety and incident response
 
-The server remains the authority for the app-owned `computer` tool, application grants, session binding, and validation. The companion independently accepts only the reviewed CUA Driver tools and rejects foreground delivery, desktop scope, unbound input, expired deadlines, duplicate IDs, and device mismatches.
+The server remains the authority for the app-owned `computer` tool, application grants, session binding, and validation. The companion independently accepts only the reviewed `desktop_*` tools and rejects foreground delivery, desktop scope, unbound input, expired deadlines, duplicate IDs, and device mismatches.
 
-A device is ready only while its authenticated companion is connected and reports compatible CUA Driver readiness. Ensure the CUA Driver daemon and its Accessibility/screen-capture permissions are granted on the laptop. Disable, disconnect, or remove a device in Settings to stop calls; removal revokes its credential and terminates the connection. Rotate server TLS credentials and remove affected devices after suspected credential loss.
+A device is ready only while its authenticated companion is connected and reports compatible agent-desktop schema/version readiness. Ensure the `agent-desktop` CLI and its accessibility permissions (macOS: Accessibility + Screen Recording; Linux: a reachable Wayland/X11 session) are granted on the laptop. Disable, disconnect, or remove a device in Settings to stop calls; removal revokes its credential and terminates the connection. Rotate server TLS credentials and remove affected devices after suspected credential loss.
 
-This is not remote desktop support. It provides only the CUA Driver capabilities exposed by the existing background-only reviewed action set; it cannot move the real pointer, deliver foreground or desktop-scoped input, transfer files, read the clipboard, record the screen, or control browser backends.
+This is not remote desktop support. It provides only the agent-desktop capabilities exposed by the existing background-only reviewed action set; it cannot transfer files or record the screen beyond the `desktop_screenshot`/`desktop_trace_export` tools already in the reviewed set, and it cannot control browser backends directly.
