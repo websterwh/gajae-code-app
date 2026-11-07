@@ -98,4 +98,11 @@ jobs:
       - env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag || format('agent-desktop-companion-dev-{0}', github.sha) }}
-        run: gh release create "$TAG" --target "$GITHUB_SHA" --title "Gajae agent-desktop Companion $TAG" --generate-notes --latest release/companion-rs/*
+          # Only an explicit workflow_dispatch tagged release should claim the
+          # releases/latest/download/... slot the Docker image's companion
+          # download template depends on - a push-triggered dev build and a
+          # manual dispatch for the same commit previously raced for --latest
+          # with no deterministic winner, and the push build's dev-<sha> tag
+          # is never what anyone wants a download link to resolve to anyway.
+          LATEST_FLAG: ${{ github.event_name == 'workflow_dispatch' && '--latest' || '' }}
+        run: gh release create "$TAG" --target "$GITHUB_SHA" --title "Gajae agent-desktop Companion $TAG" --generate-notes $LATEST_FLAG release/companion-rs/*
