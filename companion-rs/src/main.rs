@@ -30,7 +30,45 @@ struct Args {
     device_name: String,
     state_path: std::path::PathBuf,
     executable: String,
+    help: bool,
+    grant_permissions: bool,
 }
+
+const HELP_TEXT: &str = r#"gajae-agent-desktop-companion - outbound-only remote computer-use companion
+
+USAGE:
+  agent-desktop-companion --server=<host> --pair=<token> [options]
+  agent-desktop-companion --server=<host> [options]        (reconnect with a stored credential)
+  agent-desktop-companion --grant-permissions               (macOS/Linux: check/request accessibility access)
+  agent-desktop-companion --help
+
+OPTIONS:
+  --server=<host>        Required to connect. Bare domain (e.g. gjc.example.com) is
+                          expanded to wss://<host>/remote-cua automatically. Pass a full
+                          ws://... or wss://... URL instead for a non-default port/path,
+                          or ws://localhost for local development (plain ws:// is refused
+                          for any other host).
+  --pair=<token>         One-time pairing token from the server's Settings > Automation >
+                          Remote devices page. Only needed for the first connection; once
+                          paired, the issued credential is stored and reused automatically.
+  --name=<name>          Device name shown in the server's device list. Defaults to this
+                          machine's hostname.
+  --state=<path>         Where the paired device credential is stored. Defaults to this
+                          OS's standard config directory.
+  --executable=<path>    Path to the agent-desktop CLI, if not on PATH. Defaults to
+                          "agent-desktop".
+  --grant-permissions    Checks current OS automation/accessibility permission state and,
+                          if not already granted, performs one harmless read-only desktop
+                          action to trigger the OS permission prompt. Does not require
+                          --server or --pair; safe to run on its own before pairing, or
+                          again later if a tool call ever fails with a permission error.
+  --help                 Show this message.
+
+EXAMPLES:
+  agent-desktop-companion --server=gjc.example.com --pair=AbCdEf123...
+  agent-desktop-companion --server=gjc.example.com
+  agent-desktop-companion --grant-permissions
+"#;
 
 fn parse_args() -> Args {
     let mut server = String::new();
@@ -38,8 +76,14 @@ fn parse_args() -> Args {
     let mut device_name = hostname();
     let mut state_path = state::default_state_path();
     let mut executable = "agent-desktop".to_string();
+    let mut help = false;
+    let mut grant_permissions = false;
     for arg in std::env::args().skip(1) {
-        if let Some(value) = arg.strip_prefix("--server=") {
+        if arg == "--help" || arg == "-h" {
+            help = true;
+        } else if arg == "--grant-permissions" {
+            grant_permissions = true;
+        } else if let Some(value) = arg.strip_prefix("--server=") {
             server = value.to_string();
         } else if let Some(value) = arg.strip_prefix("--pair=") {
             pairing_token = Some(value.to_string());
@@ -51,13 +95,35 @@ fn parse_args() -> Args {
             executable = value.to_string();
         }
     }
-    Args { server, pairing_token, device_name, state_path, executable }
+    Args { server, pairing_token, device_name, state_path, executable, help, grant_permissions }
 }
 
+/// Real device hostname, used as the default `--name`. Neither `HOSTNAME`
+/// nor `COMPUTERNAME` is set in a typical interactive macOS/Linux shell
+/// (confirmed live: every macOS pairing without an explicit `--name` showed
+/// up server-side as "unknown-device"), so this shells out to the platform's
+/// own hostname lookup instead of relying on environment variables that are
+/// mostly a Windows-only convention.
 fn hostname() -> String {
-    std::env::var("COMPUTERNAME")
-        .or_else(|_| std::env::var("HOSTNAME"))
-        .unwrap_or_else(|_| "unknown-device".to_string())
+    if let Ok(value) = std::env::var("COMPUTERNAME") {
+        if !value.trim().is_empty() {
+            return value;
+        }
+    }
+    if let Ok(output) = std::process::Command::new("hostname").output() {
+        if output.status.success() {
+            let name = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !name.is_empty() {
+                return name;
+            }
+        }
+    }
+    if let Ok(value) = std::env::var("HOSTNAME") {
+        if !value.trim().is_empty() {
+            return value;
+        }
+    }
+    "unknown-device".to_string()
 }
 
 fn os_label() -> String {
@@ -96,8 +162,17 @@ async fn main() {
     // erroring - only observable by actually making a real wss:// connection.
     let _ = rustls::crypto::ring::default_provider().install_default();
     let args = parse_args();
+    if args.help {
+        println!("{HELP_TEXT}");
+        std::process::exit(0);
+    }
+    if args.grant_permissions {
+        let driver = Arc::new(Driver::new(args.executable.clone()));
+        grant_permissions(&driver).await;
+        std::process::exit(0);
+    }
     if args.server.is_empty() {
-        eprintln!("[error] --server=wss://host/remote-cua is required.");
+        eprintln!("[error] --server is required: pass your Gajae server's address, e.g. --server=gjc.example.com (run with --help for all options).");
         std::process::exit(1);
     }
     if let Err(cause) = normalize_server_url(&args.server) {
@@ -105,11 +180,20 @@ async fn main() {
         std::process::exit(1);
     }
     let driver = Arc::new(Driver::new(args.executable.clone()));
+    maybe_prompt_permissions(&driver).await;
     let state = Arc::new(Mutex::new(state::load(&args.state_path).await));
 
     loop {
-        if let Err(cause) = connect_once(&args, &driver, &state).await {
-            eprintln!("[info] Disconnected ({cause}). Retrying in 2s...");
+        match connect_once(&args, &driver, &state).await {
+            Ok(()) => {}
+            Err(cause) if cause.starts_with("rejected:") => {
+                eprintln!("[error] {}", cause.trim_start_matches("rejected:"));
+                eprintln!("[error] The server rejected this device. If it was removed or revoked in Settings, get a new pairing token and run with --pair=<token> again. Exiting instead of retrying forever against a connection that cannot succeed.");
+                std::process::exit(1);
+            }
+            Err(cause) => {
+                eprintln!("[info] Disconnected ({cause}). Retrying in 2s...");
+            }
         }
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
     }
@@ -125,7 +209,7 @@ async fn connect_once(
         .await
         .map_err(|cause| format!("connect failed: {cause}"))?;
     if response.status().as_u16() >= 400 {
-        return Err(format!("server rejected connection (HTTP {})", response.status()));
+        return Err(format!("rejected:server rejected the connection (HTTP {})", response.status()));
     }
     let (mut write, mut read) = socket.split();
     println!("[info] Connected. Authenticating...");
@@ -145,6 +229,20 @@ async fn connect_once(
 
     while let Some(message) = read.next().await {
         let message = message.map_err(|cause| cause.to_string())?;
+        if let Message::Close(frame) = &message {
+            let code = frame.as_ref().map(|f| u16::from(f.code)).unwrap_or(0);
+            let reason = frame.as_ref().map(|f| f.reason.to_string()).unwrap_or_default();
+            // 1008 (policy violation) is this server's rejection code for a
+            // bad/expired/already-used pairing token or an unknown, revoked,
+            // or disabled device credential - none of those become true by
+            // retrying unchanged, so surface it as a terminal rejection
+            // instead of looping "Disconnected ... Retrying in 2s" forever
+            // (previously indistinguishable from a transient network blip).
+            if code == 1008 {
+                return Err(format!("rejected:server closed the connection: {reason}"));
+            }
+            continue;
+        }
         let Message::Text(text) = message else { continue };
         let Ok(incoming) = serde_json::from_str::<Incoming>(&text) else { continue };
         match incoming {
@@ -220,6 +318,70 @@ async fn connect_once(
         }
     }
     Ok(())
+}
+
+/// Runs once at startup on the connect path (never for a standalone
+/// `--grant-permissions` invocation, which calls `grant_permissions`
+/// directly) so a first-time user is not left silently unable to automate
+/// anything with no explanation. Best-effort and non-fatal: a probe failure
+/// here just falls through to the normal in-session readiness reporting,
+/// and `--grant-permissions` remains available to run manually at any time.
+async fn maybe_prompt_permissions(driver: &Arc<Driver>) {
+    let granted = driver.call("desktop_permissions", serde_json::json!({})).await
+        .ok()
+        .and_then(|value| all_permissions_granted(&value))
+        .unwrap_or(true);
+    if !granted {
+        eprintln!("[warn] agent-desktop does not yet have the OS permissions it needs on this machine.");
+        grant_permissions(driver).await;
+    }
+}
+
+/// Reads current permission state via the `desktop_permissions` MCP tool
+/// and, if anything is missing, performs one harmless read-only action
+/// (`desktop_list_apps`) to trigger the OS's native permission prompt(s).
+/// agent-desktop (like its CUA Driver predecessor) has no CLI/MCP command
+/// that requests permissions directly; the OS only shows the prompt the
+/// first time a real accessibility-API call is actually attempted.
+async fn grant_permissions(driver: &Arc<Driver>) {
+    match driver.call("desktop_permissions", serde_json::json!({})).await {
+        Ok(value) => {
+            if all_permissions_granted(&value) == Some(true) {
+                println!("[info] All required permissions are already granted.");
+                return;
+            }
+            if let Some(data) = value.get("structuredContent").and_then(|v| v.get("data")).and_then(serde_json::Value::as_object) {
+                for (name, entry) in data {
+                    let state = entry.get("state").and_then(serde_json::Value::as_str).unwrap_or("unknown");
+                    println!("[info]   {name}: {state}");
+                }
+            } else {
+                println!("[info] Current permission state: {value}");
+            }
+        }
+        Err(cause) => println!("[warn] Could not read current permission state: {cause}"),
+    }
+    println!("[info] Attempting a harmless read-only desktop action to trigger the OS permission prompt...");
+    match driver.call("desktop_list_apps", serde_json::json!({})).await {
+        Ok(_) => println!("[info] Action completed. If a system permission dialog appeared, approve it, then re-run --grant-permissions to confirm."),
+        Err(cause) => println!("[warn] Action failed ({cause}). If a system permission dialog appeared, approve it in System Settings (macOS: Privacy & Security > Accessibility and Screen Recording) or your Linux desktop's permission manager, then re-run --grant-permissions to confirm."),
+    }
+}
+
+/// `desktop_permissions`'s envelope nests the real check under
+/// `structuredContent.data`, each field shaped `{state: "granted" | ...}`.
+/// Returns `None` when the shape is unrecognized (treated as "unknown", not
+/// "denied", by callers) and `Some(false)` only when a field explicitly
+/// says it is not granted.
+fn all_permissions_granted(value: &serde_json::Value) -> Option<bool> {
+    let data = value.get("structuredContent")?.get("data")?.as_object()?;
+    if data.is_empty() {
+        return None;
+    }
+    Some(data.values().all(|entry| {
+        let state = entry.get("state").and_then(serde_json::Value::as_str).unwrap_or("");
+        state == "granted" || state == "not_required"
+    }))
 }
 
 async fn send_readiness(

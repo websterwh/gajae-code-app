@@ -13,7 +13,11 @@ The companion lets a Gajae server use the existing reviewed `computer` tool on a
 
 `--server` accepts a bare domain; `wss://` and the `/remote-cua` path are filled in automatically. Pass a full URL instead (e.g. with a non-default port or path, or explicit `ws://` for local development) and it is used as given. Pass `--executable=/path/to/agent-desktop` if the `agent-desktop` CLI is not on `PATH`.
 
-The companion stores its device credential under its OS config directory (`device.json`, mode `0600` on Unix). Pairing tokens are single-use and expire after ten minutes. Enable the paired device from Settings before it can authenticate after reconnecting.
+The companion stores its device credential under its OS config directory (`device.json`, mode `0600` on Unix). Pairing tokens are single-use and expire after ten minutes. A device that just paired shows up in Settings as "Needs approval" - click **Trust** before it can run anything; it authenticates and reconnects fine before that, it just cannot be selected as a computer target or dispatch any tool call until trusted. **Remove** (or **Decline** before trusting) deletes the device immediately and disconnects any live companion session using its credential; pair again with a fresh token to reconnect.
+
+Run `./gajae-agent-desktop-companion --grant-permissions` once per machine before pairing (or any time later if a tool call fails on a permission error) to check the OS's current accessibility/screen-recording state and trigger the native permission prompt if anything is missing. It does not need `--server` or `--pair`. The companion also runs this check once automatically at the start of every normal connect, so first-time setup rarely needs it run by hand.
+
+Run with `--help` to see every flag.
 
 Production servers must expose `wss://` (TLS). Plain `ws://` is accepted only for explicit non-production localhost development. LAN, VPN, and reverse-tunnel deployments still require TLS and device credentials; network location is not authentication.
 

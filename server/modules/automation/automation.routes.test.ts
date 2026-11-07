@@ -89,6 +89,18 @@ function fakeService(calls: RecordedCall[]): AutomationService {
         grants.length = 0;
       },
     },
+    remoteDevices: {
+      list: () => [],
+      selectedDeviceId: () => undefined,
+      issuePairing: () => ({ token: 'fake-token', expiresAt: Date.now() + 1000 }),
+      select: () => { calls.push({ method: 'remoteDevices.select' }); },
+      update: () => { calls.push({ method: 'remoteDevices.update' }); },
+      revoke: (id: string) => { calls.push({ method: 'remoteDevices.revoke', payload: id }); },
+    },
+    remoteComputerHub: {
+      isConnected: () => false,
+      disconnect: (id: string) => { calls.push({ method: 'remoteComputerHub.disconnect', payload: id }); },
+    },
   } as unknown as AutomationService;
 }
 
@@ -161,6 +173,21 @@ test('automation routes exercise a fake CUA backend and persistent grant revoke 
       { method: 'computer:desktop_list_apps', sessionId: 'qa-session', payload: {} },
       { method: 'grant', payload: { kind: 'application', value: 'com.apple.TextEdit', scope: 'always' } },
       { method: 'revoke', payload: { kind: 'application', value: 'com.apple.TextEdit' } },
+    ]);
+  } finally {
+    await server.close();
+  }
+});
+
+test('removing a remote device disconnects its live hub connection before revoking it', async () => {
+  const calls: RecordedCall[] = [];
+  const server = await serve(createAutomationRouter(fakeService(calls)));
+  try {
+    const response = await server.request('/remote-computers/device-123', { method: 'DELETE' });
+    assert.equal(response.status, 204);
+    assert.deepEqual(calls, [
+      { method: 'remoteComputerHub.disconnect', payload: 'device-123' },
+      { method: 'remoteDevices.revoke', payload: 'device-123' },
     ]);
   } finally {
     await server.close();

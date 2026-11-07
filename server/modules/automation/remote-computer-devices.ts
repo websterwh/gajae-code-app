@@ -82,7 +82,7 @@ export class RemoteComputerDeviceRegistry {
   }
   authenticate(id: string, credential: string): RemoteComputerDevice {
     const device = read(this.storage).devices.find(candidate => candidate.id === id);
-    if (!device || device.revoked || !device.enabled || !credential
+    if (!device || !device.enabled || !credential
       || !timingSafeEqual(Buffer.from(device.credentialHash), Buffer.from(hash(credential)))) {
       throw new Error('Remote computer device is unavailable.');
     }
@@ -90,21 +90,31 @@ export class RemoteComputerDeviceRegistry {
   }
   dispatchable(id: string): RemoteComputerDevice {
     const device = read(this.storage).devices.find(candidate => candidate.id === id);
-    if (!device || device.revoked || !device.enabled) throw new Error('Remote computer device is unavailable.');
+    if (!device || !device.enabled) throw new Error('Remote computer device is unavailable.');
     return device;
   }
   update(id: string, patch: { name?: string; enabled?: boolean; readiness?: RemoteCuaReadiness }): void {
     const state = read(this.storage); const device = state.devices.find(candidate => candidate.id === id);
-    if (!device || device.revoked) throw new Error('Remote computer device was not found.');
+    if (!device) throw new Error('Remote computer device was not found.');
     if (patch.name !== undefined) device.name = patch.name.trim().slice(0, 100) || device.name;
     if (patch.enabled !== undefined) device.enabled = patch.enabled;
     if (patch.readiness !== undefined) { device.readiness = patch.readiness; device.lastSeenAt = this.now(); }
     this.save(state);
   }
+  /**
+   * Removes a device entirely: an active connection is expected to be
+   * dropped by the caller before this runs (its credential stops
+   * authenticating the instant the record is gone), and this is distinct
+   * from a bare in-memory disconnect, which leaves the device paired so it
+   * can reconnect. "Remove" in the UI means gone, not merely revoked -
+   * revoked-but-listed devices with no way to re-pair or clear them were
+   * confusing clutter, not a real resource worth retaining history for.
+   */
   revoke(id: string): void {
-    const state = read(this.storage); const device = state.devices.find(candidate => candidate.id === id);
-    if (!device) throw new Error('Remote computer device was not found.');
-    device.revoked = true; device.enabled = false; device.readiness = undefined;
+    const state = read(this.storage);
+    const existed = state.devices.some(candidate => candidate.id === id);
+    if (!existed) throw new Error('Remote computer device was not found.');
+    state.devices = state.devices.filter(candidate => candidate.id !== id);
     if (state.selectedDeviceId === id) state.selectedDeviceId = undefined;
     this.save(state);
   }
