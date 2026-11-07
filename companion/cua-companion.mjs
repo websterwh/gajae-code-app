@@ -318,65 +318,58 @@ function allowed(tool, value) {
     && typeof value.pid === 'number' && Number.isSafeInteger(value.pid) && value.pid > 0;
 }
 function startDriver() {
-  // `spawn` for a missing executable never throws synchronously: it returns
-  // an object immediately and only emits an async 'error' (ENOENT) shortly
-  // after. Until that settles (or the driver proves itself by replying),
-  // treat readiness as unknown rather than assuming success.
+  // One cua-driver mcp crash (observed live: a backgrounded type_text call
+  // that got "Remote computer request timed out", then the very next call
+  // got "CUA Driver exited with code 1") used to poison every future call
+  // for the rest of this companion process's life: launchError was set once
+  // and never cleared, so driver.call() rejected forever afterward and the
+  // only fix was restarting the whole companion. This now respawns a fresh
+  // child automatically the next time driver.call() runs, instead of
+  // requiring the operator to notice and restart the process by hand.
   let child;
   let launchError;
   let confirmed = false;
-  try {
-    child = spawn(resolveDriverPath(), ['mcp'], { stdio: ['pipe', 'pipe', 'pipe'] });
-  } catch (cause) {
-    launchError = cause instanceof Error ? cause.message : 'CUA Driver failed to start';
-  }
-  let sequence = 0; const pending = new Map();
+  let sequence = 0;
+  const pending = new Map();
   let buffer = '';
-  // cua-driver's MCP server rejects any tools/call made before the standard
-  // MCP handshake (initialize, then notifications/initialized) completes,
-  // with "Missing required per-request MCP metadata". This mirrors exactly
-  // what the app's own in-process CuaDriverClient does for the local path
-  // (see server/modules/automation/cua-client.ts), so the remote companion
-  // path performs the same two-step handshake instead of going straight to
-  // tools/call.
   let initializing;
-  function request(method, params) {
-    if (!child || launchError) {
-      return Promise.reject(new Error(launchError ?? 'CUA Driver is not installed. Run with --install-driver=portable or --install-driver=system first.'));
+
+  function spawnChild() {
+    // `spawn` for a missing executable never throws synchronously: it
+    // returns an object immediately and only emits an async 'error' (ENOENT)
+    // shortly after. Until that settles (or the driver proves itself by
+    // replying), treat readiness as unknown rather than assuming success.
+    launchError = undefined;
+    buffer = '';
+    initializing = undefined;
+    try {
+      child = spawn(resolveDriverPath(), ['mcp'], { stdio: ['pipe', 'pipe', 'pipe'] });
+    } catch (cause) {
+      child = undefined;
+      launchError = cause instanceof Error ? cause.message : 'CUA Driver failed to start';
+      return;
     }
-    const id = String(++sequence);
-    return new Promise((resolve, reject) => {
-      pending.set(id, { resolve, reject });
-      child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`);
-    });
-  }
-  function notify(method, params) {
-    if (!child || launchError) return;
-    child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method, params })}\n`);
-  }
-  function initialize() {
-    if (initializing) return initializing;
-    initializing = request('initialize', {
-      protocolVersion: '2025-03-26',
-      capabilities: {},
-      clientInfo: { name: 'gajae-cua-companion', version: String(VERSION) },
-    }).then(() => { notify('notifications/initialized', {}); })
-      .catch(cause => { initializing = undefined; throw cause; });
-    return initializing;
-  }
-  if (child) {
+    const thisChild = child;
     // A listener here is required: Node re-throws an unhandled 'error' event
     // as a process-crashing exception, which is what killed the process when
     // cua-driver was missing.
-    child.on('error', cause => {
+    thisChild.on('error', cause => {
+      if (child !== thisChild) return;
       launchError = cause instanceof Error ? cause.message : 'CUA Driver failed to start';
       for (const call of pending.values()) call.reject(new Error(launchError));
       pending.clear();
     });
-    child.on('exit', code => {
+    thisChild.on('exit', code => {
+      if (child !== thisChild) return;
       if (code !== 0 && !launchError) launchError = `CUA Driver exited with code ${code}`;
+      for (const call of pending.values()) call.reject(new Error(launchError ?? 'CUA Driver exited.'));
+      pending.clear();
+      // Clear the dead reference so the next call() respawns rather than
+      // reusing a child whose stdin is already closed.
+      if (child === thisChild) child = undefined;
     });
-    child.stdout.on('data', chunk => {
+    thisChild.stdout.on('data', chunk => {
+      if (child !== thisChild) return;
       confirmed = true;
       buffer += chunk;
       for (;;) {
@@ -390,11 +383,47 @@ function startDriver() {
       }
     });
   }
+  spawnChild();
+
+  // cua-driver's MCP server rejects any tools/call made before the standard
+  // MCP handshake (initialize, then notifications/initialized) completes,
+  // with "Missing required per-request MCP metadata". This mirrors exactly
+  // what the app's own in-process CuaDriverClient does for the local path
+  // (see server/modules/automation/cua-client.ts), so the remote companion
+  // path performs the same two-step handshake instead of going straight to
+  // tools/call.
+  function request(method, params) {
+    if (!child) {
+      return Promise.reject(new Error(launchError ?? 'CUA Driver is not installed. Run with --install-driver=portable or --install-driver=system first.'));
+    }
+    const id = String(++sequence);
+    return new Promise((resolve, reject) => {
+      pending.set(id, { resolve, reject });
+      child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`);
+    });
+  }
+  function notify(method, params) {
+    if (!child) return;
+    child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method, params })}\n`);
+  }
+  function initialize() {
+    if (initializing) return initializing;
+    initializing = request('initialize', {
+      protocolVersion: '2025-03-26',
+      capabilities: {},
+      clientInfo: { name: 'gajae-cua-companion', version: String(VERSION) },
+    }).then(() => { notify('notifications/initialized', {}); })
+      .catch(cause => { initializing = undefined; throw cause; });
+    return initializing;
+  }
   return {
     get ready() { return Boolean(child) && !launchError; },
     get confirmed() { return confirmed; },
     async call(tool, parameters) {
-      if (!child || launchError) {
+      // Respawn a fresh child if the previous one is gone (crashed, never
+      // started, or was never attempted) instead of staying poisoned.
+      if (!child) spawnChild();
+      if (!child) {
         return Promise.reject(new Error(launchError ?? 'CUA Driver is not installed. Run with --install-driver=portable or --install-driver=system first.'));
       }
       await initialize();
