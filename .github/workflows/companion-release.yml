@@ -104,5 +104,8 @@ jobs:
           # manual dispatch for the same commit previously raced for --latest
           # with no deterministic winner, and the push build's dev-<sha> tag
           # is never what anyone wants a download link to resolve to anyway.
-          LATEST_FLAG: ${{ github.event_name == 'workflow_dispatch' && '--latest' || '' }}
+          # gh release create defaults to claiming latest when no --latest
+          # flag is passed at all, so the dev-build path must pass an
+          # explicit --latest=false rather than simply omitting the flag.
+          LATEST_FLAG: ${{ github.event_name == 'workflow_dispatch' && '--latest' || '--latest=false' }}
         run: gh release create "$TAG" --target "$GITHUB_SHA" --title "Gajae agent-desktop Companion $TAG" --generate-notes $LATEST_FLAG release/companion-rs/*
