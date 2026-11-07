@@ -78,6 +78,11 @@ function run(command, commandArgs) {
 }
 
 const color = { dim: '[2m', green: '[32m', yellow: '[33m', red: '[31m', reset: '[0m' };
+// Routine status goes to stdout; only warnings/errors go to stderr. Many
+// terminals render all stderr output in red/alarming styling by default,
+// which made ordinary "Connected"/"Status" lines look like failures even
+// though they carried no color codes of their own.
+function log(message) { console.log(message); }
 
 // CUA's installer prints a lot of telemetry-disclosure and onboarding text
 // that is noise for this one-shot driver-only install. Keep the few lines
@@ -123,10 +128,10 @@ async function installDriver(mode) {
   const requireSignature = args['require-signature'] === 'true';
   if (process.platform === 'win32') {
     const options = `${portable ? ` -Prefix '${prefix.replace(/'/gu, "''")}' -NoPathUpdate` : ''}${requireSignature ? ' -RequireSignature' : ''}`;
-    console.error(`${color.dim}[info] Installing CUA Driver (${mode})...${color.reset}`);
+    log(`${color.dim}[info] Installing CUA Driver (${mode})...${color.reset}`);
     await runInstaller('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command',
       `& ([scriptblock]::Create((irm https://cua.ai/install.ps1))) -Only cua-driver -NoOnboarding${options}`]);
-    console.error(`${color.green}[info] CUA Driver installed.${color.reset}`);
+    log(`${color.green}[info] CUA Driver installed.${color.reset}`);
     return;
   }
   // CUA publishes this installer and its release manifest. The documented
@@ -137,9 +142,9 @@ async function installDriver(mode) {
     ...(requireSignature ? ['--require-signature'] : []),
     '--yes',
   ];
-  console.error(`${color.dim}[info] Installing CUA Driver (${mode}) to ${portable ? prefix : 'the system default location'}...${color.reset}`);
+  log(`${color.dim}[info] Installing CUA Driver (${mode}) to ${portable ? prefix : 'the system default location'}...${color.reset}`);
   await runInstaller('/bin/bash', ['-c', 'curl -fsSL https://cua.ai/install.sh | sh -s -- "$@"', 'gajae-cua-installer', ...options]);
-  console.error(`${color.green}[info] CUA Driver installed. Run with --server=... --pair=... to connect; the companion locates it automatically.${color.reset}`);
+  log(`${color.green}[info] CUA Driver installed. Run with --server=... --pair=... to connect; the companion locates it automatically.${color.reset}`);
 }
 
 async function registerProtocol() {
@@ -287,7 +292,7 @@ function readiness() {
 }
 let retryCount = 0;
 function connect() {
-  console.error(`[info] Connecting to ${url} ...`);
+  log(`[info] Connecting to ${url} ...`);
   let confirmedAuth = false;
   let lastError;
   let httpStatus;
@@ -304,7 +309,7 @@ function connect() {
     socket.terminate();
   });
   socket.on('open', () => {
-    console.error('[info] Connected. Authenticating...');
+    log('[info] Connected. Authenticating...');
     socket.send(JSON.stringify({
       type: 'hello', protocolVersion: VERSION,
       ...(state ? { deviceId: state.deviceId, credential: state.credential } : { pairingToken, deviceName: args.name ?? hostname(), os: `${platform()} ${process.arch}` }),
@@ -317,18 +322,18 @@ function connect() {
       state = { deviceId: message.deviceId, credential: message.credential };
       await saveState(state);
       retryCount = 0;
-      console.error('[info] Paired and connected. This device is now available to the server.');
+      log('[info] Paired and connected. This device is now available to the server.');
     }
-    if (message.type === 'pong' && !confirmedAuth) { confirmedAuth = true; retryCount = 0; console.error('[info] Connected and authenticated with the server.'); }
+    if (message.type === 'pong' && !confirmedAuth) { confirmedAuth = true; retryCount = 0; log('[info] Connected and authenticated with the server.'); }
     if (message.type === 'pong' || message.type === 'paired') {
       const current = readiness();
       socket.send(JSON.stringify(current));
       const r = current.readiness;
       const driverState = r.schemaSupported ? `${color.green}CUA Driver ready${r.driverVersion ? ` (v${r.driverVersion})` : ''}${color.reset}`
         : `${color.yellow}CUA Driver not available - tool calls will fail${color.reset}`;
-      console.error(`[info] Status: device "${r.deviceName}" (${r.os}) - ${driverState} - ${r.safeTools.length} tools reviewed.`);
+      log(`[info] Status: device "${r.deviceName}" (${r.os}) - ${driverState} - ${r.safeTools.length} tools reviewed.`);
     }
-    if (message.type === 'disconnect') { console.error(`[info] Server disconnected this device: ${message.reason}`); socket.close(4003, message.reason); }
+    if (message.type === 'disconnect') { log(`[info] Server disconnected this device: ${message.reason}`); socket.close(4003, message.reason); }
     if (message.type !== 'computer.request') return;
     const error = !state || message.deviceId !== state.deviceId ? 'device ID mismatch'
       : completed.has(message.requestId) ? 'duplicate request ID'
@@ -336,10 +341,10 @@ function connect() {
           : !allowed(message.tool, message.arguments) ? 'CUA policy denied this request' : null;
     completed.add(message.requestId);
     if (error) console.error(`${color.yellow}[warn] Refused ${message.tool}: ${error}${color.reset}`);
-    else console.error(`[info] Running ${message.tool} ...`);
+    else log(`[info] Running ${message.tool} ...`);
     try {
       const result = error ? undefined : await driver.call(message.tool, message.arguments);
-      if (!error) console.error(`[info] ${message.tool} completed.`);
+      if (!error) log(`[info] ${message.tool} completed.`);
       socket.send(JSON.stringify({ type: 'computer.result', protocolVersion: VERSION, requestId: message.requestId, deviceId: message.deviceId, ...(error ? { error } : { result }) }));
     } catch (cause) {
       const failureMessage = cause instanceof Error ? cause.message : 'CUA Driver failed';
@@ -365,7 +370,7 @@ function connect() {
       console.error(`${color.yellow}[warn] TLS handshake failed connecting to ${url}${detail}. If this server uses a locally-signed certificate, pass --ca-cert=/path/to/ca.pem (or set NODE_EXTRA_CA_CERTS). Retrying in 2s...${color.reset}`);
     } else {
       const statusNote = httpStatus ? ` (HTTP ${httpStatus})` : '';
-      console.error(`[info] Disconnected (code ${code}${statusNote}${reason ? `: ${reason}` : ''}${detail}). Retrying in 2s...`);
+      log(`[info] Disconnected (code ${code}${statusNote}${reason ? `: ${reason}` : ''}${detail}). Retrying in 2s...`);
     }
     setTimeout(connect, 2_000);
   });

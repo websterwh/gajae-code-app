@@ -44,6 +44,7 @@ type RemoteDevice = {
   os: string;
   enabled: boolean;
   revoked: boolean;
+  connected?: boolean;
   lastSeenAt?: number;
   readiness?: {
     driverVersion?: string;
@@ -261,12 +262,6 @@ export default function AutomationSettingsTab() {
     if (response.ok) setGrants(await response.json() as Grants);
   };
 
-  const statusValue = (value: boolean | undefined) => value === true
-    ? t('automation.granted')
-    : value === false
-      ? t('automation.missing')
-      : t('automation.unknown');
-
   const allGrants = [
     ...(grants?.always.origins ?? []).map((value) => ({ kind: 'origin' as const, value })),
     ...(grants?.always.applications ?? []).map((value) => ({ kind: 'application' as const, value })),
@@ -384,16 +379,9 @@ export default function AutomationSettingsTab() {
           </SettingsRow>
           <div className="flex items-center justify-between gap-4 p-4">
             <div>
-              <p className="text-sm font-medium text-foreground">CUA Driver</p>
-              <p className="mt-1 text-xs text-muted-foreground">{status?.cua.installed ? `${status.cua.version ?? ''} · ${status.cua.daemon}` : t('automation.notInstalled')}</p>
+              <p className="text-sm font-medium text-foreground">Host control</p>
+              <p className="mt-1 text-xs text-muted-foreground">Not available in this container. Planned: letting this container drive the host machine it runs on.</p>
             </div>
-            <a href="https://cua.ai/docs/how-to-guides/driver/install" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
-              {t('automation.installGuide')} <ExternalLink className="h-3 w-3" />
-            </a>
-          </div>
-          <div className="grid gap-2 p-4 text-xs text-muted-foreground sm:grid-cols-2">
-            <span>{t('automation.accessibility')}: {statusValue(status?.cua.accessibility)}</span>
-            <span>{t('automation.screenRecording')}: {statusValue(status?.cua.screenRecording)}</span>
           </div>
         </SettingsCard>
         <SettingsCard className="mt-3">
@@ -436,7 +424,15 @@ export default function AutomationSettingsTab() {
               <div key={device.id} className="border-t border-border p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-foreground">{device.name}</p>
+                    <p className="flex items-center gap-2 truncate text-sm font-medium text-foreground">
+                      <span
+                        className={`inline-block h-2 w-2 shrink-0 rounded-full ${device.connected ? 'bg-emerald-500' : 'bg-destructive'}`}
+                        role="img"
+                        aria-label={device.connected ? 'Companion online' : 'Companion offline'}
+                        title={device.connected ? 'Companion online' : 'Companion offline'}
+                      />
+                      <span className="truncate">{device.name}</span>
+                    </p>
                     <p className="mt-1 text-xs text-muted-foreground">{device.os} · {state}{device.readiness?.driverVersion ? ` · CUA Driver ${device.readiness.driverVersion}` : ''}</p>
                   </div>
                   <div className="flex flex-wrap justify-end gap-2">
