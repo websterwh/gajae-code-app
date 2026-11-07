@@ -34,6 +34,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-unknown-linux-gnu,aarch64-unknown-linux-gnu
+      # dtolnay/rust-toolchain's own target install can no-op when the
+      # requested toolchain was already the runner image's default (it takes
+      # an "update" path that does not re-apply the targets list), so add
+      # the non-native target explicitly rather than relying on that input.
+      - run: rustup target add aarch64-unknown-linux-gnu
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu
       - env:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
@@ -52,6 +57,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-apple-darwin,aarch64-apple-darwin
+      - run: rustup target add x86_64-apple-darwin aarch64-apple-darwin
       - run: node scripts/build-agent-desktop-companion.mjs darwin-x64 darwin-arm64
       - uses: actions/upload-artifact@v4
         with:
