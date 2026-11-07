@@ -24,3 +24,23 @@ host), a reviewed allow-list of operations (same spirit as `SAFE_TOOLS` in
 outbound-only WebSocket channel or needs a separate one scoped to host
 management only. Not started — no design yet, just the placeholder swap
 that prompted writing this down.
+
+## Requesting CUA Driver permissions on Windows and Linux
+
+The companion ships `--grant-permissions` to request macOS's Accessibility
+and Screen Recording TCC grants for CUA Driver, by shelling out to
+`cua-driver permissions grant` / `permissions status`. That's macOS-only:
+it is the only platform where `cua-driver` currently exposes a `permissions`
+subcommand, because it is the only platform with a user-facing OS permission
+gate in front of accessibility/screen APIs today.
+
+Windows and Linux CUA Driver builds (UI Automation and AT-SPI 2 respectively)
+do not have an equivalent interactive grant step documented upstream yet - a
+request there either succeeds outright under the signed-in desktop session or
+fails for a different reason entirely (missing AT-SPI bus, no desktop
+session, UIA access denied by policy). If/when `cua-driver` grows a
+`permissions`-style command for either platform, `grantPermissions()` in
+`cua-companion.mjs` should grow a second branch for it instead of only
+throwing "not implemented" outside macOS, and the startup/failure hints that
+currently gate on `process.platform === 'darwin'` should be extended to
+match. Not started - blocked on cua-driver itself publishing that surface.
