@@ -26,7 +26,7 @@ if (process.versions.bun && process.platform === 'darwin' && process.arch === 'x
 
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
-import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { homedir, hostname, platform } from 'node:os';
 import { join } from 'node:path';
 import { WebSocket } from 'ws';
@@ -162,10 +162,46 @@ async function grantPermissions() {
   }
   const executable = resolveDriverPath();
   log(`${color.dim}[info] Requesting macOS Accessibility and Screen Recording permission for CUA Driver...${color.reset}`);
+  // `cua-driver permissions grant` itself only triggers the two System
+  // Settings prompts and returns - it does not wait for the user to act on
+  // them, and `permissions status` right after would just report whatever
+  // was true before the prompts are answered. So this exits as soon as the
+  // grant command itself completes, rather than chaining a status check the
+  // user has to wait on for a decision that is theirs to make in System
+  // Settings. They get the exact follow-up command to re-check afterward.
   await run(executable, ['permissions', 'grant']);
-  log(`${color.dim}[info] Checking granted permissions...${color.reset}`);
-  await run(executable, ['permissions', 'status']);
-  log(`${color.green}[info] If a permission is still missing above, open System Settings and switch its toggle on, then run --grant-permissions again; macOS only re-reads the grant after CUA Driver relaunches.${color.reset}`);
+  log(`${color.green}[info] If System Settings opened, switch on both Accessibility and Screen Recording for CuaDriver, then run "${executable} permissions status" to confirm. macOS only re-reads the grant after CUA Driver relaunches.${color.reset}`);
+}
+
+
+// Removes everything this companion owns: CUA's own driver (portable and/or
+// system install, via the canonical uninstaller CUA itself publishes - see
+// https://cua.ai/driver/uninstall.sh and uninstall.ps1) plus the companion's
+// own pairing state and portable install prefix. Deliberately does NOT touch
+// macOS TCC grants (Accessibility/Screen Recording) by default: CUA's own
+// uninstaller keeps those too, so a reinstall of the same signed app needs no
+// new approval. Pass --reset-permissions to also revoke them on macOS.
+async function uninstallDriver() {
+  const resetPermissions = args['reset-permissions'] === 'true';
+  if (process.platform === 'win32') {
+    log(`${color.dim}[info] Uninstalling CUA Driver...${color.reset}`);
+    await runInstaller('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command',
+      "$env:CUA_DRIVER_RS_UNINSTALL_FORCE='1'; & ([scriptblock]::Create((irm https://cua.ai/driver/uninstall.ps1)))"]);
+  } else {
+    const forwarded = resetPermissions ? ['--', '--reset-permissions'] : [];
+    log(`${color.dim}[info] Uninstalling CUA Driver...${color.reset}`);
+    await runInstaller('/bin/bash', ['-c', 'curl -fsSL https://cua.ai/driver/uninstall.sh | sh -s -- "$@"', 'gajae-cua-uninstaller', ...forwarded]);
+  }
+  // CUA's uninstaller removes its own default (system) install location; a
+  // --portable-dir install (this companion's default ~/.gajae-cua, or a
+  // caller-supplied one) lives outside that and is never touched by it, so
+  // remove it here directly.
+  const portableDir = args['portable-dir'] ?? join(homedir(), '.gajae-cua');
+  log(`${color.dim}[info] Removing portable CUA Driver install at ${portableDir} (if present)...${color.reset}`);
+  await rm(portableDir, { recursive: true, force: true });
+  log(`${color.dim}[info] Removing companion pairing state at ${statePath}...${color.reset}`);
+  await rm(statePath, { force: true });
+  log(`${color.green}[info] CUA Driver and companion state removed.${resetPermissions ? '' : ' macOS Accessibility/Screen Recording grants for CuaDriver were left in place; rerun with --reset-permissions=true to revoke them too.'}${color.reset}`);
 }
 
 async function registerProtocol() {
@@ -215,6 +251,15 @@ if (Object.hasOwn(args, 'grant-permissions')) {
     process.exit(0);
   } catch (cause) {
     console.error(`[error] ${cause instanceof Error ? cause.message : 'Requesting permissions failed.'}`);
+    process.exit(1);
+  }
+}
+if (Object.hasOwn(args, 'uninstall')) {
+  try {
+    await uninstallDriver();
+    process.exit(0);
+  } catch (cause) {
+    console.error(`[error] ${cause instanceof Error ? cause.message : 'Uninstall failed.'}`);
     process.exit(1);
   }
 }
