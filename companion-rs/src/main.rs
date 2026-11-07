@@ -230,9 +230,10 @@ async fn send_readiness(
 ) -> Result<(), String> {
     let _ = device_id;
     // A cheap read-only probe to report driver availability, matching the
-    // old companion's readiness ping. `list-apps` is in SAFE_COMMANDS and
-    // succeeding proves agent-desktop is installed and can reach a display.
-    let schema_supported = driver.call("list-apps", serde_json::json!({})).await.is_ok();
+    // old companion's readiness ping. `desktop_list_apps` is the live MCP
+    // tool name (not the CLI command name `list-apps`); succeeding proves
+    // agent-desktop is installed, speaking MCP, and can reach a display.
+    let schema_supported = driver.call("desktop_list_apps", serde_json::json!({})).await.is_ok();
     let readiness = Readiness {
         driver_version: None,
         schema_supported,
