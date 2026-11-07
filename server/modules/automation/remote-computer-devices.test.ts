@@ -32,3 +32,13 @@ test('disabled and revoked devices cannot authenticate or be selected', () => {
   assert.equal(registry.selectedDeviceId(), undefined);
   assert.throws(() => registry.dispatchable(paired.device.id), /unavailable/u);
 });
+
+test('removing a device actually drops it from the list, not just marks it revoked', () => {
+  const registry = new RemoteComputerDeviceRegistry(storage());
+  const paired = registry.consumePairing(registry.issuePairing().token, 'Laptop', 'linux');
+  assert.equal(registry.list().length, 1);
+  registry.revoke(paired.device.id);
+  assert.deepEqual(registry.list(), []);
+  assert.throws(() => registry.update(paired.device.id, { enabled: true }), /was not found/u);
+  assert.throws(() => registry.revoke(paired.device.id), /was not found/u);
+});

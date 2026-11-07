@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ExternalLink, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react';
+import { RefreshCw, ShieldCheck, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { useAppShellStore } from '../../../../stores/useAppShellStore';
@@ -84,7 +84,6 @@ export default function AutomationSettingsTab() {
   const [computerUse, setComputerUse] = useState(false);
   const [remoteDevices, setRemoteDevices] = useState<RemoteDevice[]>([]);
   const [selectedRemoteDeviceId, setSelectedRemoteDeviceId] = useState<string | undefined>();
-  const [pairingCommand, setPairingCommand] = useState<string | null>(null);
   const [pairingToken, setPairingToken] = useState<string | null>(null);
   const [tokenCopied, setTokenCopied] = useState(false);
   const [companionDownloadTemplate, setCompanionDownloadTemplate] = useState<string | null>(null);
@@ -202,16 +201,17 @@ export default function AutomationSettingsTab() {
     const response = await fetch('/api/automation/remote-computers/pairings', { method: 'POST' });
     if (!response.ok) return;
     const pairing = await response.json() as { token: string };
-    const server = `${window.location.origin.replace(/^http/u, 'ws')}/remote-cua`;
-    setPairingCommand(`gajae-cua://pair?server=${encodeURIComponent(server)}&token=${encodeURIComponent(pairing.token)}`);
     setPairingToken(pairing.token);
     setTokenCopied(false);
   };
 
+  const companionPairCommand = (token: string) =>
+    `./gajae-agent-desktop-companion --server=${window.location.hostname} --pair=${token}`;
+
   const copyPairingToken = async () => {
     if (!pairingToken) return;
     try {
-      await navigator.clipboard.writeText(pairingToken);
+      await navigator.clipboard.writeText(companionPairCommand(pairingToken));
       setTokenCopied(true);
     } catch { /* Clipboard access can be denied by the browser; the text stays selectable. */ }
   };
@@ -388,7 +388,7 @@ export default function AutomationSettingsTab() {
           <div className="flex items-center justify-between gap-4 p-4">
             <div>
               <p className="text-sm font-medium text-foreground">Remote devices</p>
-              <p className="mt-1 text-xs text-muted-foreground">Pair a laptop running the CUA companion. Only an enabled, currently connected device with a valid readiness report can be selected.</p>
+              <p className="mt-1 text-xs text-muted-foreground">Pair a device running the agent-desktop companion. A newly paired device needs to be Trusted below before it can be selected, and only an enabled, currently connected device with a valid readiness report can actually run anything.</p>
             </div>
             <div className="flex items-center gap-2">
               {companionDownloadTemplate ? <a href={companionDownloadTemplate.replace('{platform}', companionPlatform())} className="rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted">Download companion</a> : null}
@@ -398,28 +398,30 @@ export default function AutomationSettingsTab() {
               <button type="button" onClick={() => void pairRemoteComputer()} className="rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted">Pair this computer</button>
             </div>
           </div>
-          {pairingCommand ? (
+          {pairingToken ? (
             <div className="border-t border-border p-4">
-              <p className="mb-3 text-xs text-muted-foreground">This token expires in ten minutes and is shown only now.</p>
-              <div className="flex flex-wrap gap-2">
-                <a href={pairingCommand} className="inline-flex items-center gap-1 rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted"><ExternalLink className="h-3.5 w-3.5" />Open in companion</a>
-                <button type="button" onClick={() => void copyPairingToken()} className="rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted">{tokenCopied ? 'Token copied' : 'Copy token'}</button>
+              <p className="mb-3 text-xs text-muted-foreground">This token expires in ten minutes and is shown only now. Run the companion with it on the device you want to pair:</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <code className="min-w-0 flex-1 overflow-x-auto rounded bg-muted px-2 py-1.5 text-xs text-foreground">{companionPairCommand(pairingToken)}</code>
+                <button type="button" onClick={() => void copyPairingToken()} className="shrink-0 rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted">{tokenCopied ? 'Copied' : 'Copy command'}</button>
               </div>
-              <p className="mt-2 text-xs text-muted-foreground">“Open in companion” works with an already-running companion on Linux/Windows. On macOS (no GUI handler yet) or for a first run, copy the token and pass it to the companion with <code className="rounded bg-muted px-1">--pair=TOKEN</code>.</p>
+              <p className="mt-2 text-xs text-muted-foreground">The device will appear below once it connects, and needs to be Trusted here before it can run anything.</p>
             </div>
           ) : null}
           <div className="border-t border-border p-4">
             <label className="block text-xs text-muted-foreground" htmlFor="remote-computer-target">Computer target</label>
             <select id="remote-computer-target" className={`mt-2 w-full ${selectClass}`} value={selectedRemoteDeviceId ?? ''} onChange={(event) => void selectRemoteDevice(event.target.value || undefined)}>
               <option value="">Local driver</option>
-              {remoteDevices.filter((device) => device.enabled && !device.revoked).map((device) => (
+              {remoteDevices.filter((device) => device.enabled).map((device) => (
                 <option key={device.id} value={device.id}>{device.name}</option>
               ))}
             </select>
           </div>
           {remoteDevices.length === 0 ? <p className="border-t border-border p-4 text-xs text-muted-foreground">No paired remote devices.</p> : remoteDevices.map((device) => {
-            const ready = device.enabled && !device.revoked && Boolean(device.lastSeenAt) && device.readiness?.schemaSupported === true;
-            const state = device.revoked ? 'Revoked' : !device.enabled ? 'Disabled' : !device.lastSeenAt ? 'Offline' : ready ? 'Ready' : 'CUA unsupported or permissions missing';
+            const ready = device.enabled && Boolean(device.lastSeenAt) && device.readiness?.schemaSupported === true;
+            const state = !device.enabled
+              ? (device.connected ? 'Connected - needs approval' : 'Needs approval')
+              : !device.lastSeenAt ? 'Offline' : ready ? 'Ready' : 'agent-desktop unsupported or permissions missing';
             return (
               <div key={device.id} className="border-t border-border p-4">
                 <div className="flex items-start justify-between gap-3">
@@ -433,15 +435,15 @@ export default function AutomationSettingsTab() {
                       />
                       <span className="truncate">{device.name}</span>
                     </p>
-                    <p className="mt-1 text-xs text-muted-foreground">{device.os} · {state}{device.readiness?.driverVersion ? ` · CUA Driver ${device.readiness.driverVersion}` : ''}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{device.os} · {state}{device.readiness?.driverVersion ? ` · agent-desktop ${device.readiness.driverVersion}` : ''}</p>
                   </div>
                   <div className="flex flex-wrap justify-end gap-2">
-                    <button type="button" onClick={() => void updateRemoteDevice(device.id, { enabled: !device.enabled })} disabled={device.revoked} className="rounded border border-input px-2 py-1 text-xs text-foreground hover:bg-muted disabled:opacity-50">{device.enabled ? 'Disable' : 'Enable'}</button>
+                    <button type="button" onClick={() => void updateRemoteDevice(device.id, { enabled: !device.enabled })} className={`rounded border px-2 py-1 text-xs hover:bg-muted ${device.enabled ? 'border-input text-foreground' : 'border-emerald-600 text-emerald-600'}`}>{device.enabled ? 'Disable' : 'Trust'}</button>
                     <button type="button" onClick={() => {
                       const name = window.prompt('Remote device name', device.name);
                       if (name) void updateRemoteDevice(device.id, { name });
-                    }} disabled={device.revoked} className="rounded border border-input px-2 py-1 text-xs text-foreground hover:bg-muted disabled:opacity-50">Rename</button>
-                    <button type="button" onClick={() => void removeRemoteDevice(device.id)} className="rounded border border-destructive px-2 py-1 text-xs text-destructive hover:bg-destructive/10">Remove</button>
+                    }} className="rounded border border-input px-2 py-1 text-xs text-foreground hover:bg-muted">Rename</button>
+                    <button type="button" onClick={() => void removeRemoteDevice(device.id)} className="rounded border border-destructive px-2 py-1 text-xs text-destructive hover:bg-destructive/10">{device.enabled ? 'Remove' : 'Decline'}</button>
                   </div>
                 </div>
               </div>

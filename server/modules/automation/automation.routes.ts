@@ -159,6 +159,7 @@ export function createAutomationRouter(service: AutomationService = automationSe
   }));
   router.delete('/remote-computers/:deviceId', asyncHandler((request, response) => {
     try {
+      service.remoteComputerHub.disconnect(request.params.deviceId, 'revoked');
       service.remoteDevices.revoke(request.params.deviceId);
       response.status(204).end();
     } catch (error) { response.status(404).json({ error: error instanceof Error ? error.message : 'Remote computer device was not found.' }); }
