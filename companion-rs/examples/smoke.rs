@@ -8,6 +8,6 @@ mod driver_mod;
 #[tokio::main]
 async fn main() {
     let driver = driver_mod::Driver::new("agent-desktop".to_string());
-    let result = driver.call("desktop_list_apps", serde_json::json!({})).await;
+    let result = driver.call("desktop_version", serde_json::json!({})).await;
     println!("{result:?}");
 }
