@@ -4,7 +4,7 @@ import { GJC_BROWSER_BACKENDS } from '@/gjc-engine.js';
 import { asyncHandler } from '@/shared/utils.js';
 
 import { safeSessionId, type BrowserCommand } from './browser-protocol.js';
-import { isCuaSafeTool } from './cua-client.js';
+import { isAgentDesktopSafeTool } from './agent-desktop-client.js';
 import { automationService, type AutomationService } from './automation.service.js';
 import { discoverLocalDevelopmentUrls } from './local-sites.js';
 import { parseAutomationGrantFilter } from './automation-grants.js';
@@ -257,8 +257,8 @@ export function createAutomationRouter(service: AutomationService = automationSe
   router.post('/computer/:sessionId/call', asyncHandler(async (request, response) => {
     const id = sessionId(request, response);
     if (!id) return;
-    if (!isCuaSafeTool(request.body?.tool)) {
-      response.status(400).json({ error: 'Unsupported CUA Driver tool.' });
+    if (!isAgentDesktopSafeTool(request.body?.tool)) {
+      response.status(400).json({ error: 'Unsupported agent-desktop tool.' });
       return;
     }
     try {
