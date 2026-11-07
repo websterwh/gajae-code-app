@@ -64,11 +64,40 @@ fn os_label() -> String {
     format!("{} {}", std::env::consts::OS, std::env::consts::ARCH)
 }
 
+/// `--server` accepts a bare domain; `wss://` and the `/remote-cua` path are
+/// filled in automatically so the user never has to know the wire shape.
+/// Pass a full URL instead (non-default port/path, or explicit `ws://` for
+/// local development) and it is used as given. Mirrors the equivalent logic
+/// in the retired `cua-companion.mjs`.
+fn normalize_server_url(server: &str) -> Result<url::Url, String> {
+    let candidate = if server.starts_with("ws://") || server.starts_with("wss://") {
+        server.to_string()
+    } else {
+        format!("wss://{server}")
+    };
+    let mut parsed = url::Url::parse(&candidate).map_err(|cause| format!("invalid --server value: {cause}"))?;
+    if parsed.path() == "/" || parsed.path().is_empty() {
+        parsed.set_path("/remote-cua");
+    }
+    if parsed.scheme() == "ws" {
+        let host = parsed.host_str().unwrap_or("");
+        let is_localhost = host == "localhost" || host == "127.0.0.1" || host == "::1";
+        if !is_localhost {
+            return Err("ws:// is limited to localhost development; use wss:// for any other host.".to_string());
+        }
+    }
+    Ok(parsed)
+}
+
 #[tokio::main]
 async fn main() {
     let args = parse_args();
     if args.server.is_empty() {
         eprintln!("[error] --server=wss://host/remote-cua is required.");
+        std::process::exit(1);
+    }
+    if let Err(cause) = normalize_server_url(&args.server) {
+        eprintln!("[error] {cause}");
         std::process::exit(1);
     }
     let driver = Arc::new(Driver::new(args.executable.clone()));
@@ -87,7 +116,8 @@ async fn connect_once(
     driver: &Arc<Driver>,
     state: &Arc<Mutex<Option<state::DeviceState>>>,
 ) -> Result<(), String> {
-    let (socket, response) = tokio_tungstenite::connect_async(&args.server)
+    let url = normalize_server_url(&args.server)?;
+    let (socket, response) = tokio_tungstenite::connect_async(url.as_str())
         .await
         .map_err(|cause| format!("connect failed: {cause}"))?;
     if response.status().as_u16() >= 400 {
