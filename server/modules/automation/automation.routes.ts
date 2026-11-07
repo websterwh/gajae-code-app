@@ -135,11 +135,16 @@ export function createAutomationRouter(service: AutomationService = automationSe
   router.post('/remote-computers/pairings', asyncHandler((_request, response) => {
     response.status(201).json(service.remoteDevices.issuePairing());
   }));
-  router.put('/remote-computers/selected', asyncHandler((request, response) => {
+  router.put('/remote-computers/selected', asyncHandler(async (request, response) => {
     try {
       const id = request.body?.deviceId;
       if (id !== undefined && typeof id !== 'string') throw new Error('deviceId must be a string.');
       service.remoteDevices.select(id);
+      // startBridge() only opens the automation socket when some computer
+      // transport is usable, checked once at process boot; selecting a
+      // remote device after boot (the normal pairing flow) must light up
+      // that same socket immediately instead of requiring a restart.
+      await service.startBridge();
       response.json({ selectedDeviceId: service.remoteDevices.selectedDeviceId() });
     } catch (error) { response.status(400).json({ error: error instanceof Error ? error.message : 'Invalid remote computer selection.' }); }
   }));

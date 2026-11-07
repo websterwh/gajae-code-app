@@ -171,6 +171,26 @@ export class AutomationService {
   }
   private readonly egoActivityReader = egoActivityReader;
   private readonly capabilities = automationSupport(process.platform, process.arch, process.env);
+  /**
+   * Computer automation is usable either because this machine is itself a
+   * native macOS desktop that can run CUA Driver locally, or because the
+   * user paired and selected a remote companion to drive instead. Those are
+   * independent paths: a server with no local desktop session (a Docker
+   * container, a Linux box) still has a usable computer transport once a
+   * remote device is selected, and must not need any environment override to
+   * reach it.
+   */
+  private computerCapable(): boolean {
+    if (this.capabilities.computer) return true;
+    const deviceId = this.remoteDevices.selectedDeviceId();
+    if (!deviceId) return false;
+    try {
+      this.remoteDevices.dispatchable(deviceId);
+      return true;
+    } catch {
+      return false;
+    }
+  }
   get supported(): boolean { return this.browser.isReady(); }
   private readonly bridgeToken = randomBytes(32).toString('hex');
   private readonly bridgePath = process.env.GAJAE_AUTOMATION_SOCKET
@@ -228,16 +248,17 @@ export class AutomationService {
   async status() {
     const release = this.enter('status');
     try {
+      const computerCapable = this.computerCapable();
       const [browser, cua] = await Promise.all([
         this.browser.status().catch(() => ({ state: 'unavailable' as const, ready: false, engine: 'webview' as const })),
-        this.capabilities.computer
+        computerCapable
           ? this.transport().status()
           : Promise.resolve({ installed: false, daemon: 'unknown' as const } as CuaStatus),
       ]);
       return {
         supported: browser.ready,
-        capabilities: { browser: browser.ready, computer: this.capabilities.computer },
-        computerSupported: this.capabilities.computer,
+        capabilities: { browser: browser.ready, computer: computerCapable },
+        computerSupported: computerCapable,
         platform: process.platform,
         architecture: process.arch,
         browser,
@@ -490,7 +511,7 @@ export class AutomationService {
   }
 
   async startBridge(): Promise<void> {
-    if (!this.capabilities.browser && !this.capabilities.computer) return;
+    if (!this.capabilities.browser && !this.computerCapable()) return;
     if (this.bridgeStarting) return this.bridgeStarting;
     if (this.bridge) return;
     const release = this.enter('bridge.start');
@@ -634,7 +655,7 @@ export class AutomationService {
   }
 
   private requireComputerSupported(): void {
-    if (!this.capabilities.computer) throw new Error('Native computer automation is not enabled on this platform.');
+    if (!this.computerCapable()) throw new Error('No computer automation transport is available: this machine has no local CUA Driver and no remote companion is paired and selected.');
     // The user's opt-in is checked at the same choke point as the platform
     // capability, so every caller - the worker bridge, the HTTP route, a
     // future one - fails closed while it is off, whether or not the session

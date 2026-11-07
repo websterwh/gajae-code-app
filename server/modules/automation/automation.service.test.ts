@@ -419,3 +419,47 @@ test('selecting a paired remote device routes computer calls to it instead of th
     else process.env.GAJAE_AUTOMATION = previous;
   }
 });
+
+test('a non-macOS server with no GAJAE_AUTOMATION override is still computer-capable once a remote device is paired and selected', async () => {
+  const previous = process.env.GAJAE_AUTOMATION;
+  delete process.env.GAJAE_AUTOMATION;
+  try {
+    const service = withComputerUse(new AutomationService());
+    Object.defineProperty(service, 'grants', { value: new AutomationGrantStore(memoryStorage()) });
+    const registry = new RemoteComputerDeviceRegistry(memoryStorage());
+    Object.defineProperty(service, 'remoteDevices', { value: registry });
+
+    // No local platform capability and no override: computer calls must
+    // still fail closed with no device selected.
+    await assert.rejects(service.callComputer('session-a', 'list_apps', {}), /No computer automation transport is available/u);
+
+    const paired = registry.consumePairing(registry.issuePairing().token, 'Laptop', 'darwin arm64');
+    registry.update(paired.device.id, { enabled: true });
+    registry.select(paired.device.id);
+
+    const remoteTools: string[] = [];
+    Object.defineProperty(service, 'remoteComputerHub', {
+      value: {
+        call: async (deviceId: string, appSessionId: string, tool: string) => {
+          remoteTools.push(tool);
+          assert.equal(deviceId, paired.device.id);
+          assert.equal(appSessionId, 'session-a');
+          return tool === 'start_session' ? { ok: true } : { apps: [] };
+        },
+        readiness: () => undefined,
+        devices: registry,
+      },
+    });
+
+    // Selecting a working remote device makes the server computer-capable
+    // purely from pairing state, with no platform override of any kind.
+    await service.callComputer('session-a', 'list_apps', {});
+    assert.deepEqual(remoteTools, ['start_session', 'list_apps']);
+
+    const status = await service.status();
+    assert.equal(status.computerSupported, true, 'status reports computer-capable from the selected remote device alone');
+  } finally {
+    if (previous === undefined) delete process.env.GAJAE_AUTOMATION;
+    else process.env.GAJAE_AUTOMATION = previous;
+  }
+});
