@@ -91,6 +91,10 @@ fn normalize_server_url(server: &str) -> Result<url::Url, String> {
 
 #[tokio::main]
 async fn main() {
+    // rustls needs an explicit default crypto provider installed once at
+    // startup; without it, the first TLS (wss://) connect panics instead of
+    // erroring - only observable by actually making a real wss:// connection.
+    let _ = rustls::crypto::ring::default_provider().install_default();
     let args = parse_args();
     if args.server.is_empty() {
         eprintln!("[error] --server=wss://host/remote-cua is required.");
