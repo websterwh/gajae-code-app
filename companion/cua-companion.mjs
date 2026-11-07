@@ -69,10 +69,17 @@ function resolveDriverPath() {
   return exe;
 }
 
-function run(command, commandArgs) {
+function run(command, commandArgs, { timeoutMs } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, commandArgs, { stdio: 'inherit' });
-    child.once('error', reject);
+    let timer;
+    if (timeoutMs) {
+      timer = setTimeout(() => {
+        child.kill('SIGTERM');
+        reject(new Error(`${command} ${commandArgs.join(' ')} did not finish within ${Math.round(timeoutMs / 1000)}s.`));
+      }, timeoutMs);
+    }
+    child.once('error', cause => { clearTimeout(timer); reject(cause); });
     child.once('exit', code => code === 0 ? resolve() : reject(new Error(`${command} exited with ${code}`)));
   });
 }
@@ -161,6 +168,17 @@ async function grantPermissions() {
     throw new Error(`--grant-permissions is only implemented for macOS today; see companion/PLANNED-FEATURES.md for the planned ${process.platform} equivalent.`);
   }
   const executable = resolveDriverPath();
+  // CUA's own troubleshooting guide for stale/stuck permissions is to stop
+  // any already-running daemon before granting: 'grant' against a daemon
+  // that was already running - especially one started before any grant
+  // existed - coordinates with that live process instead of starting a
+  // fresh one under its own exact path, and that handoff is exactly where it
+  // can stall indefinitely instead of ever reaching the System Settings
+  // prompt or returning. Stopping first makes 'grant' launch its own daemon
+  // from a clean state every time. 'stop' is allowed to fail (nothing running
+  // yet, or already stopped) - only 'grant' itself has to succeed.
+  log(`${color.dim}[info] Stopping any running CUA Driver daemon first...${color.reset}`);
+  await run(executable, ['stop']).catch(() => {});
   log(`${color.dim}[info] Requesting macOS Accessibility and Screen Recording permission for CUA Driver...${color.reset}`);
   // `cua-driver permissions grant` itself only triggers the two System
   // Settings prompts and returns - it does not wait for the user to act on
@@ -169,7 +187,17 @@ async function grantPermissions() {
   // grant command itself completes, rather than chaining a status check the
   // user has to wait on for a decision that is theirs to make in System
   // Settings. They get the exact follow-up command to re-check afterward.
-  await run(executable, ['permissions', 'grant']);
+  // Bounded at 30s so a cua-driver hang (observed when a stale daemon was
+  // still coordinating) can never block the terminal forever; the timeout
+  // message says exactly what to do next instead of just dying silently.
+  try {
+    await run(executable, ['permissions', 'grant'], { timeoutMs: 30_000 });
+  } catch (cause) {
+    if (cause instanceof Error && /did not finish within/u.test(cause.message)) {
+      throw new Error(`${cause.message} CUA Driver itself hung instead of opening the System Settings prompt. Run "${executable} stop" and "${executable} doctor" manually, then retry; if this keeps happening, see https://cua.ai/docs/cua-driver/guides/troubleshoot#reset-stale-macos-permissions.`);
+    }
+    throw cause;
+  }
   log(`${color.green}[info] If System Settings opened, switch on both Accessibility and Screen Recording for CuaDriver, then run "${executable} permissions status" to confirm. macOS only re-reads the grant after CUA Driver relaunches.${color.reset}`);
 }
 
