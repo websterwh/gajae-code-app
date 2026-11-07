@@ -26,16 +26,19 @@ import { computerUseStore } from './computer-use.js';
 import { egoActivityReader, egoActivityStore, type EgoActivityResponse } from './ego-activity.js';
 import { TauriBrowserClient } from './tauri-browser-client.js';
 import { automationOrigin } from './automation-url.js';
-import { CuaDriverClient, isCuaSafeTool, type CuaSafeTool, type CuaStatus } from './cua-client.js';
+import {
+  AgentDesktopClient,
+  isAgentDesktopSafeTool,
+  type AgentDesktopSafeTool,
+  type AgentDesktopStatus,
+} from './agent-desktop-client.js';
 import { LocalComputerTransport, RemoteComputerTransport, type ComputerTransport } from './computer-transport.js';
 import { RemoteComputerDeviceRegistry } from './remote-computer-devices.js';
 import { RemoteComputerHub } from './remote-computer-hub.js';
 import {
-  guardCuaCall,
-  readRequestedPid,
-  readRequestedWindowId,
+  guardAgentDesktopCall,
   requiresApplicationIdentity,
-} from './cua-capability.js';
+} from './agent-desktop-capability.js';
 
 type BridgeRequest = {
   id: string;
@@ -48,18 +51,17 @@ type BridgeRequest = {
   arguments?: Record<string, unknown>;
 };
 
-type CuaApplication = {
-  bundle_id?: unknown;
+type AgentDesktopApplication = {
   name?: unknown;
   pid?: unknown;
 };
 
-type CuaWindow = {
+type AgentDesktopWindow = {
   pid?: unknown;
-  window_id?: unknown;
+  id?: unknown;
 };
 
-type CuaApplicationAuthorization = {
+type AgentDesktopApplicationAuthorization = {
   granted: boolean;
   application: string | null;
   label: string | null;
@@ -80,21 +82,23 @@ function structuredObject(value: unknown): Record<string, unknown> {
   return object(record.structuredContent ?? record.result ?? record);
 }
 
-function applicationRecords(value: unknown): CuaApplication[] {
-  const apps = structuredObject(value).apps;
+/** `apps` from a `desktop_list_apps` call's `structuredContent.data`. */
+function applicationRecords(value: unknown): AgentDesktopApplication[] {
+  const apps = structuredObject(structuredObject(value).data).apps;
   return Array.isArray(apps)
-    ? apps.filter((app): app is CuaApplication => Boolean(app && typeof app === 'object' && !Array.isArray(app)))
+    ? apps.filter((app): app is AgentDesktopApplication => Boolean(app && typeof app === 'object' && !Array.isArray(app)))
     : [];
 }
 
-function windowRecords(value: unknown): CuaWindow[] {
-  const windows = structuredObject(value).windows;
+/** `windows` from a `desktop_list_windows` call's `structuredContent.data`. */
+function windowRecords(value: unknown): AgentDesktopWindow[] {
+  const windows = structuredObject(structuredObject(value).data).windows;
   return Array.isArray(windows)
-    ? windows.filter((window): window is CuaWindow => Boolean(window && typeof window === 'object' && !Array.isArray(window)))
+    ? windows.filter((window): window is AgentDesktopWindow => Boolean(window && typeof window === 'object' && !Array.isArray(window)))
     : [];
 }
 
-function cuaToolError(value: unknown): string | null {
+function agentDesktopToolError(value: unknown): string | null {
   const record = object(value);
   if (record.isError !== true) return null;
   const content = Array.isArray(record.content) ? record.content : [];
@@ -103,19 +107,19 @@ function cuaToolError(value: unknown): string | null {
     .map((item) => typeof item.text === 'string' ? item.text : '')
     .filter(Boolean)
     .join('\n');
-  return message || 'CUA Driver rejected the session request.';
+  return message || 'agent-desktop rejected the request.';
 }
 
-// Application identity, discovery classification and the background-only
-// argument policy all live in ./cua-capability.ts so that the authorize path
-// and the execute path can never disagree about what a call requires.
+// Application identity, discovery classification and the argument policy all
+// live in ./agent-desktop-capability.ts so that the authorize path and the
+// execute path can never disagree about what a call requires.
 
-type ComputerSession = {
-  label: string;
-  starting?: Promise<{ label: string; result: unknown }>;
-  ending?: Promise<unknown>;
-  uncertain?: boolean;
-};
+/**
+ * agent-desktop's `desktop_*` tools are stateless per call (no session label
+ * is threaded through every request, unlike CUA Driver's `start_session`/
+ * `end_session` wrapping); `desktop_session_start`/`desktop_session_end` are
+ * just two more tools in the enum, dispatched directly like any other.
+ */
 
 export function automationSupport(platform: NodeJS.Platform, arch: string, environment: NodeJS.ProcessEnv) {
   const override = environment.GAJAE_AUTOMATION === '1';
@@ -132,22 +136,15 @@ export class AutomationService {
   // Native status is synchronized when the supervisor binding arrives and by
   // the ordinary status route. Restart readers consume only that cache.
   readonly browser = new TauriBrowserClient({ refreshOnBinding: true });
-  readonly cua = new CuaDriverClient({ onSessionClosed: (label) => {
-    for (const [id, session] of this.cuaSessionLabels) {
-      if (session.label === label) {
-        this.cuaSessionLabels.delete(id);
-        this.activityRevision++;
-      }
-    }
-  } });
+  readonly cua = new AgentDesktopClient();
   readonly grants = new AutomationGrantStore();
   /** The app's browser backend choice for GJC runs; the runtime owns everything it selects. */
   readonly browserBackend = browserBackendStore;
   /** Opt-in rendering of the agent's ego browser state; off by default. */
   readonly egoActivity = egoActivityStore;
-  /** Opt-in native application control through CUA Driver; off by default. */
+  /** Opt-in native application control through agent-desktop; off by default. */
   readonly computerUse = computerUseStore;
-  /** Pairing state for outbound-only CUA companions. */
+  /** Pairing state for outbound-only agent-desktop companions. */
   readonly remoteDevices = new RemoteComputerDeviceRegistry();
   readonly remoteComputerHub = new RemoteComputerHub(this.remoteDevices);
   private readonly localTransport = new LocalComputerTransport(this.cua);
@@ -173,7 +170,7 @@ export class AutomationService {
   private readonly capabilities = automationSupport(process.platform, process.arch, process.env);
   /**
    * Computer automation is usable either because this machine is itself a
-   * native macOS desktop that can run CUA Driver locally, or because the
+   * native macOS desktop that can run agent-desktop locally, or because the
    * user paired and selected a remote companion to drive instead. Those are
    * independent paths: a server with no local desktop session (a Docker
    * container, a Linux box) still has a usable computer transport once a
@@ -197,7 +194,6 @@ export class AutomationService {
     ?? join(tmpdir(), `gajae-automation-${process.pid}.sock`);
   private bridge?: NetServer;
   private readonly bridgeConnections = new Set<Socket>();
-  private readonly cuaSessionLabels = new Map<string, ComputerSession>();
   private bridgeStarting?: Promise<void>;
   private admission?: DesktopWorkAdmission;
   private readonly activityEpoch = randomUUID();
@@ -223,14 +219,12 @@ export class AutomationService {
   getGeneration(): string { return `${this.activityEpoch}:${this.activityRevision}`; }
 
   snapshotActivity(): DesktopOwnerActivity {
-    const sessions = [...this.cuaSessionLabels.values()];
-    const unknown = sessions.some((session) => session.uncertain) ? ['computer_session_unconfirmed'] : [];
     return {
-      owner: 'automation', generation: this.getGeneration(), complete: unknown.length === 0,
-      starting: Number(Boolean(this.bridgeStarting)) + sessions.filter((session) => session.starting).length,
+      owner: 'automation', generation: this.getGeneration(), complete: true,
+      starting: Number(Boolean(this.bridgeStarting)),
       queued: 0, running: this.dispatching,
-      settling: this.closing + sessions.filter((session) => session.ending).length,
-      approvals: 0, retained: sessions.length, unknown,
+      settling: this.closing,
+      approvals: 0, retained: 0, unknown: [],
     };
   }
 
@@ -253,7 +247,7 @@ export class AutomationService {
         this.browser.status().catch(() => ({ state: 'unavailable' as const, ready: false, engine: 'webview' as const })),
         computerCapable
           ? this.transport().status()
-          : Promise.resolve({ installed: false, daemon: 'unknown' as const } as CuaStatus),
+          : Promise.resolve({ installed: false, daemon: 'unknown' as const } as AgentDesktopStatus),
       ]);
       return {
         supported: browser.ready,
@@ -336,7 +330,6 @@ export class AutomationService {
       const signal = AbortSignal.timeout(2_500);
       const [browser] = await Promise.allSettled([
         this.browser.close(sessionId, signal),
-        this.endComputerSession(sessionId, signal),
       ]);
       return browser.status === 'fulfilled' ? browser.value : { closed: false };
     } finally { release(); }
@@ -381,16 +374,16 @@ export class AutomationService {
     sessionId: string,
     payload: { tool?: unknown; arguments?: unknown; scope?: unknown; application?: unknown },
     signal?: AbortSignal,
-  ): Promise<CuaApplicationAuthorization> {
+  ): Promise<AgentDesktopApplicationAuthorization> {
     this.requireComputerSupported();
     const release = this.enter('computer.authorize');
     try {
-      if (!isCuaSafeTool(payload.tool)) throw new Error('Unsupported CUA Driver tool.');
-      const { session: _ignoredSession, ...rawArgs } = object(payload.arguments);
+      if (!isAgentDesktopSafeTool(payload.tool)) throw new Error('Unsupported agent-desktop tool.');
+      const rawArgs = object(payload.arguments);
       // Authorization must inspect the exact same normalized record that will
       // reach callComputer. Reject policy-denied or malformed requests before
       // resolving inventory, prompting, or materializing an application grant.
-      const { arguments: args } = guardCuaCall(payload.tool, rawArgs);
+      const { arguments: args } = guardAgentDesktopCall(payload.tool, rawArgs);
       const { application, label } = await this.resolveComputerApplication(
         sessionId,
         payload.tool,
@@ -425,7 +418,7 @@ export class AutomationService {
    */
   private async resolveComputerApplication(
     sessionId: string,
-    tool: CuaSafeTool,
+    tool: AgentDesktopSafeTool,
     args: Record<string, unknown>,
     hint: string,
     signal?: AbortSignal,
@@ -433,42 +426,31 @@ export class AutomationService {
     let application = hint;
     let label: string | null = null;
 
-    if (!application && tool === 'launch_app') {
-      application = typeof args.bundle_id === 'string' ? args.bundle_id.trim() : '';
-      label = typeof args.name === 'string' && args.name.trim() ? args.name.trim() : null;
+    if (!application && tool === 'desktop_launch') {
+      application = typeof args.app === 'string' ? args.app.trim() : '';
+    }
+    if (!application && typeof args.app === 'string' && args.app.trim()) {
+      application = args.app.trim();
     }
 
-    let pid = readRequestedPid(args);
-    const windowId = readRequestedWindowId(args);
-    const needsInventory = tool === 'launch_app'
-      || pid !== undefined
-      || windowId !== undefined
-      || (tool === 'list_windows' && args.pid !== undefined);
+    const windowId = typeof args.window_id === 'string' ? args.window_id : undefined;
+    const needsInventory = tool === 'desktop_launch' || (!application && windowId !== undefined);
     if (!application && needsInventory) {
       const transport = this.transport();
-      const inventory = await transport.call(
-        sessionId,
-        pid === undefined && windowId !== undefined ? 'list_windows' : 'list_apps',
-        {},
-        signal,
-      );
-      if (pid === undefined && windowId !== undefined) {
-        const window = windowRecords(inventory).find((candidate) => candidate.window_id === windowId);
-        if (window && typeof window.pid === 'number' && Number.isSafeInteger(window.pid) && window.pid > 0) {
-          pid = window.pid;
+      const inventory = await transport.call(sessionId, 'desktop_list_windows', {}, signal);
+      const window = windowRecords(inventory).find((candidate) => candidate.id === windowId);
+      let pid: number | undefined;
+      if (window && typeof window.pid === 'number' && Number.isSafeInteger(window.pid) && window.pid > 0) {
+        pid = window.pid;
+      }
+      if (pid !== undefined) {
+        const apps = applicationRecords(await transport.call(sessionId, 'desktop_list_apps', {}, signal));
+        const match = apps.find((app) => app.pid === pid);
+        if (match && typeof match.name === 'string' && match.name.trim()) {
+          application = match.name.trim();
+          label = application;
         }
       }
-      let apps = applicationRecords(inventory);
-      if (pid !== undefined && apps.length === 0) {
-        apps = applicationRecords(await transport.call(sessionId, 'list_apps', {}, signal));
-      }
-      const requestedName = typeof args.name === 'string' ? args.name.trim().toLocaleLowerCase() : '';
-      const match = apps.find((app) => (
-        (pid !== undefined && app.pid === pid)
-        || (requestedName && typeof app.name === 'string' && app.name.trim().toLocaleLowerCase() === requestedName)
-      ));
-      if (match && typeof match.bundle_id === 'string') application = match.bundle_id.trim();
-      if (match && typeof match.name === 'string' && match.name.trim()) label = match.name.trim();
     }
 
     if (!application) {
@@ -478,35 +460,30 @@ export class AutomationService {
     return { application, label: label || application };
   }
 
-  async callComputer(sessionId: string, tool: CuaSafeTool, args: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
+  async callComputer(sessionId: string, tool: AgentDesktopSafeTool, args: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
     this.requireComputerSupported();
     const release = this.enter('computer.call');
     try {
-      const { session: _ignoredSession, ...rawArgs } = args;
       // Same policy function the driver transport enforces, applied here so a
-      // denied call costs no driver round-trip and never resolves identity or
-      // opens a session it can never use. guardCuaCall is idempotent.
-      const { arguments: scopedArgs } = guardCuaCall(tool, rawArgs);
+      // denied call costs no driver round-trip and never resolves identity.
+      // guardAgentDesktopCall is idempotent.
+      const { arguments: scopedArgs } = guardAgentDesktopCall(tool, args);
       // Trusted server-side authority gate. Every caller reaching callComputer
       // — the authenticated Unix bridge, POST /api/automation/computer/:id/call,
       // and any future one — is checked here. Reaching this method never confers
       // mutation authority; only a live application grant does. The identity is
-      // re-resolved from the live driver inventory on each call, so a pid that
-      // no longer belongs to the approved application fails closed.
+      // re-resolved from the live driver inventory on each call, so a window_id
+      // that no longer belongs to the approved application fails closed.
       if (requiresApplicationIdentity(tool, scopedArgs)) {
         const { application, label } = await this.resolveComputerApplication(sessionId, tool, scopedArgs, '', signal);
         if (!application || !this.grants.has('application', application, sessionId)) {
           throw new Error(`Computer access to ${label ?? application ?? 'this application'} was not granted.`);
         }
       }
-      if (tool === 'end_session') return await this.endComputerSession(sessionId, signal);
-      const { label, result } = await this.ensureComputerSession(
-        sessionId,
-        tool === 'start_session' ? scopedArgs : {},
-        signal,
-      );
-      if (tool === 'start_session') return result;
-      return await this.transport().call(sessionId, tool, { ...scopedArgs, session: label }, signal);
+      const result = await this.transport().call(sessionId, tool, scopedArgs, signal);
+      const error = agentDesktopToolError(result);
+      if (error) throw new Error(error);
+      return result;
     } finally { release(); }
   }
 
@@ -550,10 +527,8 @@ export class AutomationService {
     this.activityRevision++;
     try {
       if (this.bridgeStarting) await this.bridgeStarting.catch(() => {});
-      const computerSessions = [...this.cuaSessionLabels.keys()];
       await Promise.allSettled([
         this.browser.shutdown(),
-        ...computerSessions.map((sessionId) => this.endComputerSession(sessionId, AbortSignal.timeout(2_000))),
       ]);
       await this.cua.shutdown();
       const bridge = this.bridge;
@@ -573,89 +548,13 @@ export class AutomationService {
     }
   }
 
-  private newComputerSessionLabel(): string {
-    return `gajae-${randomUUID()}`;
-  }
-
-  private async ensureComputerSession(
-    sessionId: string,
-    args: Record<string, unknown>,
-    signal?: AbortSignal,
-  ): Promise<{ label: string; result: unknown }> {
-    let session = this.cuaSessionLabels.get(sessionId);
-    if (session?.ending) {
-      await session.ending;
-      return this.ensureComputerSession(sessionId, args, signal);
-    }
-    if (session?.starting) return session.starting;
-    const hadLabel = Boolean(session);
-    if (!session) {
-      session = { label: this.newComputerSessionLabel() };
-      this.cuaSessionLabels.set(sessionId, session);
-    }
-    const owned = session;
-    this.activityRevision++;
-    owned.starting = (async () => {
-      const transport = this.transport();
-      let result = await transport.call(sessionId, 'start_session', { ...args, session: owned.label }, signal);
-      let error = cuaToolError(result);
-      if (error && hadLabel) {
-        // Named sessions belong to one MCP transport lease. If cua-driver or the
-        // app server restarted, rotate the private label instead of exposing a
-        // dead public name to the coding agent. The client retains any uncertain
-        // old transport-session owner independently in its original request.
-        owned.label = this.newComputerSessionLabel();
-        this.activityRevision++;
-        result = await transport.call(sessionId, 'start_session', { ...args, session: owned.label }, signal);
-        error = cuaToolError(result);
-      }
-      if (error) {
-        throw new Error(error);
-      }
-      owned.uncertain = false;
-      return { label: owned.label, result };
-    })().catch((error) => {
-      owned.uncertain = true;
-      throw error;
-    }).finally(() => {
-      owned.starting = undefined;
-      this.activityRevision++;
-    });
-    return owned.starting;
-  }
-
-  private async endComputerSession(sessionId: string, signal?: AbortSignal): Promise<unknown> {
-    const session = this.cuaSessionLabels.get(sessionId);
-    if (!session) return { ended: false };
-    if (session.ending) return session.ending;
-    this.activityRevision++;
-    session.ending = (async () => {
-      if (session.starting) await session.starting.catch(() => {});
-      const result = await this.transport().call(sessionId, 'end_session', { session: session.label }, signal);
-      const error = cuaToolError(result);
-      if (error) throw new Error(error);
-      if (!result || typeof result !== 'object' || Array.isArray(result) || object(result).ok === false || object(result).ended === false) {
-        throw new Error('CUA Driver did not acknowledge session closure.');
-      }
-      if (this.cuaSessionLabels.get(sessionId) === session) this.cuaSessionLabels.delete(sessionId);
-      return result;
-    })().catch((error) => {
-      session.uncertain = true;
-      throw error;
-    }).finally(() => {
-      session.ending = undefined;
-      this.activityRevision++;
-    });
-    return session.ending;
-  }
-
   private async requireBrowserSupported(): Promise<void> {
     const status = await this.browser.status();
     if (!status.ready) throw new Error('builtin_browser_unavailable');
   }
 
   private requireComputerSupported(): void {
-    if (!this.computerCapable()) throw new Error('No computer automation transport is available: this machine has no local CUA Driver and no remote companion is paired and selected.');
+    if (!this.computerCapable()) throw new Error('No computer automation transport is available: this machine has no local agent-desktop install and no remote companion is paired and selected.');
     // The user's opt-in is checked at the same choke point as the platform
     // capability, so every caller - the worker bridge, the HTTP route, a
     // future one - fails closed while it is off, whether or not the session
@@ -713,7 +612,7 @@ export class AutomationService {
           arguments: request.arguments,
           ...object(request.payload),
         }, controller.signal);
-      } else if (request.surface === 'computer' && isCuaSafeTool(request.tool)) {
+      } else if (request.surface === 'computer' && isAgentDesktopSafeTool(request.tool)) {
         result = await this.callComputer(request.sessionId, request.tool, object(request.arguments), controller.signal);
       } else {
         throw new Error('Unsupported automation bridge request.');

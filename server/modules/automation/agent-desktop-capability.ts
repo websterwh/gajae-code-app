@@ -331,15 +331,16 @@ export function isAgentDesktopDiscoveryTool(tool: string): boolean {
 
 /**
  * Whether this exact call must be bound to an approved application before it
- * executes. Unlike CUA's pid-bound model, agent-desktop refs are already
- * scoped to one snapshot (and therefore to whatever window/app owned that
- * snapshot); grant enforcement keys on `app`/`window_id` when present on the
- * call, and on the ref's snapshot provenance otherwise (resolved by the
- * caller via `snapshotIdFromRef`, since the policy layer performs no I/O).
+ * executes. Unlike CUA's pid-bound model, most agent-desktop interaction
+ * tools carry only a `ref_id` with no `app`/`window_id` field in their own
+ * schema (verified live - `desktop_click` etc. take only `ref_id` and
+ * `timeout_ms`); the caller (`AutomationService.resolveComputerApplication`)
+ * resolves identity from an explicit hint or from `app`/`window_id` when a
+ * tool's own schema happens to carry one (`desktop_launch`, `desktop_find`,
+ * `desktop_list_windows`, ...). Any non-discovery tool needs a grant; a
+ * discovery tool only needs one once it is scoped to a specific app/window.
  */
 export function requiresApplicationIdentity(tool: string, args: Record<string, unknown>): boolean {
-  if (tool === 'desktop_launch' || tool === 'desktop_close_app') return true;
   if (typeof args.app === 'string' || typeof args.window_id === 'string') return true;
-  if (typeof args.ref_id === 'string') return true;
   return !isAgentDesktopDiscoveryTool(tool);
 }

@@ -9,7 +9,7 @@ import test, { type TestContext } from 'node:test';
 import { AutomationGrantStore } from './automation-grants.js';
 import { AutomationService } from './automation.service.js';
 import { ComputerUseStore } from './computer-use.js';
-import { CuaDriverClient } from './cua-client.js';
+import { AgentDesktopClient } from './agent-desktop-client.js';
 
 function memoryStorage() {
   const values = new Map<string, string>();
@@ -19,11 +19,13 @@ function memoryStorage() {
   };
 }
 
-/** TextEdit-shaped inventory so pid 42 resolves to a stable bundle identity. */
+/** TextEdit-shaped inventory so window_id "w-7" resolves to a stable app identity. */
 const INVENTORY = {
   structuredContent: {
-    apps: [{ pid: 42, bundle_id: 'com.apple.TextEdit', name: 'TextEdit' }],
-    windows: [{ pid: 42, window_id: 7, title: 'README.md' }],
+    data: {
+      apps: [{ pid: 42, name: 'TextEdit' }],
+      windows: [{ pid: 42, id: 'w-7', title: 'README.md' }],
+    },
   },
 };
 
@@ -31,8 +33,8 @@ type Dispatched = { tool: string; args: Record<string, unknown> };
 
 /**
  * A service whose driver transport is replaced by a recorder. Everything above
- * the transport — identity resolution, grant enforcement, session labels — is
- * the real implementation.
+ * the transport — identity resolution, grant enforcement — is the real
+ * implementation.
  */
 function service(t: TestContext) {
   const previous = process.env.GAJAE_AUTOMATION;
@@ -51,20 +53,17 @@ function service(t: TestContext) {
   computerUse.set(true);
   Object.defineProperty(instance, 'computerUse', { value: computerUse });
   const dispatched: Dispatched[] = [];
-  let label = '';
   const inventory: string[] = [];
   instance.cua.call = async (tool, args) => {
-    if (tool === 'start_session') { label = String(args.session); return { ok: true }; }
-    if (tool === 'end_session') return { ok: true, ended: true };
     // Identity resolution reads; recorded separately from agent-visible work.
-    if ((tool === 'list_apps' || tool === 'list_windows') && Object.keys(args).length === 0) {
+    if ((tool === 'desktop_list_apps' || tool === 'desktop_list_windows') && Object.keys(args).length === 0) {
       inventory.push(tool);
       return INVENTORY;
     }
     dispatched.push({ tool, args });
     return { content: [{ type: 'text', text: 'ok' }] };
   };
-  return { instance, grants, dispatched, inventory, sessionLabel: () => label };
+  return { instance, grants, dispatched, inventory };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -74,17 +73,17 @@ function service(t: TestContext) {
 test('an ungranted application mutation is rejected at the server execution boundary', async (t) => {
   const { instance, dispatched } = service(t);
   await assert.rejects(
-    instance.callComputer('session-a', 'click', { pid: 42, window_id: 7 }),
+    instance.callComputer('session-a', 'desktop_focus_window', { window_id: 'w-7' }),
     /was not granted/u,
   );
   assert.deepEqual(dispatched, [], 'nothing may reach the driver without a grant');
 });
 
-test('a denied delivery mode is rejected before any driver round-trip', async (t) => {
+test('a malformed ref_id is rejected before any driver round-trip', async (t) => {
   const { instance, dispatched, inventory } = service(t);
   await assert.rejects(
-    instance.callComputer('session-a', 'click', { pid: 42, window_id: 7, delivery_mode: 'foreground' }),
-    { name: 'CuaPolicyError', message: /foreground delivery is denied/u },
+    instance.callComputer('session-a', 'desktop_click', { ref_id: 'e1' }),
+    { name: 'AgentDesktopPolicyError', message: /ref_id does not match/u },
   );
   assert.deepEqual(dispatched, []);
   assert.deepEqual(inventory, [], 'a denied call must not even resolve identity');
@@ -94,11 +93,11 @@ test('computer authorization rejects policy-denied arguments before inventory or
   const { instance, grants, inventory, dispatched } = service(t);
   await assert.rejects(
     instance.authorizeComputer('session-a', {
-      tool: 'click',
-      arguments: { pid: 42, delivery_mode: 'foreground' },
+      tool: 'desktop_click',
+      arguments: { ref_id: 'not-a-ref' },
       scope: 'always',
     }),
-    { name: 'CuaPolicyError', message: /foreground delivery is denied/u },
+    { name: 'AgentDesktopPolicyError', message: /ref_id does not match/u },
   );
   assert.deepEqual(inventory, [], 'a denied authorization must not resolve application identity');
   assert.deepEqual(dispatched, []);
@@ -109,97 +108,83 @@ test('computer authorization and execution share required-argument validation', 
   const { instance, grants, inventory } = service(t);
   await assert.rejects(
     instance.authorizeComputer('session-a', {
-      tool: 'get_window_state', arguments: { window_id: 7 }, scope: 'session',
+      tool: 'desktop_select', arguments: { ref_id: '@s1:e1' }, scope: 'session',
     }),
-    { name: 'CuaPolicyError', message: /requires the "pid" argument/u },
+    { name: 'AgentDesktopPolicyError', message: /requires "value"/u },
   );
   assert.deepEqual(inventory, []);
   assert.deepEqual(grants.list('session-a').session, []);
 });
 
-test('a granted application mutation is accepted and dispatched background-bound', async (t) => {
-  const { instance, grants, dispatched, sessionLabel } = service(t);
-  grants.grant({ kind: 'application', value: 'com.apple.TextEdit', scope: 'session', sessionId: 'session-a' });
+test('a granted application mutation is accepted and dispatched', async (t) => {
+  const { instance, grants, dispatched } = service(t);
+  grants.grant({ kind: 'application', value: 'TextEdit', scope: 'session', sessionId: 'session-a' });
 
-  await instance.callComputer('session-a', 'click', { pid: 42, window_id: 7 });
+  await instance.callComputer('session-a', 'desktop_focus_window', { window_id: 'w-7' });
   assert.equal(dispatched.length, 1);
   assert.deepEqual(dispatched[0], {
-    tool: 'click',
-    args: { pid: 42, window_id: 7, delivery_mode: 'background', scope: 'window', session: sessionLabel() },
+    tool: 'desktop_focus_window',
+    args: { window_id: 'w-7' },
   });
 });
 
 test('reaching callComputer directly confers no authority', async (t) => {
   const { instance, dispatched } = service(t);
   // The audited gap: authorizeComputer computed authority that nothing consumed.
-  const authorization = await instance.authorizeComputer('session-a', { tool: 'click', arguments: { pid: 42 } });
+  const authorization = await instance.authorizeComputer('session-a', {
+    tool: 'desktop_focus_window', arguments: { window_id: 'w-7' },
+  });
   assert.equal(authorization.granted, false);
-  assert.equal(authorization.application, 'com.apple.TextEdit');
+  assert.equal(authorization.application, 'TextEdit');
 
-  await assert.rejects(instance.callComputer('session-a', 'click', { pid: 42 }), /was not granted/u);
-  await assert.rejects(instance.callComputer('session-a', 'type_text', { pid: 42, text: 'x' }), /was not granted/u);
-  await assert.rejects(instance.callComputer('session-a', 'launch_app', { bundle_id: 'com.apple.TextEdit' }), /was not granted/u);
+  await assert.rejects(instance.callComputer('session-a', 'desktop_focus_window', { window_id: 'w-7' }), /was not granted/u);
+  await assert.rejects(instance.callComputer('session-a', 'desktop_resize_window', { window_id: 'w-7', width: 100, height: 100 }), /was not granted/u);
+  await assert.rejects(instance.callComputer('session-a', 'desktop_launch', { app: 'TextEdit' }), /was not granted/u);
   assert.deepEqual(dispatched, []);
 });
 
 test('an application grant does not cross session boundaries', async (t) => {
   const { instance, grants, dispatched } = service(t);
-  grants.grant({ kind: 'application', value: 'com.apple.TextEdit', scope: 'session', sessionId: 'session-a' });
+  grants.grant({ kind: 'application', value: 'TextEdit', scope: 'session', sessionId: 'session-a' });
 
-  await instance.callComputer('session-a', 'click', { pid: 42, window_id: 7 });
-  await assert.rejects(instance.callComputer('session-b', 'click', { pid: 42, window_id: 7 }), /was not granted/u);
+  await instance.callComputer('session-a', 'desktop_focus_window', { window_id: 'w-7' });
+  await assert.rejects(instance.callComputer('session-b', 'desktop_focus_window', { window_id: 'w-7' }), /was not granted/u);
   assert.equal(dispatched.length, 1);
 });
 
 test('a grant for one application does not authorize another', async (t) => {
   const { instance, grants } = service(t);
   grants.grant({ kind: 'application', value: 'com.example.Other', scope: 'always' });
-  await assert.rejects(instance.callComputer('session-a', 'click', { pid: 42, window_id: 7 }), /was not granted/u);
+  await assert.rejects(instance.callComputer('session-a', 'desktop_focus_window', { window_id: 'w-7' }), /was not granted/u);
 });
 
-test('identity is re-resolved at dispatch, so a recycled pid fails closed', async (t) => {
+test('identity is re-resolved at dispatch, so a recycled window_id fails closed', async (t) => {
   const { instance, grants, dispatched } = service(t);
-  grants.grant({ kind: 'application', value: 'com.apple.TextEdit', scope: 'session', sessionId: 'session-a' });
-  await instance.callComputer('session-a', 'click', { pid: 42, window_id: 7 });
+  grants.grant({ kind: 'application', value: 'TextEdit', scope: 'session', sessionId: 'session-a' });
+  await instance.callComputer('session-a', 'desktop_focus_window', { window_id: 'w-7' });
 
-  // The approved pid now belongs to a different application.
+  // The approved window now belongs to a different application.
   instance.cua.call = async (tool, args) => {
-    if (tool === 'start_session') return { ok: true };
-    if (tool === 'list_apps' || tool === 'list_windows') {
-      return { structuredContent: { apps: [{ pid: 42, bundle_id: 'com.example.Imposter', name: 'Imposter' }] } };
+    if (tool === 'desktop_list_windows') {
+      return { structuredContent: { data: { windows: [{ pid: 99, id: 'w-7', title: 'Imposter' }] } } };
+    }
+    if (tool === 'desktop_list_apps') {
+      return { structuredContent: { data: { apps: [{ pid: 99, name: 'Imposter' }] } } };
     }
     dispatched.push({ tool, args });
     return { ok: true };
   };
-  await assert.rejects(instance.callComputer('session-a', 'click', { pid: 42, window_id: 7 }), /was not granted/u);
-  assert.equal(dispatched.length, 1, 'the recycled pid must not reuse the old approval');
+  await assert.rejects(instance.callComputer('session-a', 'desktop_focus_window', { window_id: 'w-7' }), /was not granted/u);
+  assert.equal(dispatched.length, 1, 'the recycled window_id must not reuse the old approval');
 });
 
 test('read-only discovery stays available without an application grant', async (t) => {
   const { instance } = service(t);
-  for (const tool of ['list_apps', 'get_accessibility_tree', 'list_windows'] as const) {
+  for (const tool of ['desktop_list_apps', 'desktop_snapshot', 'desktop_find'] as const) {
     await assert.doesNotReject(instance.callComputer('session-a', tool, {}), tool);
   }
-  // A pid filter turns a discovery read into an application-bound one.
-  await assert.rejects(instance.callComputer('session-a', 'list_windows', { pid: 42 }), /was not granted/u);
-});
-
-test('move_cursor lost its discovery exemption and now needs an application grant', async (t) => {
-  const { instance, grants, dispatched } = service(t);
-  const args = { scope: 'window', target: { kind: 'window', pid: 42, window_id: 7 }, x: 1, y: 2 };
-  await assert.rejects(instance.callComputer('session-a', 'move_cursor', args), /was not granted/u);
-  assert.deepEqual(dispatched, []);
-
-  grants.grant({ kind: 'application', value: 'com.apple.TextEdit', scope: 'session', sessionId: 'session-a' });
-  await instance.callComputer('session-a', 'move_cursor', args);
-  assert.equal(dispatched.length, 1);
-});
-
-test('session lifecycle still starts and ends without an application grant', async (t) => {
-  const { instance, sessionLabel } = service(t);
-  await instance.callComputer('session-a', 'start_session', {});
-  assert.match(sessionLabel(), /^gajae-/u);
-  assert.deepEqual(await instance.callComputer('session-a', 'end_session', {}), { ok: true, ended: true });
+  // An app filter turns a discovery read into an application-bound one.
+  await assert.rejects(instance.callComputer('session-a', 'desktop_list_windows', { app: 'TextEdit' }), /was not granted/u);
 });
 
 /* -------------------------------------------------------------------------- */
@@ -207,15 +192,15 @@ test('session lifecycle still starts and ends without an application grant', asy
 /* -------------------------------------------------------------------------- */
 
 test('the driver client refuses a denied call before it starts any transport', async () => {
-  const client = new CuaDriverClient();
+  const client = new AgentDesktopClient();
   // No driver is installed in this test; a policy denial must still win, which
   // proves the guard runs ahead of process spawn rather than beside it.
-  await assert.rejects(client.call('click', { pid: 42, window_id: 7, delivery_mode: 'foreground' }),
-    { name: 'CuaPolicyError', message: /foreground delivery is denied/u });
-  await assert.rejects(client.call('press_key', { key: 'return', scope: 'desktop' }),
-    { name: 'CuaPolicyError', message: /unbound whole-desktop input/u });
-  await assert.rejects(client.call('move_cursor', { scope: 'desktop', x: 1, y: 2 }),
-    { name: 'CuaPolicyError', message: /moves the real OS pointer/u });
+  await assert.rejects(client.call('desktop_click', { ref_id: 'bad-ref' }),
+    { name: 'AgentDesktopPolicyError', message: /ref_id does not match/u });
+  await assert.rejects(client.call('desktop_select', { ref_id: '@s1:e1' }),
+    { name: 'AgentDesktopPolicyError', message: /requires "value"/u });
+  await assert.rejects(client.call('desktop_launch', {}),
+    { name: 'AgentDesktopPolicyError', message: /requires "app"/u });
 });
 
 /* -------------------------------------------------------------------------- */
@@ -250,41 +235,39 @@ test('the authenticated bridge and the HTTP route share one authority policy',
 
     // Bridge caller, no grant: rejected.
     const ungranted = await bridgeCall(socketPath, token, {
-      surface: 'computer', sessionId: 'session-a', tool: 'click', arguments: { pid: 42, window_id: 7 },
+      surface: 'computer', sessionId: 'session-a', tool: 'desktop_focus_window', arguments: { window_id: 'w-7' },
     });
     assert.equal(ungranted.ok, false);
     assert.match(ungranted.error!, /was not granted/u);
 
-    // Bridge caller requesting foreground, no grant: rejected.
-    const foreground = await bridgeCall(socketPath, token, {
-      surface: 'computer', sessionId: 'session-a', tool: 'click',
-      arguments: { pid: 42, window_id: 7, delivery_mode: 'foreground' },
+    // Bridge caller with a malformed ref: rejected before dispatch.
+    const malformed = await bridgeCall(socketPath, token, {
+      surface: 'computer', sessionId: 'session-a', tool: 'desktop_click',
+      arguments: { ref_id: 'bad-ref' },
     });
-    assert.equal(foreground.ok, false);
+    assert.equal(malformed.ok, false);
 
     // The HTTP route is a different caller reaching the same method.
     await assert.rejects(
-      instance.callComputer('session-a', 'click', { pid: 42, window_id: 7 }),
+      instance.callComputer('session-a', 'desktop_focus_window', { window_id: 'w-7' }),
       /was not granted/u,
       'POST /api/automation/computer/:sessionId/call funnels through callComputer',
     );
     assert.equal(dispatched.length, 0);
 
-    // With a grant, the same bridge request succeeds, still background-bound.
-    grants.grant({ kind: 'application', value: 'com.apple.TextEdit', scope: 'session', sessionId: 'session-a' });
+    // With a grant, the same bridge request succeeds.
+    grants.grant({ kind: 'application', value: 'TextEdit', scope: 'session', sessionId: 'session-a' });
     const granted = await bridgeCall(socketPath, token, {
-      surface: 'computer', sessionId: 'session-a', tool: 'click', arguments: { pid: 42, window_id: 7 },
+      surface: 'computer', sessionId: 'session-a', tool: 'desktop_focus_window', arguments: { window_id: 'w-7' },
     });
     assert.equal(granted.ok, true, granted.error);
     assert.equal(dispatched.length, 1);
-    assert.equal(dispatched[0]!.args.delivery_mode, 'background');
 
-    // A granted session still cannot escalate to foreground.
-    const escalation = await bridgeCall(socketPath, token, {
-      surface: 'computer', sessionId: 'session-a', tool: 'click',
-      arguments: { pid: 42, window_id: 7, delivery_mode: 'foreground' },
+    // A granted session still cannot pass unreviewed arguments.
+    const malformedAfterGrant = await bridgeCall(socketPath, token, {
+      surface: 'computer', sessionId: 'session-a', tool: 'desktop_click',
+      arguments: { ref_id: '@s1:e1', window_id: 'w-7', unknown_field: 1 },
     });
-    assert.equal(escalation.ok, false);
-    assert.match(escalation.error!, /foreground delivery is denied/u);
+    assert.equal(malformedAfterGrant.ok, false);
     assert.equal(dispatched.length, 1);
   });

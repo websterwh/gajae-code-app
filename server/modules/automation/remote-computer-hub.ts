@@ -9,8 +9,8 @@ import {
   type RemoteCuaReadiness,
 } from '../../../shared/remote-cua-protocol.js';
 
-import { guardCuaCall } from './cua-capability.js';
-import { isCuaSafeTool, type CuaSafeTool } from './cua-client.js';
+import { guardAgentDesktopCall } from './agent-desktop-capability.js';
+import { isAgentDesktopSafeTool, type AgentDesktopSafeTool } from './agent-desktop-client.js';
 import { RemoteComputerDeviceRegistry } from './remote-computer-devices.js';
 
 type Pending = { resolve: (value: unknown) => void; reject: (reason: Error) => void; timer: NodeJS.Timeout };
@@ -72,12 +72,12 @@ export class RemoteComputerHub {
     });
   }
 
-  async call(deviceId: string, appSessionId: string, tool: CuaSafeTool, args: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
+  async call(deviceId: string, appSessionId: string, tool: AgentDesktopSafeTool, args: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
     this.devices.dispatchable(deviceId);
     const connection = this.connections.get(deviceId);
     if (!connection || connection.socket.readyState !== connection.socket.OPEN) throw new Error('Remote computer is offline.');
-    if (!isCuaSafeTool(tool)) throw new Error('Unreviewed computer tool.');
-    const guarded = guardCuaCall(tool, args).arguments;
+    if (!isAgentDesktopSafeTool(tool)) throw new Error('Unreviewed computer tool.');
+    const guarded = guardAgentDesktopCall(tool, args).arguments;
     const requestId = randomUUID();
     const deadline = Date.now() + 30_000;
     if (connection.seen.has(requestId)) throw new Error('Duplicate remote computer request.');
