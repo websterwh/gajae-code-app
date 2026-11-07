@@ -229,6 +229,38 @@ function startDriver() {
   }
   let sequence = 0; const pending = new Map();
   let buffer = '';
+  // cua-driver's MCP server rejects any tools/call made before the standard
+  // MCP handshake (initialize, then notifications/initialized) completes,
+  // with "Missing required per-request MCP metadata". This mirrors exactly
+  // what the app's own in-process CuaDriverClient does for the local path
+  // (see server/modules/automation/cua-client.ts), so the remote companion
+  // path performs the same two-step handshake instead of going straight to
+  // tools/call.
+  let initializing;
+  function request(method, params) {
+    if (!child || launchError) {
+      return Promise.reject(new Error(launchError ?? 'CUA Driver is not installed. Run with --install-driver=portable or --install-driver=system first.'));
+    }
+    const id = String(++sequence);
+    return new Promise((resolve, reject) => {
+      pending.set(id, { resolve, reject });
+      child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`);
+    });
+  }
+  function notify(method, params) {
+    if (!child || launchError) return;
+    child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method, params })}\n`);
+  }
+  function initialize() {
+    if (initializing) return initializing;
+    initializing = request('initialize', {
+      protocolVersion: '2025-03-26',
+      capabilities: {},
+      clientInfo: { name: 'gajae-cua-companion', version: String(VERSION) },
+    }).then(() => { notify('notifications/initialized', {}); })
+      .catch(cause => { initializing = undefined; throw cause; });
+    return initializing;
+  }
   if (child) {
     // A listener here is required: Node re-throws an unhandled 'error' event
     // as a process-crashing exception, which is what killed the process when
@@ -258,15 +290,12 @@ function startDriver() {
   return {
     get ready() { return Boolean(child) && !launchError; },
     get confirmed() { return confirmed; },
-    call(tool, parameters) {
+    async call(tool, parameters) {
       if (!child || launchError) {
         return Promise.reject(new Error(launchError ?? 'CUA Driver is not installed. Run with --install-driver=portable or --install-driver=system first.'));
       }
-      const id = String(++sequence);
-      return new Promise((resolve, reject) => {
-        pending.set(id, { resolve, reject });
-        child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: tool, arguments: parameters } })}\n`);
-      });
+      await initialize();
+      return request('tools/call', { name: tool, arguments: parameters });
     },
     close: () => child?.kill('SIGTERM'),
   };
