@@ -31,21 +31,54 @@ export class RemoteComputerHub {
       if (message.type === 'hello') {
         if (deviceId) { reject('invalid hello'); return; }
         try {
-          let identity: { id: string }; let credential: string | undefined;
+          let identity: { id: string }; let credential: string | undefined; let pendingApproval = false;
           if (message.pairingToken) {
             const paired = this.devices.consumePairing(message.pairingToken, message.deviceName ?? '', message.os ?? '');
-            identity = paired.device; credential = paired.credential;
+            identity = paired.device; credential = paired.credential; pendingApproval = true;
             socket.send(JSON.stringify({ type: 'paired', protocolVersion: REMOTE_CUA_PROTOCOL_VERSION, deviceId: identity.id, credential }));
+          } else if (message.deviceId && message.credential) {
+            try {
+              identity = this.devices.authenticate(message.deviceId, message.credential);
+            } catch (error) {
+              if (error instanceof Error && error.message === 'not-yet-approved') {
+                // A real, still-registered credential that just can't
+                // dispatch calls yet - keep the connection alive, not a
+                // dead-end rejection that tells the user to re-pair.
+                identity = { id: message.deviceId }; pendingApproval = true;
+              } else if (error instanceof Error && error.message === 'device-not-registered') {
+                // The stored credential refers to a device that was
+                // removed or revoked: register fresh instead of rejecting,
+                // so a companion stuck with a dead credential self-heals
+                // on its own next reconnect rather than needing a new
+                // --pair token typed in by hand.
+                const registered = this.devices.registerUnattended(message.deviceName ?? '', message.os ?? '');
+                identity = registered.device; credential = registered.credential; pendingApproval = true;
+                socket.send(JSON.stringify({ type: 'paired', protocolVersion: REMOTE_CUA_PROTOCOL_VERSION, deviceId: identity.id, credential }));
+              } else {
+                throw error;
+              }
+            }
           } else {
-            if (!message.deviceId || !message.credential) throw new Error('invalid hello');
-            identity = this.devices.authenticate(message.deviceId, message.credential);
+            // No pairing token and no stored credential: either the
+            // companion's very first run with only --server, or a run
+            // whose stored credential was wiped after a prior removal/
+            // revoke rejection. Registers a brand-new disabled device
+            // instead of requiring a token copied from Settings first -
+            // approval still gates it exactly like a token pairing does,
+            // this only skips the token-copying step, not the trust gate.
+            const registered = this.devices.registerUnattended(message.deviceName ?? '', message.os ?? '');
+            identity = registered.device; credential = registered.credential; pendingApproval = true;
+            socket.send(JSON.stringify({ type: 'paired', protocolVersion: REMOTE_CUA_PROTOCOL_VERSION, deviceId: identity.id, credential }));
           }
           const old = this.connections.get(identity.id);
           if (old) old.socket.close(4001, 'reconnected');
           deviceId = identity.id;
           this.connections.set(deviceId, { socket, pending: new Map(), seen: new Set() });
-          socket.send(JSON.stringify({ type: 'pong', protocolVersion: REMOTE_CUA_PROTOCOL_VERSION }));
-        } catch { reject('authentication failed'); }
+          socket.send(JSON.stringify({
+            type: 'pong', protocolVersion: REMOTE_CUA_PROTOCOL_VERSION,
+            ...(pendingApproval ? { pendingApproval: true } : {}),
+          }));
+        } catch (error) { reject(error instanceof Error ? error.message : 'authentication failed'); }
         return;
       }
       if (!deviceId) { reject('hello required'); return; }

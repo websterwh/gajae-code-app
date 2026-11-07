@@ -21,16 +21,26 @@ test('pairing tokens expire, consume once, and never persist credentials', () =>
   assert.throws(() => registry.consumePairing(expired.token, 'Laptop', 'linux'), /invalid, expired, or already used/u);
 });
 
-test('disabled and revoked devices cannot authenticate or be selected', () => {
+test('disabled devices authenticate as not-yet-approved, not a dead credential', () => {
   const registry = new RemoteComputerDeviceRegistry(storage());
   const paired = registry.consumePairing(registry.issuePairing().token, 'Laptop', 'linux');
-  assert.throws(() => registry.authenticate(paired.device.id, paired.credential), /unavailable/u);
+  assert.throws(() => registry.authenticate(paired.device.id, paired.credential), /not-yet-approved/u);
   registry.update(paired.device.id, { enabled: true });
   assert.equal(registry.authenticate(paired.device.id, paired.credential).id, paired.device.id);
   registry.select(paired.device.id);
   registry.revoke(paired.device.id);
   assert.equal(registry.selectedDeviceId(), undefined);
   assert.throws(() => registry.dispatchable(paired.device.id), /unavailable/u);
+  assert.throws(() => registry.authenticate(paired.device.id, paired.credential), /device-not-registered/u);
+});
+
+test('registerUnattended creates a disabled device without a pairing token', () => {
+  const registry = new RemoteComputerDeviceRegistry(storage());
+  const registered = registry.registerUnattended('Desktop', 'linux');
+  assert.equal(registered.device.enabled, false);
+  assert.throws(() => registry.authenticate(registered.device.id, registered.credential), /not-yet-approved/u);
+  registry.update(registered.device.id, { enabled: true });
+  assert.equal(registry.authenticate(registered.device.id, registered.credential).id, registered.device.id);
 });
 
 test('removing a device actually drops it from the list, not just marks it revoked', () => {

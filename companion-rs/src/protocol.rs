@@ -40,6 +40,8 @@ pub enum Incoming {
     Pong {
         #[serde(rename = "protocolVersion")]
         protocol_version: u32,
+        #[serde(rename = "pendingApproval", default)]
+        pending_approval: bool,
     },
     #[serde(rename = "disconnect")]
     Disconnect {

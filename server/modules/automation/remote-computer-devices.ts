@@ -80,13 +80,41 @@ export class RemoteComputerDeviceRegistry {
     this.save(state);
     return { device: publicDevice(device), credential };
   }
+  /**
+   * `device-not-registered` and `not-yet-approved` are sentinel messages the
+   * hub matches on by exact string, not prose for a human: the companion
+   * reconnect flow needs to tell "this credential is permanently dead, drop
+   * it and register fresh" apart from "this credential is fine, just not
+   * Trusted yet", and the close-frame reason is the only channel back to it.
+   */
   authenticate(id: string, credential: string): RemoteComputerDevice {
     const device = read(this.storage).devices.find(candidate => candidate.id === id);
-    if (!device || !device.enabled || !credential
-      || !timingSafeEqual(Buffer.from(device.credentialHash), Buffer.from(hash(credential)))) {
-      throw new Error('Remote computer device is unavailable.');
+    if (!device || !credential || !timingSafeEqual(Buffer.from(device.credentialHash), Buffer.from(hash(credential)))) {
+      throw new Error('device-not-registered');
     }
+    if (!device.enabled) throw new Error('not-yet-approved');
     return device;
+  }
+  /**
+   * Registers a brand-new device without a pairing token, for a companion
+   * run with only --server (no --pair): it still starts disabled exactly
+   * like a token-paired device, so skipping the token never skips approval
+   * - it only skips the step of copying a token out of Settings first. Used
+   * both for a genuinely first-ever connection and for a companion that
+   * just had its credential rejected (removed/revoked) and is registering
+   * fresh instead of being stuck retrying a dead credential forever.
+   */
+  registerUnattended(name: string, os: string): { device: Omit<RemoteComputerDevice, 'credentialHash'>; credential: string } {
+    const state = read(this.storage);
+    const credential = randomBytes(32).toString('base64url');
+    const device: RemoteComputerDevice = {
+      id: randomUUID(), name: name.trim().slice(0, 100) || 'Remote computer', os: os.trim().slice(0, 100) || 'unknown',
+      enabled: false, revoked: false, credentialHash: hash(credential), publicIdentity: randomBytes(32).toString('base64url'),
+      pairedAt: this.now(),
+    };
+    state.devices.push(device);
+    this.save(state);
+    return { device: publicDevice(device), credential };
   }
   dispatchable(id: string): RemoteComputerDevice {
     const device = read(this.storage).devices.find(candidate => candidate.id === id);

@@ -188,7 +188,7 @@ async fn main() {
             Ok(()) => {}
             Err(cause) if cause.starts_with("rejected:") => {
                 eprintln!("[error] {}", cause.trim_start_matches("rejected:"));
-                eprintln!("[error] The server rejected this device. If it was removed or revoked in Settings, get a new pairing token and run with --pair=<token> again. Exiting instead of retrying forever against a connection that cannot succeed.");
+                eprintln!("[error] The server rejected this connection (bad pairing token, or the server itself refused it). Exiting instead of retrying forever against a connection that cannot succeed. If --pair=<token> was used, get a fresh token and try again; otherwise just run with --server again to register.");
                 std::process::exit(1);
             }
             Err(cause) => {
@@ -226,6 +226,7 @@ async fn connect_once(
     send(&mut write, &hello).await?;
 
     let completed: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
+    let mut printed_pending_notice = false;
 
     while let Some(message) = read.next().await {
         let message = message.map_err(|cause| cause.to_string())?;
@@ -250,10 +251,17 @@ async fn connect_once(
                 let new_state = state::DeviceState { device_id: device_id.clone(), credential: credential.clone() };
                 state::save(&args.state_path, &new_state).await.map_err(|cause| cause.to_string())?;
                 *state.lock().await = Some(new_state);
-                println!("[info] Paired and connected. This device is now available to the server.");
+                println!("[info] Registered. Waiting for approval - check the web UI's Settings > Automation > Remote devices page and Trust this device.");
+                printed_pending_notice = true;
                 send_readiness(&mut write, &device_id, args, driver).await?;
             }
-            Incoming::Pong { .. } => {
+            Incoming::Pong { pending_approval, .. } => {
+                if pending_approval && !printed_pending_notice {
+                    println!("[info] Connected but not yet approved - check the web UI's Settings > Automation > Remote devices page and Trust this device.");
+                    printed_pending_notice = true;
+                } else if !pending_approval {
+                    printed_pending_notice = false;
+                }
                 if let Some(active) = state.lock().await.clone() {
                     send_readiness(&mut write, &active.device_id, args, driver).await?;
                 }
