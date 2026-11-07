@@ -125,8 +125,9 @@ export function createAutomationRouter(service: AutomationService = automationSe
 
   router.get('/remote-computers', asyncHandler((_request, response) => {
     const template = process.env.GAJAE_COMPANION_DOWNLOAD_TEMPLATE;
+    const devices = service.remoteDevices.list().map(device => ({ ...device, connected: service.remoteComputerHub.isConnected(device.id) }));
     response.json({
-      devices: service.remoteDevices.list(), selectedDeviceId: service.remoteDevices.selectedDeviceId(),
+      devices, selectedDeviceId: service.remoteDevices.selectedDeviceId(),
       ...(typeof template === 'string' && /^https:\/\//u.test(template) && template.includes('{platform}')
         ? { companionDownloadTemplate: template } : {}),
     });

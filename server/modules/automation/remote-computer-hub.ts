@@ -110,4 +110,9 @@ export class RemoteComputerHub {
   readiness(deviceId: string): RemoteCuaReadiness | undefined {
     return this.devices.list().find(device => device.id === deviceId)?.readiness;
   }
+  /** True only while this device has a live, authenticated socket. */
+  isConnected(deviceId: string): boolean {
+    const connection = this.connections.get(deviceId);
+    return Boolean(connection) && connection!.socket.readyState === connection!.socket.OPEN;
+  }
 }
