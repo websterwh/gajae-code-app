@@ -170,24 +170,31 @@ test('computer authorization resolves a pid to a bundle identity and scopes the 
     const service = withComputerUse(new AutomationService());
     Object.defineProperty(service, 'grants', { value: new AutomationGrantStore(memoryStorage()) });
     service.cua.call = async (tool) => {
-      assert.equal(tool, 'list_apps');
+      assert.equal(tool, 'desktop_list_windows');
       return {
         structuredContent: {
-          apps: [{ pid: 42, bundle_id: 'com.apple.TextEdit', name: 'TextEdit' }],
+          data: { windows: [{ pid: 42, id: 'w-1', title: 'TextEdit' }] },
         },
       };
     };
+    const cuaApps = service.cua.call;
+    service.cua.call = async (tool, args) => {
+      if (tool === 'desktop_list_apps') {
+        return { structuredContent: { data: { apps: [{ pid: 42, name: 'TextEdit' }] } } };
+      }
+      return cuaApps(tool, args);
+    };
 
     assert.deepEqual(
-      await service.authorizeComputer('session-a', { tool: 'click', arguments: { pid: 42 } }),
-      { granted: false, application: 'com.apple.TextEdit', label: 'TextEdit' },
+      await service.authorizeComputer('session-a', { tool: 'desktop_focus_window', arguments: { window_id: 'w-1' } }),
+      { granted: false, application: 'TextEdit', label: 'TextEdit' },
     );
     assert.deepEqual(
-      await service.authorizeComputer('session-a', { tool: 'click', arguments: { pid: 42 }, scope: 'session' }),
-      { granted: true, application: 'com.apple.TextEdit', label: 'TextEdit' },
+      await service.authorizeComputer('session-a', { tool: 'desktop_focus_window', arguments: { window_id: 'w-1' }, scope: 'session' }),
+      { granted: true, application: 'TextEdit', label: 'TextEdit' },
     );
     assert.equal(
-      (await service.authorizeComputer('session-b', { tool: 'click', arguments: { pid: 42 } })).granted,
+      (await service.authorizeComputer('session-b', { tool: 'desktop_focus_window', arguments: { window_id: 'w-1' } })).granted,
       false,
     );
   } finally {
@@ -203,21 +210,19 @@ test('computer authorization resolves a window id to its owning application', as
     const service = withComputerUse(new AutomationService());
     Object.defineProperty(service, 'grants', { value: new AutomationGrantStore(memoryStorage()) });
     service.cua.call = async (tool) => {
-      assert.equal(tool, 'list_apps');
-      return {
-        structuredContent: {
-          apps: [{ pid: 42, bundle_id: 'com.apple.TextEdit', name: 'TextEdit' }],
-          windows: [{ pid: 42, window_id: 14747, title: 'README.md' }],
-        },
-      };
+      if (tool === 'desktop_list_windows') {
+        return { structuredContent: { data: { windows: [{ pid: 42, id: 'w-readme', title: 'README.md' }] } } };
+      }
+      assert.equal(tool, 'desktop_list_apps');
+      return { structuredContent: { data: { apps: [{ pid: 42, name: 'TextEdit' }] } } };
     };
 
     assert.deepEqual(
       await service.authorizeComputer('session-a', {
-        tool: 'get_window_state',
-        arguments: { pid: 42, window_id: 14747, include_screenshot: false },
+        tool: 'desktop_focus_window',
+        arguments: { window_id: 'w-readme' },
       }),
-      { granted: false, application: 'com.apple.TextEdit', label: 'TextEdit' },
+      { granted: false, application: 'TextEdit', label: 'TextEdit' },
     );
   } finally {
     if (previous === undefined) delete process.env.GAJAE_AUTOMATION;
@@ -232,7 +237,7 @@ test('computer discovery does not require an application grant', async () => {
     const service = withComputerUse(new AutomationService());
     Object.defineProperty(service, 'grants', { value: new AutomationGrantStore(memoryStorage()) });
     assert.deepEqual(
-      await service.authorizeComputer('session-a', { tool: 'list_apps', arguments: {} }),
+      await service.authorizeComputer('session-a', { tool: 'desktop_list_apps', arguments: {} }),
       { granted: true, application: null, label: null },
     );
   } finally {
@@ -252,34 +257,21 @@ test('stopping a session closes browser and CUA work and revokes only session gr
     grants.grant({ kind: 'application', value: 'com.example.Persistent', scope: 'always' });
 
     const calls: string[] = [];
-    let cuaLabel = '';
     service.browser.close = async (sessionId, signal) => {
       assert.equal(sessionId, 'session-a');
       assert.equal(signal?.aborted, false);
       calls.push('browser.close');
       return { closed: true };
     };
-    service.cua.call = async (tool, args, signal) => {
-      if (tool === 'start_session') {
-        cuaLabel = String(args.session);
-        assert.match(cuaLabel, /^gajae-/u);
-        return { ok: true };
-      }
-      if (tool === 'list_apps') {
-        assert.equal(args.session, cuaLabel);
-        return { apps: [] };
-      }
-      assert.equal(tool, 'end_session');
-      assert.deepEqual(args, { session: cuaLabel });
-      assert.equal(signal?.aborted, false);
-      calls.push('cua.end_session');
-      return { ok: true };
+    service.cua.call = async (tool) => {
+      assert.equal(tool, 'desktop_list_apps');
+      return { structuredContent: { data: { apps: [] } } };
     };
 
-    await service.callComputer('session-a', 'list_apps', {});
+    await service.callComputer('session-a', 'desktop_list_apps', {});
 
     assert.deepEqual(await service.stopSession('session-a'), { closed: true });
-    assert.deepEqual(calls.sort(), ['browser.close', 'cua.end_session']);
+    assert.deepEqual(calls, ['browser.close']);
     assert.deepEqual(grants.list('session-a').session, []);
     assert.deepEqual(grants.list().always.applications, ['com.example.Persistent']);
   } finally {
@@ -299,19 +291,8 @@ test('disconnecting an automation bridge client cancels its in-flight CUA reques
     let markAborted!: () => void;
     const started = new Promise<void>((resolve) => { markStarted = resolve; });
     const aborted = new Promise<void>((resolve) => { markAborted = resolve; });
-    let cuaLabel = '';
-    service.cua.call = async (tool, args, signal) => {
-      if (tool === 'start_session') {
-        cuaLabel = String(args.session);
-        assert.match(cuaLabel, /^gajae-/u);
-        return { ok: true };
-      }
-      if (tool === 'end_session') {
-        assert.deepEqual(args, { session: cuaLabel });
-        return { ok: true };
-      }
-      assert.equal(tool, 'list_apps');
-      assert.deepEqual(args, { session: cuaLabel });
+    service.cua.call = async (tool, _args, signal) => {
+      assert.equal(tool, 'desktop_list_apps');
       assert.ok(signal);
       markStarted();
       return new Promise((_resolve, reject) => {
@@ -334,7 +315,7 @@ test('disconnecting an automation bridge client cancels its in-flight CUA reques
       token,
       surface: 'computer',
       sessionId: 'session-a',
-      tool: 'list_apps',
+      tool: 'desktop_list_apps',
       arguments: {},
     })}\n`);
     await started;
@@ -358,17 +339,17 @@ test('computer use is off by default and every computer path refuses until the u
     const service = withComputerUse(new AutomationService(), false);
     Object.defineProperty(service, 'grants', { value: new AutomationGrantStore(memoryStorage()) });
     let driverCalls = 0;
-    service.cua.call = async () => { driverCalls += 1; return { ok: true }; };
+    service.cua.call = async () => { driverCalls += 1; return { structuredContent: { data: { apps: [] } } }; };
 
     // The platform capability is present; the opt-in alone gates the call.
     const refused = /Computer use is off/u;
-    await assert.rejects(service.authorizeComputer('session-a', { tool: 'click', arguments: { pid: 42 } }), refused);
-    await assert.rejects(service.callComputer('session-a', 'list_apps', {}), refused);
-    await assert.rejects(service.callComputer('session-a', 'click', { pid: 42, window_id: 7 }), refused);
+    await assert.rejects(service.authorizeComputer('session-a', { tool: 'desktop_click', arguments: { ref_id: '@s1:e1' } }), refused);
+    await assert.rejects(service.callComputer('session-a', 'desktop_list_apps', {}), refused);
+    await assert.rejects(service.callComputer('session-a', 'desktop_focus_window', { window_id: 'w-1' }), refused);
     assert.equal(driverCalls, 0, 'a refused call never reaches the driver');
 
     service.computerUse.set(true);
-    await assert.doesNotReject(service.callComputer('session-a', 'list_apps', {}));
+    await assert.doesNotReject(service.callComputer('session-a', 'desktop_list_apps', {}));
     assert.ok(driverCalls > 0);
   } finally {
     if (previous === undefined) delete process.env.GAJAE_AUTOMATION;
@@ -390,14 +371,13 @@ test('selecting a paired remote device routes computer calls to it instead of th
 
     let localCalls = 0;
     const remoteTools: string[] = [];
-    service.cua.call = async () => { localCalls += 1; return { ok: true }; };
+    service.cua.call = async () => { localCalls += 1; return { structuredContent: { data: { apps: [] } } }; };
     Object.defineProperty(service, 'remoteComputerHub', {
       value: {
         call: async (deviceId: string, appSessionId: string, tool: string) => {
           remoteTools.push(tool);
           assert.equal(deviceId, paired.device.id);
           assert.equal(appSessionId, 'session-a');
-          if (tool === 'start_session') return { ok: true };
           return { apps: [] };
         },
         readiness: () => undefined,
@@ -405,14 +385,14 @@ test('selecting a paired remote device routes computer calls to it instead of th
       },
     });
 
-    await service.callComputer('session-a', 'list_apps', {});
-    assert.deepEqual(remoteTools, ['start_session', 'list_apps'], 'the selected remote device received every call');
+    await service.callComputer('session-a', 'desktop_list_apps', {});
+    assert.deepEqual(remoteTools, ['desktop_list_apps'], 'the selected remote device received the call');
     assert.equal(localCalls, 0, 'the local driver was never consulted while a device is selected');
 
     // Disabling the selected device after selection falls back to local
     // instead of throwing, since dispatchable() re-checks on every call.
     registry.update(paired.device.id, { enabled: false });
-    await service.callComputer('session-a', 'list_apps', {});
+    await service.callComputer('session-a', 'desktop_list_apps', {});
     assert.ok(localCalls > 0, 'a disabled selected device falls back to the local driver');
   } finally {
     if (previous === undefined) delete process.env.GAJAE_AUTOMATION;
@@ -431,7 +411,7 @@ test('a non-macOS server with no GAJAE_AUTOMATION override is still computer-cap
 
     // No local platform capability and no override: computer calls must
     // still fail closed with no device selected.
-    await assert.rejects(service.callComputer('session-a', 'list_apps', {}), /No computer automation transport is available/u);
+    await assert.rejects(service.callComputer('session-a', 'desktop_list_apps', {}), /No computer automation transport is available/u);
 
     const paired = registry.consumePairing(registry.issuePairing().token, 'Laptop', 'darwin arm64');
     registry.update(paired.device.id, { enabled: true });
@@ -444,7 +424,7 @@ test('a non-macOS server with no GAJAE_AUTOMATION override is still computer-cap
           remoteTools.push(tool);
           assert.equal(deviceId, paired.device.id);
           assert.equal(appSessionId, 'session-a');
-          return tool === 'start_session' ? { ok: true } : { apps: [] };
+          return { apps: [] };
         },
         readiness: () => undefined,
         devices: registry,
@@ -453,8 +433,8 @@ test('a non-macOS server with no GAJAE_AUTOMATION override is still computer-cap
 
     // Selecting a working remote device makes the server computer-capable
     // purely from pairing state, with no platform override of any kind.
-    await service.callComputer('session-a', 'list_apps', {});
-    assert.deepEqual(remoteTools, ['start_session', 'list_apps']);
+    await service.callComputer('session-a', 'desktop_list_apps', {});
+    assert.deepEqual(remoteTools, ['desktop_list_apps']);
 
     const status = await service.status();
     assert.equal(status.computerSupported, true, 'status reports computer-capable from the selected remote device alone');

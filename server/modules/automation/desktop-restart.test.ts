@@ -18,7 +18,7 @@ import {
   AutomationService, configureDesktopRestartAdmission, createAutomationDesktopRestartReader,
   createBrowserDesktopRestartReader, createComputerDesktopRestartReader,
 } from './automation.service.js';
-import { CuaDriverClient } from './cua-client.js';
+import { AgentDesktopClient } from './agent-desktop-client.js';
 import { ComputerUseStore } from './computer-use.js';
 
 /** Computer use is off by default (#131); these tests exercise live computer work, so it is on. */
@@ -51,7 +51,7 @@ class Admission implements DesktopWorkAdmission {
 type WireRequest = {
   id: string;
   method: string;
-  params?: { name?: string; arguments?: { session?: string } };
+  params?: { name?: string; arguments?: Record<string, unknown> };
 };
 
 class FakeChild extends EventEmitter {
@@ -75,7 +75,7 @@ class FakeChild extends EventEmitter {
     this.stderr.end();
     this.emit('close', 0);
   }
-  cuaReply(request: WireRequest, result: unknown = { ok: true }): void {
+  reply(request: WireRequest, result: unknown = { ok: true }): void {
     this.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', id: request.id, result })}\n`);
   }
 }
@@ -120,39 +120,29 @@ function idle(activity: DesktopOwnerActivity): void {
   }
 }
 
-async function initializeCua(fixture: ReturnType<typeof children>) {
+async function initializeAgentDesktop(fixture: ReturnType<typeof children>) {
   await until(() => Boolean(fixture.processes.at(-1)?.calls.length));
   const child = fixture.processes.at(-1)!;
   assert.equal(child.calls[0]!.method, 'initialize');
-  child.cuaReply(child.calls[0]!, {
+  child.reply(child.calls[0]!, {
     capabilities: { tools: {} },
-    serverInfo: { name: 'cua-driver', version: '0.21.0' },
+    serverInfo: { name: 'agent-desktop', version: '1.2.0' },
   });
   await until(() => child.calls.some((call) => call.method === 'tools/call'));
   return child;
 }
 
-test('CUA client rejects unsupported or unknown schemas before tool dispatch', async (t) => {
-  environment(t, { CUA_DRIVER_PATH: process.execPath });
+test('agent-desktop client rejects an unknown schema before tool dispatch', async (t) => {
+  environment(t, { AGENT_DESKTOP_PATH: process.execPath });
   const fixture = children(t);
-  for (const version of ['0.22.0', undefined]) {
-    const client = new CuaDriverClient();
-    const call = client.call('list_apps', {});
-    const processCount = fixture.processes.length + 1;
-    await until(() => fixture.processes.length >= processCount && Boolean(fixture.processes.at(-1)?.calls.length));
-    const child = fixture.processes.at(-1)!;
-    assert.equal(child.calls[0]!.method, 'initialize');
-    child.cuaReply(child.calls[0]!, {
-      capabilities: { tools: {} },
-      ...(version ? { serverInfo: { name: 'cua-driver', version } } : {}),
-    });
-    await assert.rejects(call, {
-      message: version
-        ? /Unsupported CUA Driver schema 0\.22\.0/u
-        : /Unsupported CUA Driver schema unknown/u,
-    });
-    assert.equal(child.calls.some((request) => request.method === 'tools/call'), false);
-  }
+  const client = new AgentDesktopClient();
+  const call = client.call('desktop_list_apps', {});
+  await until(() => Boolean(fixture.processes.at(-1)?.calls.length));
+  const child = fixture.processes.at(-1)!;
+  assert.equal(child.calls[0]!.method, 'initialize');
+  child.reply(child.calls[0]!, { capabilities: { tools: {} } });
+  await assert.rejects(call, { message: /Unsupported agent-desktop schema unknown/u });
+  assert.equal(child.calls.some((request) => request.method === 'tools/call'), false);
 });
 
 test('all three readers are pure, complete for healthy unused owners, and independent snapshots', async (t) => {
@@ -174,8 +164,8 @@ test('all three readers are pure, complete for healthy unused owners, and indepe
   assert.deepEqual(admission.sources, []);
 });
 
-test('fenced direct service and client producers reject before startup, label creation or dispatch', async (t) => {
-  environment(t, { GAJAE_AUTOMATION: '1', CUA_DRIVER_PATH: process.execPath });
+test('fenced direct service and client producers reject before startup or dispatch', async (t) => {
+  environment(t, { GAJAE_AUTOMATION: '1', AGENT_DESKTOP_PATH: process.execPath });
   const fixture = children(t);
   const admission = new Admission();
   const service = withComputerUse(new AutomationService(admission));
@@ -185,12 +175,12 @@ test('fenced direct service and client producers reject before startup, label cr
     () => service.openBrowser('session', {}),
     () => service.commandBrowser('session', { action: 'reload' }),
     () => service.authorizeBrowser('session', {}),
-    () => service.authorizeComputer('session', { tool: 'list_apps' }),
-    () => service.callComputer('session', 'start_session', {}),
+    () => service.authorizeComputer('session', { tool: 'desktop_list_apps' }),
+    () => service.callComputer('session', 'desktop_list_apps', {}),
     () => service.stopSession('session'),
     () => service.startBridge(),
     () => service.status(),
-    () => service.cua.call('start_session', {}),
+    () => service.cua.call('desktop_list_apps', {}),
     () => service.cua.status(),
   ];
   for (const operation of operations) await assert.rejects(operation(), /fenced/);
@@ -202,128 +192,55 @@ test('fenced direct service and client producers reject before startup, label cr
   assert.equal(admission.active, 0);
 });
 
-test('CUA named session ownership survives cancellation and is released by late end acknowledgment', async (t) => {
-  environment(t, { GAJAE_AUTOMATION: '1', CUA_DRIVER_PATH: process.execPath });
+test('a cancelled computer call is reported uncertain and transport exit is treated as unconfirmed, not success', async (t) => {
+  environment(t, { GAJAE_AUTOMATION: '1', AGENT_DESKTOP_PATH: process.execPath });
   const fixture = children(t);
   const admission = new Admission();
   const service = withComputerUse(new AutomationService(admission));
-  const start = service.callComputer('session', 'start_session', {});
-  assert.equal(service.snapshotActivity().retained, 1, 'session label is owned before executable lookup');
-  assert.ok(service.cua.snapshotActivity().starting > 0);
-  const child = await initializeCua(fixture);
-  child.cuaReply(child.calls.at(-1)!);
-  await start;
-  const reader = createComputerDesktopRestartReader(service);
-  assert.equal(reader.read().retained, 2, 'service label and original start request both retain the session');
-  assert.equal(reader.read().running, 0);
   const controller = new AbortController();
-  const end = service.callComputer('session', 'end_session', {}, controller.signal);
-  const rejected = assert.rejects(end, /cancelled/);
-  await until(() => child.calls.at(-1)?.params?.name === 'end_session');
-  const request = child.calls.at(-1)!;
-  assert.ok(service.snapshotActivity().settling > 0);
+  const call = service.callComputer('session', 'desktop_list_apps', {}, controller.signal);
+  assert.ok(service.cua.snapshotActivity().starting > 0 || service.cua.snapshotActivity().running > 0);
+  const child = await initializeAgentDesktop(fixture);
+  const rejected = assert.rejects(call, /cancelled/);
   controller.abort();
   await rejected;
+  assert.ok(child.calls.some((request) => request.method === 'notifications/cancelled'));
   assert.equal(admission.active, 0);
-  assert.equal(reader.read().complete, false);
-  assert.equal(reader.read().retained, 2);
-  assert.ok(child.calls.some((call) => call.method === 'notifications/cancelled'));
-  const generation = reader.getGeneration();
-  child.cuaReply(request);
-  idle(await reader.read());
-  idle(service.snapshotActivity());
-  assert.notEqual(reader.getGeneration(), generation);
 });
 
-test('CUA timed-out requests survive transport exit and replacement at the same session name', async (t) => {
-  environment(t, { CUA_DRIVER_PATH: process.execPath });
+test('agent-desktop requests that time out survive transport exit and a replacement process', async (t) => {
+  environment(t, { AGENT_DESKTOP_PATH: process.execPath });
   const fixture = children(t);
-  const client = new CuaDriverClient();
-  const first = client.call('start_session', { session: 'same-label' });
-  const oldChild = await initializeCua(fixture);
-  oldChild.cuaReply(oldChild.calls.at(-1)!);
+  const client = new AgentDesktopClient();
+  const first = client.call('desktop_list_apps', {});
+  const oldChild = await initializeAgentDesktop(fixture);
+  oldChild.reply(oldChild.calls.at(-1)!);
   await first;
   const request = client as unknown as {
     request(method: string, params: Record<string, unknown>, timeout: number): Promise<unknown>;
   };
-  await assert.rejects(request.request('tools/call', { name: 'list_apps', arguments: {} }, 5), /timed out/);
+  await assert.rejects(request.request('tools/call', { name: 'desktop_list_apps', arguments: {} }, 5), /timed out/);
   assert.equal(client.snapshotActivity().complete, false);
   oldChild.close();
-  const next = client.call('start_session', { session: 'same-label' });
+  const next = client.call('desktop_list_apps', {});
   await until(() => fixture.processes.length === 2);
-  const child = await initializeCua(fixture);
-  child.cuaReply(child.calls.at(-1)!);
+  const child = await initializeAgentDesktop(fixture);
+  child.reply(child.calls.at(-1)!);
   await next;
-  assert.equal(client.snapshotActivity().retained, 2, 'replacement must not erase an older transport owner');
-  const end = client.call('end_session', { session: 'same-label' });
-  await until(() => child.calls.at(-1)?.params?.name === 'end_session');
-  oldChild.emit('close', 0);
-  child.cuaReply(child.calls.at(-1)!);
-  await end;
-  assert.equal(client.snapshotActivity().retained, 1);
-  assert.equal(client.snapshotActivity().running, 1);
-  assert.deepEqual(client.snapshotActivity().unknown, ['cua_request_unconfirmed']);
+  assert.equal(client.snapshotActivity().running, 0);
+  assert.deepEqual(client.snapshotActivity().unknown, ['agent_desktop_request_unconfirmed']);
 });
 
-test('failed computer cleanup retains its label and a retry can prove healthy idle', async (t) => {
+test('a failing computer call surfaces the driver error and does not leave admission stuck', async (t) => {
   environment(t, { GAJAE_AUTOMATION: '1' });
   const service = withComputerUse(new AutomationService());
-  let failEnd = true;
-  service.cua.call = async (tool) => tool === 'end_session' && failEnd
-    ? { isError: true, content: [{ text: 'cleanup failed' }] } : { ok: true };
-  await service.callComputer('session', 'start_session', {});
-  await assert.rejects(service.callComputer('session', 'end_session', {}), /cleanup failed/);
-  assert.equal(service.snapshotActivity().retained, 1);
-  assert.deepEqual(service.snapshotActivity().unknown, ['computer_session_unconfirmed']);
-  failEnd = false;
-  await service.callComputer('session', 'end_session', {});
+  let fail = true;
+  service.cua.call = async () => fail
+    ? { isError: true, content: [{ text: 'tool failed' }] } : { structuredContent: { data: { apps: [] } } };
+  await assert.rejects(service.callComputer('session', 'desktop_list_apps', {}), /tool failed/);
+  fail = false;
+  await service.callComputer('session', 'desktop_list_apps', {});
   idle(service.snapshotActivity());
-});
-
-test('computer close waits for an already-owned session start instead of forgetting its label', async (t) => {
-  environment(t, { GAJAE_AUTOMATION: '1', CUA_DRIVER_PATH: process.execPath });
-  const fixture = children(t);
-  const service = withComputerUse(new AutomationService());
-  const start = service.callComputer('session', 'start_session', {});
-  const end = service.callComputer('session', 'end_session', {});
-  const child = await initializeCua(fixture);
-  assert.equal(child.calls.filter((call) => call.params?.name === 'start_session').length, 1);
-  assert.equal(child.calls.filter((call) => call.params?.name === 'end_session').length, 0);
-  assert.equal(service.snapshotActivity().retained, 1);
-  assert.ok(service.snapshotActivity().settling > 0);
-  const startRequest = child.calls.at(-1)!;
-  child.cuaReply(startRequest);
-  await start;
-  await until(() => child.calls.at(-1)?.params?.name === 'end_session');
-  assert.equal(child.calls.at(-1)!.params?.arguments?.session, startRequest.params?.arguments?.session);
-  child.cuaReply(child.calls.at(-1)!);
-  await end;
-  idle(createComputerDesktopRestartReader(service).read());
-});
-
-test('CUA inspection deadline keeps admission and unknown ownership until all processes close', async (t) => {
-  environment(t, { CUA_DRIVER_PATH: process.execPath });
-  const fixture = children(t);
-  const admission = new Admission();
-  const client = new CuaDriverClient({ desktopRestartAdmission: admission });
-  t.mock.timers.enable({ apis: ['setTimeout'] });
-  const status = client.status();
-  const expected = process.platform === 'darwin' ? 3 : 2;
-  for (let i = 0; i < 1_000 && fixture.processes.length < expected; i++) {
-    await new Promise<void>((resolve) => setImmediate(resolve));
-  }
-  assert.equal(fixture.processes.length, expected);
-  const generation = client.getGeneration();
-  t.mock.timers.tick(3_000);
-  assert.equal(admission.active, 1);
-  assert.deepEqual(client.snapshotActivity().unknown, ['cua_inspection_unconfirmed']);
-  assert.notEqual(client.getGeneration(), generation);
-  for (const child of fixture.processes.slice(0, -1)) child.close();
-  assert.equal(client.snapshotActivity().complete, false);
-  fixture.processes.at(-1)!.close();
-  await status;
-  assert.equal(admission.active, 0);
-  idle(client.snapshotActivity());
 });
 
 async function bridge(t: TestContext) {

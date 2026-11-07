@@ -152,7 +152,7 @@ export class AgentDesktopClient {
     return {
       owner: 'computer', generation: this.getGeneration(), complete: unknown.length === 0,
       starting: Number(Boolean(this.starting)), queued: this.dispatching,
-      running: requests.length + this.inspecting,
+      running: requests.filter((request) => !request.uncertain).length + this.inspecting,
       settling: this.closing, approvals: 0, retained: 0, unknown,
     };
   }
