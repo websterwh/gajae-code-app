@@ -27,12 +27,12 @@ that prompted writing this down.
 
 ## Requesting CUA Driver permissions on Windows and Linux
 
-The companion ships `--grant-permissions` to request macOS's Accessibility
-and Screen Recording TCC grants for CUA Driver, by shelling out to
-`cua-driver permissions grant` / `permissions status`. That's macOS-only:
-it is the only platform where `cua-driver` currently exposes a `permissions`
-subcommand, because it is the only platform with a user-facing OS permission
-gate in front of accessibility/screen APIs today.
+macOS is done: the companion ships `--grant-permissions`, which requests
+Accessibility and Screen Recording TCC grants for CUA Driver by shelling out
+to `cua-driver permissions grant`. It's macOS-only because that is the only
+platform where `cua-driver` currently exposes a `permissions` subcommand at
+all - the only platform with a user-facing OS permission gate in front of
+accessibility/screen APIs today.
 
 Windows and Linux CUA Driver builds (UI Automation and AT-SPI 2 respectively)
 do not have an equivalent interactive grant step documented upstream yet - a
