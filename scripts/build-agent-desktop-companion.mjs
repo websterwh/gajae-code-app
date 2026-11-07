@@ -30,35 +30,25 @@ const output = join('release', 'companion-rs');
 await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });
 
-function hasRustup() {
-  return spawnSync('rustup', ['--version'], { stdio: 'ignore' }).status === 0;
-}
-
-function installedTargets() {
-  if (!hasRustup()) return new Set();
-  const result = spawnSync('rustup', ['target', 'list', '--installed'], { encoding: 'utf8' });
-  if (result.status !== 0) return new Set();
-  return new Set(result.stdout.split('\n').map((line) => line.trim()).filter(Boolean));
-}
-
 const nativeTriple = spawnSync('rustc', ['-vV'], { encoding: 'utf8' }).stdout
   .split('\n').find((line) => line.startsWith('host: '))?.slice('host: '.length).trim();
-const installed = installedTargets();
 
+// Do not pre-check `rustup target list --installed`: when a toolchain is
+// activated via a directory/env override (as `dtolnay/rust-toolchain@stable`
+// does) rather than as rustup's own default, that query inspects the wrong
+// toolchain and reports every non-native target as missing even when it is
+// actually installed and buildable. Attempt the build directly instead and
+// classify failure as "missing target/linker" only when cargo itself says so.
 const built = [];
 const skipped = [];
 for (const name of names) {
   const { triple, binaryName } = TARGETS[name];
   const isNative = triple === nativeTriple;
-  if (!isNative && !installed.has(triple)) {
-    skipped.push({ name, reason: `rust target "${triple}" is not installed (run: rustup target add ${triple}); cross-compiling macOS/Windows from a non-matching host also needs a matching linker/toolchain, which this script does not install` });
-    continue;
-  }
   const args = ['build', '--release'];
   if (!isNative) args.push('--target', triple);
   const result = spawnSync('cargo', args, { cwd: crateDir, stdio: 'inherit' });
   if (result.status !== 0) {
-    skipped.push({ name, reason: `cargo build failed (exit ${result.status})` });
+    skipped.push({ name, reason: `cargo build failed (exit ${result.status}); likely missing target "${triple}" (run: rustup target add ${triple}) or, for a non-native OS, a matching linker/toolchain this script does not install` });
     continue;
   }
   const builtPath = isNative
