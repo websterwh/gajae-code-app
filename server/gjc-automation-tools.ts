@@ -30,12 +30,31 @@ const browserSchema = z.discriminatedUnion('action', [
 // Transport envelope only. `arguments` is intentionally permissive here because
 // this schema runs in the worker alongside the model; the authoritative
 // per-tool validation is server-side in
-// server/modules/automation/cua-capability.ts (guardCuaCall).
+// server/modules/automation/agent-desktop-capability.ts (guardAgentDesktopCall).
+//
+// Tool names are agent-desktop's real MCP tool names (`desktop_*`), verified
+// live against a running `agent-desktop mcp` server's `tools/list` response -
+// NOT the CLI command names (`click`, `list-apps`) documented on
+// agent-desktop's own docs site, which differ (e.g. CLI `list-apps` is MCP
+// `desktop_list_apps`). Per explicit instruction this exposes the full live
+// 67-tool surface rather than a narrower subset.
 const computerSchema = z.object({
   action: z.enum([
-    'start_session', 'end_session', 'list_apps', 'list_windows', 'get_window_state',
-    'get_accessibility_tree', 'launch_app', 'set_window_frame', 'move_cursor',
-    'click', 'type_text', 'press_key', 'hotkey', 'scroll', 'invoke_menu',
+    'desktop_batch', 'desktop_check', 'desktop_clear', 'desktop_click', 'desktop_clipboard_clear',
+    'desktop_clipboard_get', 'desktop_clipboard_set', 'desktop_close_app', 'desktop_collapse',
+    'desktop_cursor_overlay_disable', 'desktop_cursor_overlay_enable', 'desktop_dismiss_all_notifications',
+    'desktop_dismiss_notification', 'desktop_double_click', 'desktop_drag', 'desktop_expand', 'desktop_find',
+    'desktop_focus', 'desktop_focus_window', 'desktop_get', 'desktop_hover', 'desktop_is', 'desktop_key_down',
+    'desktop_key_up', 'desktop_launch', 'desktop_list_apps', 'desktop_list_displays',
+    'desktop_list_notifications', 'desktop_list_surfaces', 'desktop_list_windows', 'desktop_maximize',
+    'desktop_minimize', 'desktop_mouse_click', 'desktop_mouse_down', 'desktop_mouse_move', 'desktop_mouse_up',
+    'desktop_mouse_wheel', 'desktop_move_window', 'desktop_notification_action', 'desktop_open_system_surface',
+    'desktop_permissions', 'desktop_press', 'desktop_resize_window', 'desktop_restore', 'desktop_right_click',
+    'desktop_screenshot', 'desktop_scroll', 'desktop_scroll_to', 'desktop_select', 'desktop_session_end',
+    'desktop_session_gc', 'desktop_session_list', 'desktop_session_start', 'desktop_set_value',
+    'desktop_skills_get', 'desktop_skills_list', 'desktop_skills_path', 'desktop_snapshot', 'desktop_status',
+    'desktop_toggle', 'desktop_trace_export', 'desktop_trace_show', 'desktop_triple_click', 'desktop_type',
+    'desktop_uncheck', 'desktop_version', 'desktop_wait',
   ]),
   arguments: z.record(z.string(), z.unknown()).default({}),
 });
@@ -335,7 +354,7 @@ export function createGjcAutomationTools(
   const computer: NonNullable<AutomationTools['computer']> = {
     name: 'computer',
     label: 'Computer',
-    description: 'Control a reviewed native macOS application through CUA Driver. Inspect apps/windows before acting and verify mutations with a fresh get_window_state call. This path is background-only and the server enforces it: input is bound to an approved application window, delivery_mode is always background, and desktop-scoped input, foreground delivery and real pointer movement are rejected. invoke_menu resolves menus through accessibility APIs without fronting the app. Browser pages belong in the browser tool. Every input action (click, type_text, press_key, hotkey, scroll) requires arguments.pid naming the target process - get it from the pid a prior launch_app or list_windows call already returned for that app, do not omit it. A `cua_policy_denied: <tool> requires a bound target pid` error means to retry the exact same call with that pid added, not to give up on this tool.',
+    description: 'Control a reviewed native application through agent-desktop, an accessibility-tree-based desktop automation driver. Workflow: call desktop_snapshot or desktop_find on a window or app to get an accessibility tree with ref_id tokens shaped like "@<snapshot_id>:eN"; then address elements for interaction tools (desktop_click, desktop_type, desktop_set_value, desktop_toggle, desktop_select, desktop_scroll, etc.) using that exact ref_id. A ref_id is only valid within the snapshot that produced it - take a fresh desktop_snapshot or desktop_find after any navigation or layout change before reusing a ref; do not reuse a ref_id from an earlier snapshot. Use desktop_list_apps and desktop_list_windows for discovery, desktop_launch to start or attach to an app, and desktop_get/desktop_is to read element text, value, or state without mutating anything. Verify a mutation worked with a fresh desktop_get, desktop_is, or desktop_snapshot call rather than assuming delivery from a successful response. Browser pages belong in the browser tool, not here. An `agent_desktop_policy_denied: <tool> requires "ref_id"` or similar error means to retry with the missing argument added, not to give up on this tool.',
     parameters: computerSchema as any,
     concurrency: 'exclusive',
     async execute(_toolCallId: string, rawParams: unknown, signal?: AbortSignal) {
