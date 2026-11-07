@@ -147,6 +147,27 @@ async function installDriver(mode) {
   log(`${color.green}[info] CUA Driver installed. Run with --server=... --pair=... to connect; the companion locates it automatically.${color.reset}`);
 }
 
+// macOS gates CUA Driver's Accessibility/Screen Recording access through
+// TCC, and the driver itself cannot self-grant: it has to start under its
+// own exact installed path so macOS attributes the prompt to that specific
+// binary, and the user has to flip each toggle on in System Settings
+// ("Open System Settings" alone does not grant anything). `cua-driver
+// permissions grant` drives that flow; this just runs it from the companion
+// so the user does not have to find/install cua-driver's own CLI separately.
+// Windows/Linux CUA Driver builds do not have an equivalent permission gate
+// yet (see companion/PLANNED-FEATURES.md).
+async function grantPermissions() {
+  if (process.platform !== 'darwin') {
+    throw new Error(`--grant-permissions is only implemented for macOS today; see companion/PLANNED-FEATURES.md for the planned ${process.platform} equivalent.`);
+  }
+  const executable = resolveDriverPath();
+  log(`${color.dim}[info] Requesting macOS Accessibility and Screen Recording permission for CUA Driver...${color.reset}`);
+  await run(executable, ['permissions', 'grant']);
+  log(`${color.dim}[info] Checking granted permissions...${color.reset}`);
+  await run(executable, ['permissions', 'status']);
+  log(`${color.green}[info] If a permission is still missing above, open System Settings and switch its toggle on, then run --grant-permissions again; macOS only re-reads the grant after CUA Driver relaunches.${color.reset}`);
+}
+
 async function registerProtocol() {
   const executable = process.execPath;
   if (process.platform === 'linux') {
@@ -179,12 +200,21 @@ if (args['install-driver']) {
     process.exit(1);
   }
 }
-if (args['register-protocol']) {
+if (Object.hasOwn(args, 'register-protocol')) {
   try {
     await registerProtocol();
     process.exit(0);
   } catch (cause) {
     console.error(`[error] ${cause instanceof Error ? cause.message : 'Protocol registration failed.'}`);
+    process.exit(1);
+  }
+}
+if (Object.hasOwn(args, 'grant-permissions')) {
+  try {
+    await grantPermissions();
+    process.exit(0);
+  } catch (cause) {
+    console.error(`[error] ${cause instanceof Error ? cause.message : 'Requesting permissions failed.'}`);
     process.exit(1);
   }
 }
@@ -309,6 +339,9 @@ setTimeout(() => {
   if (!driver.ready) {
     console.error('[warn] CUA Driver is not available yet; pairing and connection will proceed, but tool calls will fail.');
     console.error('[warn] Install it with: gajae-cua-companion --install-driver=portable   (or --install-driver=system)');
+    if (process.platform === 'darwin') {
+      console.error('[warn] Once installed, run: gajae-cua-companion --grant-permissions   to request macOS Accessibility and Screen Recording access.');
+    }
   }
 }, 250);
 let state = await loadState();
@@ -378,6 +411,9 @@ function connect() {
     } catch (cause) {
       const failureMessage = cause instanceof Error ? cause.message : 'CUA Driver failed';
       console.error(`${color.red}[error] ${message.tool} failed: ${failureMessage}${color.reset}`);
+      if (process.platform === 'darwin' && /permission/iu.test(failureMessage)) {
+        console.error(`${color.yellow}[hint] Run this companion once with --grant-permissions to request macOS Accessibility and Screen Recording access for CUA Driver, then retry.${color.reset}`);
+      }
       socket.send(JSON.stringify({ type: 'computer.result', protocolVersion: VERSION, requestId: message.requestId, deviceId: message.deviceId, error: failureMessage }));
     }
   });
