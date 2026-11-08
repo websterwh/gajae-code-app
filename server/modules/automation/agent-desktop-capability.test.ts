@@ -74,6 +74,21 @@ test('an unknown tool is rejected', () => {
   denies('desktop_shell_exec', {}, /unknown tool/u);
 });
 
+/*
+ * A model that guesses a field name (app_name instead of desktop_launch's app)
+ * otherwise only learns that it guessed wrong, not what to send instead, and
+ * abandons the tool on the first denial. The denial names the accepted
+ * arguments, exactly as agent-desktop's own MCP server does.
+ */
+test('a denied argument names the arguments the tool does accept, so the call can be retried', () => {
+  denies(
+    'desktop_launch',
+    { app_name: 'textedit' },
+    /does not document an argument named "app_name"\. Accepted arguments: app, activate, args, cdp, cwd, env, no_attach, timeout\./u,
+  );
+  denies('desktop_launch', {}, /requires "app"\. Accepted arguments: app,/u);
+});
+
 test('type accepts text and interval_ms alongside ref_id', () => {
   assert.deepEqual(
     allows('desktop_type', { ref_id: '@s8f3k2p9:e3', text: 'hello', interval_ms: 50 }),

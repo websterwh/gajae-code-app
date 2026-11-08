@@ -280,6 +280,18 @@ export function agentDesktopToolPolicy(tool: string): AgentDesktopToolPolicy | u
 
 export type GuardedAgentDesktopCall = { tool: string; arguments: Record<string, unknown> };
 
+/**
+ * Names the fields the tool actually accepts. A model that guessed a field
+ * name (`app_name` for `desktop_launch`'s `app`) otherwise only learns what is
+ * wrong, not what to send instead, and abandons the tool on the first denial;
+ * agent-desktop's own MCP server names its accepted arguments for exactly this
+ * reason.
+ */
+function acceptedArguments(policy: AgentDesktopToolPolicy): string {
+  const names = Object.keys(policy.fields);
+  return names.length ? `Accepted arguments: ${names.join(', ')}.` : 'This tool accepts no arguments.';
+}
+
 function matchesType(value: unknown, type: FieldType): boolean {
   switch (type) {
     case 'string': return typeof value === 'string';
@@ -303,12 +315,12 @@ export function guardAgentDesktopCall(tool: string, args: Record<string, unknown
   for (const [key, value] of Object.entries(args)) {
     if (value === undefined) continue;
     const type = policy.fields[key];
-    if (!type) deny(`${tool} does not document an argument named "${key}".`);
+    if (!type) deny(`${tool} does not document an argument named "${key}". ${acceptedArguments(policy)}`);
     if (!matchesType(value, type)) deny(`${tool} argument "${key}" does not match its documented type (${type}).`);
     guarded[key] = value;
   }
   for (const required of policy.required) {
-    if (guarded[required] === undefined) deny(`${tool} requires "${required}".`);
+    if (guarded[required] === undefined) deny(`${tool} requires "${required}". ${acceptedArguments(policy)}`);
   }
   if (policy.refAddressed && guarded.ref_id !== undefined && !isWellFormedRefId(guarded.ref_id)) {
     deny(`${tool} ref_id does not match the documented "@<snapshot_id>:e<N>" format.`);
