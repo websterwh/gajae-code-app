@@ -352,7 +352,21 @@ export function isAgentDesktopDiscoveryTool(tool: string): boolean {
  * `desktop_list_windows`, ...). Any non-discovery tool needs a grant; a
  * discovery tool only needs one once it is scoped to a specific app/window.
  */
+/**
+ * Session lifecycle tools act on the driver's own session store, not on an
+ * application, and their schemas carry no `app`/`window_id`/`ref_id` at all.
+ * Requiring an application identity for them made every
+ * `desktop_session_start` fail with "requires a resolvable application
+ * identity" - an app that no argument could ever name.
+ */
+const AGENT_DESKTOP_SESSION_TOOLS: ReadonlySet<string> = new Set([
+  'desktop_session_start',
+  'desktop_session_end',
+  'desktop_session_gc',
+]);
+
 export function requiresApplicationIdentity(tool: string, args: Record<string, unknown>): boolean {
   if (typeof args.app === 'string' || typeof args.window_id === 'string') return true;
+  if (AGENT_DESKTOP_SESSION_TOOLS.has(tool)) return false;
   return !isAgentDesktopDiscoveryTool(tool);
 }

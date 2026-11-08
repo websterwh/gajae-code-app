@@ -187,6 +187,61 @@ test('read-only discovery stays available without an application grant', async (
   await assert.rejects(instance.callComputer('session-a', 'desktop_list_windows', { app: 'TextEdit' }), /was not granted/u);
 });
 
+test('a ref_id resolves to the application whose snapshot produced it', async (t) => {
+  const { instance, grants, dispatched } = service(t);
+  instance.cua.call = async (tool, args) => {
+    dispatched.push({ tool, args });
+    if (tool === 'desktop_snapshot') {
+      return { structuredContent: { data: { app: 'TextEdit', snapshot_id: 's1abc', tree: {} } } };
+    }
+    return { content: [{ type: 'text', text: 'ok' }] };
+  };
+  grants.grant({ kind: 'application', value: 'TextEdit', scope: 'session', sessionId: 'session-a' });
+
+  await instance.callComputer('session-a', 'desktop_snapshot', { app: 'TextEdit' });
+  // Interaction tools carry no app field, so the snapshot is the only link
+  // back to the approved application.
+  await instance.callComputer('session-a', 'desktop_type', { ref_id: '@s1abc:e2', text: 'HELLO' });
+  assert.deepEqual(dispatched[dispatched.length - 1], {
+    tool: 'desktop_type',
+    args: { ref_id: '@s1abc:e2', text: 'HELLO' },
+  });
+});
+
+test('a ref_id from another session does not resolve', async (t) => {
+  const { instance, grants } = service(t);
+  instance.cua.call = async (tool) => tool === 'desktop_snapshot'
+    ? { structuredContent: { data: { app: 'TextEdit', snapshot_id: 's1abc', tree: {} } } }
+    : { ok: true };
+  grants.grant({ kind: 'application', value: 'TextEdit', scope: 'session', sessionId: 'session-a' });
+
+  await instance.callComputer('session-a', 'desktop_snapshot', { app: 'TextEdit' });
+  await assert.rejects(
+    instance.callComputer('session-b', 'desktop_type', { ref_id: '@s1abc:e2', text: 'HELLO' }),
+    /requires a resolvable application identity/u,
+  );
+});
+
+test('window_id resolves against agent-desktop 1.2.0\'s bare-array window list', async (t) => {
+  const { instance, grants, dispatched } = service(t);
+  instance.cua.call = async (tool, args) => {
+    if (tool === 'desktop_list_windows') return { structuredContent: { data: [{ id: 'w-9', pid: 42 }] } };
+    if (tool === 'desktop_list_apps') return { structuredContent: { data: { apps: [{ pid: 42, name: 'TextEdit' }] } } };
+    dispatched.push({ tool, args });
+    return { ok: true };
+  };
+  grants.grant({ kind: 'application', value: 'TextEdit', scope: 'session', sessionId: 'session-a' });
+
+  await instance.callComputer('session-a', 'desktop_focus_window', { window_id: 'w-9' });
+  assert.equal(dispatched.length, 1);
+});
+
+test('session lifecycle tools need no application identity', async (t) => {
+  const { instance, dispatched } = service(t);
+  await instance.callComputer('session-a', 'desktop_session_start', {});
+  assert.deepEqual(dispatched, [{ tool: 'desktop_session_start', args: {} }]);
+});
+
 /* -------------------------------------------------------------------------- */
 /* The guard sits at the driver transport                                     */
 /* -------------------------------------------------------------------------- */
