@@ -11,6 +11,7 @@
 //! policy (defense in depth, not a single point of trust).
 
 mod driver;
+mod install;
 mod protocol;
 mod state;
 mod tools;
@@ -32,6 +33,7 @@ struct Args {
     executable: String,
     help: bool,
     grant_permissions: bool,
+    install_agent_desktop: bool,
 }
 
 const HELP_TEXT: &str = r#"gajae-agent-desktop-companion - outbound-only remote computer-use companion
@@ -39,6 +41,7 @@ const HELP_TEXT: &str = r#"gajae-agent-desktop-companion - outbound-only remote 
 USAGE:
   agent-desktop-companion --server=<host> --pair=<token> [options]
   agent-desktop-companion --server=<host> [options]        (reconnect with a stored credential)
+  agent-desktop-companion --install-agent-desktop           (download and install agent-desktop itself)
   agent-desktop-companion --grant-permissions               (macOS/Linux: check/request accessibility access)
   agent-desktop-companion --help
 
@@ -61,8 +64,16 @@ OPTIONS:
                           machine's hostname.
   --state=<path>         Where the paired device credential is stored. Defaults to this
                           OS's standard config directory.
-  --executable=<path>    Path to the agent-desktop CLI, if not on PATH. Defaults to
-                          "agent-desktop".
+  --executable=<path>    Path to the agent-desktop CLI. Defaults to a prior
+                          --install-agent-desktop's location if one exists, otherwise
+                          plain "agent-desktop" (resolved via PATH).
+  --install-agent-desktop
+                          Downloads the latest agent-desktop release directly from
+                          https://github.com/vercel-labs/agent-desktop (no Node/npm
+                          required), verifies its published sha256, and installs it
+                          under this OS's config directory. Does not require --server
+                          or --pair. Once installed, --executable defaults to it
+                          automatically - no PATH changes or npm/brew install needed.
   --grant-permissions    Checks current OS automation/accessibility permission state and,
                           if not already granted, performs harmless read-only desktop
                           actions to trigger the OS permission prompts. Does not require
@@ -74,6 +85,7 @@ OPTIONS:
   --help                 Show this message.
 
 EXAMPLES:
+  agent-desktop-companion --install-agent-desktop
   agent-desktop-companion --server=gjc.example.com --pair=AbCdEf123...
   agent-desktop-companion --server=gjc.example.com
   agent-desktop-companion --grant-permissions
@@ -84,14 +96,20 @@ fn parse_args() -> Args {
     let mut pairing_token = None;
     let mut device_name = hostname();
     let mut state_path = state::default_state_path();
-    let mut executable = "agent-desktop".to_string();
+    // A prior --install-agent-desktop takes effect with no further flags
+    // needed: an explicit --executable (checked below, after this loop)
+    // still overrides it.
+    let mut executable = install::find_installed().map(|path| path.display().to_string()).unwrap_or_else(|| "agent-desktop".to_string());
     let mut help = false;
     let mut grant_permissions = false;
+    let mut install_agent_desktop = false;
     for arg in std::env::args().skip(1) {
         if arg == "--help" || arg == "-h" {
             help = true;
         } else if arg == "--grant-permissions" {
             grant_permissions = true;
+        } else if arg == "--install-agent-desktop" {
+            install_agent_desktop = true;
         } else if let Some(value) = arg.strip_prefix("--server=") {
             server = value.to_string();
         } else if let Some(value) = arg.strip_prefix("--pair=") {
@@ -104,7 +122,7 @@ fn parse_args() -> Args {
             executable = value.to_string();
         }
     }
-    Args { server, pairing_token, device_name, state_path, executable, help, grant_permissions }
+    Args { server, pairing_token, device_name, state_path, executable, help, grant_permissions, install_agent_desktop }
 }
 
 /// Real device hostname, used as the default `--name`. Neither `HOSTNAME`
@@ -174,6 +192,12 @@ async fn main() {
     if args.help {
         println!("{HELP_TEXT}");
         std::process::exit(0);
+    }
+    if args.install_agent_desktop {
+        match install::install().await {
+            Ok(_) => std::process::exit(0),
+            Err(cause) => { eprintln!("[error] {cause}"); std::process::exit(1); }
+        }
     }
     if args.grant_permissions {
         let driver = Arc::new(Driver::new(args.executable.clone()));
@@ -400,27 +424,51 @@ async fn connect_once(
 async fn maybe_prompt_permissions(driver: &Arc<Driver>) {
     let granted = driver.call("desktop_permissions", serde_json::json!({})).await
         .ok()
-        .and_then(|value| all_permissions_granted(&value))
-        .unwrap_or(true);
-    if !granted {
+        .and_then(|value| all_permissions_granted(&value));
+    if granted == Some(false) {
         eprintln!("[warn] agent-desktop does not yet have the OS permissions it needs on this machine.");
         grant_permissions(driver).await;
     }
 }
 
 /// Reads current permission state via the `desktop_permissions` MCP tool
-/// and, if anything is missing, performs one harmless read-only action
-/// (`desktop_list_apps`) to trigger the OS's native permission prompt(s).
-/// agent-desktop (like its CUA Driver predecessor) has no CLI/MCP command
-/// that requests permissions directly; the OS only shows the prompt the
-/// first time a real accessibility-API call is actually attempted.
+/// and, if anything is missing, calls it again with `request: true` (and
+/// `guide: true` on macOS). This is the tool's own documented request
+/// mechanism - confirmed against its real input schema, which accepts
+/// exactly these two booleans - not a side-effecting read-only action
+/// that happens to also touch the accessibility API. The companion's
+/// earlier approach (calling `desktop_list_apps`, then `desktop_snapshot`/
+/// `desktop_screenshot`) never actually requested anything: `list_apps`
+/// never touches the accessibility API at all, and even the AX-tree/
+/// screen-capture calls only *preflight* existing access on macOS, they
+/// do not drive the OS consent flow the way `request: true` does -
+/// `guide: true` additionally opens System Settings with an on-screen
+/// walkthrough of exactly which app to allow.
 async fn grant_permissions(driver: &Arc<Driver>) {
+    if report_permissions(driver).await == Some(true) {
+        println!("[info] All required permissions are already granted.");
+        return;
+    }
+    println!("[info] Requesting missing permissions...");
+    let args = if std::env::consts::OS == "macos" {
+        serde_json::json!({ "request": true, "guide": true })
+    } else {
+        serde_json::json!({ "request": true })
+    };
+    match driver.call("desktop_permissions", args).await {
+        Ok(_) => {
+            println!("[info] Request completed. If a system permission dialog or System Settings window appeared, approve it, then re-run --grant-permissions to confirm.");
+            report_permissions(driver).await;
+        }
+        Err(cause) => println!("[warn] Request failed ({cause}). Approve permissions manually in System Settings (macOS: Privacy & Security > Accessibility and Screen Recording) or your Linux desktop's permission manager, then re-run --grant-permissions to confirm."),
+    }
+}
+
+/// Prints the current per-permission state and returns whether everything
+/// required is granted (`None` if the response shape was unrecognized).
+async fn report_permissions(driver: &Arc<Driver>) -> Option<bool> {
     match driver.call("desktop_permissions", serde_json::json!({})).await {
         Ok(value) => {
-            if all_permissions_granted(&value) == Some(true) {
-                println!("[info] All required permissions are already granted.");
-                return;
-            }
             if let Some(data) = value.get("structuredContent").and_then(|v| v.get("data")).and_then(serde_json::Value::as_object) {
                 for (name, entry) in data {
                     let state = entry.get("state").and_then(serde_json::Value::as_str).unwrap_or("unknown");
@@ -429,26 +477,9 @@ async fn grant_permissions(driver: &Arc<Driver>) {
             } else {
                 println!("[info] Current permission state: {value}");
             }
+            all_permissions_granted(&value)
         }
-        Err(cause) => println!("[warn] Could not read current permission state: {cause}"),
-    }
-    // `desktop_list_apps` only enumerates processes/windows - it never
-    // calls into the accessibility API and does not trigger anything on
-    // macOS (confirmed against the real CLI: it has no AX-tree-walking
-    // step). `desktop_snapshot` genuinely walks the accessibility tree,
-    // which is what actually forces the Accessibility TCC prompt; a plain
-    // `desktop_screenshot` is what forces the Screen Recording prompt.
-    println!("[info] Attempting a harmless read-only accessibility-tree read to trigger the Accessibility permission prompt...");
-    let snapshot = driver.call("desktop_snapshot", serde_json::json!({})).await;
-    println!("[info] Attempting a harmless read-only screen capture to trigger the Screen Recording permission prompt...");
-    let screenshot = driver.call("desktop_screenshot", serde_json::json!({})).await;
-    match (snapshot, screenshot) {
-        (Ok(_), Ok(_)) => println!("[info] Both actions completed. If system permission dialogs appeared, approve them, then re-run --grant-permissions to confirm."),
-        (snapshot, screenshot) => {
-            if let Err(cause) = snapshot { println!("[warn] Accessibility-tree read failed ({cause})."); }
-            if let Err(cause) = screenshot { println!("[warn] Screen capture failed ({cause})."); }
-            println!("[warn] If a system permission dialog appeared for either, approve it in System Settings (macOS: Privacy & Security > Accessibility and Screen Recording) or your Linux desktop's permission manager, then re-run --grant-permissions to confirm.");
-        }
+        Err(cause) => { println!("[warn] Could not read current permission state: {cause}"); None }
     }
 }
 

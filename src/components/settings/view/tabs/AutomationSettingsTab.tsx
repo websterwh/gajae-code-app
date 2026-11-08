@@ -272,12 +272,12 @@ export default function AutomationSettingsTab() {
   }, [refresh]);
 
   // A companion that just registered (--pair or plain --server) needs this
-  // page to show up as "needs approval" without a manual reload - the
-  // companion's own connect is the only signal that anything changed, and
-  // there is no server push channel into this tab, so poll lightly instead.
-  // A full refresh() (re-fetches status/grants/ego/etc. too) runs on mount
-  // and on every manual action already; this only needs to catch devices
-  // appearing or changing state in between.
+  // page to show up as "needs approval" without a manual reload. The server
+  // pushes an SSE 'changed' event the instant a device connects, registers,
+  // is approved, disconnects, or reports readiness - subscribed here instead
+  // of polling on a fixed interval, so a change shows up immediately rather
+  // than after up to one poll period. A full refresh() (re-fetches status/
+  // grants/ego/etc. too) still runs on mount and on every manual action.
   useEffect(() => {
     const refreshRemoteDevices = async () => {
       try {
@@ -286,10 +286,13 @@ export default function AutomationSettingsTab() {
         const remote = await response.json() as { devices?: RemoteDevice[]; selectedDeviceId?: string };
         if (Array.isArray(remote.devices)) setRemoteDevices(remote.devices);
         setSelectedRemoteDeviceId(remote.selectedDeviceId);
-      } catch { /* Transient network hiccup; the next tick retries. */ }
+      } catch { /* Transient network hiccup; the next 'changed' event retries. */ }
     };
-    const id = window.setInterval(() => void refreshRemoteDevices(), 4000);
-    return () => window.clearInterval(id);
+    const source = new EventSource('/api/automation/remote-computers/events');
+    source.addEventListener('changed', () => void refreshRemoteDevices());
+    // EventSource auto-reconnects on its own after a drop; nothing else to
+    // do here beyond closing it on unmount.
+    return () => source.close();
   }, []);
 
 

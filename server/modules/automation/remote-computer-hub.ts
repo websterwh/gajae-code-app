@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { EventEmitter } from 'node:events';
 
 import type { WebSocket } from 'ws';
 
@@ -19,7 +20,18 @@ type Connection = { socket: WebSocket; pending: Map<string, Pending>; seen: Set<
 /** Multiplexes authenticated companion connections; no desktop capability lives on the server. */
 export class RemoteComputerHub {
   private readonly connections = new Map<string, Connection>();
+  /**
+   * Fires 'changed' whenever anything the Settings page's device list
+   * renders could have moved: a device connects/disconnects, registers,
+   * gets approved, or reports readiness. Backs the SSE subscription in
+   * automation.routes.ts so the client never has to poll - a plain
+   * EventEmitter is enough since this process is the only writer and the
+   * route just re-reads devices.list()/isConnected() on each event rather
+   * than needing the event payload itself.
+   */
+  readonly events = new EventEmitter();
   constructor(readonly devices: RemoteComputerDeviceRegistry) {}
+  private notifyChanged(): void { this.events.emit('changed'); }
 
   handle(socket: WebSocket): void {
     let deviceId: string | undefined;
@@ -89,6 +101,7 @@ export class RemoteComputerHub {
             type: 'pong', protocolVersion: REMOTE_CUA_PROTOCOL_VERSION,
             ...(pendingApproval ? { pendingApproval: true } : {}),
           }));
+          this.notifyChanged();
         } catch (error) { reject(error instanceof Error ? error.message : 'authentication failed'); }
         return;
       }
@@ -97,6 +110,7 @@ export class RemoteComputerHub {
       if (!connection || connection.socket !== socket) { reject('stale connection'); return; }
       if (message.type === 'readiness') {
         this.devices.update(deviceId, { readiness: message.readiness });
+        this.notifyChanged();
       } else if (message.type === 'computer.result') {
         if (message.deviceId !== deviceId || !message.requestId) { reject('device mismatch'); return; }
         const pending = connection.pending.get(message.requestId);
@@ -113,6 +127,7 @@ export class RemoteComputerHub {
       const connection = this.connections.get(deviceId)!;
       this.connections.delete(deviceId);
       for (const pending of connection.pending.values()) { clearTimeout(pending.timer); pending.reject(new Error('Remote computer disconnected.')); }
+      this.notifyChanged();
     });
   }
 
@@ -150,7 +165,10 @@ export class RemoteComputerHub {
     if (!connection) return;
     connection.socket.send(JSON.stringify({ type: 'disconnect', protocolVersion: REMOTE_CUA_PROTOCOL_VERSION, reason }));
     connection.socket.close(4003, reason);
+    this.notifyChanged();
   }
+  /** Lets routes outside this class (PATCH/DELETE/pairings) report a device-list mutation without duplicating this emitter. */
+  notifyDevicesChanged(): void { this.notifyChanged(); }
   /**
    * Pushes a live notification to an already-connected device the instant
    * it is Trusted - a no-op if the device is not currently connected, since
