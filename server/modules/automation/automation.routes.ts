@@ -154,6 +154,10 @@ export function createAutomationRouter(service: AutomationService = automationSe
       if (name !== undefined && typeof name !== 'string') throw new Error('name must be a string.');
       if (enabled !== undefined && typeof enabled !== 'boolean') throw new Error('enabled must be true or false.');
       service.remoteDevices.update(request.params.deviceId, { ...(name !== undefined ? { name } : {}), ...(enabled !== undefined ? { enabled } : {}) });
+      // An already-connected pending companion has no other way to learn
+      // it was just Trusted - it is not polling anything, and its next
+      // hello only happens on reconnect, so push it live instead.
+      if (enabled === true) service.remoteComputerHub.notifyApproved(request.params.deviceId);
       response.json({ devices: service.remoteDevices.list(), selectedDeviceId: service.remoteDevices.selectedDeviceId() });
     } catch (error) { response.status(400).json({ error: error instanceof Error ? error.message : 'Invalid remote computer device.' }); }
   }));

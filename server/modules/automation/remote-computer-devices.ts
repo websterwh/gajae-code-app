@@ -64,6 +64,13 @@ export class RemoteComputerDeviceRegistry {
     this.save(state);
     return { token, expiresAt };
   }
+  /**
+   * A manually-issued pairing token already is the approval step - it was
+   * copied out of this server's own Settings page by someone who can reach
+   * it, which is a stronger signal than a disabled-by-default device ever
+   * needs restating via a second Trust click. Starts enabled immediately,
+   * unlike `registerUnattended`, whose caller never proved they saw a token.
+   */
   consumePairing(token: string, name: string, os: string): { device: Omit<RemoteComputerDevice, 'credentialHash'>; credential: string } {
     const state = read(this.storage);
     const pairing = state.pairings.find(candidate => candidate.expiresAt > this.now() && !candidate.used
@@ -73,7 +80,7 @@ export class RemoteComputerDeviceRegistry {
     const credential = randomBytes(32).toString('base64url');
     const device: RemoteComputerDevice = {
       id: randomUUID(), name: name.trim().slice(0, 100) || 'Remote computer', os: os.trim().slice(0, 100) || 'unknown',
-      enabled: false, revoked: false, credentialHash: hash(credential), publicIdentity: randomBytes(32).toString('base64url'),
+      enabled: true, revoked: false, credentialHash: hash(credential), publicIdentity: randomBytes(32).toString('base64url'),
       pairedAt: this.now(),
     };
     state.devices.push(device);

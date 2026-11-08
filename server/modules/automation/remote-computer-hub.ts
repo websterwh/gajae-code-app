@@ -32,40 +32,51 @@ export class RemoteComputerHub {
         if (deviceId) { reject('invalid hello'); return; }
         try {
           let identity: { id: string }; let credential: string | undefined; let pendingApproval = false;
-          if (message.pairingToken) {
-            const paired = this.devices.consumePairing(message.pairingToken, message.deviceName ?? '', message.os ?? '');
-            identity = paired.device; credential = paired.credential; pendingApproval = true;
-            socket.send(JSON.stringify({ type: 'paired', protocolVersion: REMOTE_CUA_PROTOCOL_VERSION, deviceId: identity.id, credential }));
-          } else if (message.deviceId && message.credential) {
+          // A stored credential, when present, is tried first even if a
+          // --pair token was also sent: a healthy existing credential should
+          // just reconnect, not waste a freshly-issued token. The token (if
+          // any) only gets consumed as a fallback, when the stored
+          // credential turns out to be dead (removed/revoked) - this is
+          // exactly the case that silently dropped a user-supplied --pair
+          // token before: the companion only ever sent the token on a
+          // *first-ever* hello, so a dead stored credential made it stop
+          // sending the token at all, and the fresh token the user had just
+          // typed in went completely unused.
+          let authenticated: { id: string } | undefined;
+          if (message.deviceId && message.credential) {
             try {
-              identity = this.devices.authenticate(message.deviceId, message.credential);
+              authenticated = this.devices.authenticate(message.deviceId, message.credential);
             } catch (error) {
               if (error instanceof Error && error.message === 'not-yet-approved') {
                 // A real, still-registered credential that just can't
                 // dispatch calls yet - keep the connection alive, not a
                 // dead-end rejection that tells the user to re-pair.
-                identity = { id: message.deviceId }; pendingApproval = true;
-              } else if (error instanceof Error && error.message === 'device-not-registered') {
-                // The stored credential refers to a device that was
-                // removed or revoked: register fresh instead of rejecting,
-                // so a companion stuck with a dead credential self-heals
-                // on its own next reconnect rather than needing a new
-                // --pair token typed in by hand.
-                const registered = this.devices.registerUnattended(message.deviceName ?? '', message.os ?? '');
-                identity = registered.device; credential = registered.credential; pendingApproval = true;
-                socket.send(JSON.stringify({ type: 'paired', protocolVersion: REMOTE_CUA_PROTOCOL_VERSION, deviceId: identity.id, credential }));
-              } else {
+                authenticated = { id: message.deviceId }; pendingApproval = true;
+              } else if (!(error instanceof Error && error.message === 'device-not-registered')) {
                 throw error;
               }
+              // device-not-registered falls through to the pairingToken /
+              // registerUnattended branches below instead of rejecting.
             }
+          }
+          if (authenticated) {
+            identity = authenticated;
+          } else if (message.pairingToken) {
+            // A manually-issued token already is the approval step (it had
+            // to be copied out of this server's own Settings page), so this
+            // device starts enabled and is never pendingApproval - unlike
+            // the no-token branch below, which never proved that.
+            const paired = this.devices.consumePairing(message.pairingToken, message.deviceName ?? '', message.os ?? '');
+            identity = paired.device; credential = paired.credential;
+            socket.send(JSON.stringify({ type: 'paired', protocolVersion: REMOTE_CUA_PROTOCOL_VERSION, deviceId: identity.id, credential }));
           } else {
-            // No pairing token and no stored credential: either the
-            // companion's very first run with only --server, or a run
-            // whose stored credential was wiped after a prior removal/
-            // revoke rejection. Registers a brand-new disabled device
-            // instead of requiring a token copied from Settings first -
-            // approval still gates it exactly like a token pairing does,
-            // this only skips the token-copying step, not the trust gate.
+            // No pairing token and no usable stored credential: either the
+            // companion's very first run with only --server, or a run whose
+            // stored credential was wiped after a prior removal/revoke.
+            // Registers a brand-new disabled device instead of requiring a
+            // token copied from Settings first - approval still gates it
+            // exactly like a token pairing does, this only skips the
+            // token-copying step, not the trust gate.
             const registered = this.devices.registerUnattended(message.deviceName ?? '', message.os ?? '');
             identity = registered.device; credential = registered.credential; pendingApproval = true;
             socket.send(JSON.stringify({ type: 'paired', protocolVersion: REMOTE_CUA_PROTOCOL_VERSION, deviceId: identity.id, credential }));
@@ -139,6 +150,17 @@ export class RemoteComputerHub {
     if (!connection) return;
     connection.socket.send(JSON.stringify({ type: 'disconnect', protocolVersion: REMOTE_CUA_PROTOCOL_VERSION, reason }));
     connection.socket.close(4003, reason);
+  }
+  /**
+   * Pushes a live notification to an already-connected device the instant
+   * it is Trusted - a no-op if the device is not currently connected, since
+   * its next hello will see the already-enabled record and skip the
+   * pending state entirely with no notification needed.
+   */
+  notifyApproved(deviceId: string): void {
+    const connection = this.connections.get(deviceId);
+    if (!connection || connection.socket.readyState !== connection.socket.OPEN) return;
+    connection.socket.send(JSON.stringify({ type: 'approved', protocolVersion: REMOTE_CUA_PROTOCOL_VERSION }));
   }
   readiness(deviceId: string): RemoteCuaReadiness | undefined {
     return this.devices.list().find(device => device.id === deviceId)?.readiness;

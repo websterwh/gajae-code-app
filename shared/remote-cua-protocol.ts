@@ -35,6 +35,12 @@ export type RemoteCuaMessage =
   | { type: 'computer.result'; protocolVersion: typeof REMOTE_CUA_PROTOCOL_VERSION; requestId: string; deviceId: string; result?: unknown; error?: string }
   | { type: 'cancel'; protocolVersion: typeof REMOTE_CUA_PROTOCOL_VERSION; requestId: string; deviceId: string }
   | { type: 'ping'; protocolVersion: typeof REMOTE_CUA_PROTOCOL_VERSION }
+  // Pushed the instant a device is Trusted in Settings, to a companion that
+  // is already connected and sitting in the pendingApproval state - without
+  // this, an already-connected pending companion would only learn it was
+  // approved on its next reconnect, since it has no reason to re-send hello
+  // and nothing else prompts the server to say anything in between.
+  | { type: 'approved'; protocolVersion: typeof REMOTE_CUA_PROTOCOL_VERSION }
   // pendingApproval marks a connection that authenticated with a real,
   // still-registered credential (fresh pairing, unattended registration, or
   // a previously-approved device not yet Trusted) but cannot dispatch calls
