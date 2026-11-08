@@ -272,12 +272,16 @@ export default function AutomationSettingsTab() {
   }, [refresh]);
 
   // A companion that just registered (--pair or plain --server) needs this
-  // page to show up as "needs approval" without a manual reload. The server
-  // pushes an SSE 'changed' event the instant a device connects, registers,
-  // is approved, disconnects, or reports readiness - subscribed here instead
-  // of polling on a fixed interval, so a change shows up immediately rather
-  // than after up to one poll period. A full refresh() (re-fetches status/
-  // grants/ego/etc. too) still runs on mount and on every manual action.
+  // page to show up as "needs approval" or online without a manual reload.
+  // The server pushes an SSE 'changed' event the instant a device connects,
+  // registers, is approved, disconnects, or reports readiness - subscribed
+  // here for the instant path. A reverse proxy that holds an event stream
+  // open without ever flushing an event (confirmed via the proxy's own access
+  // log: the request is 200 but only the stream's 5-byte preamble ever
+  // arrives) leaves the online bubble stale, so this also re-reads the same
+  // cheap endpoint on a slow interval while the tab is visible. SSE still
+  // wins whenever it delivers; the poll is the floor. A full refresh()
+  // (status/grants/ego/etc. too) still runs on mount and on every action.
   useEffect(() => {
     const refreshRemoteDevices = async () => {
       try {
@@ -286,13 +290,20 @@ export default function AutomationSettingsTab() {
         const remote = await response.json() as { devices?: RemoteDevice[]; selectedDeviceId?: string };
         if (Array.isArray(remote.devices)) setRemoteDevices(remote.devices);
         setSelectedRemoteDeviceId(remote.selectedDeviceId);
-      } catch { /* Transient network hiccup; the next 'changed' event retries. */ }
+      } catch { /* Transient network hiccup; the next event or poll retries. */ }
     };
-    const source = new EventSource('/api/automation/remote-computers/events');
-    source.addEventListener('changed', () => void refreshRemoteDevices());
+    const source = typeof EventSource === 'undefined'
+      ? null
+      : new EventSource('/api/automation/remote-computers/events');
+    source?.addEventListener('changed', () => void refreshRemoteDevices());
+    // Only while the tab is visible, so a backgrounded Settings tab does not
+    // keep re-reading an endpoint nobody is looking at.
+    const poll = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void refreshRemoteDevices();
+    }, 5_000);
     // EventSource auto-reconnects on its own after a drop; nothing else to
     // do here beyond closing it on unmount.
-    return () => source.close();
+    return () => { source?.close(); window.clearInterval(poll); };
   }, []);
 
 
