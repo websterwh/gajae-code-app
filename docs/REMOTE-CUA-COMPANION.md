@@ -28,6 +28,8 @@ The companion stores its device credential under its OS config directory (`devic
 
 Run `./gajae-agent-desktop-companion --grant-permissions` once per machine (or any time later if a tool call fails on a permission error) to check the OS's current accessibility/screen-recording state and, if anything is missing, actually request it - calling `agent-desktop`'s own `permissions --request` (plus `--guide`, which opens System Settings with an on-screen walkthrough, on macOS). It does not need `--server` or `--pair`. On the normal `--server` connect path, the same check runs automatically exactly once, right after this device is approved - never before, and never for a device that is not yet trusted.
 
+Expect `automation: unknown` (the System Events permission, used for macOS automation of other apps) to stay `unknown` after `--grant-permissions` even once Accessibility and Screen Recording show `granted` - this is intentional, per agent-desktop's own macOS skill documentation: Automation is never pre-requestable, it only ever prompts macOS the first time a command that actually needs it runs, and `unknown` is exactly its normal pending state until that first real use.
+
 Run with `--help` to see every flag.
 
 Production servers must expose `wss://` (TLS). Plain `ws://` is accepted only for explicit non-production localhost development. LAN, VPN, and reverse-tunnel deployments still require TLS and device credentials; network location is not authentication.

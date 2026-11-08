@@ -72,7 +72,11 @@ impl Driver {
         if let Some(error) = response.get("error") {
             return Err(error.get("message").and_then(Value::as_str).unwrap_or("agent-desktop error").to_string());
         }
-        Ok(response.get("result").cloned().unwrap_or(Value::Null))
+        let result = response.get("result").cloned().unwrap_or(Value::Null);
+        if let Some(message) = tool_failure_message(&result) {
+            return Err(message);
+        }
+        Ok(result)
     }
 
     pub async fn close(&self) {
@@ -80,6 +84,33 @@ impl Driver {
             let _ = running.child.kill().await;
         }
     }
+}
+
+/// A real action failure (SNAPSHOT_NOT_FOUND, ACTION_FAILED, PERM_DENIED,
+/// APP_UNRESPONSIVE, ...) is never a JSON-RPC-level error - MCP reports it
+/// as a normal, successful RPC response whose *result* envelope carries
+/// `isError: true`, with the actual failure under `structuredContent.error`.
+/// Confirmed live against agent-desktop 1.2.0: every one of these
+/// previously came back as `Ok(...)` from `call()` and was silently
+/// reported as a successful call all the way up through the companion, the
+/// server, and the agent - this is what made a failed click/type look
+/// identical to a real one. Returns `None` for an actually-successful
+/// result.
+fn tool_failure_message(result: &Value) -> Option<String> {
+    if result.get("isError").and_then(Value::as_bool) != Some(true) {
+        return None;
+    }
+    let message = result.get("structuredContent")
+        .and_then(|value| value.get("error"))
+        .and_then(|error| error.get("message"))
+        .and_then(Value::as_str)
+        .or_else(|| result.get("content")
+            .and_then(Value::as_array)
+            .and_then(|items| items.first())
+            .and_then(|item| item.get("text"))
+            .and_then(Value::as_str))
+        .unwrap_or("agent-desktop reported a tool failure");
+    Some(message.to_string())
 }
 
 async fn initialize(running: &mut Running) -> std::io::Result<()> {
