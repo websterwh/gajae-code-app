@@ -197,6 +197,8 @@ test('application identity is required once a call names an app, window, or ref'
   assert.equal(requiresApplicationIdentity('desktop_click', { ref_id: '@s1:e1' }), true);
   assert.equal(requiresApplicationIdentity('desktop_list_windows', { app: 'TextEdit' }), true);
   assert.equal(requiresApplicationIdentity('desktop_list_windows', {}), false);
+  assert.equal(requiresApplicationIdentity('desktop_session_start', {}), false);
+  assert.equal(requiresApplicationIdentity('desktop_session_end', {}), false);
 });
 
 test('policy denials are typed so callers can distinguish them from driver failures', () => {

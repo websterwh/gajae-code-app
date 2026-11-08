@@ -38,6 +38,7 @@ import { RemoteComputerHub } from './remote-computer-hub.js';
 import {
   guardAgentDesktopCall,
   requiresApplicationIdentity,
+  snapshotIdFromRef,
 } from './agent-desktop-capability.js';
 
 type BridgeRequest = {
@@ -68,6 +69,8 @@ type AgentDesktopApplicationAuthorization = {
 };
 
 const MAX_BRIDGE_LINE = 2 * 1024 * 1024;
+/** Upper bound on remembered snapshot -> application links (oldest evicted first). */
+const MAX_TRACKED_SNAPSHOTS = 256;
 
 function object(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -90,9 +93,19 @@ function applicationRecords(value: unknown): AgentDesktopApplication[] {
     : [];
 }
 
-/** `windows` from a `desktop_list_windows` call's `structuredContent.data`. */
+/**
+ * Windows from a `desktop_list_windows` call.
+ *
+ * agent-desktop 1.2.0 answers with a bare array under `data`
+ * (`{"command":"list-windows","data":[...]}`), unlike `desktop_list_apps`,
+ * which nests its records under `data.apps`. Reading only `data.windows` made
+ * every `window_id` resolve to "no such window", so window-addressed calls
+ * failed identity resolution even for a window that was listed a moment ago.
+ * Both shapes are accepted.
+ */
 function windowRecords(value: unknown): AgentDesktopWindow[] {
-  const windows = structuredObject(structuredObject(value).data).windows;
+  const data = structuredObject(value).data;
+  const windows = Array.isArray(data) ? data : object(data).windows;
   return Array.isArray(windows)
     ? windows.filter((window): window is AgentDesktopWindow => Boolean(window && typeof window === 'object' && !Array.isArray(window)))
     : [];
@@ -138,6 +151,15 @@ export class AutomationService {
   readonly browser = new TauriBrowserClient({ refreshOnBinding: true });
   readonly cua = new AgentDesktopClient();
   readonly grants = new AutomationGrantStore();
+  /**
+   * `${sessionId}\u0000${snapshotId}` -> the application that produced the
+   * snapshot. Interaction tools (`desktop_click`, `desktop_type`, ...) carry
+   * only a `ref_id`, so the snapshot is their only link back to an approved
+   * application; without this every one of them failed resolution before
+   * dispatch. Holds no authority - grants are still checked against the
+   * resolved application on every call.
+   */
+  private readonly snapshotApplications = new Map<string, string>();
   /** The app's browser backend choice for GJC runs; the runtime owns everything it selects. */
   readonly browserBackend = browserBackendStore;
   /** Opt-in rendering of the agent's ego browser state; off by default. */
@@ -432,6 +454,19 @@ export class AutomationService {
     if (!application && typeof args.app === 'string' && args.app.trim()) {
       application = args.app.trim();
     }
+    // A ref_id addresses an element, not an application. Recover the owning
+    // application from the snapshot namespace the ref was minted in. Refs are
+    // session-scoped: a snapshot taken by another session never resolves here.
+    if (!application && typeof args.ref_id === 'string') {
+      const snapshotId = snapshotIdFromRef(args.ref_id);
+      const remembered = snapshotId
+        ? this.snapshotApplications.get(`${sessionId}\u0000${snapshotId}`)
+        : undefined;
+      if (remembered) {
+        application = remembered;
+        label = remembered;
+      }
+    }
 
     const windowId = typeof args.window_id === 'string' ? args.window_id : undefined;
     const needsInventory = tool === 'desktop_launch' || (!application && windowId !== undefined);
@@ -455,9 +490,39 @@ export class AutomationService {
 
     if (!application) {
       if (!requiresApplicationIdentity(tool, args)) return { application: null, label: null };
-      throw new Error('Computer action requires a resolvable application identity.');
+      throw new Error(
+        `${tool} requires a resolvable application identity. Take a desktop_snapshot or desktop_find scoped to the app (pass app, or run desktop_launch first) and address elements with a ref_id from that result.`,
+      );
     }
     return { application, label: label || application };
+  }
+
+  /**
+   * Records which application minted each snapshot. Called after a successful
+   * `desktop_snapshot`/`desktop_find`, so a later `ref_id` can be traced back
+   * to the application the person approved.
+   */
+  private rememberSnapshotApplication(
+    sessionId: string,
+    tool: string,
+    args: Record<string, unknown>,
+    result: unknown,
+  ): void {
+    if (tool !== 'desktop_snapshot' && tool !== 'desktop_find') return;
+    const data = object(structuredObject(result).data);
+    const snapshotId = typeof data.snapshot_id === 'string' ? data.snapshot_id : '';
+    const declared = typeof data.app === 'string' && data.app.trim() ? data.app.trim() : '';
+    const requested = typeof args.app === 'string' ? args.app.trim() : '';
+    const application = declared || requested;
+    if (!snapshotId || !application) return;
+    const key = `${sessionId}\u0000${snapshotId}`;
+    this.snapshotApplications.delete(key);
+    this.snapshotApplications.set(key, application);
+    while (this.snapshotApplications.size > MAX_TRACKED_SNAPSHOTS) {
+      const oldest = this.snapshotApplications.keys().next().value;
+      if (oldest === undefined) break;
+      this.snapshotApplications.delete(oldest);
+    }
   }
 
   async callComputer(sessionId: string, tool: AgentDesktopSafeTool, args: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
@@ -483,6 +548,7 @@ export class AutomationService {
       const result = await this.transport().call(sessionId, tool, scopedArgs, signal);
       const error = agentDesktopToolError(result);
       if (error) throw new Error(error);
+      this.rememberSnapshotApplication(sessionId, tool, scopedArgs, result);
       return result;
     } finally { release(); }
   }
