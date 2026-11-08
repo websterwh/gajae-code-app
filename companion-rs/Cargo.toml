@@ -17,3 +17,10 @@ serde_json = "1"
 url = "2"
 dirs = "5"
 rand = "0.8"
+# Used only by --install-agent-desktop to download the matching release
+# tarball directly from GitHub, verify its published sha256, and extract it -
+# rustls to match the existing TLS stack already pulled in for the websocket.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots", "json"] }
+sha2 = "0.10"
+flate2 = "1"
+tar = "0.4"

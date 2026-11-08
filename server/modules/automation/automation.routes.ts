@@ -135,6 +135,29 @@ export function createAutomationRouter(service: AutomationService = automationSe
   router.post('/remote-computers/pairings', asyncHandler((_request, response) => {
     response.status(201).json(service.remoteDevices.issuePairing());
   }));
+  // Pushes a change notification to every subscribed Settings tab the
+  // instant anything in the device list could have moved - connects,
+  // disconnects, registers, is approved, or reports readiness - so the
+  // client never has to poll on a fixed interval to notice a change.
+  router.get('/remote-computers/events', asyncHandler((request, response) => {
+    response.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+    response.write(':ok\n\n');
+    const onChanged = () => { response.write('event: changed\ndata: {}\n\n'); };
+    service.remoteComputerHub.events.on('changed', onChanged);
+    // Reverse-proxy/idle-timeout keepalive; carries no data of its own.
+    // unref() so this timer alone never keeps the process (or a test
+    // runner) alive beyond the request/response lifecycle.
+    const keepalive = setInterval(() => response.write(':ping\n\n'), 25_000).unref();
+    request.on('close', () => {
+      clearInterval(keepalive);
+      service.remoteComputerHub.events.off('changed', onChanged);
+    });
+  }));
   router.put('/remote-computers/selected', asyncHandler(async (request, response) => {
     try {
       const id = request.body?.deviceId;
@@ -156,8 +179,13 @@ export function createAutomationRouter(service: AutomationService = automationSe
       service.remoteDevices.update(request.params.deviceId, { ...(name !== undefined ? { name } : {}), ...(enabled !== undefined ? { enabled } : {}) });
       // An already-connected pending companion has no other way to learn
       // it was just Trusted - it is not polling anything, and its next
-      // hello only happens on reconnect, so push it live instead.
+      // hello only happens on reconnect, so push it live instead. This
+      // already notifies every subscribed Settings tab too (notifyApproved
+      // itself fires the shared 'changed' event); a rename-only update
+      // still needs its own notification since notifyApproved only runs
+      // when enabled became true.
       if (enabled === true) service.remoteComputerHub.notifyApproved(request.params.deviceId);
+      else service.remoteComputerHub.notifyDevicesChanged();
       response.json({ devices: service.remoteDevices.list(), selectedDeviceId: service.remoteDevices.selectedDeviceId() });
     } catch (error) { response.status(400).json({ error: error instanceof Error ? error.message : 'Invalid remote computer device.' }); }
   }));
@@ -165,6 +193,7 @@ export function createAutomationRouter(service: AutomationService = automationSe
     try {
       service.remoteComputerHub.disconnect(request.params.deviceId, 'revoked');
       service.remoteDevices.revoke(request.params.deviceId);
+      service.remoteComputerHub.notifyDevicesChanged();
       response.status(204).end();
     } catch (error) { response.status(404).json({ error: error instanceof Error ? error.message : 'Remote computer device was not found.' }); }
   }));

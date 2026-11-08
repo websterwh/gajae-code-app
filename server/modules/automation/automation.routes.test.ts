@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { once } from 'node:events';
+import { EventEmitter, once } from 'node:events';
 import { createServer } from 'node:http';
 import test from 'node:test';
 
@@ -97,10 +97,16 @@ function fakeService(calls: RecordedCall[]): AutomationService {
       update: () => { calls.push({ method: 'remoteDevices.update' }); },
       revoke: (id: string) => { calls.push({ method: 'remoteDevices.revoke', payload: id }); },
     },
-    remoteComputerHub: {
-      isConnected: () => false,
-      disconnect: (id: string) => { calls.push({ method: 'remoteComputerHub.disconnect', payload: id }); },
-    },
+    remoteComputerHub: (() => {
+      const events = new EventEmitter();
+      return {
+        isConnected: () => false,
+        disconnect: (id: string) => { calls.push({ method: 'remoteComputerHub.disconnect', payload: id }); },
+        notifyApproved: () => { events.emit('changed'); },
+        notifyDevicesChanged: () => { events.emit('changed'); },
+        events,
+      };
+    })(),
   } as unknown as AutomationService;
 }
 
@@ -116,6 +122,11 @@ async function serve(router: Router) {
   return {
     request: (path: string, options?: RequestInit) => fetch(`http://127.0.0.1:${address.port}${path}`, options),
     close: async () => {
+      // closeAllConnections() first: a long-lived SSE response (the
+      // remote-computers/events stream) otherwise keeps server.close()
+      // waiting indefinitely for a connection that is never going to end
+      // on its own within this test.
+      server.closeAllConnections();
       server.close();
       await once(server, 'close');
     },
@@ -189,6 +200,37 @@ test('removing a remote device disconnects its live hub connection before revoki
       { method: 'remoteComputerHub.disconnect', payload: 'device-123' },
       { method: 'remoteDevices.revoke', payload: 'device-123' },
     ]);
+  } finally {
+    await server.close();
+  }
+});
+
+test('the remote-computers events stream pushes a changed event instead of requiring the client to poll', async () => {
+  const calls: RecordedCall[] = [];
+  const service = fakeService(calls);
+  const server = await serve(createAutomationRouter(service));
+  try {
+    const controller = new AbortController();
+    const response = await server.request('/remote-computers/events', { signal: controller.signal });
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('content-type'), 'text/event-stream');
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    const readUntil = async (marker: string) => {
+      while (!buffer.includes(marker)) {
+        const { value, done } = await reader.read();
+        if (done) throw new Error('stream ended before marker arrived');
+        buffer += decoder.decode(value);
+      }
+    };
+    try {
+      await readUntil(':ok');
+      service.remoteComputerHub.notifyDevicesChanged();
+      await readUntil('event: changed');
+    } finally {
+      controller.abort();
+    }
   } finally {
     await server.close();
   }
