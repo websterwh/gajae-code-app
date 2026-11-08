@@ -271,6 +271,28 @@ export default function AutomationSettingsTab() {
     void refresh().catch(() => setLoading(false));
   }, [refresh]);
 
+  // A companion that just registered (--pair or plain --server) needs this
+  // page to show up as "needs approval" without a manual reload - the
+  // companion's own connect is the only signal that anything changed, and
+  // there is no server push channel into this tab, so poll lightly instead.
+  // A full refresh() (re-fetches status/grants/ego/etc. too) runs on mount
+  // and on every manual action already; this only needs to catch devices
+  // appearing or changing state in between.
+  useEffect(() => {
+    const refreshRemoteDevices = async () => {
+      try {
+        const response = await fetch('/api/automation/remote-computers');
+        if (!response.ok) return;
+        const remote = await response.json() as { devices?: RemoteDevice[]; selectedDeviceId?: string };
+        if (Array.isArray(remote.devices)) setRemoteDevices(remote.devices);
+        setSelectedRemoteDeviceId(remote.selectedDeviceId);
+      } catch { /* Transient network hiccup; the next tick retries. */ }
+    };
+    const id = window.setInterval(() => void refreshRemoteDevices(), 4000);
+    return () => window.clearInterval(id);
+  }, []);
+
+
   const revoke = async (kind: 'origin' | 'application', value: string) => {
     const response = await fetch('/api/automation/grants', {
       method: 'DELETE',
@@ -406,7 +428,7 @@ export default function AutomationSettingsTab() {
           <div className="flex items-center justify-between gap-4 p-4">
             <div>
               <p className="text-sm font-medium text-foreground">Remote devices</p>
-              <p className="mt-1 text-xs text-muted-foreground">Pair a device running the agent-desktop companion. A newly paired device needs to be Trusted below before it can be selected, and only an enabled, currently connected device with a valid readiness report can actually run anything.</p>
+              <p className="mt-1 text-xs text-muted-foreground">Pair a device running the agent-desktop companion, or run it with only --server and no token at all - either way a new device needs to be Trusted below before it can be selected, and only a trusted, currently connected device with a valid readiness report can actually run anything. Untrust pauses a device without deleting it; Remove deletes it outright (it can always reconnect and register again afterward).</p>
             </div>
             <div className="flex items-center gap-2">
               {companionDownloadTemplate ? <a href={companionDownloadTemplate.replace('{platform}', companionPlatform())} className="rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted">Download companion</a> : null}
@@ -425,7 +447,7 @@ export default function AutomationSettingsTab() {
                 <button type="button" onClick={() => void copyPairingCommand()} className="rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted">{commandCopied ? 'Command copied' : 'Copy command'}</button>
               </div>
               <code className="mt-2 block overflow-x-auto rounded bg-muted px-2 py-1.5 text-xs text-foreground">{companionPairCommand(pairingToken)}</code>
-              <p className="mt-2 text-xs text-muted-foreground">"Open in companion" requires an OS protocol handler the companion does not register yet - use the token or command for now. The device will appear below once it connects, and needs to be Trusted here before it can run anything. It is also safe to run the companion with only --server and no token at all; it registers itself and shows up below needing the same approval.</p>
+              <p className="mt-2 text-xs text-muted-foreground">"Open in companion" requires an OS protocol handler the companion does not register yet - use the token or command for now. The device will appear below once it connects, and needs to be Trusted here before it can run anything.</p>
             </div>
           ) : null}
           <div className="border-t border-border p-4">
@@ -458,12 +480,18 @@ export default function AutomationSettingsTab() {
                     <p className="mt-1 text-xs text-muted-foreground">{device.os} · {state}{device.readiness?.driverVersion ? ` · agent-desktop ${device.readiness.driverVersion}` : ''}</p>
                   </div>
                   <div className="flex flex-wrap justify-end gap-2">
-                    <button type="button" onClick={() => void updateRemoteDevice(device.id, { enabled: !device.enabled })} className={`rounded border px-2 py-1 text-xs hover:bg-muted ${device.enabled ? 'border-input text-foreground' : 'border-emerald-600 text-emerald-600'}`}>{device.enabled ? 'Disable' : 'Trust'}</button>
+                    {/* Same two verbs always mean the same thing: Trust/
+                       Untrust is the one toggle, Remove is the one delete -
+                       it never relabels itself to Decline depending on
+                       whether the device happened to be trusted yet, which
+                       was confusing (the delete action is identical either
+                       way: it deletes the record outright). */}
+                    <button type="button" onClick={() => void updateRemoteDevice(device.id, { enabled: !device.enabled })} className={`rounded border px-2 py-1 text-xs hover:bg-muted ${device.enabled ? 'border-input text-foreground' : 'border-emerald-600 text-emerald-600'}`}>{device.enabled ? 'Untrust' : 'Trust'}</button>
                     <button type="button" onClick={() => {
                       const name = window.prompt('Remote device name', device.name);
                       if (name) void updateRemoteDevice(device.id, { name });
                     }} className="rounded border border-input px-2 py-1 text-xs text-foreground hover:bg-muted">Rename</button>
-                    <button type="button" onClick={() => void removeRemoteDevice(device.id)} className="rounded border border-destructive px-2 py-1 text-xs text-destructive hover:bg-destructive/10">{device.enabled ? 'Remove' : 'Decline'}</button>
+                    <button type="button" onClick={() => void removeRemoteDevice(device.id)} className="rounded border border-destructive px-2 py-1 text-xs text-destructive hover:bg-destructive/10">Remove</button>
                   </div>
                 </div>
               </div>

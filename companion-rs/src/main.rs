@@ -48,9 +48,15 @@ OPTIONS:
                           ws://... or wss://... URL instead for a non-default port/path,
                           or ws://localhost for local development (plain ws:// is refused
                           for any other host).
-  --pair=<token>         One-time pairing token from the server's Settings > Automation >
-                          Remote devices page. Only needed for the first connection; once
-                          paired, the issued credential is stored and reused automatically.
+
+  --pair=<token>         Pairing token from the server's Settings > Automation > Remote
+                          devices page. Retried on every connection attempt, not just the
+                          first - a stored credential is tried first if one exists, and
+                          this token is only consumed as a fallback if that credential is
+                          dead (device removed/untrusted too long), or if no credential is
+                          stored yet at all. A token-paired device is trusted immediately;
+                          a --server-only registration (no --pair) still needs to be
+                          Trusted in Settings before it can run anything.
   --name=<name>          Device name shown in the server's device list. Defaults to this
                           machine's hostname.
   --state=<path>         Where the paired device credential is stored. Defaults to this
@@ -58,10 +64,13 @@ OPTIONS:
   --executable=<path>    Path to the agent-desktop CLI, if not on PATH. Defaults to
                           "agent-desktop".
   --grant-permissions    Checks current OS automation/accessibility permission state and,
-                          if not already granted, performs one harmless read-only desktop
-                          action to trigger the OS permission prompt. Does not require
+                          if not already granted, performs harmless read-only desktop
+                          actions to trigger the OS permission prompts. Does not require
                           --server or --pair; safe to run on its own before pairing, or
                           again later if a tool call ever fails with a permission error.
+                          On the normal --server connect path this also runs automatically,
+                          exactly once, right after this device is approved in Settings -
+                          never before approval.
   --help                 Show this message.
 
 EXAMPLES:
@@ -179,8 +188,11 @@ async fn main() {
         eprintln!("[error] {cause}");
         std::process::exit(1);
     }
+    // No agent-desktop permission probe runs here: this would touch the
+    // local machine (and can pop a native OS permission dialog) before the
+    // connection is even authenticated, let alone approved. It is deferred
+    // to the first post-approval pong inside connect_once instead.
     let driver = Arc::new(Driver::new(args.executable.clone()));
-    maybe_prompt_permissions(&driver).await;
     let state = Arc::new(Mutex::new(state::load(&args.state_path).await));
 
     loop {
@@ -215,18 +227,30 @@ async fn connect_once(
     println!("[info] Connected. Authenticating...");
 
     let current_state = state.lock().await.clone();
+    // An explicit --pair=<token> is always sent, even when a stored
+    // credential exists: typing a fresh --pair token is a deliberate
+    // "start over" signal from the user, and the previous behavior of only
+    // ever sending it when no local state file existed meant a stale
+    // stored credential (left behind by a device that was later removed or
+    // revoked) silently discarded any token the user had just typed in -
+    // the companion kept authenticating with the dead credential instead
+    // and the token went completely unused. The server tries the stored
+    // credential first regardless and only falls back to the token if that
+    // credential turns out to be dead, so a *working* stored credential is
+    // still never displaced by an incidental leftover --pair flag.
     let hello = Outgoing::Hello {
         protocol_version: PROTOCOL_VERSION,
         device_id: current_state.as_ref().map(|s| s.device_id.clone()),
         credential: current_state.as_ref().map(|s| s.credential.clone()),
-        pairing_token: if current_state.is_none() { args.pairing_token.clone() } else { None },
-        device_name: if current_state.is_none() { Some(args.device_name.clone()) } else { None },
-        os: if current_state.is_none() { Some(os_label()) } else { None },
+        pairing_token: args.pairing_token.clone(),
+        device_name: Some(args.device_name.clone()),
+        os: Some(os_label()),
     };
     send(&mut write, &hello).await?;
 
     let completed: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
     let mut printed_pending_notice = false;
+    let mut permissions_checked = false;
 
     while let Some(message) = read.next().await {
         let message = message.map_err(|cause| cause.to_string())?;
@@ -251,16 +275,36 @@ async fn connect_once(
                 let new_state = state::DeviceState { device_id: device_id.clone(), credential: credential.clone() };
                 state::save(&args.state_path, &new_state).await.map_err(|cause| cause.to_string())?;
                 *state.lock().await = Some(new_state);
-                println!("[info] Registered. Waiting for approval - check the web UI's Settings > Automation > Remote devices page and Trust this device.");
-                printed_pending_notice = true;
-                send_readiness(&mut write, &device_id, args, driver).await?;
+                // No readiness probe here: approval state is reported by the
+                // pong that follows immediately after, and agent-desktop is
+                // never touched for an unapproved device (see below).
             }
             Incoming::Pong { pending_approval, .. } => {
-                if pending_approval && !printed_pending_notice {
-                    println!("[info] Connected but not yet approved - check the web UI's Settings > Automation > Remote devices page and Trust this device.");
-                    printed_pending_notice = true;
-                } else if !pending_approval {
+                if pending_approval {
+                    if !printed_pending_notice {
+                        println!("[info] Connected but not yet approved - check the web UI's Settings > Automation > Remote devices page and Trust this device.");
+                        printed_pending_notice = true;
+                    }
+                    // Never probes agent-desktop (no tool call, no
+                    // permission prompt, nothing loaded) for a device that
+                    // cannot dispatch anything yet - there is no reason to
+                    // touch the local machine at all before a human has
+                    // actually approved this connection.
+                    continue;
+                }
+                if printed_pending_notice {
+                    println!("[info] Approved. Loading agent-desktop...");
                     printed_pending_notice = false;
+                }
+                if !permissions_checked {
+                    // Deferred from startup: the very first thing this
+                    // device does with agent-desktop (and the only place
+                    // that can pop a native OS permission dialog) happens
+                    // only now, once per run, after a human has actually
+                    // approved this connection - never before approval,
+                    // and never repeated every reconnect/readiness round.
+                    permissions_checked = true;
+                    maybe_prompt_permissions(driver).await;
                 }
                 if let Some(active) = state.lock().await.clone() {
                     send_readiness(&mut write, &active.device_id, args, driver).await?;
@@ -269,6 +313,22 @@ async fn connect_once(
             Incoming::Disconnect { reason, .. } => {
                 println!("[info] Server disconnected this device: {reason}");
                 return Ok(());
+            }
+            Incoming::Approved { .. } => {
+                // Pushed live the instant Trust is clicked on an
+                // already-connected pending device - without this there is
+                // no other signal in between reconnects.
+                if printed_pending_notice {
+                    println!("[info] Approved. Loading agent-desktop...");
+                    printed_pending_notice = false;
+                }
+                if !permissions_checked {
+                    permissions_checked = true;
+                    maybe_prompt_permissions(driver).await;
+                }
+                if let Some(active) = state.lock().await.clone() {
+                    send_readiness(&mut write, &active.device_id, args, driver).await?;
+                }
             }
             Incoming::Cancel { .. } => {
                 // Best-effort: this companion does not track in-flight
@@ -330,10 +390,13 @@ async fn connect_once(
 
 /// Runs once at startup on the connect path (never for a standalone
 /// `--grant-permissions` invocation, which calls `grant_permissions`
-/// directly) so a first-time user is not left silently unable to automate
-/// anything with no explanation. Best-effort and non-fatal: a probe failure
-/// here just falls through to the normal in-session readiness reporting,
-/// and `--grant-permissions` remains available to run manually at any time.
+/// directly), and only after this device has actually been approved
+/// (exactly once per run, on the first non-pending pong) so a device that
+/// is not yet trusted never touches agent-desktop or pops a native OS
+/// permission dialog before a human has approved it in Settings.
+/// Best-effort and non-fatal: a probe failure here just falls through to
+/// the normal in-session readiness reporting, and `--grant-permissions`
+/// remains available to run manually at any time.
 async fn maybe_prompt_permissions(driver: &Arc<Driver>) {
     let granted = driver.call("desktop_permissions", serde_json::json!({})).await
         .ok()
@@ -369,10 +432,23 @@ async fn grant_permissions(driver: &Arc<Driver>) {
         }
         Err(cause) => println!("[warn] Could not read current permission state: {cause}"),
     }
-    println!("[info] Attempting a harmless read-only desktop action to trigger the OS permission prompt...");
-    match driver.call("desktop_list_apps", serde_json::json!({})).await {
-        Ok(_) => println!("[info] Action completed. If a system permission dialog appeared, approve it, then re-run --grant-permissions to confirm."),
-        Err(cause) => println!("[warn] Action failed ({cause}). If a system permission dialog appeared, approve it in System Settings (macOS: Privacy & Security > Accessibility and Screen Recording) or your Linux desktop's permission manager, then re-run --grant-permissions to confirm."),
+    // `desktop_list_apps` only enumerates processes/windows - it never
+    // calls into the accessibility API and does not trigger anything on
+    // macOS (confirmed against the real CLI: it has no AX-tree-walking
+    // step). `desktop_snapshot` genuinely walks the accessibility tree,
+    // which is what actually forces the Accessibility TCC prompt; a plain
+    // `desktop_screenshot` is what forces the Screen Recording prompt.
+    println!("[info] Attempting a harmless read-only accessibility-tree read to trigger the Accessibility permission prompt...");
+    let snapshot = driver.call("desktop_snapshot", serde_json::json!({})).await;
+    println!("[info] Attempting a harmless read-only screen capture to trigger the Screen Recording permission prompt...");
+    let screenshot = driver.call("desktop_screenshot", serde_json::json!({})).await;
+    match (snapshot, screenshot) {
+        (Ok(_), Ok(_)) => println!("[info] Both actions completed. If system permission dialogs appeared, approve them, then re-run --grant-permissions to confirm."),
+        (snapshot, screenshot) => {
+            if let Err(cause) = snapshot { println!("[warn] Accessibility-tree read failed ({cause})."); }
+            if let Err(cause) = screenshot { println!("[warn] Screen capture failed ({cause})."); }
+            println!("[warn] If a system permission dialog appeared for either, approve it in System Settings (macOS: Privacy & Security > Accessibility and Screen Recording) or your Linux desktop's permission manager, then re-run --grant-permissions to confirm.");
+        }
     }
 }
 

@@ -49,6 +49,11 @@ pub enum Incoming {
         protocol_version: u32,
         reason: String,
     },
+    #[serde(rename = "approved")]
+    Approved {
+        #[serde(rename = "protocolVersion")]
+        protocol_version: u32,
+    },
     #[serde(rename = "computer.request")]
     ComputerRequest {
         #[serde(rename = "protocolVersion")]

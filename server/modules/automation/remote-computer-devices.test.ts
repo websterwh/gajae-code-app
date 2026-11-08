@@ -14,16 +14,21 @@ test('pairing tokens expire, consume once, and never persist credentials', () =>
   const registry = new RemoteComputerDeviceRegistry(values, () => now);
   const pairing = registry.issuePairing();
   const paired = registry.consumePairing(pairing.token, 'Laptop', 'linux');
-  assert.equal(paired.device.enabled, false);
+  // A manually-issued token already proves the approval step (copied out
+  // of this server's own Settings page), so a token-paired device starts
+  // enabled immediately, unlike an unattended --server-only registration.
+  assert.equal(paired.device.enabled, true);
   assert.equal(JSON.stringify([...values.values.values()]).includes(paired.credential), false);
   assert.throws(() => registry.consumePairing(pairing.token, 'Laptop', 'linux'), /invalid, expired, or already used/u);
   const expired = registry.issuePairing(); now += 10 * 60_001;
   assert.throws(() => registry.consumePairing(expired.token, 'Laptop', 'linux'), /invalid, expired, or already used/u);
 });
 
-test('disabled devices authenticate as not-yet-approved, not a dead credential', () => {
+test('a token-paired device authenticates immediately; an untrusted one is not-yet-approved, not dead', () => {
   const registry = new RemoteComputerDeviceRegistry(storage());
   const paired = registry.consumePairing(registry.issuePairing().token, 'Laptop', 'linux');
+  assert.equal(registry.authenticate(paired.device.id, paired.credential).id, paired.device.id);
+  registry.update(paired.device.id, { enabled: false });
   assert.throws(() => registry.authenticate(paired.device.id, paired.credential), /not-yet-approved/u);
   registry.update(paired.device.id, { enabled: true });
   assert.equal(registry.authenticate(paired.device.id, paired.credential).id, paired.device.id);
