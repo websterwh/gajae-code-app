@@ -156,6 +156,20 @@ router.post('/sessions', asyncHandler(async (req: Request, res: Response) => {
   res.status(201).json(createApiSuccessResponse(await sessionsService.createAppSession(providerFrom(body.provider), projectPath)));
 }));
 
+// Native fork (/fork) and the branch-at-an-entry step behind the message edit
+// action. Both answer with the new app session id so the client can open it.
+router.post('/sessions/:sessionId/fork', asyncHandler(async (req: Request, res: Response) => {
+  res.status(201).json(createApiSuccessResponse(await sessionsService.branchSession(sessionFrom(req.params.sessionId))));
+}));
+
+router.post('/sessions/:sessionId/branch', asyncHandler(async (req: Request, res: Response) => {
+  const entryId = objectBody(req.body).entryId;
+  if (typeof entryId !== 'string' || !entryId.trim()) {
+    return invalid('A message to branch from is required.', 'INVALID_BRANCH_ENTRY');
+  }
+  res.status(201).json(createApiSuccessResponse(await sessionsService.branchSession(sessionFrom(req.params.sessionId), entryId)));
+}));
+
 router.post('/worktree-sessions', asyncHandler(async (req: Request, res: Response) => {
   const body = objectBody(req.body);
   providerFrom(body.provider);

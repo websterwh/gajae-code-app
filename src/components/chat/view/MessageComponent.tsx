@@ -19,6 +19,7 @@ import { authenticatedFetch } from '../../../utils/api';
 
 import ChatMessageImages from './ChatMessageImages';
 import { Markdown } from './Markdown';
+import MessageBranchControl from './MessageBranchControl';
 import MessageCopyControl from './MessageCopyControl';
 import MessageSpeakControl from './MessageSpeakControl';
 
@@ -107,6 +108,9 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, d
     message.isToolUse && COPY_HIDDEN_TOOL_NAMES.has(String(message.toolName || ''))
   );
   const shouldShowUserCopyControl = message.type === 'user' && userCopyContent.trim().length > 0;
+  // Provider message ids are the transcript entry ids, optionally suffixed per
+  // part ("<entry>:text"), so the entry a branch is taken at is the prefix.
+  const userBranchEntryId = message.type === 'user' ? String(message.id ?? '').split(':')[0] : '';
   const shouldShowAssistantCopyControl = message.type === 'assistant' &&
     assistantCopyContent.trim().length > 0 &&
     !isCommandOrFileEditToolResponse &&
@@ -188,6 +192,13 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, d
                 <div className="pointer-events-none absolute top-full right-1 z-10 mt-0.5 flex items-center justify-end gap-1 text-[11px] whitespace-nowrap text-muted-foreground opacity-0 transition-opacity group-hover/turn:pointer-events-auto group-hover/turn:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100">
                   {shouldShowUserCopyControl && (
                     <MessageCopyControl content={userCopyContent} messageType="user" />
+                  )}
+                  {shouldShowUserCopyControl && message.sessionId && userBranchEntryId && (
+                    <MessageBranchControl
+                      sessionId={message.sessionId}
+                      entryId={userBranchEntryId}
+                      content={userCopyContent}
+                    />
                   )}
                   <span>{formattedTime}</span>
                 </div>

@@ -133,7 +133,20 @@ export function useChatComposerState(args: UseChatComposerStateArgs) {
   const login = useCallback((provider?: string) => { if (isComposerSealed()) return; resetBox(setInput, inputRef, setAttachedImages, () => undefined, setExpanded, textareaRef); eraseDraft(); onLogin?.(provider); }, [eraseDraft, onLogin, setAttachedImages, setInput]);
   const palette = usePaletteOps();
   const showCostModal = useCallback(() => { const parts = tokenBudget?.breakdown && typeof tokenBudget.breakdown === 'object' ? tokenBudget.breakdown as Record<string, unknown> : {}; const inTokens = Number(tokenBudget?.inputTokens ?? parts.input); const outTokens = Number(tokenBudget?.outputTokens ?? parts.output); const used = Number(tokenBudget?.used); const total = Number(tokenBudget?.total); setModal({ kind: 'cost', data: { tokenUsage: { used: Number.isFinite(used) ? used : (Number.isFinite(inTokens) ? inTokens : 0) + (Number.isFinite(outTokens) ? outTokens : 0), total: Number.isFinite(total) ? total : 0 }, ...(Number.isFinite(inTokens) || Number.isFinite(outTokens) ? { tokenBreakdown: { input: Number.isFinite(inTokens) ? inTokens : 0, output: Number.isFinite(outTokens) ? outTokens : 0 } } : {}), provider: typeof tokenBudget?.provider === 'string' ? tokenBudget.provider : 'gjc', model: typeof tokenBudget?.model === 'string' ? tokenBudget.model : gjcModel } }); }, [gjcModel, tokenBudget]);
-  const applyAppCommand = useCallback((command: AppUiCommand) => { if (isComposerSealed()) return; return runAppUiCommand(command, { openSessionPicker: palette.openSessionPicker, startNewChat: palette.startNewChat, openSettings: () => onShowSettings ? onShowSettings() : palette.openSettings(), openModelPicker: () => setModelPickerTrigger((n) => n + 1), openCostModal: showCostModal }); }, [onShowSettings, palette, showCostModal]);
+  // Forking is the SDK's own fork: the server hands back the app session it
+  // registered for the successor, so the picker lists it like any other. The
+  // answer arrives after a round trip, hence the refresh before opening.
+  const forkSession = useCallback(() => {
+    if (!conversation) { palette.openSessionPicker(); return; }
+    void authenticatedFetch(`/api/providers/sessions/${encodeURIComponent(conversation)}/fork`, { method: 'POST', headers: {}, body: '{}' })
+      .then(async (response) => {
+        if (!response.ok) return;
+        await palette.refreshProjects();
+        palette.openSessionPicker();
+      })
+      .catch(() => undefined);
+  }, [conversation, palette]);
+  const applyAppCommand = useCallback((command: AppUiCommand) => { if (isComposerSealed()) return; return runAppUiCommand(command, { openSessionPicker: palette.openSessionPicker, startNewChat: palette.startNewChat, openSettings: () => onShowSettings ? onShowSettings() : palette.openSettings(), openModelPicker: () => setModelPickerTrigger((n) => n + 1), openCostModal: showCostModal, forkSession }); }, [forkSession, onShowSettings, palette, showCostModal]);
 
   const { slashCommands, slashCommandsCount, filteredCommands, frequentCommands, commandQuery, showCommandMenu, selectedCommandIndex, resetCommandMenuState, handleCommandSelect, handleToggleCommandMenu, handleCommandInputChange, handleCommandMenuKeyDown } = useSlashCommands({ selectedProject, executionCwd, provider: 'gjc', sessionId: conversation, input, setInput, textareaRef, onLoginCommand: login, onAppCommand: (command) => { const app = findAppUiCommand(command.name); if (app) applyAppCommand(app); } });
   const { showFileDropdown, filteredFiles, selectedFileIndex, renderInputWithMentions, selectFile, setCursorPosition, handleFileMentionsKeyDown } = useFileMentions({ selectedProject, executionCwd, sessionId: conversation, input, setInput, textareaRef });

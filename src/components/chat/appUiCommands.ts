@@ -23,7 +23,8 @@ type AppUiCommandActionId =
   | 'start-new-chat'
   | 'open-settings'
   | 'open-model-picker'
-  | 'open-cost-modal';
+  | 'open-cost-modal'
+  | 'fork-session';
 
 export type AppUiCommand = {
   name: string;
@@ -46,6 +47,7 @@ export type AppUiCommandActions = {
   openSettings: () => void;
   openModelPicker: () => void;
   openCostModal: () => void;
+  forkSession: () => void;
 };
 
 export const APP_UI_COMMANDS: readonly AppUiCommand[] = [
@@ -92,6 +94,14 @@ export const APP_UI_COMMANDS: readonly AppUiCommand[] = [
     type: 'app',
     actionId: 'open-cost-modal',
   },
+  {
+    name: '/fork',
+    description: 'Continue this session in a new one (native fork)',
+    namespace: 'app',
+    type: 'app',
+    actionId: 'fork-session',
+    interceptWithArgs: false,
+  },
 ];
 
 const APP_UI_COMMANDS_BY_NAME = new Map(
@@ -120,6 +130,9 @@ export function runAppUiCommand(command: AppUiCommand, actions: AppUiCommandActi
       break;
     case 'open-cost-modal':
       actions.openCostModal();
+      break;
+    case 'fork-session':
+      actions.forkSession();
       break;
   }
 }

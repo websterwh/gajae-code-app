@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 
+import { getGjcWorkerSupervisor } from '@/gjc-worker-client.js';
 import { projectsDb, sessionsDb } from '@/modules/database/index.js';
 import { providerRegistry } from '@/modules/providers/provider.registry.js';
 import { resolveSessionProjectPath } from '@/modules/providers/services/session-project-path.service.js';
@@ -96,6 +97,31 @@ export const sessionsService = {
     const sessionId = randomUUID();
     sessionsDb.createAppSession(sessionId, provider, project);
     return { sessionId, provider, projectPath: project };
+  },
+
+  /**
+   * Native fork (whole session) or native branch at one entry — the step `/tree`
+   * performs — followed by the app-side row that points at the successor.
+   *
+   * The SDK owns the transcript: `SessionManager.fork()` copies it and
+   * `createBranchedSession(entryId)` starts a new file at that entry. What the
+   * SDK cannot know is the app's own mapping, and without it the successor is
+   * invisible: history, the sidebar and resume all read a row, so one is
+   * registered for the id the worker returns.
+   */
+  async branchSession(sessionId: string, entryId?: string): Promise<{ sessionId: string; providerSessionId: string }> {
+    const row = requiredSession(sessionId);
+    if (row.provider !== 'gjc' || !row.provider_session_id) throw sessionNotFound(sessionId);
+    const projectPath = await resolveSessionProjectPath(row.project_path ?? '');
+    const scope = { appSessionId: row.session_id, cwd: projectPath, owner: `session:${row.session_id}` };
+    const supervisor = getGjcWorkerSupervisor();
+    const providerSessionId = entryId
+      ? await supervisor.branchSession(scope, row.provider_session_id, entryId)
+      : await supervisor.forkSession(scope, row.provider_session_id);
+    return {
+      sessionId: sessionsDb.createSession(providerSessionId, row.provider, projectPath),
+      providerSessionId,
+    };
   },
 
   async fetchHistory(sessionId: string, options: Pick<FetchHistoryOptions, 'limit' | 'offset' | 'includeImages'> = {}): Promise<FetchHistoryResult> {

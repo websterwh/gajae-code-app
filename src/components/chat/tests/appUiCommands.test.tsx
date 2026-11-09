@@ -69,6 +69,7 @@ test('runAppUiCommand dispatches each action id to its action', () => {
     openSettings: () => { calls.push('open-settings'); },
     openModelPicker: () => { calls.push('open-model-picker'); },
     openCostModal: () => { calls.push('open-cost-modal'); },
+    forkSession: () => { calls.push('fork-session'); },
   };
 
   for (const command of APP_UI_COMMANDS) {
