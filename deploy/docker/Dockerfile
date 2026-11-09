@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tar \
     gzip \
     unzip \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb
 
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
     apt-get install -y --no-install-recommends nodejs && \
@@ -45,6 +45,11 @@ RUN git clone "${APP_REPOSITORY}" . && \
     printf '%s\n' "${APP_REPOSITORY_WEB}/releases/latest/download/gajae-agent-desktop-companion-{platform}" > /opt/gajae-app/.companion_download_template && \
     printf '%s\n' "${APP_REPOSITORY_WEB}" > /opt/gajae-app/.image_repository && \
     printf '%s\n' "${APP_REF}" > /opt/gajae-app/.image_ref
+
+# Split the runtime tree: the dependency directory changes only when the lockfile
+# does, while the code changes on every commit. Kept as two directories so the
+# final image can layer them separately.
+RUN mkdir -p /opt/gajae-deps && mv /opt/gajae-app/node_modules /opt/gajae-deps/node_modules
 
 FROM node:22-bookworm-slim
 
@@ -88,7 +93,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpango-1.0-0 \
     libcairo2 \
     libasound2 \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb
 
 # Set default editor alternative to nano
 RUN update-alternatives --set editor /bin/nano 2>/dev/null || true
@@ -111,7 +116,13 @@ RUN chmod +x /usr/local/bin/install-github-app
 # Copy the application built from the selected fork revision. The companion
 # download template is derived at build time from APP_REPOSITORY, so every
 # fork's image points at its own GitHub Releases without manual configuration.
+# Dependencies first, code second. Docker keeps each COPY as its own layer, so a
+# redeploy after a code change transfers the small code layer and reuses the
+# dependency layer, instead of pulling the whole ~700 MB tree every time.
+COPY --from=app-build /opt/gajae-deps /opt/gajae-deps
 COPY --from=app-build /opt/gajae-app /opt/gajae-app
+# Node resolves the tree through this link; the app directory itself stays code-only.
+RUN ln -sfn /opt/gajae-deps/node_modules /opt/gajae-app/node_modules
 
 # Install global CLI wrapper for convenience.
 RUN printf '#!/bin/sh\nexec node /opt/gajae-app/dist-server/server/cli.js "$@"\n' > /usr/local/bin/gajae-app && \
