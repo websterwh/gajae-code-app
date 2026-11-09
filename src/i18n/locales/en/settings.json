@@ -126,7 +126,8 @@
     "notifications": "Notifications",
     "automation": "Automation",
     "about": "About",
-    "permissions": "Permissions"
+    "permissions": "Permissions",
+    "authentication": "Authentication"
   },
   "automation": {
     "browserBackend": {
@@ -286,5 +287,35 @@
     "empty": "Every workspace runs without asking, as the GJC CLI does.",
     "loading": "Loading…",
     "error": "Permissions could not be loaded."
+  },
+  "authentication": {
+    "title": "Sign-in",
+    "intro": "Let the owner sign in with an OpenID Connect provider. Endpoints come from the provider's discovery document.",
+    "enabled": "Require sign-in",
+    "enabledHint": "Until an issuer, client id and secret are all saved, the gate stays off so a typo cannot lock you out.",
+    "issuer": "Issuer URL",
+    "issuerHint": "Base URL of the provider, e.g. https://auth.example.com",
+    "clientId": "Client ID",
+    "clientSecret": "Client secret",
+    "secretKept": "A secret is stored. Leave empty to keep it.",
+    "scopes": "Scopes",
+    "scopesHint": "openid is always requested.",
+    "redirectUri": "Redirect URI",
+    "redirectUriHint": "Leave empty to derive it from the request: /api/auth/oidc/callback",
+    "allowedDomains": "Allowed email domains",
+    "allowedHint": "Comma separated. Empty allows any verified identity.",
+    "allowedEmails": "Allowed emails",
+    "discover": "Test discovery",
+    "save": "Save",
+    "saved": "Saved",
+    "saveFailed": "The settings could not be saved.",
+    "discoveryFailed": "Discovery failed.",
+    "endpoints": "Discovered endpoints",
+    "session": "Your session",
+    "sessionHint": "Sign-in is not required while the gate is off.",
+    "signedInAs": "Signed in as {{email}}",
+    "signedOut": "Not signed in",
+    "signIn": "Sign in",
+    "signOut": "Sign out"
   }
 }
