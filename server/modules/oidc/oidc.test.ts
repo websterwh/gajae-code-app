@@ -4,7 +4,7 @@ import { createServer, type Server } from 'node:http';
 import test from 'node:test';
 
 import { normalizeIssuer, oidcEnforcing, validateOidcConfig, type OidcConfig } from './oidc.config.js';
-import { isExemptPath } from './oidc.middleware.js';
+import { clientAddressAllowed, isExemptPath } from './oidc.middleware.js';
 import {
   buildAuthorizeUrl,
   completeSignIn,
@@ -64,6 +64,9 @@ const configFor = (issuer: string): OidcConfig => ({
   redirectUri: '',
   allowedDomains: [],
   allowedEmails: [],
+  allowedGroups: [],
+  allowLocal: false,
+  allowedIps: [],
 });
 
 const future = () => Math.floor(Date.now() / 1000) + 300;
@@ -146,12 +149,39 @@ test('the authorize URL carries PKCE, state and nonce', () => {
 
 test('email gates allow by list, by domain, or not at all', () => {
   const base = configFor('https://auth.example.com');
-  const identity = { sub: 's', email: 'owner@example.com', emailVerified: true };
+  const identity = { sub: 's', email: 'owner@example.com', emailVerified: true, groups: [] };
   assert.equal(identityAllowed(base, identity), true);
   assert.equal(identityAllowed({ ...base, allowedDomains: ['example.com'] }, identity), true);
   assert.equal(identityAllowed({ ...base, allowedDomains: ['other.com'] }, identity), false);
   assert.equal(identityAllowed({ ...base, allowedEmails: ['owner@example.com'] }, identity), true);
   assert.equal(identityAllowed(base, { ...identity, emailVerified: false }), false);
+});
+
+test('groups gate sign-in and every configured list has to pass', () => {
+  const base = configFor('https://auth.example.com');
+  const identity = { sub: 's', email: 'owner@example.com', emailVerified: true, groups: ['Gajae-Admins'] };
+  assert.equal(identityAllowed({ ...base, allowedGroups: ['gajae-admins'] }, identity), true);
+  assert.equal(identityAllowed({ ...base, allowedGroups: ['other'] }, identity), false);
+  assert.equal(identityAllowed({ ...base, allowedGroups: ['other'] }, { ...identity, groups: [] }), false);
+  assert.equal(identityAllowed({ ...base, allowedEmails: ['owner@example.com'], allowedGroups: ['gajae-admins'] }, identity), true);
+  assert.equal(identityAllowed({ ...base, allowedEmails: ['someone@example.com'], allowedGroups: ['gajae-admins'] }, identity), false);
+});
+
+test('local access is granted per address, and defaults to private ranges', () => {
+  assert.equal(clientAddressAllowed('127.0.0.1', []), true);
+  assert.equal(clientAddressAllowed('::1', []), true);
+  assert.equal(clientAddressAllowed('::ffff:192.168.1.40', []), true);
+  assert.equal(clientAddressAllowed('172.20.0.3', []), true);
+  assert.equal(clientAddressAllowed('8.8.8.8', []), false);
+
+  assert.equal(clientAddressAllowed('192.168.1.40', ['192.168.1.0/24']), true);
+  assert.equal(clientAddressAllowed('192.168.2.40', ['192.168.1.0/24']), false);
+  assert.equal(clientAddressAllowed('10.0.0.5', ['192.168.1.0/24', '10.0.0.5']), true);
+  assert.equal(clientAddressAllowed('8.8.8.8', ['192.168.1.0/24']), false);
+  assert.equal(clientAddressAllowed('192.168.1.40', ['0.0.0.0/0']), true);
+
+  assert.match(String(validateOidcConfig({ ...configFor('https://a.example'), allowedIps: ['999.1.1.1'] })), /not an IP/u);
+  assert.equal(validateOidcConfig({ ...configFor('https://a.example'), allowedIps: ['192.168.1.0/24'] }), null);
 });
 
 test('the gate is inert until the config is complete, and exempts automation', () => {

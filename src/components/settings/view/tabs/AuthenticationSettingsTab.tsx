@@ -17,6 +17,9 @@ type OidcConfig = {
   redirectUri: string;
   allowedDomains: string[];
   allowedEmails: string[];
+  allowedGroups: string[];
+  allowLocal: boolean;
+  allowedIps: string[];
 };
 
 type Discovery = {
@@ -42,6 +45,9 @@ const emptyConfig: OidcConfig = {
   redirectUri: '',
   allowedDomains: [],
   allowedEmails: [],
+  allowedGroups: [],
+  allowLocal: false,
+  allowedIps: [],
 };
 
 export default function AuthenticationSettingsTab() {
@@ -88,6 +94,9 @@ export default function AuthenticationSettingsTab() {
         redirectUri: config.redirectUri,
         allowedDomains: config.allowedDomains,
         allowedEmails: config.allowedEmails,
+        allowedGroups: config.allowedGroups,
+        allowLocal: config.allowLocal,
+        allowedIps: config.allowedIps,
         ...(secret ? { clientSecret: secret } : {}),
         ...changes,
       }),
@@ -172,6 +181,10 @@ export default function AuthenticationSettingsTab() {
             <input className={inputClass} value={config.allowedEmails.join(', ')} placeholder="owner@example.com"
               onChange={(event) => patch({ allowedEmails: event.target.value.split(',').map((value) => value.trim()).filter(Boolean) })} />
           </SettingsRow>
+          <SettingsRow label={t('authentication.allowedGroups')} description={t('authentication.allowedGroupsHint')} className="flex-col items-stretch gap-2">
+            <input className={inputClass} value={config.allowedGroups.join(', ')} placeholder="gajae-admins"
+              onChange={(event) => patch({ allowedGroups: event.target.value.split(',').map((value) => value.trim()).filter(Boolean) })} />
+          </SettingsRow>
           <div className="flex flex-wrap items-center gap-2 border-t border-border px-4 py-3">
             <button type="button" onClick={() => void discover()} disabled={busy || !config.issuer}
               className="inline-flex items-center gap-2 rounded-lg border border-input px-3 py-2 text-sm font-medium text-foreground disabled:opacity-50">
@@ -194,6 +207,21 @@ export default function AuthenticationSettingsTab() {
               </span>
             )}
           </div>
+        </SettingsCard>
+      </SettingsSection>      <SettingsSection title={t('authentication.localTitle')}>
+        <SettingsCard>
+          <p className="px-4 py-3 text-sm text-muted-foreground">{t('authentication.localIntro')}</p>
+          <SettingsRow label={t('authentication.localAccess')} description={t('authentication.localAccessHint')}>
+            <SettingsToggle
+              checked={config.allowLocal}
+              onChange={(allowLocal) => { patch({ allowLocal }); void save({ allowLocal }); }}
+              ariaLabel={t('authentication.localAccess')}
+            />
+          </SettingsRow>
+          <SettingsRow label={t('authentication.allowedIps')} description={t('authentication.allowedIpsHint')} className="flex-col items-stretch gap-2">
+            <input className={inputClass} value={config.allowedIps.join(', ')} placeholder="192.168.1.0/24, 10.0.0.5"
+              onChange={(event) => patch({ allowedIps: event.target.value.split(',').map((value) => value.trim()).filter(Boolean) })} />
+          </SettingsRow>
         </SettingsCard>
       </SettingsSection>
 

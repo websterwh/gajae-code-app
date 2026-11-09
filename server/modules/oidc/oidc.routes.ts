@@ -82,6 +82,7 @@ export function createOidcRouter() {
       enabled: config.enabled,
       configured: oidcEnforcing(config),
       issuer: config.issuer,
+      localAccess: config.allowLocal,
       loginUrl: '/api/auth/oidc/start',
     });
   });
@@ -104,6 +105,9 @@ export function createOidcRouter() {
       redirectUri: body.redirectUri === undefined ? undefined : text(body.redirectUri, 512),
       allowedDomains: body.allowedDomains === undefined ? undefined : stringList(body.allowedDomains),
       allowedEmails: body.allowedEmails === undefined ? undefined : stringList(body.allowedEmails),
+      allowedGroups: body.allowedGroups === undefined ? undefined : stringList(body.allowedGroups),
+      allowLocal: typeof body.allowLocal === 'boolean' ? body.allowLocal : undefined,
+      allowedIps: body.allowedIps === undefined ? undefined : stringList(body.allowedIps),
     });
     const problem = validateOidcConfig(next);
     if (problem) return fail(response, 400, 'OIDC_CONFIG_INVALID', problem);
@@ -174,7 +178,12 @@ export function createOidcRouter() {
       serializeCookie(SESSION_COOKIE, session, cookieAttributes(request.secure, SESSION_TTL_SECONDS)),
       clearedCookie(TRANSACTION_COOKIE, request.secure),
     ]);
-    return response.redirect(302, '/');
+    // Only a same-app path is acceptable: a sealed cookie must never become an
+    // open redirect into another origin.
+    const destination = transaction.returnTo.startsWith('/') && !transaction.returnTo.startsWith('//')
+      ? transaction.returnTo
+      : '/';
+    return response.redirect(302, destination);
   }));
 
   router.post('/logout', (request, response) => {
