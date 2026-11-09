@@ -11,7 +11,7 @@ import {
   buildStoredImageRecords, ensureImageAssetsDir,
   isAllowedImageMimeType, resolveImageAssetFile,
 } from '@/modules/assets/services/image-assets.service.js';
-import { asyncHandler } from '@/shared/utils.js';
+import { asyncHandler, routeParam } from '@/shared/utils.js';
 
 const assetsRouter = express.Router();
 
@@ -112,7 +112,7 @@ assetsRouter.post('/images', asyncHandler(async (request, response) => {
 }));
 
 assetsRouter.get('/images/:filename', asyncHandler(async (request, response) => {
-  const filename = resolveImageAssetFile(request.params.filename);
+  const filename = resolveImageAssetFile(routeParam(request.params.filename));
   if (filename === null) {
     response.status(400).json({ error: 'Invalid asset filename' });
     return;
