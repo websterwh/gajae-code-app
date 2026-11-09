@@ -450,7 +450,7 @@ async fn maybe_prompt_permissions(driver: &Arc<Driver>) {
         .ok()
         .and_then(|value| all_permissions_granted(&value));
     if granted == Some(false) {
-        eprintln!("[warn] agent-desktop does not yet have the OS permissions it needs on this machine.");
+        eprintln!("[warn] The OS is blocking agent-desktop on this machine (a permission is reported as denied).");
         grant_permissions(driver).await;
     }
 }
@@ -494,9 +494,19 @@ async fn report_permissions(driver: &Arc<Driver>) -> Option<bool> {
     match driver.call("desktop_permissions", serde_json::json!({})).await {
         Ok(value) => {
             if let Some(data) = value.get("structuredContent").and_then(|v| v.get("data")).and_then(serde_json::Value::as_object) {
+                let mut undetermined = Vec::new();
                 for (name, entry) in data {
                     let state = entry.get("state").and_then(serde_json::Value::as_str).unwrap_or("unknown");
                     println!("[info]   {name}: {state}");
+                    if is_undetermined(state) {
+                        undetermined.push(name.as_str());
+                    }
+                }
+                if !undetermined.is_empty() {
+                    println!(
+                        "[info] {} could not be determined by agent-desktop. That is not a denial - macOS only reports a permission as denied once it is actually blocking agent-desktop, and this background check never prompts for consent. Ignore it unless a tool call fails with PERM_DENIED.",
+                        undetermined.join(", ")
+                    );
                 }
             } else {
                 println!("[info] Current permission state: {value}");
@@ -507,19 +517,34 @@ async fn report_permissions(driver: &Arc<Driver>) -> Option<bool> {
     }
 }
 
+/// The states agent-desktop reports when the OS is actively blocking it.
+/// Everything else - `granted`, `not_required`, and `unknown` - is not a
+/// denial. `unknown` in particular is a statement about the *check*, not
+/// about the permission: macOS reports automation access (and others) as
+/// unknown whenever it cannot determine the state on its own, and treating
+/// that as "missing" made the companion claim the machine was missing
+/// permissions that were already granted, then request them again and print
+/// the same unknown state - three misleading lines per connect.
+const DENIED_PERMISSION_STATES: &[&str] = &["denied", "not_granted", "missing", "blocked", "restricted"];
+
+fn is_undetermined(state: &str) -> bool {
+    let normalized = state.trim().to_ascii_lowercase();
+    normalized.is_empty() || normalized == "unknown"
+}
+
 /// `desktop_permissions`'s envelope nests the real check under
 /// `structuredContent.data`, each field shaped `{state: "granted" | ...}`.
 /// Returns `None` when the shape is unrecognized (treated as "unknown", not
 /// "denied", by callers) and `Some(false)` only when a field explicitly
-/// says it is not granted.
+/// reports a blocking (denied) state.
 fn all_permissions_granted(value: &serde_json::Value) -> Option<bool> {
     let data = value.get("structuredContent")?.get("data")?.as_object()?;
     if data.is_empty() {
         return None;
     }
     Some(data.values().all(|entry| {
-        let state = entry.get("state").and_then(serde_json::Value::as_str).unwrap_or("");
-        state == "granted" || state == "not_required"
+        let state = entry.get("state").and_then(serde_json::Value::as_str).unwrap_or("").trim().to_ascii_lowercase();
+        !DENIED_PERMISSION_STATES.contains(&state.as_str())
     }))
 }
 

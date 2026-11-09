@@ -121,7 +121,9 @@ async fn initialize(running: &mut Running) -> std::io::Result<()> {
         "params": {
             "protocolVersion": "2024-11-05",
             "capabilities": {},
-            "clientInfo": { "name": "gajae-agent-desktop-companion", "version": "0.1.0" },
+            // Reported from Cargo.toml so it can never drift from the built
+            // binary the way a hand-copied literal does.
+            "clientInfo": { "name": "gajae-agent-desktop-companion", "version": env!("CARGO_PKG_VERSION") },
         },
     });
     send(running, &init).await?;
