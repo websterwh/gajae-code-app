@@ -111,6 +111,30 @@ function windowRecords(value: unknown): AgentDesktopWindow[] {
     : [];
 }
 
+/**
+ * Driver dead ends that read as final but are not.
+ *
+ * `desktop_snapshot {app}` answers "Application 'X' is running but has no
+ * matching window" whenever the app owns no window the accessibility tree can
+ * see: Finder before one is opened, or an app whose last window was closed. A
+ * live session read that as "the data does not exist" and told the person their
+ * Downloads folder was empty. The message now names the next move, so the loop
+ * continues instead of ending on a wrong conclusion.
+ */
+function computerRecoveryHint(tool: string, message: string): string {
+  if (/has no matching window/u.test(message)) {
+    return `${message}\nThe application is running but owns no window the accessibility tree can see. Open or restore one and snapshot again: for Finder send desktop_press {combo:"cmd+n", app:"Finder"} (cmd+shift+d opens Downloads), otherwise retry desktop_launch {app, activate:true} or pick a window from desktop_list_windows.`;
+  }
+  if (/is not exposed through accessibility/u.test(message)) {
+    return `${message}\n${tool} cannot read that window. Use a window from desktop_list_windows whose "accessible" is true, or address the app instead of the window_id.`;
+  }
+  return message;
+}
+
+function computerFailure(tool: string, cause: unknown): Error {
+  return new Error(computerRecoveryHint(tool, cause instanceof Error ? cause.message : String(cause)));
+}
+
 function agentDesktopToolError(value: unknown): string | null {
   const record = object(value);
   if (record.isError !== true) return null;
@@ -545,9 +569,16 @@ export class AutomationService {
           throw new Error(`Computer access to ${label ?? application ?? 'this application'} was not granted.`);
         }
       }
-      const result = await this.transport().call(sessionId, tool, scopedArgs, signal);
+      let result: unknown;
+      try {
+        result = await this.transport().call(sessionId, tool, scopedArgs, signal);
+      } catch (cause) {
+        // The remote transport rejects instead of returning isError; give both
+        // shapes the same recovery guidance.
+        throw computerFailure(tool, cause);
+      }
       const error = agentDesktopToolError(result);
-      if (error) throw new Error(error);
+      if (error) throw new Error(computerRecoveryHint(tool, error));
       this.rememberSnapshotApplication(sessionId, tool, scopedArgs, result);
       return result;
     } finally { release(); }

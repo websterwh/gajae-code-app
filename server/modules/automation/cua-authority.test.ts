@@ -242,6 +242,50 @@ test('session lifecycle tools need no application identity', async (t) => {
   assert.deepEqual(dispatched, [{ tool: 'desktop_session_start', args: {} }]);
 });
 
+test('a driver dead end names the recovery path instead of ending the loop', async (t) => {
+  const { instance, grants } = service(t);
+  grants.grant({ kind: 'application', value: 'TextEdit', scope: 'session', sessionId: 'session-a' });
+  const INVENTORY_REPLY = (tool: string, args: Record<string, unknown>) =>
+    (tool === 'desktop_list_windows' || tool === 'desktop_list_apps') && Object.keys(args).length === 0;
+
+  // agent-desktop's own text for an app that owns no visible window.
+  instance.cua.call = async () => ({
+    isError: true,
+    content: [{ type: 'text', text: "Application 'TextEdit' is running but has no matching window" }],
+  });
+  await assert.rejects(
+    instance.callComputer('session-a', 'desktop_snapshot', { app: 'TextEdit' }),
+    /no matching window[\s\S]*desktop_press \{combo:"cmd\+n"/u,
+  );
+
+  // A window-addressed dead end: identity still resolves from the live
+  // inventory, so the call reaches the driver and gains the hint.
+  instance.cua.call = async (tool, args) => INVENTORY_REPLY(tool, args)
+    ? INVENTORY
+    : { isError: true, content: [{ type: 'text', text: "Window 'w-7' exists but is not exposed through accessibility" }] };
+  await assert.rejects(
+    instance.callComputer('session-a', 'desktop_snapshot', { window_id: 'w-7' }),
+    /not exposed through accessibility[\s\S]*desktop_list_windows[\s\S]*accessible/u,
+  );
+
+  // The remote transport rejects rather than returning isError; same hint.
+  instance.cua.call = async (tool, args) => {
+    if (INVENTORY_REPLY(tool, args)) return INVENTORY;
+    throw new Error("Window 'w-7' exists but is not exposed through accessibility");
+  };
+  await assert.rejects(
+    instance.callComputer('session-a', 'desktop_snapshot', { window_id: 'w-7' }),
+    /not exposed through accessibility[\s\S]*desktop_list_windows/u,
+  );
+
+  // An unrelated driver error is passed through untouched.
+  instance.cua.call = async () => ({ isError: true, content: [{ type: 'text', text: 'Permission denied' }] });
+  await assert.rejects(
+    instance.callComputer('session-a', 'desktop_snapshot', { app: 'TextEdit' }),
+    { message: 'Permission denied' },
+  );
+});
+
 /* -------------------------------------------------------------------------- */
 /* The guard sits at the driver transport                                     */
 /* -------------------------------------------------------------------------- */
