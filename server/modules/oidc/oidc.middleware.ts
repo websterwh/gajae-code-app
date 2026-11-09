@@ -35,12 +35,14 @@ export function isExemptPath(pathname: string): boolean {
 }
 
 /**
- * The deliberate break-glass switch. When the operator runs with no
- * authentication at all, a broken or half-configured provider must never be able
- * to lock them out of their own app, so the gate stays inert.
+ * The deliberate break-glass switch: NO_AUTH (or GAJAE_NO_AUTH) turns the gate
+ * off without touching the stored settings, so a broken provider cannot lock the
+ * operator out. GAJAE_ALLOW_UNAUTH_REMOTE is deliberately not consulted here -
+ * container images ship it as 1 for the bind guard, which would have switched
+ * sign-in off for every deployment that never asked for that.
  */
-export function unauthRemoteAllowed(): boolean {
-  return process.env.GAJAE_ALLOW_UNAUTH_REMOTE === '1';
+export function noAuthEnabled(): boolean {
+  return process.env.NO_AUTH === '1' || process.env.GAJAE_NO_AUTH === '1';
 }
 
 const stripMappedV4 = (address: string): string => address.replace(/^::ffff:/iu, '');
@@ -107,7 +109,7 @@ export function createOidcGate() {
   return (request: Request, response: Response, next: NextFunction) => {
     const config = readOidcConfig();
     if (isDesktopMode() || !oidcEnforcing(config) || isExemptPath(request.path)) return next();
-    if (unauthRemoteAllowed()) return next();
+    if (noAuthEnabled()) return next();
 
     if (config.allowLocal) {
       const address = request.ip ?? request.socket.remoteAddress ?? '';

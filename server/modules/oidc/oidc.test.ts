@@ -4,7 +4,7 @@ import { createServer, type Server } from 'node:http';
 import test from 'node:test';
 
 import { normalizeIssuer, oidcEnforcing, validateOidcConfig, type OidcConfig } from './oidc.config.js';
-import { clientAddressAllowed, isExemptPath, unauthRemoteAllowed } from './oidc.middleware.js';
+import { clientAddressAllowed, isExemptPath, noAuthEnabled } from './oidc.middleware.js';
 import {
   buildAuthorizeUrl,
   completeSignIn,
@@ -63,8 +63,6 @@ const configFor = (issuer: string): OidcConfig => ({
   clientSecret: 'secret',
   scopes: 'openid profile email',
   redirectUri: '',
-  allowedDomains: [],
-  allowedEmails: [],
   allowedGroups: [],
   allowLocal: false,
   allowedIps: [],
@@ -148,13 +146,10 @@ test('the authorize URL carries PKCE, state and nonce', () => {
   assert.ok(url.searchParams.get('code_challenge'));
 });
 
-test('email gates allow by list, by domain, or not at all', () => {
+test('without an allowed group, any identity the provider signed in is accepted', () => {
   const base = configFor('https://auth.example.com');
   const identity = { sub: 's', email: 'owner@example.com', emailVerified: true, groups: [] };
   assert.equal(identityAllowed(base, identity), true);
-  assert.equal(identityAllowed({ ...base, allowedDomains: ['example.com'] }, identity), true);
-  assert.equal(identityAllowed({ ...base, allowedDomains: ['other.com'] }, identity), false);
-  assert.equal(identityAllowed({ ...base, allowedEmails: ['owner@example.com'] }, identity), true);
   // The provider's flag is reported, not decisive: Pocket ID leaves it unset for
   // accounts it creates, which locked the owner out of an app nobody else used.
   assert.equal(identityAllowed(base, { ...identity, emailVerified: false }), true);
@@ -166,32 +161,39 @@ test('groups gate sign-in and every configured list has to pass', () => {
   assert.equal(identityAllowed({ ...base, allowedGroups: ['gajae-admins'] }, identity), true);
   assert.equal(identityAllowed({ ...base, allowedGroups: ['other'] }, identity), false);
   assert.equal(identityAllowed({ ...base, allowedGroups: ['other'] }, { ...identity, groups: [] }), false);
-  assert.equal(identityAllowed({ ...base, allowedEmails: ['owner@example.com'], allowedGroups: ['gajae-admins'] }, identity), true);
-  assert.equal(identityAllowed({ ...base, allowedEmails: ['someone@example.com'], allowedGroups: ['gajae-admins'] }, identity), false);
 });
 
 test('a rejection names the gate that refused the identity', () => {
   const base = configFor('https://auth.example.com');
   const identity = { sub: 's', email: 'owner@example.com', emailVerified: true, groups: ['staff'] };
   assert.equal(identityRejection(base, identity), null);
-  assert.match(String(identityRejection({ ...base, allowedDomains: ['other.com'] }, identity)), /domain example\.com/u);
-  assert.match(String(identityRejection({ ...base, allowedEmails: ['x@example.com'] }, identity)), /allowed list/u);
   assert.match(String(identityRejection({ ...base, allowedGroups: ['admins'] }, identity)), /staff/u);
   assert.match(String(identityRejection({ ...base, allowedGroups: ['admins'] }, { ...identity, groups: [] })), /no groups/u);
 });
 
-test('GAJAE_ALLOW_UNAUTH_REMOTE is the deliberate break-glass switch', () => {
-  const saved = process.env.GAJAE_ALLOW_UNAUTH_REMOTE;
+test('NO_AUTH is the deliberate break-glass switch, and the bind-guard var is not', () => {
+  const savedNoAuth = process.env.NO_AUTH;
+  const savedPrefixed = process.env.GAJAE_NO_AUTH;
+  const savedGuard = process.env.GAJAE_ALLOW_UNAUTH_REMOTE;
   try {
-    delete process.env.GAJAE_ALLOW_UNAUTH_REMOTE;
-    assert.equal(unauthRemoteAllowed(), false);
+    delete process.env.NO_AUTH;
+    delete process.env.GAJAE_NO_AUTH;
+    // Container images ship this as 1 for the bind guard; it must not switch
+    // sign-in off for deployments that never asked for that.
     process.env.GAJAE_ALLOW_UNAUTH_REMOTE = '1';
-    assert.equal(unauthRemoteAllowed(), true);
-    process.env.GAJAE_ALLOW_UNAUTH_REMOTE = 'true';
-    assert.equal(unauthRemoteAllowed(), false);
+    assert.equal(noAuthEnabled(), false);
+    process.env.NO_AUTH = '1';
+    assert.equal(noAuthEnabled(), true);
+    delete process.env.NO_AUTH;
+    process.env.GAJAE_NO_AUTH = '1';
+    assert.equal(noAuthEnabled(), true);
+    process.env.GAJAE_NO_AUTH = 'true';
+    assert.equal(noAuthEnabled(), false);
   } finally {
-    if (saved === undefined) delete process.env.GAJAE_ALLOW_UNAUTH_REMOTE;
-    else process.env.GAJAE_ALLOW_UNAUTH_REMOTE = saved;
+    if (savedNoAuth === undefined) delete process.env.NO_AUTH; else process.env.NO_AUTH = savedNoAuth;
+    if (savedPrefixed === undefined) delete process.env.GAJAE_NO_AUTH; else process.env.GAJAE_NO_AUTH = savedPrefixed;
+    if (savedGuard === undefined) delete process.env.GAJAE_ALLOW_UNAUTH_REMOTE;
+    else process.env.GAJAE_ALLOW_UNAUTH_REMOTE = savedGuard;
   }
 });
 

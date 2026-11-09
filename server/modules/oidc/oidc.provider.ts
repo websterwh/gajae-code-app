@@ -241,7 +241,13 @@ export async function completeSignIn(
     sub,
     email: email.toLowerCase(),
     emailVerified: claims.email_verified !== false,
-    name: typeof claims.name === 'string' ? claims.name : undefined,
+    // The display name comes from the provider, falling back to its username
+    // claim before anything renders the address.
+    name: typeof claims.name === 'string' && claims.name.trim()
+      ? claims.name.trim()
+      : typeof claims.preferred_username === 'string' && claims.preferred_username.trim()
+        ? claims.preferred_username.trim()
+        : undefined,
     groups,
   };
 }
@@ -256,23 +262,12 @@ export async function completeSignIn(
  * locked the owner out of an app nobody else could reach.
  */
 export function identityRejection(config: OidcConfig, identity: OidcIdentity): string | null {
-  const email = identity.email.toLowerCase();
-  const domain = email.slice(email.lastIndexOf('@') + 1);
-  if (config.allowedEmails.length && !config.allowedEmails.includes(email)) {
-    return 'The address is not on the allowed list.';
-  }
-  if (config.allowedDomains.length && !config.allowedDomains.includes(domain)) {
-    return `The domain ${domain} is not allowed.`;
-  }
-  if (config.allowedGroups.length) {
-    const owned = new Set(identity.groups.map((group) => group.toLowerCase()));
-    if (!config.allowedGroups.some((group) => owned.has(group.toLowerCase()))) {
-      return identity.groups.length
-        ? `None of the account's groups (${identity.groups.join(', ')}) is allowed.`
-        : 'The provider sent no groups for this account, so no allowed group could match; check the groups scope and the account memberships.';
-    }
-  }
-  return null;
+  if (!config.allowedGroups.length) return null;
+  const owned = new Set(identity.groups.map((group) => group.toLowerCase()));
+  if (config.allowedGroups.some((group) => owned.has(group.toLowerCase()))) return null;
+  return identity.groups.length
+    ? `None of the account's groups (${identity.groups.join(', ')}) is allowed.`
+    : 'The provider sent no groups for this account, so no allowed group could match; check the groups scope and the account memberships.';
 }
 
 export function identityAllowed(config: OidcConfig, identity: OidcIdentity): boolean {

@@ -15,8 +15,6 @@ type OidcConfig = {
   hasClientSecret: boolean;
   scopes: string;
   redirectUri: string;
-  allowedDomains: string[];
-  allowedEmails: string[];
   allowedGroups: string[];
   allowLocal: boolean;
   allowedIps: string[];
@@ -36,15 +34,19 @@ type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
 const inputClass = 'w-full touch-manipulation rounded-lg border border-input bg-card p-2.5 text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary';
 
+/** Accept a pasted discovery document URL; the issuer is its base. */
+const normalizeIssuerInput = (value: string): string => value
+  .trim()
+  .replace(/\/+$/u, '')
+  .replace(/\/\.well-known\/openid-configuration$/u, '');
+
 const emptyConfig: OidcConfig = {
   enabled: false,
   issuer: '',
   clientId: '',
   hasClientSecret: false,
-  scopes: 'openid profile email',
+  scopes: 'openid profile email groups',
   redirectUri: '',
-  allowedDomains: [],
-  allowedEmails: [],
   allowedGroups: [],
   allowLocal: false,
   allowedIps: [],
@@ -88,12 +90,10 @@ export default function AuthenticationSettingsTab() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         enabled: config.enabled,
-        issuer: config.issuer,
+        issuer: normalizeIssuerInput(config.issuer),
         clientId: config.clientId,
         scopes: config.scopes,
         redirectUri: config.redirectUri,
-        allowedDomains: config.allowedDomains,
-        allowedEmails: config.allowedEmails,
         allowedGroups: config.allowedGroups,
         allowLocal: config.allowLocal,
         allowedIps: config.allowedIps,
@@ -119,7 +119,7 @@ export default function AuthenticationSettingsTab() {
       const response = await authenticatedFetch('/api/auth/oidc/discover', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ issuer: config.issuer }),
+        body: JSON.stringify({ issuer: normalizeIssuerInput(config.issuer) }),
       });
       const body = await response.json() as { success?: boolean; data?: Discovery; error?: { message?: string } };
       if (!response.ok || !body.success) {
@@ -173,16 +173,8 @@ export default function AuthenticationSettingsTab() {
             <input className={inputClass} value={config.redirectUri} placeholder="https://app.example.com/api/auth/oidc/callback"
               onChange={(event) => patch({ redirectUri: event.target.value })} />
           </SettingsRow>
-          <SettingsRow label={t('authentication.allowedDomains')} description={t('authentication.allowedHint')} className="flex-col items-stretch gap-2">
-            <input className={inputClass} value={config.allowedDomains.join(', ')} placeholder="example.com"
-              onChange={(event) => patch({ allowedDomains: event.target.value.split(',').map((value) => value.trim()).filter(Boolean) })} />
-          </SettingsRow>
-          <SettingsRow label={t('authentication.allowedEmails')} className="flex-col items-stretch gap-2">
-            <input className={inputClass} value={config.allowedEmails.join(', ')} placeholder="owner@example.com"
-              onChange={(event) => patch({ allowedEmails: event.target.value.split(',').map((value) => value.trim()).filter(Boolean) })} />
-          </SettingsRow>
           <SettingsRow label={t('authentication.allowedGroups')} description={t('authentication.allowedGroupsHint')} className="flex-col items-stretch gap-2">
-            <input className={inputClass} value={config.allowedGroups.join(', ')} placeholder="gajae-admins"
+            <input className={inputClass} value={config.allowedGroups.join(', ')} placeholder="admins"
               onChange={(event) => patch({ allowedGroups: event.target.value.split(',').map((value) => value.trim()).filter(Boolean) })} />
           </SettingsRow>
           <div className="flex flex-wrap items-center gap-2 border-t border-border px-4 py-3">
@@ -242,8 +234,10 @@ export default function AuthenticationSettingsTab() {
       <SettingsSection title={t('authentication.session')}>
         <SettingsCard>
           <SettingsRow
-            label={session ? t('authentication.signedInAs', { email: session.email }) : t('authentication.signedOut')}
-            description={session ? new Date(session.expiresAt).toLocaleString() : t('authentication.sessionHint')}
+            label={session ? t('authentication.signedInAs', { name: session.name || session.email }) : t('authentication.signedOut')}
+            description={session
+              ? `${session.name ? `${session.email} · ` : ''}${new Date(session.expiresAt).toLocaleString()}`
+              : t('authentication.sessionHint')}
           >
             {session
               ? <button type="button" onClick={() => void signOut()}
