@@ -1,11 +1,13 @@
 services:
   gajae-app:
-    image: ghcr.io/websterwh/gajae-app-docker:remote-cua-companion
+    # Published tag for the active line of work. Override IMAGE_TAG when the
+    # image came from another branch (main publishes :latest).
+    image: ghcr.io/websterwh/gajae-app-docker:${IMAGE_TAG:-agent-desktop-companion}
     build:
       context: .
       args:
         APP_REPOSITORY: ${APP_REPOSITORY:-https://github.com/websterwh/gajae-code-app.git}
-        APP_REF: ${APP_REF:-feat/remote-cua-companion}
+        APP_REF: ${APP_REF:-feat/agent-desktop-companion}
     container_name: gajae-app
     restart: unless-stopped
     ports:
