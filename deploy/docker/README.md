@@ -91,9 +91,8 @@ revision is required.
 ### Core App & Network
 | Variable | Default | Description |
 |---|---|---|
-| `HOST` | `0.0.0.0` | Bind IP inside container (`0.0.0.0` required for container port mapping). |
+| `HOST` | `0.0.0.0` | Bind address, and the only knob for it. `0.0.0.0` is required for container port mapping; `127.0.0.1` keeps the app unreachable from outside the container. A non-loopback bind is logged as a warning at startup. |
 | `SERVER_PORT` | `3001` | Port the internal WebUI server listens on. |
-| `GAJAE_ALLOW_UNAUTH_REMOTE` | `1` | Permits binding to `0.0.0.0` across network interfaces. It does not turn sign-in off. |
 | `NO_AUTH` | unset | Set to `1` to disable sign-in entirely as a break-glass. Saved OIDC settings are kept and apply again once it is unset. |
 | `ALLOWED_HOSTS` | `*` | Admitted hostnames/origins (`*` allows all, or enter comma-separated domains). |
 | `GAJAE_TRUST_PROXY_TLS` | unset | Set to `1` only when a reverse proxy in front of this container terminates TLS itself, so the Remote CUA companion's `wss://` upgrade is accepted via `X-Forwarded-Proto`. |

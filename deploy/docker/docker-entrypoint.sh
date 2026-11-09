@@ -6,7 +6,6 @@ set -e
 # ==============================================================================
 export HOST="${HOST:-0.0.0.0}"
 export SERVER_PORT="${SERVER_PORT:-3001}"
-export GAJAE_ALLOW_UNAUTH_REMOTE="${GAJAE_ALLOW_UNAUTH_REMOTE:-1}"
 export ALLOWED_HOSTS="${ALLOWED_HOSTS:-*}"
 export DATABASE_PATH="${DATABASE_PATH:-/data/auth.db}"
 export WORKSPACES_ROOT="${WORKSPACES_ROOT:-/workspace}"
@@ -422,7 +421,7 @@ echo " Starting Gajae Code App Container"
 echo " Source Revision: $(cat /opt/gajae-app/.image_revision 2>/dev/null || echo 'unknown')"
 echo " Bind Address   : ${HOST}:${SERVER_PORT}"
 echo " Allowed Hosts  : ${ALLOWED_HOSTS}"
-echo " Unauth Remote  : ${GAJAE_ALLOW_UNAUTH_REMOTE} (bind guard only; NO_AUTH=${NO_AUTH:-unset} controls sign-in)"
+echo " Sign-in Off    : ${NO_AUTH:-unset}"
 echo " Database Path  : ${DATABASE_PATH}"
 echo " Workspace Root : ${WORKSPACES_ROOT}"
 if [ "${SSH_ENABLE}" = "true" ] || [ "${SSH_ENABLE}" = "1" ]; then

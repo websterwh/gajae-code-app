@@ -31,7 +31,6 @@ test('isolated environment redirects every persistent runtime root', () => {
     host: '127.0.0.1',
     vitePort: 5174,
     serverPort: 3101,
-    remote: false,
   });
   assert.equal(env.HOME, '/tmp/qa-one');
   assert.equal(env.USERPROFILE, '/tmp/qa-one');
@@ -44,16 +43,16 @@ test('isolated environment redirects every persistent runtime root', () => {
   assert.equal(env.GAJAE_ALLOW_UNAUTH_REMOTE, undefined);
 });
 
-test('remote isolated environment enables only the admitted private override', () => {
+test('the isolated environment binds only the admitted host and scrubs the retired override', () => {
   const env = isolatedQaEnvironment({
-    parentEnv: {},
+    parentEnv: { GAJAE_ALLOW_UNAUTH_REMOTE: '1' },
     qaHome: '/tmp/qa-two',
     host: '100.78.133.28',
     vitePort: '5174',
     serverPort: '3101',
-    remote: true,
   });
-  assert.equal(env.GAJAE_ALLOW_UNAUTH_REMOTE, '1');
+  assert.equal(env.HOST, '100.78.133.28');
+  assert.equal(env.GAJAE_ALLOW_UNAUTH_REMOTE, undefined);
 });
 
 test('production workspace and browser overrides cannot escape the QA home', () => {
@@ -69,7 +68,6 @@ test('production workspace and browser overrides cannot escape the QA home', () 
     host: '127.0.0.1',
     vitePort: 5174,
     serverPort: 3101,
-    remote: false,
   });
   for (const name of ['WORKSPACES_ROOT', 'GAJAE_BROWSER_PROFILE_DIR', 'GAJAE_BROWSER_CACHE_DIR']) {
     const relative = path.relative('/tmp/qa-overrides', env[name]);

@@ -175,10 +175,10 @@ Examples:
 
 Environment Variables:
   SERVER_PORT         Set server port (default: 3001)
-  HOST                Set bind address (default: 127.0.0.1 — loopback only)
+  HOST                Set bind address (default: 127.0.0.1; the container uses 0.0.0.0)
   DATABASE_PATH       Set custom database location
   CONTEXT_WINDOW      Set context window size (default: 160000)
-  GAJAE_ALLOW_UNAUTH_REMOTE  Set to 1 for a trusted private-network non-loopback bind
+  NO_AUTH             Set to 1 to disable sign-in without deleting the stored settings
 
 Documentation:
   ${packageJson.homepage || 'https://github.com/devswha/gajae-code-app'}

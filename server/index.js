@@ -1641,16 +1641,9 @@ async function startServer() {
         }
         if (shutdownStarted)
             return;
-        // Fail-closed exposure guard: desktop traffic stays on loopback unless
-        // a trusted private-network override is explicitly configured.
-        const exposure = evaluateExposure({
-            host: HOST,
-            allowUnauthRemote: process.env.GAJAE_ALLOW_UNAUTH_REMOTE === '1',
-        });
-        if (exposure.level === 'block') {
-            console.error(`${c.warn('[SECURITY]')} ${exposure.message}`);
-            throw new Error(exposure.message);
-        }
+        // HOST decides the interface; a non-loopback bind is reported, because a
+        // container has to bind 0.0.0.0 to be port-mapped at all.
+        const exposure = evaluateExposure({ host: HOST });
         if (exposure.level === 'warn') {
             console.warn(`${c.warn('[SECURITY]')} ${exposure.message}`);
         }
