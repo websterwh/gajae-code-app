@@ -7,7 +7,7 @@
 // matching toolchain). This script builds only the targets whose toolchain
 // is actually present and reports the rest as skipped - it does not pretend
 // to produce artifacts it cannot actually produce.
-import { cp, mkdir, rm } from 'node:fs/promises';
+import { cp, mkdir, readdir, rm } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 
@@ -41,6 +41,7 @@ const nativeTriple = spawnSync('rustc', ['-vV'], { encoding: 'utf8' }).stdout
 // classify failure as "missing target/linker" only when cargo itself says so.
 const built = [];
 const skipped = [];
+const ARCHIVE_ROOT = join('release', 'agent-desktop');
 for (const name of names) {
   const { triple, binaryName } = TARGETS[name];
   const isNative = triple === nativeTriple;
@@ -56,10 +57,32 @@ for (const name of names) {
     : join(crateDir, 'target', triple, 'release', binaryName);
   const destName = `gajae-agent-desktop-companion-${name}${name.startsWith('windows') ? '.exe' : ''}`;
   await cp(builtPath, join(output, destName));
-  built.push(destName);
+  built.push({ name, destName });
 }
 
-console.log(`Built: ${built.length ? built.join(', ') : '(none)'}`);
+// A staged agent-desktop (see stage-agent-desktop-bundle.mjs) is packaged next
+// to the companion, so the archive is the whole install: no --install-agent-
+// desktop, no Node/npm, no PATH change. Targets without a staged driver still
+// publish the bare binary, which keeps the existing download URL working.
+for (const { name, destName } of built) {
+  const stagedDir = join(ARCHIVE_ROOT, name);
+  let staged = [];
+  try {
+    staged = await readdir(stagedDir);
+  } catch { continue; }
+  if (!staged.length) continue;
+  const bundleDir = join(output, `bundle-${name}`);
+  await mkdir(bundleDir, { recursive: true });
+  await cp(join(output, destName), join(bundleDir, destName));
+  for (const entry of staged) await cp(join(stagedDir, entry), join(bundleDir, entry), { recursive: true });
+  const archive = join(output, `gajae-agent-desktop-companion-${name}.tar.gz`);
+  const packed = spawnSync('tar', ['-czf', archive, '-C', bundleDir, '.'], { stdio: 'inherit' });
+  if (packed.status !== 0) throw new Error(`failed to package ${archive} (exit ${packed.status})`);
+  await rm(bundleDir, { recursive: true, force: true });
+  console.log(`Bundled: ${archive} (companion + ${staged.join(', ')})`);
+}
+
+console.log(`Built: ${built.length ? built.map((entry) => entry.destName).join(', ') : '(none)'}`);
 if (skipped.length) {
   console.log('Skipped:');
   for (const { name, reason } of skipped) console.log(`  - ${name}: ${reason}`);

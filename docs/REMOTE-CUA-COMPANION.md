@@ -1,11 +1,15 @@
 # Remote agent-desktop companion
 
-The companion lets a Gajae server use the existing reviewed `computer` tool on a paired laptop. It opens one authenticated outbound WebSocket to the server. It never opens a listener, mounts a display socket, or provides a general MCP, shell, filesystem, clipboard, browser, or remote-desktop proxy.
+The companion lets a Gajae server use the existing reviewed `computer` tool on a paired laptop. It opens one authenticated outbound WebSocket to the server. It never opens a listener, mounts a display socket, or provides a general MCP, clipboard, browser, or remote-desktop proxy.
+
+The one exception is deliberate and opt-in: `--shell` (see below) additionally exposes a small, bounded shell/file tool set for the machine the companion runs on. A companion started without that flag refuses every shell and filesystem request, whatever the server asks for.
 
 ## Pair and run
 
 1. In **Settings → Automation → Computer use**, keep the master switch off until native application automation is intended. Create a pairing code under **Remote devices**.
-2. Install [`agent-desktop`](https://github.com/vercel-labs/agent-desktop) - it is **not** bundled with the companion binary itself; the companion is a thin WebSocket client that spawns `agent-desktop mcp` as a subprocess and otherwise does nothing on its own. Three ways to get it, in order of convenience:
+2. Get [`agent-desktop`](https://github.com/vercel-labs/agent-desktop).
+   - **Bundled archive (recommended):** `gajae-agent-desktop-companion-<platform>.tar.gz` from the same GitHub release contains the companion *and* the matching `agent-desktop` (plus its helper, on macOS). Extracting it is the whole install: the companion prefers an `agent-desktop` sitting next to its own executable, so no `--install-agent-desktop`, Node, npm, brew, or `PATH` change is needed.
+   - **Bare binary:** `gajae-agent-desktop-companion-<platform>` is still published for scripts that only want the companion. On its own it is a thin WebSocket client that spawns `agent-desktop mcp` as a subprocess and otherwise does nothing, so it needs one of the three installs below.
    - `./gajae-agent-desktop-companion --install-agent-desktop` - downloads the matching release tarball directly from `vercel-labs/agent-desktop`'s GitHub Releases, verifies its published sha256, and installs it under this OS's config directory. No Node/npm required. Once installed, every other companion command picks it up automatically with no `--executable` flag or `PATH` change needed.
    - `npm install -g agent-desktop` (requires Node).
    - `brew install vercel-labs/tap/agent-desktop` (macOS).
@@ -54,9 +58,22 @@ template containing a `{platform}` placeholder, for example
 The button is hidden only if neither the baked-in default nor an override
 resolves to a valid template.
 
+## Local shell and files (`--shell`)
+
+Passing `--shell` lets the paired app work on the machine that runs the companion the way the GJC CLI would there: the same `computer` tool then also accepts `local_exec` (a shell command, with optional `cwd` and `timeout_ms`), `local_read_file`, `local_write_file`, `local_list_files`, and `local_search`. This is for work that has to happen on your own machine - your repository, your shell, your files - rather than on the server.
+
+```sh
+./gajae-agent-desktop-companion --server=gajae.example --shell
+```
+
+- **Off unless named.** No other flag implies it, and the companion advertises these tools to the server only while it is running with it. Restarting without the flag removes them on the next call.
+- **Two gates.** Settings' **Computer use** master switch still applies, and the server re-checks the companion's advertised tools on every dispatch - a stale capability is never honoured.
+- **No per-application prompt.** A shell command is not scoped to a window, so there is no application grant to approve; the launch flag is the consent. Only enable it for a server you would trust with this machine.
+- **Bounded, not sandboxed.** Commands are capped at 32 KiB and 10 minutes, writes at 1 MiB, reads at 8 MiB, search at 1 MiB per file, output at 100k characters, and directory walks at 12 levels / 20k entries. It is otherwise real access to your account - the same reach your own terminal has.
+
 ## Safety and incident response
 
-The server remains the authority for the app-owned `computer` tool, application grants, session binding, and validation. The companion independently accepts only the reviewed `desktop_*` tools and rejects foreground delivery, desktop scope, unbound input, expired deadlines, duplicate IDs, and device mismatches.
+The server remains the authority for the app-owned `computer` tool, application grants, session binding, and validation. The companion independently accepts only the reviewed `desktop_*` tools - plus the `local_*` tools when it was explicitly started with `--shell` - and rejects everything else, along with foreground delivery, desktop scope, unbound input, expired deadlines, duplicate IDs, and device mismatches.
 
 A device is ready only while its authenticated companion is connected and reports compatible agent-desktop schema/version readiness. Ensure the `agent-desktop` CLI and its accessibility permissions (macOS: Accessibility + Screen Recording; Linux: a reachable Wayland/X11 session) are granted on the laptop. Disable, disconnect, or remove a device in Settings to stop calls; removal revokes its credential and terminates the connection. Rotate server TLS credentials and remove affected devices after suspected credential loss.
 

@@ -12,6 +12,7 @@
 
 mod driver;
 mod install;
+mod local;
 mod protocol;
 mod state;
 mod tools;
@@ -34,6 +35,7 @@ struct Args {
     help: bool,
     grant_permissions: bool,
     install_agent_desktop: bool,
+    local_shell: bool,
 }
 
 const HELP_TEXT: &str = r#"gajae-agent-desktop-companion - outbound-only remote computer-use companion
@@ -41,6 +43,7 @@ const HELP_TEXT: &str = r#"gajae-agent-desktop-companion - outbound-only remote 
 USAGE:
   agent-desktop-companion --server=<host> --pair=<token> [options]
   agent-desktop-companion --server=<host> [options]        (reconnect with a stored credential)
+  agent-desktop-companion --server=<host> --shell    (also allow shell/file access to this machine)
   agent-desktop-companion --install-agent-desktop           (download and install agent-desktop itself)
   agent-desktop-companion --grant-permissions               (macOS/Linux: check/request accessibility access)
   agent-desktop-companion --help
@@ -82,6 +85,15 @@ OPTIONS:
                           On the normal --server connect path this also runs automatically,
                           exactly once, right after this device is approved in Settings -
                           never before approval.
+  --shell          Also let the paired app use this machine's shell and files,
+                          the way running the GJC CLI here would: local_exec (a shell
+                          command), local_read_file, local_write_file,
+                          local_list_files and local_search. Off by default and never
+                          enabled by any other flag - a companion started without it
+                          refuses every local_* request, whatever the server asks.
+                          Only use it with a server you would trust with this machine:
+                          it gives the agent the reach your own terminal has, within
+                          the documented command, write, output and timeout caps.
   --help                 Show this message.
 
 EXAMPLES:
@@ -89,6 +101,7 @@ EXAMPLES:
   agent-desktop-companion --server=gjc.example.com --pair=AbCdEf123...
   agent-desktop-companion --server=gjc.example.com
   agent-desktop-companion --grant-permissions
+  agent-desktop-companion --server=gjc.example.com --pair=AbCdEf123... --shell
 "#;
 
 fn parse_args() -> Args {
@@ -103,6 +116,7 @@ fn parse_args() -> Args {
     let mut help = false;
     let mut grant_permissions = false;
     let mut install_agent_desktop = false;
+    let mut local_shell = false;
     for arg in std::env::args().skip(1) {
         if arg == "--help" || arg == "-h" {
             help = true;
@@ -110,6 +124,8 @@ fn parse_args() -> Args {
             grant_permissions = true;
         } else if arg == "--install-agent-desktop" {
             install_agent_desktop = true;
+        } else if arg == "--shell" {
+            local_shell = true;
         } else if let Some(value) = arg.strip_prefix("--server=") {
             server = value.to_string();
         } else if let Some(value) = arg.strip_prefix("--pair=") {
@@ -122,7 +138,7 @@ fn parse_args() -> Args {
             executable = value.to_string();
         }
     }
-    Args { server, pairing_token, device_name, state_path, executable, help, grant_permissions, install_agent_desktop }
+    Args { server, pairing_token, device_name, state_path, executable, help, grant_permissions, install_agent_desktop, local_shell }
 }
 
 /// Real device hostname, used as the default `--name`. Neither `HOSTNAME`
@@ -374,7 +390,7 @@ async fn connect_once(
                     Some("duplicate request ID".to_string())
                 } else if now_ms >= deadline {
                     Some("expired deadline".to_string())
-                } else if !tools::is_safe_command(&tool) {
+                } else if !tools::is_safe_command(&tool) && !(args.local_shell && local::is_local_tool(&tool)) {
                     Some("cua_policy_denied: command not in companion allowlist".to_string())
                 } else {
                     None
@@ -386,7 +402,15 @@ async fn connect_once(
                     }
                     None => {
                         println!("[info] Running {tool} ...");
-                        match driver.call(&tool, arguments).await {
+                        // `--shell` tools never touch agent-desktop: they run
+                        // on this machine directly. The flag was already enforced
+                        // by the allowlist check above.
+                        let outcome = if local::is_local_tool(&tool) {
+                            local::call(&tool, &arguments).await
+                        } else {
+                            driver.call(&tool, arguments).await
+                        };
+                        match outcome {
                             Ok(value) => {
                                 println!("[info] {tool} completed.");
                                 Ok(value)
@@ -510,16 +534,29 @@ async fn send_readiness(
     // old companion's readiness ping. `desktop_list_apps` is the live MCP
     // tool name (not the CLI command name `list-apps`); succeeding proves
     // agent-desktop is installed, speaking MCP, and can reach a display.
-    let schema_supported = driver.call("desktop_list_apps", serde_json::json!({})).await.is_ok();
+    let desktop_ready = driver.call("desktop_list_apps", serde_json::json!({})).await.is_ok();
+    // Local tools are advertised only when `--shell` was actually passed:
+    // the server gates every local_* call on seeing them here, so a companion
+    // restarted without the flag loses that surface immediately.
+    let mut safe_tools = tools::SAFE_COMMANDS.to_vec();
+    if args.local_shell {
+        safe_tools.extend_from_slice(local::LOCAL_TOOLS);
+    }
+    let schema_supported = desktop_ready || args.local_shell;
     let readiness = Readiness {
         driver_version: None,
         schema_supported,
-        daemon: if schema_supported { "running" } else { "unknown" },
-        safe_tools: tools::SAFE_COMMANDS.to_vec(),
+        daemon: if desktop_ready { "running" } else { "unknown" },
+        safe_tools,
         device_name: args.device_name.clone(),
         os: os_label(),
     };
-    let state = if schema_supported { "agent-desktop ready" } else { "agent-desktop not available - tool calls will fail" };
+    let state = match (desktop_ready, args.local_shell) {
+        (true, true) => "agent-desktop ready, local shell enabled",
+        (true, false) => "agent-desktop ready",
+        (false, true) => "local shell enabled - agent-desktop not available, desktop tool calls will fail",
+        (false, false) => "agent-desktop not available - tool calls will fail",
+    };
     println!("[info] Status: device \"{}\" ({}) - {state} - {} commands reviewed.", args.device_name, os_label(), tools::SAFE_COMMANDS.len());
     send(write, &Outgoing::Readiness { protocol_version: PROTOCOL_VERSION, readiness }).await
 }

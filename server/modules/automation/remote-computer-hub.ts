@@ -11,7 +11,8 @@ import {
 } from '../../../shared/remote-cua-protocol.js';
 
 import { guardAgentDesktopCall } from './agent-desktop-capability.js';
-import { isAgentDesktopSafeTool, type AgentDesktopSafeTool } from './agent-desktop-client.js';
+import { isAgentDesktopSafeTool } from './agent-desktop-client.js';
+import { guardLocalMachineCall, isLocalMachineTool, type ComputerTool } from './local-machine-capability.js';
 import { RemoteComputerDeviceRegistry } from './remote-computer-devices.js';
 
 type Pending = { resolve: (value: unknown) => void; reject: (reason: Error) => void; timer: NodeJS.Timeout };
@@ -131,12 +132,14 @@ export class RemoteComputerHub {
     });
   }
 
-  async call(deviceId: string, appSessionId: string, tool: AgentDesktopSafeTool, args: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
+  async call(deviceId: string, appSessionId: string, tool: ComputerTool, args: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
     this.devices.dispatchable(deviceId);
     const connection = this.connections.get(deviceId);
     if (!connection || connection.socket.readyState !== connection.socket.OPEN) throw new Error('Remote computer is offline.');
-    if (!isAgentDesktopSafeTool(tool)) throw new Error('Unreviewed computer tool.');
-    const guarded = guardAgentDesktopCall(tool, args).arguments;
+    if (!isAgentDesktopSafeTool(tool) && !isLocalMachineTool(tool)) throw new Error('Unreviewed computer tool.');
+    // Desktop tools and the opt-in local machine tools have separate policies;
+    // the companion enforces the --shell boundary again on its side.
+    const guarded = isLocalMachineTool(tool) ? guardLocalMachineCall(tool, args) : guardAgentDesktopCall(tool, args);
     const requestId = randomUUID();
     const deadline = Date.now() + 30_000;
     if (connection.seen.has(requestId)) throw new Error('Duplicate remote computer request.');
