@@ -1,3 +1,5 @@
+import { isIP } from 'node:net';
+
 import { appConfigDb } from '@/modules/database/index.js';
 
 /**
@@ -13,9 +15,15 @@ export type OidcConfig = {
   scopes: string;
   /** Empty means "derive from the incoming request" (proxy-friendly). */
   redirectUri: string;
-  /** Optional email gates; empty means any identity the provider asserts. */
+  /** Optional identity gates; empty means "not checked". All set gates must pass. */
   allowedDomains: string[];
   allowedEmails: string[];
+  /** Group names from the provider's `groups` claim. */
+  allowedGroups: string[];
+  /** Let listed addresses in without a sign-in, for the LAN and health checks. */
+  allowLocal: boolean;
+  /** IPs or IPv4 CIDR ranges; empty means loopback and private ranges. */
+  allowedIps: string[];
 };
 
 const CONFIG_KEY = 'oidc.config.v1';
@@ -29,10 +37,18 @@ const EMPTY_CONFIG: OidcConfig = {
   redirectUri: '',
   allowedDomains: [],
   allowedEmails: [],
+  allowedGroups: [],
+  allowLocal: false,
+  allowedIps: [],
 };
 
 const listOf = (value: unknown): string[] => (Array.isArray(value) ? value : [])
   .map((entry) => String(entry).trim().toLowerCase())
+  .filter(Boolean);
+
+/** Group names and addresses are matched as written by the provider. */
+const exactListOf = (value: unknown): string[] => (Array.isArray(value) ? value : [])
+  .map((entry) => String(entry).trim())
   .filter(Boolean);
 
 /** Trailing slashes make `iss` comparisons fail against a provider's own value. */
@@ -54,6 +70,9 @@ export function readOidcConfig(): OidcConfig {
       redirectUri: String(parsed.redirectUri ?? '').trim(),
       allowedDomains: listOf(parsed.allowedDomains),
       allowedEmails: listOf(parsed.allowedEmails),
+      allowedGroups: exactListOf(parsed.allowedGroups),
+      allowLocal: parsed.allowLocal === true,
+      allowedIps: exactListOf(parsed.allowedIps),
     };
   } catch {
     return { ...EMPTY_CONFIG };
@@ -74,6 +93,9 @@ export function writeOidcConfig(patch: Partial<OidcConfig>): OidcConfig {
     redirectUri: patch.redirectUri === undefined ? current.redirectUri : String(patch.redirectUri).trim(),
     allowedDomains: patch.allowedDomains === undefined ? current.allowedDomains : listOf(patch.allowedDomains),
     allowedEmails: patch.allowedEmails === undefined ? current.allowedEmails : listOf(patch.allowedEmails),
+    allowedGroups: patch.allowedGroups === undefined ? current.allowedGroups : exactListOf(patch.allowedGroups),
+    allowLocal: patch.allowLocal ?? current.allowLocal,
+    allowedIps: patch.allowedIps === undefined ? current.allowedIps : exactListOf(patch.allowedIps),
   };
   appConfigDb.set(CONFIG_KEY, JSON.stringify(next));
   return next;
@@ -90,6 +112,9 @@ export function publicOidcConfig(config: OidcConfig) {
     redirectUri: config.redirectUri,
     allowedDomains: config.allowedDomains,
     allowedEmails: config.allowedEmails,
+    allowedGroups: config.allowedGroups,
+    allowLocal: config.allowLocal,
+    allowedIps: config.allowedIps,
   };
 }
 
@@ -114,6 +139,16 @@ export function validateOidcConfig(config: OidcConfig): string | null {
   if (parsed.protocol !== 'https:' && !local) return 'The issuer must use https.';
   if (!config.clientId) return 'A client id is required.';
   if (!config.clientSecret) return 'A client secret is required.';
+  for (const entry of config.allowedIps) {
+    const [address, prefix] = entry.split('/');
+    if (isIP(address) === 0) return `"${entry}" is not an IP address.`;
+    if (prefix !== undefined) {
+      const bits = Number(prefix);
+      if (isIP(address) !== 4 || !Number.isInteger(bits) || bits < 0 || bits > 32) {
+        return `"${entry}" is not an IPv4 CIDR range.`;
+      }
+    }
+  }
   return null;
 }
 

@@ -11,9 +11,17 @@ export type OidcDiscovery = {
   userinfo_endpoint?: string;
   end_session_endpoint?: string;
   scopes_supported?: string[];
+  token_endpoint_auth_methods_supported?: string[];
 };
 
-export type OidcIdentity = { sub: string; email: string; emailVerified: boolean; name?: string };
+export type OidcIdentity = {
+  sub: string;
+  email: string;
+  emailVerified: boolean;
+  name?: string;
+  /** Provider group names; empty when the `groups` scope was not granted. */
+  groups: string[];
+};
 
 const DISCOVERY_TTL_MS = 10 * 60 * 1000;
 const JWKS_TTL_MS = 10 * 60 * 1000;
@@ -24,7 +32,13 @@ type JsonObject = Record<string, unknown>;
 
 async function getJson(url: string, init?: RequestInit): Promise<JsonObject> {
   const response = await fetch(url, { ...init, signal: AbortSignal.timeout(10_000) });
-  if (!response.ok) throw new Error(`${url} answered ${response.status}`);
+  if (!response.ok) {
+    // A refused token exchange is only diagnosable through the provider's own
+    // body (`invalid_grant`, `invalid_client`, a PKCE mismatch, ...), so it is
+    // carried into the message the settings page shows.
+    const detail = (await response.text().catch(() => '')).trim().slice(0, 400);
+    throw new Error(`${url} answered ${response.status}${detail ? `: ${detail}` : ''}`);
+  }
   return await response.json() as JsonObject;
 }
 
@@ -61,6 +75,9 @@ export async function discoverOidc(issuer: string, refresh = false): Promise<Oid
     scopes_supported: Array.isArray(document.scopes_supported)
       ? document.scopes_supported.map((scope) => String(scope))
       : undefined,
+    token_endpoint_auth_methods_supported: Array.isArray(document.token_endpoint_auth_methods_supported)
+      ? document.token_endpoint_auth_methods_supported.map((method) => String(method))
+      : undefined,
   };
   discoveryCache.set(base, { at: Date.now(), value });
   return value;
@@ -87,6 +104,8 @@ export function buildAuthorizeUrl(
 ): string {
   const scopes = new Set(config.scopes.split(/\s+/u).filter(Boolean));
   scopes.add('openid');
+  // Without this scope the provider omits the claim the group gate reads.
+  if (config.allowedGroups.length) scopes.add('groups');
   const url = new URL(discovery.authorization_endpoint);
   url.searchParams.set('response_type', 'code');
   url.searchParams.set('client_id', config.clientId);
@@ -110,15 +129,24 @@ async function exchangeCode(
     grant_type: 'authorization_code',
     code,
     redirect_uri: redirectUri,
-    client_id: config.clientId,
-    client_secret: config.clientSecret,
     code_verifier: codeVerifier,
   });
-  const document = await getJson(discovery.token_endpoint, {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
-    body,
-  });
+  const headers: Record<string, string> = {
+    'content-type': 'application/x-www-form-urlencoded',
+    accept: 'application/json',
+  };
+  // Providers disagree about client authentication: Kanidm takes HTTP Basic
+  // only, Pocket ID and Keycloak accept the secret in the body. Discovery says
+  // which, and the body form is the fallback when it says nothing.
+  const methods = discovery.token_endpoint_auth_methods_supported ?? [];
+  if (methods.includes('client_secret_basic') && !methods.includes('client_secret_post')) {
+    const credentials = Buffer.from(`${config.clientId}:${config.clientSecret}`, 'utf8').toString('base64');
+    headers.authorization = `Basic ${credentials}`;
+  } else {
+    body.set('client_id', config.clientId);
+    body.set('client_secret', config.clientSecret);
+  }
+  const document = await getJson(discovery.token_endpoint, { method: 'POST', headers, body });
   const idToken = document.id_token;
   if (typeof idToken !== 'string' || !idToken) throw new Error('The token response carried no id_token.');
   return {
@@ -205,21 +233,30 @@ export async function completeSignIn(
   if (!sub) throw new Error('The id_token carries no subject.');
   const email = String(claims.email ?? claims.preferred_username ?? '').trim();
   if (!email) throw new Error('The id_token carries no email; request the email scope.');
+  const rawGroups = claims.groups;
+  const groups = Array.isArray(rawGroups)
+    ? rawGroups.map((group) => String(group).trim()).filter(Boolean)
+    : typeof rawGroups === 'string' ? rawGroups.split(/[\s,]+/u).filter(Boolean) : [];
   return {
     sub,
     email: email.toLowerCase(),
     emailVerified: claims.email_verified !== false,
     name: typeof claims.name === 'string' ? claims.name : undefined,
+    groups,
   };
 }
 
 export function identityAllowed(config: OidcConfig, identity: OidcIdentity): boolean {
   if (!identity.emailVerified) return false;
   const email = identity.email.toLowerCase();
-  if (config.allowedEmails.length) return config.allowedEmails.includes(email);
-  if (config.allowedDomains.length) {
-    const domain = email.slice(email.lastIndexOf('@') + 1);
-    return config.allowedDomains.includes(domain);
+  const domain = email.slice(email.lastIndexOf('@') + 1);
+  // Every configured gate has to pass: an email list and a group list together
+  // mean "this person, in this group", not "either"
+  if (config.allowedEmails.length && !config.allowedEmails.includes(email)) return false;
+  if (config.allowedDomains.length && !config.allowedDomains.includes(domain)) return false;
+  if (config.allowedGroups.length) {
+    const owned = new Set(identity.groups.map((group) => group.toLowerCase()));
+    if (!config.allowedGroups.some((group) => owned.has(group.toLowerCase()))) return false;
   }
   return true;
 }
