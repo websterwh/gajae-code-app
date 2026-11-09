@@ -184,6 +184,15 @@ export class AutomationService {
    * resolved application on every call.
    */
   private readonly snapshotApplications = new Map<string, string>();
+  /**
+   * One in-flight inventory read per session and kind.
+   *
+   * Inventory is deliberately never cached across calls: a recycled window_id
+   * or a reused pid has to fail closed, so the owning application is re-read
+   * from the live driver on every dispatch. This only stops two concurrent
+   * readers of the same list from paying for it twice.
+   */
+  private readonly inventoryReads = new Map<string, Promise<unknown>>();
   /** The app's browser backend choice for GJC runs; the runtime owns everything it selects. */
   readonly browserBackend = browserBackendStore;
   /** Opt-in rendering of the agent's ego browser state; off by default. */
@@ -492,19 +501,29 @@ export class AutomationService {
       }
     }
 
+    // A batch is one MCP round trip for a whole sequence, so the model reaches
+    // for it whenever several steps belong together. Its ref_ids still name the
+    // snapshot they were minted in, which is the same application link an
+    // interaction tool uses - read it from there instead of demanding an `app`
+    // argument the batch tool does not document.
+    if (!application && tool === 'desktop_batch') {
+      const batched = this.batchApplication(sessionId, args);
+      if (batched) {
+        application = batched;
+        label = batched;
+      }
+    }
+
     const windowId = typeof args.window_id === 'string' ? args.window_id : undefined;
     const needsInventory = tool === 'desktop_launch' || (!application && windowId !== undefined);
     if (!application && needsInventory) {
-      const transport = this.transport();
-      const inventory = await transport.call(sessionId, 'desktop_list_windows', {}, signal);
-      const window = windowRecords(inventory).find((candidate) => candidate.id === windowId);
+      const window = (await this.inventoryWindows(sessionId, signal)).find((candidate) => candidate.id === windowId);
       let pid: number | undefined;
       if (window && typeof window.pid === 'number' && Number.isSafeInteger(window.pid) && window.pid > 0) {
         pid = window.pid;
       }
       if (pid !== undefined) {
-        const apps = applicationRecords(await transport.call(sessionId, 'desktop_list_apps', {}, signal));
-        const match = apps.find((app) => app.pid === pid);
+        const match = (await this.inventoryApps(sessionId, signal)).find((app) => app.pid === pid);
         if (match && typeof match.name === 'string' && match.name.trim()) {
           application = match.name.trim();
           label = application;
@@ -547,6 +566,53 @@ export class AutomationService {
       if (oldest === undefined) break;
       this.snapshotApplications.delete(oldest);
     }
+  }
+
+  /**
+   * The single application a `desktop_batch` addresses, or null.
+   *
+   * Every ref_id in the batch has to resolve to the same application: a batch
+   * that mixes two apps would otherwise be authorized by whichever one happened
+   * to be found first, which is exactly the cross-application reach the grant
+   * model exists to prevent.
+   */
+  private batchApplication(sessionId: string, args: Record<string, unknown>): string | null {
+    if (typeof args.commands_json !== 'string') return null;
+    let steps: unknown;
+    try { steps = JSON.parse(args.commands_json); } catch { return null; }
+    if (!Array.isArray(steps)) return null;
+    const applications = new Set<string>();
+    for (const step of steps) {
+      const ref = object(object(step).args).ref_id;
+      if (typeof ref !== 'string') continue;
+      const snapshotId = snapshotIdFromRef(ref);
+      const application = snapshotId ? this.snapshotApplications.get(`${sessionId}\u0000${snapshotId}`) : undefined;
+      if (!application) return null;
+      applications.add(application);
+    }
+    return applications.size === 1 ? [...applications][0] : null;
+  }
+
+  /** One inventory read per session and kind at a time: concurrent callers share it. */
+  private async inventoryRead<T>(sessionId: string, kind: 'windows' | 'apps', read: () => Promise<T>): Promise<T> {
+    const key = `${sessionId}\u0000${kind}`;
+    const inFlight = this.inventoryReads.get(key);
+    if (inFlight) return await inFlight as T;
+    const pending = read().finally(() => { this.inventoryReads.delete(key); });
+    this.inventoryReads.set(key, pending);
+    return await pending;
+  }
+
+  private async inventoryWindows(sessionId: string, signal?: AbortSignal): Promise<AgentDesktopWindow[]> {
+    return await this.inventoryRead(sessionId, 'windows', async () => windowRecords(
+      await this.transport().call(sessionId, 'desktop_list_windows', {}, signal),
+    ));
+  }
+
+  private async inventoryApps(sessionId: string, signal?: AbortSignal): Promise<AgentDesktopApplication[]> {
+    return await this.inventoryRead(sessionId, 'apps', async () => applicationRecords(
+      await this.transport().call(sessionId, 'desktop_list_apps', {}, signal),
+    ));
   }
 
   async callComputer(sessionId: string, tool: AgentDesktopSafeTool, args: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
