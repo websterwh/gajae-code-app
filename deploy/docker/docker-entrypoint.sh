@@ -422,7 +422,7 @@ echo " Starting Gajae Code App Container"
 echo " Source Revision: $(cat /opt/gajae-app/.image_revision 2>/dev/null || echo 'unknown')"
 echo " Bind Address   : ${HOST}:${SERVER_PORT}"
 echo " Allowed Hosts  : ${ALLOWED_HOSTS}"
-echo " Unauth Remote  : ${GAJAE_ALLOW_UNAUTH_REMOTE}"
+echo " Unauth Remote  : ${GAJAE_ALLOW_UNAUTH_REMOTE} (bind guard only; NO_AUTH=${NO_AUTH:-unset} controls sign-in)"
 echo " Database Path  : ${DATABASE_PATH}"
 echo " Workspace Root : ${WORKSPACES_ROOT}"
 if [ "${SSH_ENABLE}" = "true" ] || [ "${SSH_ENABLE}" = "1" ]; then

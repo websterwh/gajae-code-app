@@ -18,6 +18,9 @@ services:
       - HOST=0.0.0.0
       - SERVER_PORT=3001
       - GAJAE_ALLOW_UNAUTH_REMOTE=1
+      # NO_AUTH=1 disables sign-in entirely (break-glass): stored auth settings
+      # are kept, the gate just stops enforcing them.
+      - NO_AUTH=${NO_AUTH:-}
       - ALLOWED_HOSTS=${ALLOWED_HOSTS:-*}
       # Set to 1 only when a reverse proxy (nginx, godoxy, Caddy, etc.) in
       # front of this container terminates TLS itself; it lets the Remote CUA

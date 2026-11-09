@@ -12,7 +12,7 @@ import {
   writeOidcConfig,
   type OidcConfig,
 } from './oidc.config.js';
-import { createOidcGate } from './oidc.middleware.js';
+import { clientAddressAllowed, createOidcGate, noAuthEnabled } from './oidc.middleware.js';
 import {
   buildAuthorizeUrl,
   completeSignIn,
@@ -51,24 +51,38 @@ function redirectUriFor(request: Request, config: OidcConfig): string {
   return `${request.protocol}://${request.get('host') ?? 'localhost'}${OIDC_REDIRECT_PATH}`;
 }
 
-/** Local owner row for a provider identity; the username is the verified email. */
+/**
+ * Local owner row for a provider identity. The email stays the login key, but
+ * the provider's display name is what the app and git show, so an account created
+ * before names were captured is filled in on the next sign-in.
+ */
 function ensureOwner(identity: { email: string; name?: string }): { id: number; username: string } {
   const db = getConnection();
-  const existing = db.prepare('SELECT id, username FROM users WHERE username = ? LIMIT 1')
-    .get(identity.email) as { id: number; username: string } | undefined;
-  if (existing) return existing;
+  const existing = db.prepare('SELECT id, username, git_name FROM users WHERE username = ? LIMIT 1')
+    .get(identity.email) as { id: number; username: string; git_name: string | null } | undefined;
+  if (existing) {
+    if (!existing.git_name && identity.name) {
+      db.prepare('UPDATE users SET git_name = ? WHERE id = ?').run(identity.name, existing.id);
+    }
+    return { id: existing.id, username: existing.username };
+  }
   const created = db.prepare('INSERT INTO users (username, password_hash, git_name) VALUES (?, ?, ?)')
     .run(identity.email, 'oidc:no-password', identity.name ?? null);
   return { id: Number(created.lastInsertRowid), username: identity.email };
 }
 
 /**
- * Settings may be read or written before a sign-in only while enforcement is
- * off; once it is on, only a signed-in owner may change it.
+ * Settings stay writable while enforcement is off, and while the request comes
+ * straight from the container's own network: a bad provider must leave a way
+ * back in. Requests that arrived through a proxy (`x-forwarded-for`) still need
+ * a session, so the bypass cannot be reached from outside.
  */
 function requireOwnerWhenEnforced(request: Request, response: Response): boolean {
-  if (!oidcEnforcing(readOidcConfig())) return true;
+  const config = readOidcConfig();
+  if (!oidcEnforcing(config) || noAuthEnabled()) return true;
   if (readSession(request.headers.cookie)) return true;
+  const proxied = request.headers['x-forwarded-for'] !== undefined;
+  if (!proxied && clientAddressAllowed(request.socket.remoteAddress ?? '', [])) return true;
   fail(response, 401, 'SIGN_IN_REQUIRED', 'Sign in to change authentication settings.');
   return false;
 }
@@ -103,8 +117,6 @@ export function createOidcRouter() {
       clientSecret: typeof body.clientSecret === 'string' && body.clientSecret ? body.clientSecret : undefined,
       scopes: body.scopes === undefined ? undefined : text(body.scopes, 256),
       redirectUri: body.redirectUri === undefined ? undefined : text(body.redirectUri, 512),
-      allowedDomains: body.allowedDomains === undefined ? undefined : stringList(body.allowedDomains),
-      allowedEmails: body.allowedEmails === undefined ? undefined : stringList(body.allowedEmails),
       allowedGroups: body.allowedGroups === undefined ? undefined : stringList(body.allowedGroups),
       allowLocal: typeof body.allowLocal === 'boolean' ? body.allowLocal : undefined,
       allowedIps: body.allowedIps === undefined ? undefined : stringList(body.allowedIps),

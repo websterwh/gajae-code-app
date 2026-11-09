@@ -15,10 +15,7 @@ export type OidcConfig = {
   scopes: string;
   /** Empty means "derive from the incoming request" (proxy-friendly). */
   redirectUri: string;
-  /** Optional identity gates; empty means "not checked". All set gates must pass. */
-  allowedDomains: string[];
-  allowedEmails: string[];
-  /** Group names from the provider's `groups` claim. */
+  /** The only identity gate: group names from the provider's `groups` claim. */
   allowedGroups: string[];
   /** Let listed addresses in without a sign-in, for the LAN and health checks. */
   allowLocal: boolean;
@@ -33,18 +30,12 @@ const EMPTY_CONFIG: OidcConfig = {
   issuer: '',
   clientId: '',
   clientSecret: '',
-  scopes: 'openid profile email',
+  scopes: 'openid profile email groups',
   redirectUri: '',
-  allowedDomains: [],
-  allowedEmails: [],
   allowedGroups: [],
   allowLocal: false,
   allowedIps: [],
 };
-
-const listOf = (value: unknown): string[] => (Array.isArray(value) ? value : [])
-  .map((entry) => String(entry).trim().toLowerCase())
-  .filter(Boolean);
 
 /** Group names and addresses are matched as written by the provider. */
 const exactListOf = (value: unknown): string[] => (Array.isArray(value) ? value : [])
@@ -68,8 +59,6 @@ export function readOidcConfig(): OidcConfig {
       clientSecret: String(parsed.clientSecret ?? ''),
       scopes: String(parsed.scopes ?? EMPTY_CONFIG.scopes).trim() || EMPTY_CONFIG.scopes,
       redirectUri: String(parsed.redirectUri ?? '').trim(),
-      allowedDomains: listOf(parsed.allowedDomains),
-      allowedEmails: listOf(parsed.allowedEmails),
       allowedGroups: exactListOf(parsed.allowedGroups),
       allowLocal: parsed.allowLocal === true,
       allowedIps: exactListOf(parsed.allowedIps),
@@ -91,8 +80,6 @@ export function writeOidcConfig(patch: Partial<OidcConfig>): OidcConfig {
       : String(patch.clientSecret),
     scopes: patch.scopes === undefined ? current.scopes : (String(patch.scopes).trim() || EMPTY_CONFIG.scopes),
     redirectUri: patch.redirectUri === undefined ? current.redirectUri : String(patch.redirectUri).trim(),
-    allowedDomains: patch.allowedDomains === undefined ? current.allowedDomains : listOf(patch.allowedDomains),
-    allowedEmails: patch.allowedEmails === undefined ? current.allowedEmails : listOf(patch.allowedEmails),
     allowedGroups: patch.allowedGroups === undefined ? current.allowedGroups : exactListOf(patch.allowedGroups),
     allowLocal: patch.allowLocal ?? current.allowLocal,
     allowedIps: patch.allowedIps === undefined ? current.allowedIps : exactListOf(patch.allowedIps),
@@ -110,8 +97,6 @@ export function publicOidcConfig(config: OidcConfig) {
     hasClientSecret: Boolean(config.clientSecret),
     scopes: config.scopes,
     redirectUri: config.redirectUri,
-    allowedDomains: config.allowedDomains,
-    allowedEmails: config.allowedEmails,
     allowedGroups: config.allowedGroups,
     allowLocal: config.allowLocal,
     allowedIps: config.allowedIps,
