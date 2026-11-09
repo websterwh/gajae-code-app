@@ -137,7 +137,25 @@ fn set_executable(_path: &std::path::Path) -> Result<(), String> {
 /// on `PATH` at all - this is what makes a prior `--install-agent-desktop`
 /// actually take effect without the user having to pass `--executable`
 /// (or edit PATH) by hand every time.
+///
+/// A release archive ships agent-desktop next to this companion binary, so a
+/// sibling copy is checked first: that is the "no separate install, no
+/// download, no PATH change" path, and it survives the companion being moved
+/// anywhere as a directory. Only when that is absent do the downloaded
+/// install directory and then PATH apply.
 pub fn find_installed() -> Option<PathBuf> {
+    if let Some(bundled) = bundled_executable() {
+        return Some(bundled);
+    }
     let path = installed_executable_path();
     if path.exists() { Some(path) } else { None }
+}
+
+/// `agent-desktop` alongside the running companion executable, which is how a
+/// bundled release archive lays the two binaries out.
+fn bundled_executable() -> Option<PathBuf> {
+    let current = std::env::current_exe().ok()?;
+    let name = if cfg!(windows) { "agent-desktop.exe" } else { "agent-desktop" };
+    let candidate = current.parent()?.join(name);
+    if candidate.exists() { Some(candidate) } else { None }
 }

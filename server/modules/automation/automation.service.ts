@@ -40,6 +40,13 @@ import {
   requiresApplicationIdentity,
   snapshotIdFromRef,
 } from './agent-desktop-capability.js';
+import {
+  companionOffersLocalTool,
+  guardLocalMachineCall,
+  isLocalMachineTool,
+  type ComputerTool,
+  type LocalMachineTool,
+} from './local-machine-capability.js';
 
 type BridgeRequest = {
   id: string;
@@ -433,7 +440,12 @@ export class AutomationService {
     this.requireComputerSupported();
     const release = this.enter('computer.authorize');
     try {
-      if (!isAgentDesktopSafeTool(payload.tool)) throw new Error('Unsupported agent-desktop tool.');
+      // local_* has no application to approve: the companion's own
+      // --shell launch flag is the consent, and the execute path below
+      // re-checks it so a companion restarted without the flag loses the
+      // surface on the very next call.
+      if (isLocalMachineTool(payload.tool)) return { granted: true, application: null, label: null };
+      if (!isAgentDesktopSafeTool(payload.tool)) throw new Error('Unsupported computer tool.');
       const rawArgs = object(payload.arguments);
       // Authorization must inspect the exact same normalized record that will
       // reach callComputer. Reject policy-denied or malformed requests before
@@ -615,10 +627,14 @@ export class AutomationService {
     ));
   }
 
-  async callComputer(sessionId: string, tool: AgentDesktopSafeTool, args: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
-    this.requireComputerSupported();
+  async callComputer(sessionId: string, tool: ComputerTool, args: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
+    // A local_* call needs no agent-desktop transport on this machine, so the
+    // local path checks the opt-in switch itself instead of failing here with
+    // "no computer transport" - which would be true but not the real reason.
+    if (!isLocalMachineTool(tool)) this.requireComputerSupported();
     const release = this.enter('computer.call');
     try {
+      if (isLocalMachineTool(tool)) return await this.callLocalMachine(sessionId, tool, args, signal);
       // Same policy function the driver transport enforces, applied here so a
       // denied call costs no driver round-trip and never resolves identity.
       // guardAgentDesktopCall is idempotent.
@@ -648,6 +664,39 @@ export class AutomationService {
       this.rememberSnapshotApplication(sessionId, tool, scopedArgs, result);
       return result;
     } finally { release(); }
+  }
+
+  /**
+   * `local_*` calls run on the machine with the paired companion, not here.
+   *
+   * Two gates, both required: a companion must be paired and selected, and that
+   * companion must have advertised the tool in its readiness report, which it
+   * only does while running with `--shell`. The second check is re-read
+   * from the live device record on every call - never cached - so restarting
+   * the companion without the flag removes the surface immediately instead of
+   * leaving a stale capability behind.
+   */
+  private async callLocalMachine(
+    sessionId: string,
+    tool: LocalMachineTool,
+    args: Record<string, unknown>,
+    signal?: AbortSignal,
+  ): Promise<unknown> {
+    if (!this.computerUse.get()) throw new Error('Computer use is off. Turn it on in Settings > Automation.');
+    const { arguments: scopedArgs } = guardLocalMachineCall(tool, args);
+    const deviceId = this.remoteDevices.selectedDeviceId();
+    if (!deviceId) {
+      throw new Error(`${tool} runs on your own machine, so it needs a paired companion: pair one and select it in Settings > Automation > Remote devices.`);
+    }
+    const readiness = this.remoteDevices.list().find((device) => device.id === deviceId)?.readiness;
+    if (!companionOffersLocalTool(readiness, tool)) {
+      throw new Error(`${tool} is not available: the selected companion was not started with --shell, so it does not allow shell or file access to that machine. Restart it with --shell to enable these tools.`);
+    }
+    try {
+      return await new RemoteComputerTransport(deviceId, this.remoteComputerHub).call(sessionId, tool, scopedArgs, signal);
+    } catch (cause) {
+      throw new Error(cause instanceof Error ? cause.message : String(cause));
+    }
   }
 
   async startBridge(): Promise<void> {
@@ -775,7 +824,7 @@ export class AutomationService {
           arguments: request.arguments,
           ...object(request.payload),
         }, controller.signal);
-      } else if (request.surface === 'computer' && isAgentDesktopSafeTool(request.tool)) {
+      } else if (request.surface === 'computer' && (isAgentDesktopSafeTool(request.tool) || isLocalMachineTool(request.tool))) {
         result = await this.callComputer(request.sessionId, request.tool, object(request.arguments), controller.signal);
       } else {
         throw new Error('Unsupported automation bridge request.');

@@ -5,6 +5,7 @@ import { asyncHandler } from '@/shared/utils.js';
 
 import { safeSessionId, type BrowserCommand } from './browser-protocol.js';
 import { isAgentDesktopSafeTool } from './agent-desktop-client.js';
+import { isLocalMachineTool } from './local-machine-capability.js';
 import { automationService, type AutomationService } from './automation.service.js';
 import { discoverLocalDevelopmentUrls } from './local-sites.js';
 import { parseAutomationGrantFilter } from './automation-grants.js';
@@ -291,12 +292,13 @@ export function createAutomationRouter(service: AutomationService = automationSe
   router.post('/computer/:sessionId/call', asyncHandler(async (request, response) => {
     const id = sessionId(request, response);
     if (!id) return;
-    if (!isAgentDesktopSafeTool(request.body?.tool)) {
-      response.status(400).json({ error: 'Unsupported agent-desktop tool.' });
+    const tool = request.body?.tool;
+    if (!isAgentDesktopSafeTool(tool) && !isLocalMachineTool(tool)) {
+      response.status(400).json({ error: 'Unsupported computer tool.' });
       return;
     }
     try {
-      response.json(await service.callComputer(id, request.body.tool, request.body?.arguments ?? {}));
+      response.json(await service.callComputer(id, tool, request.body?.arguments ?? {}));
     } catch (error) {
       errorResponse(response, error);
     }
