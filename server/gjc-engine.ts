@@ -33,6 +33,7 @@ export {
   serializeGjcWorkerFrame,
 } from './gjc-worker-protocol.js';
 export type {
+  GjcBranchedSession,
   GjcWorkerEventFrame,
   GjcWorkerEventMethod,
   GjcWorkerFrame,

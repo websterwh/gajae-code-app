@@ -27,6 +27,7 @@ import {
   GjcWorkerRequestTracker,
   createWindowsJobLaunch,
   serializeGjcWorkerFrame,
+  type GjcBranchedSession,
   type GjcWorkerEventFrame,
   type GjcWorkerGlobalEventMethod,
   type GjcWorkerRequestFrame,
@@ -770,12 +771,12 @@ export class GjcWorkerSupervisor {
   }
 
   /** Native whole-session fork; resolves to the new provider session id. */
-  forkSession(scope: GjcGoalScope, providerSessionId: string): Promise<string> {
+  forkSession(scope: GjcGoalScope, providerSessionId: string): Promise<GjcBranchedSession> {
     return this.#branchSession('session.fork', scope, providerSessionId, {});
   }
 
   /** Branches the session at one entry, the headless form of `/tree`. */
-  branchSession(scope: GjcGoalScope, providerSessionId: string, entryId: string): Promise<string> {
+  branchSession(scope: GjcGoalScope, providerSessionId: string, entryId: string): Promise<GjcBranchedSession> {
     return this.#branchSession('session.branch', scope, providerSessionId, { entryId });
   }
 
@@ -784,7 +785,7 @@ export class GjcWorkerSupervisor {
     scope: GjcGoalScope,
     providerSessionId: string,
     extra: JsonObject,
-  ): Promise<string> {
+  ): Promise<GjcBranchedSession> {
     const releaseAdmission = this.acquireRoot(method);
     const release = this.beginActivity('settling');
     try {
@@ -793,9 +794,11 @@ export class GjcWorkerSupervisor {
       await this.ensureWorker();
       const response = await this.request(method, scope.appSessionId, { providerSessionId, sessionRoot, ...extra });
       if (!response.ok) throw new Error(response.error.message);
-      const result = response.result as { sessionId?: unknown } | undefined;
-      if (!result || typeof result.sessionId !== 'string') throw new Error('The worker returned no branched session.');
-      return result.sessionId;
+      const result = response.result as { sessionId?: unknown; transcriptPath?: unknown } | undefined;
+      if (!result || typeof result.sessionId !== 'string' || typeof result.transcriptPath !== 'string') {
+        throw new Error('The worker returned no branched session.');
+      }
+      return { sessionId: result.sessionId, transcriptPath: result.transcriptPath };
     } finally {
       release();
       releaseAdmission();

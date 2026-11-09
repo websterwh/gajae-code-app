@@ -115,12 +115,16 @@ export const sessionsService = {
     const projectPath = await resolveSessionProjectPath(row.project_path ?? '');
     const scope = { appSessionId: row.session_id, cwd: projectPath, owner: `session:${row.session_id}` };
     const supervisor = getGjcWorkerSupervisor();
-    const providerSessionId = entryId
+    const successor = entryId
       ? await supervisor.branchSession(scope, row.provider_session_id, entryId)
       : await supervisor.forkSession(scope, row.provider_session_id);
     return {
-      sessionId: sessionsDb.createSession(providerSessionId, row.provider, projectPath),
-      providerSessionId,
+      // The row carries the successor's transcript: history, the sidebar and
+      // resume all resolve through it, so a row without one looks empty.
+      sessionId: sessionsDb.createSession(
+        successor.sessionId, row.provider, projectPath, undefined, undefined, undefined, successor.transcriptPath,
+      ),
+      providerSessionId: successor.sessionId,
     };
   },
 

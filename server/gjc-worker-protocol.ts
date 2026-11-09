@@ -462,3 +462,9 @@ export class GjcWorkerRequestTracker {
     return this.pending.size;
   }
 }
+
+/**
+ * A branched session: the successor's id and the transcript file it lives in.
+ * `createBranchedSession` reports the file, so the id is resolved by opening it.
+ */
+export type GjcBranchedSession = { sessionId: string; transcriptPath: string };

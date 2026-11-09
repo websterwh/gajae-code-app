@@ -32,7 +32,7 @@ import { appendImagesInputTag } from './shared/image-attachments.js';
 import { GjcBunOAuthController, type GjcBunOAuthControllerOptions, type GjcOAuthActivitySnapshot } from './gjc-bun-oauth-controller.js';
 import { GJC_APP_BUILTIN_COMMAND_NAMES } from './gjc-command-surface.generated.js';
 import type { GjcWorkerOAuthRuntime, GjcWorkerRuntime, GjcWorkerWriter } from './gjc-worker.js';
-import type { GjcWorkerActivity, JsonObject } from './gjc-worker-protocol.js';
+import type { GjcBranchedSession, GjcWorkerActivity, JsonObject } from './gjc-worker-protocol.js';
 import { GjcBunAskController } from './gjc-bun-ask-controller.js';
 import { GjcCleanupUnconfirmedError, isGjcCleanupUnconfirmedError } from './gjc-cleanup-error.js';
 import { isVerifiedSdkPatch, type VerifiedSdkPatch } from './gjc-runtime-manifest.js';
@@ -1016,24 +1016,37 @@ export class GjcBunSdkAdapter implements GjcWorkerRuntime {
    * it, then `fork()` publishes the successor file; the new id is read back
    * from that file instead of being synthesised here.
    */
-  async forkGjcSession(providerSessionId: string, sessionRoot: string): Promise<string> {
+  async forkGjcSession(providerSessionId: string, sessionRoot: string): Promise<GjcBranchedSession> {
     this.#assertHealthy();
     return this.#withOperation(async () => {
       const manager = await resumeManager(providerSessionId, sessionRoot);
       const forked = await manager.fork();
       if (!forked) throw new Error(FAILURE);
-      return (await SessionManager.open(forked.newSessionFile, sessionRoot)).getSessionId();
+      return this.#branchedSession(forked.newSessionFile, sessionRoot);
     });
   }
 
   /** The step `/tree` performs: a new session file rooted at `entryId`. */
-  async branchGjcSession(providerSessionId: string, entryId: string, sessionRoot: string): Promise<string> {
+  async branchGjcSession(providerSessionId: string, entryId: string, sessionRoot: string): Promise<GjcBranchedSession> {
     this.#assertHealthy();
     return this.#withOperation(async () => {
-      const sessionId = (await resumeManager(providerSessionId, sessionRoot)).createBranchedSession(entryId);
-      if (!sessionId) throw new Error(FAILURE);
-      return sessionId;
+      const transcriptPath = (await resumeManager(providerSessionId, sessionRoot)).createBranchedSession(entryId);
+      if (!transcriptPath) throw new Error(FAILURE);
+      return this.#branchedSession(transcriptPath, sessionRoot);
     });
+  }
+
+  /**
+   * `createBranchedSession` hands back the successor's file, not its session id,
+   * so the id is read back from that file. The path returns with it: history,
+   * the sidebar and resume all read the transcript a row points at, and a row
+   * registered without one lists as an empty conversation.
+   */
+  async #branchedSession(transcriptPath: string, sessionRoot: string): Promise<GjcBranchedSession> {
+    return {
+      sessionId: (await SessionManager.open(transcriptPath, sessionRoot)).getSessionId(),
+      transcriptPath,
+    };
   }
 
   async abortGjcSession(sessionId: string): Promise<boolean> {
