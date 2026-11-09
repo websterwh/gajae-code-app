@@ -1,0 +1,67 @@
+services:
+  gajae-app:
+    image: ghcr.io/websterwh/gajae-app-docker:remote-cua-companion
+    build:
+      context: .
+      args:
+        APP_REPOSITORY: ${APP_REPOSITORY:-https://github.com/websterwh/gajae-code-app.git}
+        APP_REF: ${APP_REF:-feat/remote-cua-companion}
+    container_name: gajae-app
+    restart: unless-stopped
+    ports:
+      - "${SERVER_PORT:-3001}:3001"
+      - "${SSH_PORT:-2222}:${SSH_PORT:-2222}"
+    environment:
+      # Network and Admission
+      - HOST=0.0.0.0
+      - SERVER_PORT=3001
+      - GAJAE_ALLOW_UNAUTH_REMOTE=1
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-*}
+      # Set to 1 only when a reverse proxy (nginx, godoxy, Caddy, etc.) in
+      # front of this container terminates TLS itself; it lets the Remote CUA
+      # companion connect over the proxy's X-Forwarded-Proto header instead of
+      # requiring this container to see TLS directly. Leave unset otherwise.
+      - GAJAE_TRUST_PROXY_TLS=${GAJAE_TRUST_PROXY_TLS:-}
+      
+      # Storage and Data
+      - DATABASE_PATH=/data/auth.db
+      - WORKSPACES_ROOT=/workspace
+      - GJC_WORKER_AGENT_DIR=/root/.gjc/agent
+      # GAJAE_COMPANION_DOWNLOAD_TEMPLATE is intentionally not set here: it is
+      # baked into the image at build time from APP_REPOSITORY and defaults
+      # per-fork. Set it explicitly only to override that default.
+
+      # Universal Addon Package Provisioning
+      - APT_PACKAGES=${APT_PACKAGES:-}
+      - UV_TOOLS=${UV_TOOLS:-}
+      - PIP_PACKAGES=${PIP_PACKAGES:-}
+      - GITHUB_APPS=${GITHUB_APPS:-}
+      - AUTO_UPDATE_PACKAGES=${AUTO_UPDATE_PACKAGES:-true}
+      - CHECK_PACKAGE_UPDATES=${CHECK_PACKAGE_UPDATES:-true}
+      - POST_COMMANDS=${POST_COMMANDS:-}
+      # Direct Container SSH & CLI Access
+      - SSH_ENABLE=${SSH_ENABLE:-false}
+      - SSH_PORT=${SSH_PORT:-2222}
+      - SSH_ALLOW_PASSWORD=${SSH_ALLOW_PASSWORD:-false}
+      - SSH_PASSWORD=${SSH_PASSWORD:-}
+      - SSH_PUBLIC_KEYS=${SSH_PUBLIC_KEYS:-}
+      - SSH_NO_AUTH=${SSH_NO_AUTH:-false}
+      - SSH_DEFAULT_COMMAND=${SSH_DEFAULT_COMMAND:-}
+      - INSTALL_GJC_CLI=${INSTALL_GJC_CLI:-true}
+
+      # Optional AI Provider API Keys (or configure them in the web settings)
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+    volumes:
+      # Persistent app data: auth.db, logs, caches, ssh keys, installed apps,
+      # and (via symlinks the entrypoint creates) ~/.gajae-app and ~/.claude -
+      # chat transcripts, chat images, and per-provider session state. auth.db
+      # only stores session *rows*; their actual content lives under those two
+      # directories, so both must stay under this one volume or chats reappear
+      # empty after every recreate.
+      - ./data:/data
+      # Workspace directory containing projects for GJC agent
+      - ${HOST_WORKSPACE_DIR:-./workspace}:/workspace
+      # Persistent GJC agent configuration and credentials
+      - ./gjc-config:/root/.gjc
