@@ -1431,8 +1431,10 @@ app.get('/api/projects/:projectId/sessions/:sessionId/token-usage', authenticate
     }
 }));
 
-// Serve React app for all other routes (excluding static files)
-app.get('*', (req, res) => {
+// Serve React app for all other routes (excluding static files). Express 5's
+// path-to-regexp rejects a bare '*', and '/*splat' alone misses the root, so
+// the SPA fallback lists both.
+app.get(['/', '/*splat'], (req, res) => {
     // Skip requests for static assets (files with extensions)
     if (path.extname(req.path)) {
         return res.status(404).send('Not found');
