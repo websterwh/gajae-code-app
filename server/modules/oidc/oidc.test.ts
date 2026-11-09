@@ -4,13 +4,14 @@ import { createServer, type Server } from 'node:http';
 import test from 'node:test';
 
 import { normalizeIssuer, oidcEnforcing, validateOidcConfig, type OidcConfig } from './oidc.config.js';
-import { clientAddressAllowed, isExemptPath } from './oidc.middleware.js';
+import { clientAddressAllowed, isExemptPath, unauthRemoteAllowed } from './oidc.middleware.js';
 import {
   buildAuthorizeUrl,
   completeSignIn,
   createTransaction,
   discoverOidc,
   identityAllowed,
+  identityRejection,
 } from './oidc.provider.js';
 
 const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
@@ -154,7 +155,9 @@ test('email gates allow by list, by domain, or not at all', () => {
   assert.equal(identityAllowed({ ...base, allowedDomains: ['example.com'] }, identity), true);
   assert.equal(identityAllowed({ ...base, allowedDomains: ['other.com'] }, identity), false);
   assert.equal(identityAllowed({ ...base, allowedEmails: ['owner@example.com'] }, identity), true);
-  assert.equal(identityAllowed(base, { ...identity, emailVerified: false }), false);
+  // The provider's flag is reported, not decisive: Pocket ID leaves it unset for
+  // accounts it creates, which locked the owner out of an app nobody else used.
+  assert.equal(identityAllowed(base, { ...identity, emailVerified: false }), true);
 });
 
 test('groups gate sign-in and every configured list has to pass', () => {
@@ -165,6 +168,31 @@ test('groups gate sign-in and every configured list has to pass', () => {
   assert.equal(identityAllowed({ ...base, allowedGroups: ['other'] }, { ...identity, groups: [] }), false);
   assert.equal(identityAllowed({ ...base, allowedEmails: ['owner@example.com'], allowedGroups: ['gajae-admins'] }, identity), true);
   assert.equal(identityAllowed({ ...base, allowedEmails: ['someone@example.com'], allowedGroups: ['gajae-admins'] }, identity), false);
+});
+
+test('a rejection names the gate that refused the identity', () => {
+  const base = configFor('https://auth.example.com');
+  const identity = { sub: 's', email: 'owner@example.com', emailVerified: true, groups: ['staff'] };
+  assert.equal(identityRejection(base, identity), null);
+  assert.match(String(identityRejection({ ...base, allowedDomains: ['other.com'] }, identity)), /domain example\.com/u);
+  assert.match(String(identityRejection({ ...base, allowedEmails: ['x@example.com'] }, identity)), /allowed list/u);
+  assert.match(String(identityRejection({ ...base, allowedGroups: ['admins'] }, identity)), /staff/u);
+  assert.match(String(identityRejection({ ...base, allowedGroups: ['admins'] }, { ...identity, groups: [] })), /no groups/u);
+});
+
+test('GAJAE_ALLOW_UNAUTH_REMOTE is the deliberate break-glass switch', () => {
+  const saved = process.env.GAJAE_ALLOW_UNAUTH_REMOTE;
+  try {
+    delete process.env.GAJAE_ALLOW_UNAUTH_REMOTE;
+    assert.equal(unauthRemoteAllowed(), false);
+    process.env.GAJAE_ALLOW_UNAUTH_REMOTE = '1';
+    assert.equal(unauthRemoteAllowed(), true);
+    process.env.GAJAE_ALLOW_UNAUTH_REMOTE = 'true';
+    assert.equal(unauthRemoteAllowed(), false);
+  } finally {
+    if (saved === undefined) delete process.env.GAJAE_ALLOW_UNAUTH_REMOTE;
+    else process.env.GAJAE_ALLOW_UNAUTH_REMOTE = saved;
+  }
 });
 
 test('local access is granted per address, and defaults to private ranges', () => {

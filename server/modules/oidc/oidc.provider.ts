@@ -246,17 +246,35 @@ export async function completeSignIn(
   };
 }
 
-export function identityAllowed(config: OidcConfig, identity: OidcIdentity): boolean {
-  if (!identity.emailVerified) return false;
+/**
+ * Why an identity is refused, phrased for the person staring at the sign-in
+ * page. Every configured gate has to pass: an email list and a group list
+ * together mean "this person, in this group", not "either".
+ *
+ * The provider's own `email_verified` flag is reported, never decisive: Pocket
+ * ID leaves it unset for accounts it creates, and treating that as failure
+ * locked the owner out of an app nobody else could reach.
+ */
+export function identityRejection(config: OidcConfig, identity: OidcIdentity): string | null {
   const email = identity.email.toLowerCase();
   const domain = email.slice(email.lastIndexOf('@') + 1);
-  // Every configured gate has to pass: an email list and a group list together
-  // mean "this person, in this group", not "either"
-  if (config.allowedEmails.length && !config.allowedEmails.includes(email)) return false;
-  if (config.allowedDomains.length && !config.allowedDomains.includes(domain)) return false;
+  if (config.allowedEmails.length && !config.allowedEmails.includes(email)) {
+    return 'The address is not on the allowed list.';
+  }
+  if (config.allowedDomains.length && !config.allowedDomains.includes(domain)) {
+    return `The domain ${domain} is not allowed.`;
+  }
   if (config.allowedGroups.length) {
     const owned = new Set(identity.groups.map((group) => group.toLowerCase()));
-    if (!config.allowedGroups.some((group) => owned.has(group.toLowerCase()))) return false;
+    if (!config.allowedGroups.some((group) => owned.has(group.toLowerCase()))) {
+      return identity.groups.length
+        ? `None of the account's groups (${identity.groups.join(', ')}) is allowed.`
+        : 'The provider sent no groups for this account, so no allowed group could match; check the groups scope and the account memberships.';
+    }
   }
-  return true;
+  return null;
+}
+
+export function identityAllowed(config: OidcConfig, identity: OidcIdentity): boolean {
+  return identityRejection(config, identity) === null;
 }

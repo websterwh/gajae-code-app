@@ -34,6 +34,15 @@ export function isExemptPath(pathname: string): boolean {
   return STATIC_FILE.test(pathname);
 }
 
+/**
+ * The deliberate break-glass switch. When the operator runs with no
+ * authentication at all, a broken or half-configured provider must never be able
+ * to lock them out of their own app, so the gate stays inert.
+ */
+export function unauthRemoteAllowed(): boolean {
+  return process.env.GAJAE_ALLOW_UNAUTH_REMOTE === '1';
+}
+
 const stripMappedV4 = (address: string): string => address.replace(/^::ffff:/iu, '');
 
 const isLoopback = (address: string): boolean => address === '::1'
@@ -98,6 +107,7 @@ export function createOidcGate() {
   return (request: Request, response: Response, next: NextFunction) => {
     const config = readOidcConfig();
     if (isDesktopMode() || !oidcEnforcing(config) || isExemptPath(request.path)) return next();
+    if (unauthRemoteAllowed()) return next();
 
     if (config.allowLocal) {
       const address = request.ip ?? request.socket.remoteAddress ?? '';

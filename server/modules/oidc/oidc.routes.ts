@@ -18,7 +18,7 @@ import {
   completeSignIn,
   createTransaction,
   discoverOidc,
-  identityAllowed,
+  identityRejection,
 } from './oidc.provider.js';
 import {
   SESSION_COOKIE,
@@ -163,8 +163,9 @@ export function createOidcRouter() {
       codeVerifier: transaction.codeVerifier,
       nonce: transaction.nonce,
     });
-    if (!identityAllowed(config, identity)) {
-      return fail(response, 403, 'OIDC_IDENTITY_NOT_ALLOWED', `Sign-in is not allowed for ${identity.email}.`);
+    const rejection = identityRejection(config, identity);
+    if (rejection) {
+      return fail(response, 403, 'OIDC_IDENTITY_NOT_ALLOWED', `Sign-in is not allowed for ${identity.email}. ${rejection}`);
     }
 
     const owner = ensureOwner(identity);
