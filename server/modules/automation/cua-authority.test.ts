@@ -286,6 +286,34 @@ test('a driver dead end names the recovery path instead of ending the loop', asy
   );
 });
 
+test('a batch is authorized by the application its ref_ids were minted in', async (t) => {
+  const { instance, grants, dispatched } = service(t);
+  grants.grant({ kind: 'application', value: 'TextEdit', scope: 'session', sessionId: 'session-a' });
+  instance.cua.call = async (tool, args) => {
+    dispatched.push({ tool, args });
+    if (tool === 'desktop_snapshot') {
+      return { structuredContent: { data: { snapshot_id: 's1', app: 'TextEdit' } } };
+    }
+    return { content: [{ type: 'text', text: 'ok' }] };
+  };
+  await instance.callComputer('session-a', 'desktop_snapshot', { app: 'TextEdit' });
+  const commands = JSON.stringify([{ command: 'type', args: { ref_id: '@s1:e2', text: 'hi' } }]);
+  await instance.callComputer('session-a', 'desktop_batch', { commands_json: commands });
+  assert.deepEqual(dispatched.at(-1), { tool: 'desktop_batch', args: { commands_json: commands } });
+});
+
+test('a batch whose refs belong to no snapshot is rejected, never dispatched', async (t) => {
+  const { instance, grants, dispatched } = service(t);
+  grants.grant({ kind: 'application', value: 'TextEdit', scope: 'session', sessionId: 'session-a' });
+  await assert.rejects(
+    instance.callComputer('session-a', 'desktop_batch', {
+      commands_json: JSON.stringify([{ command: 'click', args: { ref_id: '@unknown:e1' } }]),
+    }),
+    /requires a resolvable application identity/u,
+  );
+  assert.deepEqual(dispatched, []);
+});
+
 /* -------------------------------------------------------------------------- */
 /* The guard sits at the driver transport                                     */
 /* -------------------------------------------------------------------------- */
