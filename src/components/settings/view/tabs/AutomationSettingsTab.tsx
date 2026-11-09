@@ -300,10 +300,23 @@ export default function AutomationSettingsTab() {
     // keep re-reading an endpoint nobody is looking at.
     const poll = window.setInterval(() => {
       if (document.visibilityState === 'visible') void refreshRemoteDevices();
-    }, 5_000);
+    }, 2_000);
+    // A tab that was hidden, or a window that just regained focus, is exactly
+    // when the cached view is oldest - re-read immediately instead of waiting
+    // out the next poll tick.
+    const refreshOnVisible = () => {
+      if (document.visibilityState === 'visible') void refreshRemoteDevices();
+    };
+    document.addEventListener('visibilitychange', refreshOnVisible);
+    window.addEventListener('focus', refreshOnVisible);
     // EventSource auto-reconnects on its own after a drop; nothing else to
     // do here beyond closing it on unmount.
-    return () => { source?.close(); window.clearInterval(poll); };
+    return () => {
+      source?.close();
+      window.clearInterval(poll);
+      document.removeEventListener('visibilitychange', refreshOnVisible);
+      window.removeEventListener('focus', refreshOnVisible);
+    };
   }, []);
 
 
@@ -474,10 +487,20 @@ export default function AutomationSettingsTab() {
             </select>
           </div>
           {remoteDevices.length === 0 ? <p className="border-t border-border p-4 text-xs text-muted-foreground">No paired remote devices.</p> : remoteDevices.map((device) => {
-            const ready = device.enabled && Boolean(device.lastSeenAt) && device.readiness?.schemaSupported === true;
+            // `connected` is the live socket state and is what "online" means.
+            // `lastSeenAt` only moves when a readiness report arrives, so
+            // reading it as the liveness signal showed a freshly connected but
+            // still probing companion as "Offline" - the state the user then
+            // had to refresh the page to clear.
             const state = !device.enabled
               ? (device.connected ? 'Connected - needs approval' : 'Needs approval')
-              : !device.lastSeenAt ? 'Offline' : ready ? 'Ready' : 'agent-desktop unsupported or permissions missing';
+              : !device.connected
+                ? 'Offline'
+                : device.readiness?.schemaSupported === true
+                  ? 'Ready'
+                  : device.readiness
+                    ? 'agent-desktop unsupported or permissions missing'
+                    : 'Connected - checking agent-desktop';
             return (
               <div key={device.id} className="border-t border-border p-4">
                 <div className="flex items-start justify-between gap-3">

@@ -61,6 +61,10 @@ export function useProjectGitSummary(projectId: string | undefined, enabled: boo
     try {
       const response = await api.gitStatus(projectId, sessionId);
       const body = await response.json() as Record<string, unknown>;
+      if (response.ok && body.isRepository === false) {
+        publish({ kind: 'not-a-repository' });
+        return;
+      }
       if (!response.ok || typeof body.error === 'string') {
         // The endpoint answers 200 with an error string for a directory that is
         // simply not a repository, which is a normal state, not a failure.

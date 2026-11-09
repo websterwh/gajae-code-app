@@ -15,6 +15,19 @@ import { isAgentDesktopSafeTool } from './agent-desktop-client.js';
 import { guardLocalMachineCall, isLocalMachineTool, type ComputerTool } from './local-machine-capability.js';
 import { RemoteComputerDeviceRegistry } from './remote-computer-devices.js';
 
+/**
+ * How long one remote desktop call may run.
+ *
+ * Accessibility snapshots, screenshots and window listings are not fast on a
+ * busy Mac: `desktop_snapshot` on a large app routinely needs 30-90 seconds.
+ * The old 30 s cap rejected those calls while the companion was still working
+ * on them, so the model retried a call that had in fact succeeded and the
+ * transcript showed an error for every slow-but-successful step. The cap still
+ * has to exist - a wedged companion must not hang a turn forever - so it is
+ * generous rather than tight.
+ */
+const REMOTE_CALL_TIMEOUT_MS = 180_000;
+
 type Pending = { resolve: (value: unknown) => void; reject: (reason: Error) => void; timer: NodeJS.Timeout };
 type Connection = { socket: WebSocket; pending: Map<string, Pending>; seen: Set<string> };
 
@@ -141,7 +154,7 @@ export class RemoteComputerHub {
     // the companion enforces the --shell boundary again on its side.
     const guarded = isLocalMachineTool(tool) ? guardLocalMachineCall(tool, args) : guardAgentDesktopCall(tool, args);
     const requestId = randomUUID();
-    const deadline = Date.now() + 30_000;
+    const deadline = Date.now() + REMOTE_CALL_TIMEOUT_MS;
     if (connection.seen.has(requestId)) throw new Error('Duplicate remote computer request.');
     connection.seen.add(requestId);
     const request: RemoteCuaComputerRequest = {
@@ -162,7 +175,7 @@ export class RemoteComputerHub {
         try { connection.socket.send(JSON.stringify({ type: 'cancel', protocolVersion: REMOTE_CUA_PROTOCOL_VERSION, requestId, deviceId })); } catch { /* disconnected */ }
         reject(error);
       };
-      const timer = setTimeout(() => finish(new Error('Remote computer request timed out.')), 30_000);
+      const timer = setTimeout(() => finish(new Error('Remote computer request timed out.')), REMOTE_CALL_TIMEOUT_MS);
       connection.pending.set(requestId, { resolve, reject, timer });
       signal?.addEventListener('abort', () => finish(new Error('Remote computer request cancelled.')), { once: true });
       connection.socket.send(JSON.stringify(request));
