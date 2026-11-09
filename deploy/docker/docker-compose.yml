@@ -15,9 +15,10 @@ services:
       - "${SSH_PORT:-2222}:${SSH_PORT:-2222}"
     environment:
       # Network and Admission
-      - HOST=0.0.0.0
+      # HOST is the only bind knob: 0.0.0.0 is required for port mapping, and
+      # 127.0.0.1 keeps the app inside the container network instead.
+      - HOST=${HOST:-0.0.0.0}
       - SERVER_PORT=3001
-      - GAJAE_ALLOW_UNAUTH_REMOTE=1
       # NO_AUTH=1 disables sign-in entirely (break-glass): stored auth settings
       # are kept, the gate just stops enforcing them.
       - NO_AUTH=${NO_AUTH:-}

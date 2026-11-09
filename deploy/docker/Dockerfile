@@ -141,7 +141,6 @@ ENV PATH="/data/bin:/root/.local/share/aquaproj-aqua/bin:/usr/local/bin:$PATH" \
     NPM_CONFIG_CACHE="/data/cache/npm" \
     HOST=0.0.0.0 \
     SERVER_PORT=3001 \
-    GAJAE_ALLOW_UNAUTH_REMOTE=1 \
     ALLOWED_HOSTS=* \
     DATABASE_PATH=/data/auth.db \
     WORKSPACES_ROOT=/workspace \

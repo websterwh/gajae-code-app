@@ -169,12 +169,21 @@ export function createOidcRouter() {
     if (!code) return fail(response, 400, 'OIDC_CODE_MISSING', 'The provider returned no authorization code.');
 
     const discovery = await discoverOidc(config.issuer);
-    const identity = await completeSignIn(config, discovery, {
-      code,
-      redirectUri: transaction.redirectUri,
-      codeVerifier: transaction.codeVerifier,
-      nonce: transaction.nonce,
-    });
+    let identity: Awaited<ReturnType<typeof completeSignIn>>;
+    try {
+      identity = await completeSignIn(config, discovery, {
+        code,
+        redirectUri: transaction.redirectUri,
+        codeVerifier: transaction.codeVerifier,
+        nonce: transaction.nonce,
+      });
+    } catch (error) {
+      // A refused exchange is the operator's only lead - an unmatched client
+      // secret, an unregistered redirect URI, an expired code - so it is
+      // reported here instead of surfacing as a bare 500 page.
+      const detail = error instanceof Error ? error.message : 'The provider refused the exchange.';
+      return fail(response, 401, 'OIDC_SIGN_IN_FAILED', `The provider rejected this sign-in: ${detail}`);
+    }
     const rejection = identityRejection(config, identity);
     if (rejection) {
       return fail(response, 403, 'OIDC_IDENTITY_NOT_ALLOWED', `Sign-in is not allowed for ${identity.email}. ${rejection}`);

@@ -16,7 +16,7 @@ export function admitQaHost(host, tailscaleIps = []) {
   throw new Error(`Refusing non-loopback QA host ${host}; it is not a current Tailscale IPv4 address.`);
 }
 
-export function isolatedQaEnvironment({ parentEnv, qaHome, host, vitePort, serverPort, remote }) {
+export function isolatedQaEnvironment({ parentEnv, qaHome, host, vitePort, serverPort }) {
   const agentDir = path.join(qaHome, '.gjc', 'agent');
   const sourceHome = parentEnv.HOME || os.homedir();
   const env = {
@@ -38,8 +38,9 @@ export function isolatedQaEnvironment({ parentEnv, qaHome, host, vitePort, serve
     VITE_PORT: String(vitePort),
     SERVER_PORT: String(serverPort),
   };
+  // HOST alone decides the interface now, so a retired override inherited from
+  // the parent environment must not survive into the child.
   delete env.GAJAE_ALLOW_UNAUTH_REMOTE;
-  if (remote) env.GAJAE_ALLOW_UNAUTH_REMOTE = '1';
   return env;
 }
 
@@ -88,7 +89,6 @@ export async function main() {
       host: admission.host,
       vitePort,
       serverPort,
-      remote: admission.remote,
     });
 
     console.log(`[isolated-qa] HOME: ${qaHome}`);

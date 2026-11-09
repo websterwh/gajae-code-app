@@ -119,11 +119,13 @@ keep the existing loopback/VPN/tunnel or authenticated-proxy access boundary.
 
 ## Who web mode is for
 
-Web mode is a single-owner tool. The server has no sign-in: every client that
-reaches it is the owner, and `GAJAE_ALLOW_UNAUTH_REMOTE=1` states exactly that
-for a non-loopback bind. The access boundary is the network — loopback, a
-tailnet, an SSH tunnel, or a reverse proxy that authenticates before it
-forwards. A multi-user deployment with its own login is future scope, not a
+Web mode is a single-owner tool. `HOST` decides the interface: loopback keeps it
+local, `0.0.0.0` exposes it wherever that address routes, and the server only
+warns about the wider bind rather than refusing it. The access boundary is still
+the network — loopback, a tailnet, an SSH tunnel, or a reverse proxy that
+authenticates before it forwards. On top of that, OIDC sign-in can be enabled in
+Settings, and `NO_AUTH=1` turns the requirement off without deleting what was
+saved. A multi-user deployment with its own login is future scope, not a
 configuration of the current server; do not publish the bound address beyond a
 network you would trust with a shell on that machine.
 

@@ -75,9 +75,11 @@ export function writeOidcConfig(patch: Partial<OidcConfig>): OidcConfig {
     issuer: patch.issuer === undefined ? current.issuer : normalizeIssuer(patch.issuer),
     clientId: patch.clientId === undefined ? current.clientId : String(patch.clientId).trim(),
     // The client never receives the secret, so an absent field means "keep it".
+    // A pasted secret routinely carries a trailing newline, and the provider
+    // rejects that as invalid_client at the token endpoint.
     clientSecret: patch.clientSecret === undefined || patch.clientSecret === null
       ? current.clientSecret
-      : String(patch.clientSecret),
+      : String(patch.clientSecret).trim(),
     scopes: patch.scopes === undefined ? current.scopes : (String(patch.scopes).trim() || EMPTY_CONFIG.scopes),
     redirectUri: patch.redirectUri === undefined ? current.redirectUri : String(patch.redirectUri).trim(),
     allowedGroups: patch.allowedGroups === undefined ? current.allowedGroups : exactListOf(patch.allowedGroups),

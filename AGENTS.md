@@ -58,12 +58,12 @@ job projection protocol). `scripts/` holds build/release/verify tooling.
   `/tmp/gjc-dev/README.md`). Reuse it rather than starting a second
   `npm run dev` on the same ports. On `home-server` it serves the tailnet
   from its own database on **3101/5174**:
-  `HOST=$(tailscale ip -4) SERVER_PORT=3101 VITE_PORT=5174 GAJAE_ALLOW_UNAUTH_REMOTE=1 DATABASE_PATH=$HOME/.gajae-app-dev/auth.db npm run dev`.
+  `HOST=$(tailscale ip -4) SERVER_PORT=3101 VITE_PORT=5174 DATABASE_PATH=$HOME/.gajae-app-dev/auth.db npm run dev`.
   There, chatmux owns 3001 and `tailscale serve` already proxies
   `127.0.0.1:3001` and `127.0.0.1:5173` with Funnel on `:443`, so never run a
-  dev stack on loopback 3001/5173 on that host. The unauth override disables
-  authentication on the bound address, so never combine it with a bind that
-  is reachable outside the tailnet, or put it behind `serve`/Funnel.
+  dev stack on loopback 3001/5173 on that host. `HOST=$(tailscale ip -4)` binds
+  the tailnet address only; never bind `0.0.0.0` there, because `serve`/Funnel
+  would then publish the dev server.
 - **Never run a dev server on `~/.gajae-app` while the desktop app is
   installed.** Without `DATABASE_PATH` the server uses `~/.gajae-app`, and
   `gajae-core jobs` takes an exclusive lock on `jobs.sqlite3` there.
