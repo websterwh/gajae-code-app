@@ -1,4 +1,6 @@
-import webpush from 'web-push';
+// web-push 4 is an ES module with named exports only, so a default import
+// resolves to nothing at runtime even though the types still advertise one.
+import * as webpush from 'web-push';
 
 import { appConfigDb, notificationChannelEndpointsDb } from '@/modules/database/index.js';
 
