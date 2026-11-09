@@ -11,6 +11,8 @@ export const GJC_WORKER_REQUEST_METHODS = [
   'worker.admission',
   'session.start',
   'session.resume',
+  'session.fork',
+  'session.branch',
   'turn.start',
   'turn.abort',
   'turn.steer',

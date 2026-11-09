@@ -1011,6 +1011,31 @@ export class GjcBunSdkAdapter implements GjcWorkerRuntime {
     return true;
   }
 
+  /**
+   * Native whole-session fork. The manager is opened exactly as a resume opens
+   * it, then `fork()` publishes the successor file; the new id is read back
+   * from that file instead of being synthesised here.
+   */
+  async forkGjcSession(providerSessionId: string, sessionRoot: string): Promise<string> {
+    this.#assertHealthy();
+    return this.#withOperation(async () => {
+      const manager = await resumeManager(providerSessionId, sessionRoot);
+      const forked = await manager.fork();
+      if (!forked) throw new Error(FAILURE);
+      return (await SessionManager.open(forked.newSessionFile, sessionRoot)).getSessionId();
+    });
+  }
+
+  /** The step `/tree` performs: a new session file rooted at `entryId`. */
+  async branchGjcSession(providerSessionId: string, entryId: string, sessionRoot: string): Promise<string> {
+    this.#assertHealthy();
+    return this.#withOperation(async () => {
+      const sessionId = (await resumeManager(providerSessionId, sessionRoot)).createBranchedSession(entryId);
+      if (!sessionId) throw new Error(FAILURE);
+      return sessionId;
+    });
+  }
+
   async abortGjcSession(sessionId: string): Promise<boolean> {
     this.#assertHealthy();
     return this.#withOperation(() => this.#abortGjcSession(sessionId));
