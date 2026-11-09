@@ -1,0 +1,8 @@
+.git
+.github
+data/
+workspace/
+gjc-config/
+.env
+.env.example
+README.md
