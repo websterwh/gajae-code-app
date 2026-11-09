@@ -64,10 +64,19 @@ function browserAliases() {
   return { '@': browserSourceDirectory }
 }
 
+// Rolldown's build only accepts the function form of manualChunks, so the
+// stable groups above are matched by package path instead of by entry name.
+function manualChunks(id) {
+  for (const [group, packages] of Object.entries(dependencyChunks)) {
+    if (packages.some((name) => id.includes(`/node_modules/${name}/`))) return group
+  }
+  return undefined
+}
+
 function productionBuild() {
   return {
     chunkSizeWarningLimit: 1000,
-    rollupOptions: { output: { manualChunks: dependencyChunks } },
+    rollupOptions: { output: { manualChunks } },
     outDir: 'dist',
   }
 }

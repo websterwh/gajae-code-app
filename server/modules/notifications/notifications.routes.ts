@@ -8,7 +8,7 @@ import {
   parseWebPushSubscription,
   sendWebPushNotification,
 } from '@/modules/notifications/services/web-push.service.js';
-import { asyncHandler } from '@/shared/utils.js';
+import { asyncHandler, routeParam } from '@/shared/utils.js';
 
 const router = express.Router();
 
@@ -126,7 +126,8 @@ router.patch('/endpoints/:channel/:endpointId', asyncHandler((request, response)
     { log: 'Error updating notification endpoint:', body: 'Failed to update notification endpoint' },
     () => {
       const userId = authenticatedUserId(request);
-      const { channel, endpointId } = request.params;
+      const channel = routeParam(request.params.channel);
+      const endpointId = routeParam(request.params.endpointId);
       const updated = notificationChannelEndpointsDb.setEndpointEnabled(userId, channel, endpointId, request.body.enabled);
       if (!updated) return response.status(404).json({ error: 'Notification endpoint not found' });
 
@@ -146,7 +147,8 @@ router.delete('/endpoints/:channel/:endpointId', asyncHandler((request, response
     { log: 'Error removing notification endpoint:', body: 'Failed to remove notification endpoint' },
     () => {
       const userId = authenticatedUserId(request);
-      const { channel, endpointId } = request.params;
+      const channel = routeParam(request.params.channel);
+      const endpointId = routeParam(request.params.endpointId);
       const didRemove = notificationChannelEndpointsDb.removeEndpoint(userId, channel, endpointId);
       if (!didRemove) return response.status(404).json({ error: 'Notification endpoint not found' });
 

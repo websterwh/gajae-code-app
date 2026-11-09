@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 
 import { GJC_BROWSER_BACKENDS } from '@/gjc-engine.js';
-import { asyncHandler } from '@/shared/utils.js';
+import { asyncHandler, routeParam } from '@/shared/utils.js';
 
 import { safeSessionId, type BrowserCommand } from './browser-protocol.js';
 import { isAgentDesktopSafeTool } from './agent-desktop-client.js';
@@ -178,10 +178,11 @@ export function createAutomationRouter(service: AutomationService = automationSe
   }));
   router.patch('/remote-computers/:deviceId', asyncHandler((request, response) => {
     try {
+      const deviceId = routeParam(request.params.deviceId);
       const { name, enabled } = request.body ?? {};
       if (name !== undefined && typeof name !== 'string') throw new Error('name must be a string.');
       if (enabled !== undefined && typeof enabled !== 'boolean') throw new Error('enabled must be true or false.');
-      service.remoteDevices.update(request.params.deviceId, { ...(name !== undefined ? { name } : {}), ...(enabled !== undefined ? { enabled } : {}) });
+      service.remoteDevices.update(deviceId, { ...(name !== undefined ? { name } : {}), ...(enabled !== undefined ? { enabled } : {}) });
       // An already-connected pending companion has no other way to learn
       // it was just Trusted - it is not polling anything, and its next
       // hello only happens on reconnect, so push it live instead. This
@@ -189,15 +190,16 @@ export function createAutomationRouter(service: AutomationService = automationSe
       // itself fires the shared 'changed' event); a rename-only update
       // still needs its own notification since notifyApproved only runs
       // when enabled became true.
-      if (enabled === true) service.remoteComputerHub.notifyApproved(request.params.deviceId);
+      if (enabled === true) service.remoteComputerHub.notifyApproved(deviceId);
       else service.remoteComputerHub.notifyDevicesChanged();
       response.json({ devices: service.remoteDevices.list(), selectedDeviceId: service.remoteDevices.selectedDeviceId() });
     } catch (error) { response.status(400).json({ error: error instanceof Error ? error.message : 'Invalid remote computer device.' }); }
   }));
   router.delete('/remote-computers/:deviceId', asyncHandler((request, response) => {
     try {
-      service.remoteComputerHub.disconnect(request.params.deviceId, 'revoked');
-      service.remoteDevices.revoke(request.params.deviceId);
+      const deviceId = routeParam(request.params.deviceId);
+      service.remoteComputerHub.disconnect(deviceId, 'revoked');
+      service.remoteDevices.revoke(deviceId);
       service.remoteComputerHub.notifyDevicesChanged();
       response.status(204).end();
     } catch (error) { response.status(404).json({ error: error instanceof Error ? error.message : 'Remote computer device was not found.' }); }

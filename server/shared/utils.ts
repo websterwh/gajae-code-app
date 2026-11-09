@@ -66,6 +66,15 @@ export function snapshotHttpActivity() {
   };
 }
 
+/**
+ * Express 5 types a route param as string | string[] because a wildcard route
+ * captures a list of segments. Every named param this server declares is a
+ * single segment, so this narrows one without an assertion.
+ */
+export function routeParam(value: string | string[] | undefined): string {
+  return typeof value === 'string' ? value : value?.[0] ?? '';
+}
+
 export function asyncHandler(handler: (req: Request, res: Response, next: NextFunction) => unknown | Promise<unknown>): RequestHandler {
   return (req, res, next) => {
     let release: (() => void) | undefined;
