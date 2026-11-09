@@ -11,6 +11,7 @@ import {
   GjcWorkerProtocolError,
   serializeGjcWorkerFrame,
   isGjcWorkerActivity,
+  type GjcBranchedSession,
   type GjcWorkerActivity,
   type GjcWorkerEventFrame,
   type GjcWorkerGlobalEventMethod,
@@ -58,10 +59,10 @@ export type GjcWorkerRuntime = {
   controlGjcGoal?(runId: string, scope: GjcGoalScope, command?: GjcGoalCommand, stopAfterMutation?: boolean): Promise<GjcGoalSnapshot>;
   spawnGjc(message: string, options: JsonObject, writer: GjcWorkerWriter): SpawnedRun;
   abortGjcSession(sessionId: string): Promise<boolean>;
-  /** Native whole-session fork; resolves to the successor provider session id. */
-  forkGjcSession?(providerSessionId: string, sessionRoot: string): Promise<string>;
+  /** Native whole-session fork; resolves to the successor session and its transcript. */
+  forkGjcSession?(providerSessionId: string, sessionRoot: string): Promise<GjcBranchedSession>;
   /** Native /tree branch step: a new session file rooted at `entryId`. */
-  branchGjcSession?(providerSessionId: string, entryId: string, sessionRoot: string): Promise<string>;
+  branchGjcSession?(providerSessionId: string, entryId: string, sessionRoot: string): Promise<GjcBranchedSession>;
   /**
    * Delivers a message into a turn that is already running. Optional: a runtime
    * that drives a CLI process has no way to reach a live turn, and the caller
@@ -279,11 +280,11 @@ export class GjcWorkerHost {
     }
     const runtime = this.#runtime!;
     try {
-      const sessionId = branched
+      const successor = branched
         ? await runtime.branchGjcSession?.(input.providerSessionId, input.entryId as string, input.sessionRoot)
         : await runtime.forkGjcSession?.(input.providerSessionId, input.sessionRoot);
-      this.#response(request, sessionId
-        ? success({ sessionId })
+      this.#response(request, successor
+        ? success({ sessionId: successor.sessionId, transcriptPath: successor.transcriptPath })
         : failure('session_branch_unavailable', 'This runtime cannot branch sessions.'));
     } catch (error) {
       this.#diagnose('session branch failed', error);
