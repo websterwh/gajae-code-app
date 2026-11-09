@@ -5,7 +5,7 @@ import type { SubagentChildTool, CodeEditorDiffInfo  } from '../types/types';
 import { collapsibleStartsOpen, toolOutputDensityRules } from '../utils/toolOutputDensity';
 import type { ToolOutputDensity } from '../utils/toolOutputDensity';
 
-import { getToolConfig, getToolResultConfig, rendersCommandRow, rendersResultInline } from './configs/toolConfigs';
+import { foldsOutputOnFailure, getToolConfig, getToolResultConfig, rendersCommandRow, rendersResultInline } from './configs/toolConfigs';
 import { OneLineDisplay, BashCommandDisplay, CollapsibleDisplay, ToolCallRow, ToolDiffViewer, MarkdownContent, FileListContent, TodoListContent, TaskListContent, TextContent, QuestionAnswerContent, SubagentContainer } from './components';
 import { PlanDisplay } from './components/PlanDisplay';
 import { ToolStatusBadge } from './components/ToolStatusBadge';
@@ -117,7 +117,7 @@ export const ToolRenderer: React.FC<ToolRendererProps> = ({ toolName, toolInput,
     const secondary = displayConfig.getSecondary?.(parsedData);
     const output = resultText(toolResult);
     if (mode === 'input' && rendersResultInline(toolName) && output.trim()) {
-      return <ToolCallRow toolName={toolName} label={displayConfig.label} value={value} secondary={secondary} output={output} isError={Boolean(toolResult?.isError)} status={toolStatus !== 'completed' ? toolStatus : undefined} defaultOpen={rules.bashOutputOpen} openOnError={rules.failureOpens} />;
+      return <ToolCallRow toolName={toolName} label={displayConfig.label} value={value} secondary={secondary} output={output} isError={Boolean(toolResult?.isError)} status={toolStatus !== 'completed' ? toolStatus : undefined} defaultOpen={rules.bashOutputOpen} openOnError={rules.failureOpens && foldsOutputOnFailure(toolName)} />;
     }
     return <OneLineDisplay toolName={toolName} icon={displayConfig.icon} label={displayConfig.label} value={value} secondary={secondary} action={displayConfig.action} onAction={handleAction} style={displayConfig.style} wrapText={displayConfig.wrapText} colorScheme={displayConfig.colorScheme} status={toolStatus !== 'completed' ? toolStatus : undefined} />;
   }

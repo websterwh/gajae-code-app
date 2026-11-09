@@ -146,7 +146,13 @@ export class RemoteComputerHub {
     connection.seen.add(requestId);
     const request: RemoteCuaComputerRequest = {
       type: 'computer.request', protocolVersion: REMOTE_CUA_PROTOCOL_VERSION, requestId, deviceId, appSessionId,
-      tool, arguments: guarded, deadline,
+      // `guardAgentDesktopCall`/`guardLocalMachineCall` return the canonical
+      // `{ tool, arguments }` envelope, not the argument record itself. Sending
+      // the envelope as `arguments` made every remote tool call arrive as
+      // `{ tool, arguments }`, which agent-desktop rejects with "Unknown
+      // argument 'arguments'" - a failure that only showed up over a real
+      // companion, never against the in-process transport.
+      tool, arguments: guarded.arguments, deadline,
     };
     return new Promise<unknown>((resolve, reject) => {
       const finish = (error: Error) => {

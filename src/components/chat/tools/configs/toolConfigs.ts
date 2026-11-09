@@ -66,13 +66,18 @@ function todoMarkdown(ops: unknown): string {
 
 function computerSummary(input: unknown): string {
   if (!input || typeof input !== 'object') return '';
-  const action = input as { action?: string; actions?: unknown[]; text?: string; keys?: unknown };
-  if (action.action === 'batch') {
-    const children = (Array.isArray(action.actions) ? action.actions : []).map(computerSummary).filter(Boolean);
+  const call = input as { action?: string; actions?: unknown[]; text?: string; keys?: unknown; arguments?: Record<string, unknown> };
+  if (call.action === 'batch') {
+    const children = (Array.isArray(call.actions) ? call.actions : []).map(computerSummary).filter(Boolean);
     return children.length ? `batch: ${children.join(', ')}` : 'batch';
   }
-  const detail = action.text || (Array.isArray(action.keys) ? action.keys.join('+') : '');
-  return [action.action, detail].filter(Boolean).join(' ');
+  // The target (app, element text, keys) lives in the nested `arguments`
+  // record, so without this a row read `desktop_launch` with no target at all.
+  const args = call.arguments ?? {};
+  const target = args.app ?? args.ref_id ?? args.window_id;
+  const detail = call.text || (Array.isArray(call.keys) ? call.keys.join('+') : '')
+    || (typeof target === 'string' ? target : '');
+  return [call.action, detail].filter(Boolean).join(' ');
 }
 
 /**
@@ -110,6 +115,14 @@ const callOnly = (label: string, getValue: (input: any) => string, colors = neut
 const inlineToolNames = new Set(['bash', 'Bash', 'search', 'find', 'ast_grep', 'skill', 'lsp', 'web_search', 'browser', 'computer']);
 const commandToolNames = new Set(['bash', 'Bash']);
 export function rendersResultInline(toolName: string): boolean { return inlineToolNames.has(toolName); }
+/**
+ * Computer output is an accessibility tree or a screenshot dump: hundreds of
+ * lines whose useful part is already summarized in the row. A failed call keeps
+ * its error badge but never unfolds on its own, so a run that hits the same
+ * denial twice does not put two identical trees in the transcript.
+ */
+const alwaysFoldedOutput = new Set(['computer']);
+export function foldsOutputOnFailure(toolName: string): boolean { return !alwaysFoldedOutput.has(toolName); }
 export function rendersCommandRow(toolName: string): boolean { return commandToolNames.has(toolName); }
 
 const questions: ToolDisplayConfig = {

@@ -1,8 +1,8 @@
 services:
   gajae-app:
-    # Published tag for the active line of work. Override IMAGE_TAG when the
-    # image came from another branch (main publishes :latest).
-    image: ghcr.io/websterwh/gajae-app-docker:${IMAGE_TAG:-agent-desktop-companion}
+    # :latest is what this deployment tracks. Override IMAGE_TAG to pin a
+    # specific published tag (e.g. agent-desktop-companion) instead.
+    image: ghcr.io/websterwh/gajae-app-docker:${IMAGE_TAG:-latest}
     build:
       context: .
       args:

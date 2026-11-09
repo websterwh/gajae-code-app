@@ -43,7 +43,9 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            # The companion branch is the deployment line right now: the compose
+            # file tracks :latest, so this branch publishes it until it merges.
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feat/agent-desktop-companion' }}
             type=raw,value=remote-cua-companion,enable=${{ github.ref == 'refs/heads/feat/remote-cua-companion' }}
             type=raw,value=agent-desktop-companion,enable=${{ github.ref == 'refs/heads/feat/agent-desktop-companion' }}
 
