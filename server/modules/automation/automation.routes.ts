@@ -125,6 +125,10 @@ export function createAutomationRouter(service: AutomationService = automationSe
   }));
 
   router.get('/remote-computers', asyncHandler((_request, response) => {
+    // Live connection state: a cached copy would show a device as offline (or
+    // still "needs approval") long after the companion reconnected, which read
+    // as a page that had to be refreshed to become truthful.
+    response.set('Cache-Control', 'no-store');
     const template = process.env.GAJAE_COMPANION_DOWNLOAD_TEMPLATE;
     const devices = service.remoteDevices.list().map(device => ({ ...device, connected: service.remoteComputerHub.isConnected(device.id) }));
     response.json({

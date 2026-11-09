@@ -246,6 +246,10 @@ async function validateGitRepository(projectPath) {
   }
 }
 
+function isNotARepositoryError(error) {
+  return Boolean(error) && /not a git repository/iu.test(String(error.message ?? ''));
+}
+
 async function getGitProjectContext(projectPath) {
   const resolvedProjectPath = await fs.realpath(projectPath);
   const { stdout } = await spawnAsync('git', ['rev-parse', '--show-toplevel'], { cwd: resolvedProjectPath });
@@ -746,15 +750,27 @@ router.get('/status', asyncHandler(async (req, res) => {
       staged
     });
   } catch (error) {
+    // A project directory that is not a repository is a normal state - a
+    // deployed container's app folder, a scratch project - not a server fault.
+    // Answering with the description, rather than logging a stack trace, keeps
+    // the container log readable and tells the Status tab exactly what it is.
+    if (isNotARepositoryError(error)) {
+      return res.json({
+        isRepository: false,
+        branch: null,
+        hasCommits: false,
+        modified: [],
+        added: [],
+        deleted: [],
+        untracked: [],
+        staged: [],
+      });
+    }
     console.error('Git status error:', error);
     if (error.statusCode) return res.status(error.statusCode).json({ error: error.message, code: error.code });
     res.json({
-      error: error.message.includes('not a git repository') || error.message.includes('Project directory is not a git repository')
-        ? error.message
-        : 'Git operation failed',
-      details: error.message.includes('not a git repository') || error.message.includes('Project directory is not a git repository')
-        ? error.message
-        : `Failed to get git status: ${error.message}`
+      error: 'Git operation failed',
+      details: `Failed to get git status: ${error.message}`,
     });
   }
 }));
