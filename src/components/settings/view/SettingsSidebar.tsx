@@ -1,4 +1,4 @@
-import { Bell, GitBranch, Info, Mic, MonitorCog, Palette, ShieldCheck } from 'lucide-react';
+import { Bell, GitBranch, Info, KeyRound, Mic, MonitorCog, Palette, ShieldCheck } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { cn } from '../../../utils/cn';
@@ -15,6 +15,7 @@ const NAV_ITEMS: NavItem[] = [
   ['voice', 'mainTabs.voice', Mic],
   ['notifications', 'mainTabs.notifications', Bell],
   ['automation', 'mainTabs.automation', MonitorCog],
+  ['authentication', 'mainTabs.authentication', KeyRound],
   ['about', 'mainTabs.about', Info],
 ];
 

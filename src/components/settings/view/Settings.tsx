@@ -10,6 +10,7 @@ import type { SettingsProps } from '../types/types';
 import SettingsSidebar from './SettingsSidebar';
 import AboutTab from './tabs/AboutTab';
 import AppearanceSettingsTab from './tabs/AppearanceSettingsTab';
+import AuthenticationSettingsTab from './tabs/AuthenticationSettingsTab';
 import AutomationSettingsTab from './tabs/AutomationSettingsTab';
 import GitSettingsTab from './tabs/git-settings/GitSettingsTab';
 import NotificationsSettingsTab from './tabs/NotificationsSettingsTab';
@@ -148,6 +149,7 @@ function Settings({ isOpen, onClose, initialTab = 'appearance' }: SettingsProps)
               )}
               {activeTab === 'voice' && <VoiceSettingsTab />}
               {activeTab === 'automation' && <AutomationSettingsTab />}
+              {activeTab === 'authentication' && <AuthenticationSettingsTab />}
               {activeTab === 'about' && <AboutTab />}
             </div>
           </main>

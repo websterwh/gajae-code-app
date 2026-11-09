@@ -82,6 +82,7 @@ import {
 } from './utils/url-detection.js';
 import gitRoutes from './routes/git.js';
 import authRoutes from './routes/auth.js';
+import { createOidcGate, createOidcRouter } from './modules/oidc/index.js';
 import settingsRoutes from './routes/settings.js';
 import { createGjcAppFactory } from './app-factory.js';
 import { DesktopUpdateRelay } from './services/desktop-update-relay.js';
@@ -281,7 +282,14 @@ app.get('/health', (req, res) => {
 });
 
 // Authentication routes (public)
+app.use('/api/auth/oidc', createOidcRouter());
 app.use('/api/auth', authRoutes);
+
+// Sign-in gate. Inert until an issuer, client id and secret are all configured,
+// so an unconfigured server keeps the implicit-owner behaviour it always had.
+// Automation, the worker API and the sockets authenticate themselves and are
+// exempt by path, not by port.
+app.use(createOidcGate());
 
 // Projects API Routes (protected)
 app.use('/api/projects', authenticateToken, projectModuleRoutes);
