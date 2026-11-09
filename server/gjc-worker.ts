@@ -58,6 +58,10 @@ export type GjcWorkerRuntime = {
   controlGjcGoal?(runId: string, scope: GjcGoalScope, command?: GjcGoalCommand, stopAfterMutation?: boolean): Promise<GjcGoalSnapshot>;
   spawnGjc(message: string, options: JsonObject, writer: GjcWorkerWriter): SpawnedRun;
   abortGjcSession(sessionId: string): Promise<boolean>;
+  /** Native whole-session fork; resolves to the successor provider session id. */
+  forkGjcSession?(providerSessionId: string, sessionRoot: string): Promise<string>;
+  /** Native /tree branch step: a new session file rooted at `entryId`. */
+  branchGjcSession?(providerSessionId: string, entryId: string, sessionRoot: string): Promise<string>;
   /**
    * Delivers a message into a turn that is already running. Optional: a runtime
    * that drives a CLI process has no way to reach a live turn, and the caller
@@ -242,6 +246,7 @@ export class GjcWorkerHost {
     if (!this.#initialized) return this.#response(request, failure('not_initialized', 'Worker must be initialized before use.'));
     switch (request.method) {
       case 'session.start': case 'session.resume': case 'turn.start': return this.#start(request);
+      case 'session.fork': case 'session.branch': return this.#branch(request);
       case 'turn.abort': return this.#abort(request);
       case 'turn.steer': return this.#steer(request);
       case 'goal.inspect': case 'goal.control': return this.#goal(request);
@@ -254,6 +259,35 @@ export class GjcWorkerHost {
       case 'oauth.submit': return this.#oauthSubmit(request);
       case 'oauth.cancel': return this.#oauthCancel(request);
       case 'worker.shutdown': return this.#shutdown(request);
+    }
+  }
+
+  /**
+   * Both native branch operations open the session the same way a resume does
+   * and then let the SDK publish the successor file, so the two differ only in
+   * which manager call runs: `fork()` copies the whole session, while
+   * `createBranchedSession(entryId)` starts a new one at a chosen entry.
+   */
+  async #branch(request: GjcWorkerRequestFrame): Promise<void> {
+    if (request.method !== 'session.fork' && request.method !== 'session.branch') return;
+    const input = payload(request, ['providerSessionId', 'sessionRoot', 'entryId']);
+    const branched = request.method === 'session.branch';
+    if (!input || typeof input.providerSessionId !== 'string' || !input.providerSessionId
+      || typeof input.sessionRoot !== 'string' || !input.sessionRoot
+      || (branched && (typeof input.entryId !== 'string' || !input.entryId))) {
+      return this.#response(request, failure('invalid_payload', 'Request payload is invalid.'));
+    }
+    const runtime = this.#runtime!;
+    try {
+      const sessionId = branched
+        ? await runtime.branchGjcSession?.(input.providerSessionId, input.entryId as string, input.sessionRoot)
+        : await runtime.forkGjcSession?.(input.providerSessionId, input.sessionRoot);
+      this.#response(request, sessionId
+        ? success({ sessionId })
+        : failure('session_branch_unavailable', 'This runtime cannot branch sessions.'));
+    } catch (error) {
+      this.#diagnose('session branch failed', error);
+      this.#response(request, failure('session_branch_failed', 'The session could not be branched.'));
     }
   }
 

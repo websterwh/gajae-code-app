@@ -769,6 +769,39 @@ export class GjcWorkerSupervisor {
     }
   }
 
+  /** Native whole-session fork; resolves to the new provider session id. */
+  forkSession(scope: GjcGoalScope, providerSessionId: string): Promise<string> {
+    return this.#branchSession('session.fork', scope, providerSessionId, {});
+  }
+
+  /** Branches the session at one entry, the headless form of `/tree`. */
+  branchSession(scope: GjcGoalScope, providerSessionId: string, entryId: string): Promise<string> {
+    return this.#branchSession('session.branch', scope, providerSessionId, { entryId });
+  }
+
+  async #branchSession(
+    method: 'session.fork' | 'session.branch',
+    scope: GjcGoalScope,
+    providerSessionId: string,
+    extra: JsonObject,
+  ): Promise<string> {
+    const releaseAdmission = this.acquireRoot(method);
+    const release = this.beginActivity('settling');
+    try {
+      const liveRoot = getGjcLiveSessionRoot();
+      const sessionRoot = await resolveGjcResumeSessionRoot(providerSessionId, liveRoot) ?? liveRoot;
+      await this.ensureWorker();
+      const response = await this.request(method, scope.appSessionId, { providerSessionId, sessionRoot, ...extra });
+      if (!response.ok) throw new Error(response.error.message);
+      const result = response.result as { sessionId?: unknown } | undefined;
+      if (!result || typeof result.sessionId !== 'string') throw new Error('The worker returned no branched session.');
+      return result.sessionId;
+    } finally {
+      release();
+      releaseAdmission();
+    }
+  }
+
   async controlGoal(runId: string, scope: GjcGoalScope, command?: GjcGoalCommand, stopAfterMutation = true): Promise<GjcGoalSnapshot> {
     const run = this.runs.get(runId);
     if (!run || run.appScope !== scope.appSessionId || run.phase !== 'request_issued' || run.aborted || run.abortPromise) throw new Error('The active run changed. Refresh before controlling its goal.');
