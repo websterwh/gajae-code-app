@@ -112,7 +112,7 @@ test('loopback, literal remote addresses and configured HTTPS reverse proxies st
   const allowed: Array<Record<string, string>> = [
     { host: '127.0.0.1:3001', origin: 'http://localhost:5173' },
     { host: 'localhost:3001', origin: 'http://127.0.0.1:5173' },
-    { host: '100.78.133.28:3001', origin: 'http://100.78.133.28:5173' },
+    { host: '100.64.0.1:3001', origin: 'http://100.64.0.1:5173' },
     { host: 'studio.example', origin: 'https://studio.example', 'x-forwarded-proto': 'https' },
     { host: 'mac.trusted.test', origin: 'https://mac.trusted.test' },
     { host: '127.0.0.1:3001', origin: 'https://studio.example' },
@@ -156,7 +156,7 @@ test('default loopback deployment still allows loopback and literal remote IPs',
     { host: 'localhost:3001', origin: 'http://127.0.0.1:5173' },
     { host: '127.0.0.1:3001', origin: 'http://localhost:5173' },
     { host: '[::1]:3001', origin: 'http://[::1]:5173' },
-    { host: '100.78.133.28:3001', origin: 'http://100.78.133.28:5173' },
+    { host: '100.64.0.1:3001', origin: 'http://100.64.0.1:5173' },
   ]) {
     assert.equal((await server.request(headers)).status, 202);
     assert.equal(await server.connect(headers), 101);

@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 
 import { isDesktopMode } from '@/middleware/desktop-auth.js';
+import { isPrivateAddress, stripMappedV4 } from '@/shared/peer-address.js';
 
 import { oidcEnforcing, readOidcConfig } from './oidc.config.js';
 import { readSession } from './oidc.sessions.js';
@@ -44,19 +45,6 @@ export function isExemptPath(pathname: string): boolean {
 export function noAuthEnabled(): boolean {
   return process.env.NO_AUTH === '1' || process.env.GAJAE_NO_AUTH === '1';
 }
-
-const stripMappedV4 = (address: string): string => address.replace(/^::ffff:/iu, '');
-
-const isLoopback = (address: string): boolean => address === '::1'
-  || address === 'localhost'
-  || address.startsWith('127.');
-
-/** RFC1918 plus unique-local IPv6: "the machine next to this one". */
-const isPrivateAddress = (address: string): boolean => isLoopback(address)
-  || address.startsWith('10.')
-  || address.startsWith('192.168.')
-  || /^172\.(1[6-9]|2\d|3[01])\./u.test(address)
-  || /^f[cd][0-9a-f]{2}:/iu.test(address);
 
 function toV4(address: string): number | null {
   const parts = address.split('.');

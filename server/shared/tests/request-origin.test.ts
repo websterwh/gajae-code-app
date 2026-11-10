@@ -73,10 +73,10 @@ test('loopback spellings are interchangeable', () => {
 });
 
 test('the same host on a non-loopback address is allowed', () => {
-  const tailnet = { hostHeader: '100.78.133.28:3001', allowedHosts: undefined } as const;
+  const tailnet = { hostHeader: '100.64.0.1:3001', allowedHosts: undefined } as const;
 
-  assert.equal(isAllowedRequestOrigin('http://100.78.133.28:5173', tailnet), true);
-  assert.equal(isAllowedRequestOrigin('http://100.78.133.29:5173', tailnet), false);
+  assert.equal(isAllowedRequestOrigin('http://100.64.0.1:5173', tailnet), true);
+  assert.equal(isAllowedRequestOrigin('http://100.64.0.2:5173', tailnet), false);
 });
 
 test('a name the owner listed in ALLOWED_HOSTS is admitted', () => {
