@@ -4,7 +4,7 @@ import { createServer, type Server } from 'node:http';
 import test from 'node:test';
 
 import { normalizeIssuer, oidcEnforcing, validateOidcConfig, type OidcConfig } from './oidc.config.js';
-import { clientAddressAllowed, isExemptPath, noAuthEnabled } from './oidc.middleware.js';
+import { clientAddress, clientAddressAllowed, isExemptPath, noAuthEnabled } from './oidc.middleware.js';
 import {
   buildAuthorizeUrl,
   completeSignIn,
@@ -195,6 +195,21 @@ test('NO_AUTH is the deliberate break-glass switch, and the bind-guard var is no
     if (savedGuard === undefined) delete process.env.GAJAE_ALLOW_UNAUTH_REMOTE;
     else process.env.GAJAE_ALLOW_UNAUTH_REMOTE = savedGuard;
   }
+});
+
+test('a forwarded header is believed only when the peer that sent it is local', () => {
+  const request = (socket: string, forwarded?: string, ip?: string) => ({
+    socket: { remoteAddress: socket },
+    headers: forwarded === undefined ? {} : { 'x-forwarded-for': forwarded },
+    ip,
+  });
+  // A proxy on the host or the container network speaks for the client.
+  assert.equal(clientAddress(request('172.18.0.2', '8.8.8.8', '8.8.8.8')), '8.8.8.8');
+  assert.equal(clientAddress(request('127.0.0.1', '192.168.1.40', '192.168.1.40')), '192.168.1.40');
+  // A direct connection to the published port can write any header it likes.
+  assert.equal(clientAddress(request('203.0.113.9', '192.168.1.40', '192.168.1.40')), '203.0.113.9');
+  assert.equal(clientAddress(request('192.168.1.9')), '192.168.1.9');
+  assert.equal(clientAddress(request('::ffff:192.168.1.9')), '192.168.1.9');
 });
 
 test('local access is granted per address, and defaults to private ranges', () => {
