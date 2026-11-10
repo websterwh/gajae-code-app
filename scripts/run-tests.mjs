@@ -124,12 +124,14 @@ function runBunTests(label, files) {
   }
 }
 
-const [serverTestsAll, clientTests, scriptTests] = await Promise.all([
+const [serverTestsAll, clientTests, scriptTests, deployTests] = await Promise.all([
   collectTests('server'),
   collectTests('src'),
   // Build and release tooling: plain Node, no tsconfig. This is where the
   // distribution-exclusion stubs are checked before any payload is built.
   collectTests('scripts'),
+  // Host-side tooling that runs on the Docker host, outside the app bundle.
+  collectTests('deploy'),
 ]);
 const serverBunTests = serverTestsAll.filter((file) => BUN_TEST_FILE_PATTERN.test(file));
 const serverTests = serverTestsAll.filter((file) => !BUN_TEST_FILE_PATTERN.test(file));
@@ -141,3 +143,4 @@ runBunTests('server-bun', serverBunTests);
 runTests('client', clientNodeTests, { tsconfig: 'tsconfig.json' });
 runBunTests('client-bun', clientBunTests);
 runTests('scripts', scriptTests);
+runTests('deploy', deployTests);
