@@ -290,6 +290,7 @@
   },
   "authentication": {
     "title": "Sign-in",
+    "loadFailed": "Sign in to view or change these settings. Empty defaults here would look like sign-in is switched off.",
     "intro": "Let the owner sign in with an OpenID Connect provider. Endpoints come from the provider's discovery document.",
     "enabled": "Require sign-in",
     "enabledHint": "Until an issuer, client id and secret are all saved, the gate stays off so a typo cannot lock you out.",

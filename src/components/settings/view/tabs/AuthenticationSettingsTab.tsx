@@ -61,6 +61,7 @@ export default function AuthenticationSettingsTab() {
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   const loadSession = useCallback(async () => {
     const response = await authenticatedFetch('/api/auth/oidc/session');
@@ -75,6 +76,11 @@ export default function AuthenticationSettingsTab() {
       if (response.ok) {
         const body = await response.json() as { data?: OidcConfig };
         if (body.data) setConfig(body.data);
+        setLoadFailed(false);
+      } else {
+        // Rendering empty defaults after a refused read is worse than showing
+        // nothing: it looks exactly like a deployment with sign-in switched off.
+        setLoadFailed(true);
       }
       await loadSession();
     })();
@@ -138,6 +144,21 @@ export default function AuthenticationSettingsTab() {
     await loadSession();
   };
 
+  if (loadFailed) {
+    return (
+      <SettingsSection title={t('authentication.title')}>
+        <SettingsCard>
+          <p className="px-4 py-3 text-sm text-muted-foreground">{t('authentication.loadFailed')}</p>
+          <div className="border-t border-border px-4 py-3">
+            <a href="/api/auth/oidc/start" className="inline-flex items-center gap-2 rounded-lg border border-input px-3 py-2 text-sm font-medium">
+              <KeyRound className="h-4 w-4" aria-hidden />{t('authentication.signIn')}
+            </a>
+          </div>
+        </SettingsCard>
+      </SettingsSection>
+    );
+  }
+
   return (
     <>
       <SettingsSection title={t('authentication.title')}>
@@ -200,7 +221,8 @@ export default function AuthenticationSettingsTab() {
             )}
           </div>
         </SettingsCard>
-      </SettingsSection>      <SettingsSection title={t('authentication.localTitle')}>
+      </SettingsSection>
+      <SettingsSection title={t('authentication.localTitle')}>
         <SettingsCard>
           <p className="px-4 py-3 text-sm text-muted-foreground">{t('authentication.localIntro')}</p>
           <SettingsRow label={t('authentication.localAccess')} description={t('authentication.localAccessHint')}>
