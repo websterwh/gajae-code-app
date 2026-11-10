@@ -24,6 +24,12 @@ services:
       - NO_AUTH=${NO_AUTH:-}
       - ALLOWED_HOSTS=${ALLOWED_HOSTS:-*}
       
+      # Host control (opt-in, default off). Without GAJAE_HOST_CONTROL=1 the
+      # /api/host routes answer "not available" whatever the settings say.
+      # Capabilities are then switched on one by one in Settings -> Automation.
+      - GAJAE_HOST_CONTROL=${GAJAE_HOST_CONTROL:-}
+      - GAJAE_DOCKER_SOCKET=${GAJAE_DOCKER_SOCKET:-/var/run/docker.sock}
+
       # Storage and Data
       - DATABASE_PATH=/data/auth.db
       - WORKSPACES_ROOT=/workspace
@@ -66,3 +72,9 @@ services:
       - ${HOST_WORKSPACE_DIR:-./workspace}:/workspace
       # Persistent GJC agent configuration and credentials
       - ./gjc-config:/root/.gjc
+      # Host control only. Mount the daemon socket when GAJAE_HOST_CONTROL=1,
+      # and prefer a socket proxy that exposes nothing but /info and
+      # /containers over the raw socket: a direct mount is root-equivalent
+      # access to the host for anything that can reach this container.
+      # Restarting a container needs write access, so :ro is not enough for it.
+      # - /var/run/docker.sock:/var/run/docker.sock

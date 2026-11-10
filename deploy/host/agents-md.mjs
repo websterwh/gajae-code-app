@@ -8,13 +8,41 @@ const table = (headers, body) => [
 
 const block = (lines) => ['```', ...lines, '```'].join('\n');
 
+const gigabytes = (bytes) => (typeof bytes === 'number' && Number.isFinite(bytes) && bytes > 0
+  ? `${Math.round((bytes / 1024 ** 3) * 10) / 10} GB`
+  : '—');
+
+const number = (value, digits = 2) => (typeof value === 'number' && Number.isFinite(value)
+  ? String(Math.round(value * 10 ** digits) / 10 ** digits)
+  : '—');
+
+const humanDuration = (seconds) => {
+  if (typeof seconds !== 'number' || seconds <= 0) return 'unknown';
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  return [days ? `${days}d` : null, hours ? `${hours}h` : null, `${minutes}m`].filter(Boolean).join(' ');
+};
+
+const orNone = (list, empty) => (list?.length ? list : null) ?? empty;
+
 /**
  * Turn collected facts into the file an agent reads before touching the host.
  * Everything here is either observed or a rule that follows from an observation;
  * the generated part is meant to be regenerated, not hand-edited.
  */
 export function renderAgentsMd(facts, { root = '/' } = {}) {
-  const { system, init, packages, containers, resources, network, scheduled, security, timezone, quirks } = facts;
+  const { system, init, packages, containers, timezone, quirks } = facts;
+  const services = facts.services ?? {};
+  const virtualization = facts.virtualization ?? { lxc: [], vms: [] };
+  const resources = facts.resources ?? {};
+  const storage = facts.storage ?? { blockDevices: [], writable: [], raid: [], pools: [], root: null };
+  const network = facts.network ?? { addresses: [], listeners: [], nameservers: [], gateway: null };
+  const scheduled = facts.scheduled ?? { timers: [], cron: [], cronFiles: [] };
+  const health = facts.health ?? { temperatures: [], ups: [] };
+  const security = facts.security ?? { lsm: [], cgroupV2: false };
+  const memory = resources.memory ?? {};
+  const load = resources.loadAverage ?? {};
   const os = system.os ?? {};
 
   const sections = [
@@ -33,10 +61,14 @@ export function renderAgentsMd(facts, { root = '/' } = {}) {
       ['Kernel / arch', `${system.kernel} · ${system.arch}`],
       ['Platform', system.platform],
       ['Init', init.name ? `${init.name}${init.systemd ? ' (systemd)' : ''}` : 'unknown'],
+      ['Service manager', services.manager ? `${services.manager}${services.tools?.length ? ` (${services.tools.join(', ')})` : ''}` : 'none detected'],
       ['Package manager', packages.manager],
       ['Timezone', timezone],
       ['CPUs', resources.cpus],
-      ['Memory', `${resources.memoryMB} MB`],
+      ['Memory', memory.totalMB ? `${memory.usedPercent}% of ${memory.totalMB} MB used` : `${resources.memoryMB} MB`],
+      ['Swap', resources.swap?.totalMB ? `${resources.swap.totalMB} MB (${resources.swap.devices.map((entry) => entry.device).join(', ')})` : 'none'],
+      ['Load average (1/5/15)', `${number(load.one)} / ${number(load.five)} / ${number(load.fifteen)}`],
+      ['Uptime', humanDuration(resources.uptimeSeconds)],
     ]),
     '',
     '## Containers',
@@ -44,7 +76,7 @@ export function renderAgentsMd(facts, { root = '/' } = {}) {
   ];
 
   if (containers.runtime) {
-    sections.push(`Docker ${containers.version} is the container runtime on this host.`, '');
+    sections.push(`Docker ${containers.version} is the container runtime on this host${containers.rootDir ? `, with its state under ${containers.rootDir}` : ''}.`, '');
     sections.push(containers.list.length
       ? table(['Name', 'Image', 'Status', 'Ports'], containers.list.map((container) => [container.name, container.image, container.status, container.ports || '—']))
       : 'No containers are currently running.');
@@ -54,13 +86,48 @@ export function renderAgentsMd(facts, { root = '/' } = {}) {
   }
   sections.push('');
 
+  if (virtualization.lxc.length || virtualization.vms.length) {
+    sections.push('## Other workloads', '');
+    if (virtualization.lxc.length) sections.push(`LXC guests running: ${virtualization.lxc.join(', ')}`, '');
+    if (virtualization.vms.length) sections.push(`Virtual machines running: ${virtualization.vms.join(', ')}`, '');
+    sections.push('Docker is not the only thing on this host: a reboot or a host-level change affects these too.', '');
+  }
+
   sections.push('## Storage', '');
-  sections.push(resources.disks.length
+  if (storage.root) {
+    sections.push(`Root filesystem: \`${storage.root.filesystem}\`${storage.root.readOnly ? ' (read-only)' : ''}${storage.rootImageBacked ? ' — an image unpacked at boot, so only the writable mounts below keep state across a reboot' : ''}.`, '');
+  }
+  if (storage.rootImageBacked) {
+    sections.push('### Where state survives', '');
+    sections.push(storage.writable.length
+      ? `Writable mounts: ${storage.writable.map((entry) => entry.mount).join(', ')}. Anything written elsewhere is lost on reboot, including packages installed into the running root; find the OS's own persistent location for a package, service definition or script before changing it.`
+      : 'No writable non-virtual mount was found: this host is entirely ephemeral, so do not expect any change to survive a reboot.', '');
+  }
+  sections.push(storage.blockDevices.length
+    ? table(['Device', 'Type', 'Size', 'Filesystem', 'Mount', 'RO'], storage.blockDevices.slice(0, 20).map((device) => [
+      device.name, device.type, gigabytes(device.size), device.filesystem ?? '—', device.mount ?? '—', device.readOnly ? 'yes' : 'no',
+    ]))
+    : '`lsblk` returned nothing; check `mount` before assuming a path is a separate disk.');
+  sections.push('');
+  if (storage.pools?.length) {
+    sections.push('ZFS pools:', '');
+    sections.push(table(['Pool', 'Size', 'Allocated', 'Free', 'Health'], storage.pools.map((pool) => [pool.name, pool.size, pool.allocated, pool.free, pool.health])));
+    sections.push('');
+  }
+  if (storage.raid?.length) {
+    sections.push('Software RAID (`/proc/mdstat`):', '');
+    sections.push(block(storage.raid));
+    sections.push('');
+  }
+  sections.push('Filesystem usage:', '');
+  sections.push(resources.disks?.length
     ? table(['Filesystem', 'Size', 'Used', 'Avail', 'Use%', 'Mount'], resources.disks.map((disk) => [disk.filesystem, disk.size, disk.used, disk.avail, disk.percent, disk.mount]))
     : '`df` returned nothing; check `mount` before assuming a path is a separate disk.');
   sections.push('');
 
   sections.push('## Network', '');
+  if (network.gateway) sections.push(`Default gateway: ${network.gateway}`, '');
+  else sections.push('No default IPv4 gateway is configured.', '');
   sections.push(network.addresses.length
     ? table(['Interface', 'Address'], network.addresses.map((entry) => [entry.iface, entry.address]))
     : 'No global IPv4 addresses were reported.');
@@ -72,11 +139,41 @@ export function renderAgentsMd(facts, { root = '/' } = {}) {
     sections.push('');
   }
 
-  sections.push('## Scheduling', '');
+  sections.push('## Services and scheduling', '');
+  if (services.running?.length) {
+    sections.push(`Supervised services as reported by \`${services.manager}\`:`, '');
+    sections.push(block(services.running));
+    sections.push('');
+  }
   sections.push(scheduled.timers.length ? `Systemd timers:\n\n${block(scheduled.timers)}` : 'No systemd timers are readable on this host.');
   sections.push('');
   sections.push(scheduled.cron.length ? `Cron entries:\n\n${block(scheduled.cron)}` : 'No cron entries were readable for this user.');
   sections.push('');
+  if (scheduled.cronFiles?.length) {
+    sections.push('Cron files outside /etc/crontab (their contents are not paraphrased here):', '');
+    sections.push(block(scheduled.cronFiles));
+    sections.push('');
+  }
+
+  sections.push('## Health', '');
+  if (health.temperatures.length) {
+    sections.push('Temperature readings:', '');
+    sections.push(block(health.temperatures));
+    sections.push('');
+  }
+  if (health.ups.length) {
+    sections.push(table(['UPS', 'Status', 'Charge', 'Runtime', 'Load'], health.ups.map((entry) => [
+      entry.name,
+      entry.values['ups.status'] ?? '—',
+      entry.values['battery.charge'] ? `${entry.values['battery.charge']}%` : '—',
+      entry.values['battery.runtime'] ? `${entry.values['battery.runtime']}s` : '—',
+      entry.values['ups.load'] ? `${entry.values['ups.load']}%` : '—',
+    ])));
+    sections.push('');
+  }
+  if (!health.temperatures.length && !health.ups.length) {
+    sections.push('No temperature sensors or UPS were readable: either the tooling is not installed or this machine exposes neither. Check `sensors` and `upsc -l` before reporting a host-health value.', '');
+  }
 
   sections.push('## Host quirks', '');
   sections.push(quirks.length ? quirks.map((quirk) => `- ${quirk}`).join('\n') : '- Nothing unusual was detected by the probes.');
@@ -101,10 +198,12 @@ export function renderAgentsMd(facts, { root = '/' } = {}) {
     '',
   );
 
-  if (security.lsm.length || security.cgroupV2) {
-    sections.push(`## Kernel notes`, '', `- LSM: ${security.lsm.length ? security.lsm.join(', ') : 'none reported'}`);
-    if (security.cgroupV2) sections.push('- cgroup v2 is in use.');
-    sections.push('');
+  const notes = orNone([
+    security.lsm?.length ? `- LSM: ${security.lsm.join(', ')}` : null,
+    security.cgroupV2 ? '- cgroup v2 is in use.' : null,
+  ], []);
+  if (notes.length) {
+    sections.push('## Kernel notes', '', ...notes, '');
   }
 
   return `${sections.join('\n')}\n`;

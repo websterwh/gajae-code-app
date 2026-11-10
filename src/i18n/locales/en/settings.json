@@ -178,6 +178,19 @@
       "label": "Computer use",
       "description": "Let the agent drive native applications on this Mac through CUA Driver. Off by default: until you turn this on, no session is offered the computer tool and every computer call is refused. Turning it off again withholds the tool from every new session."
     },
+    "hostControl": {
+      "label": "Host control",
+      "description": "Let this container see and act on the machine it runs on, through the Docker socket mounted beside it. Off unless the deployment was started with GAJAE_HOST_CONTROL, and each permission below is separate. Turning the switch off drops every permission with it.",
+      "unavailable": "Not enabled for this deployment. Set GAJAE_HOST_CONTROL=1 and mount the Docker socket at /var/run/docker.sock (or set GAJAE_DOCKER_SOCKET), then restart the container. Without that environment variable these controls stay inert.",
+      "socketReachable": "Docker socket reachable at {{path}}.",
+      "socketUnreachable": "Docker socket not reachable at {{path}}. Check the mount and that the daemon is running.",
+      "facts": "Read host and daemon info",
+      "factsDescription": "Docker's own view of the host: version, kernel, CPU count, memory and container counts. Read-only.",
+      "containers": "List containers",
+      "containersDescription": "List every container on the host with its image, state and status.",
+      "restart": "Restart a container",
+      "restartDescription": "Restart one container by name. Nothing else is writable from here; there is no shell, no file access and no prune."
+    },
     "notInstalled": "Unavailable",
     "installGuide": "Setup instructions",
     "accessibility": "Accessibility",
