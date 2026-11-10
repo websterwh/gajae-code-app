@@ -51,6 +51,7 @@ const fakeFiles = {
   '/proc/uptime': '345600.00 1200.00\n',
   '/proc/swaps': 'Filename Type Size Used Priority\n/dev/zram0 partition 4194304 0 5\n',
   '/proc/mdstat': 'Personalities : [raid1]\nmd0 : active raid1 sdb1[0] sdc1[1]\n      1953382464 blocks super 1.2 [2/2] [UU]\n',
+  '/proc/partitions': 'major minor  #blocks  name\n\n   8        0  488386584 sda\n   8        1  488384000 sda1\n',
   '/sys/fs/cgroup/cgroup.controllers': 'cpu memory\n',
   '/sys/kernel/security/lsm': 'capability,apparmor\n',
   '/etc/crontab': '# comment\n0 3 * * * root /usr/local/bin/backup\n',
@@ -122,6 +123,28 @@ test('facts describe an image-backed non-systemd host with a proxy and the app c
   assert.match(quirks, /godoxy/u);
   assert.match(quirks, /gajae-app/u);
   assert.match(quirks, /cgroup v2/u);
+});
+
+test('a host without lsblk still lists disks from /proc/partitions', async () => {
+  const facts = await factsFor({
+    run: async (command) => (command.includes('lsblk')
+      ? { code: 127, stdout: '', stderr: 'lsblk: not found' }
+      : fakeHost(command)),
+  });
+  assert.deepEqual(facts.storage.blockDevices.map((device) => device.name), ['sda', 'sda1']);
+  assert.equal(facts.storage.blockDevices[1].size, 500105216000);
+  assert.match(facts.quirks.join('\n'), /`lsblk` is not installed/u);
+});
+
+test('a RAM-backed rootfs is treated as ephemeral and Docker mounts are not storage', async () => {
+  const facts = await factsFor({
+    read: async (file) => (file === '/proc/mounts'
+      ? 'rootfs / rootfs rw 0 0\n/dev/sda2 /boot vfat rw 0 0\noverlay /var/lib/docker/overlay2/x/merged overlay rw 0 0\n'
+      : readFake(file)),
+  });
+  assert.equal(facts.storage.rootImageBacked, true);
+  assert.deepEqual(facts.storage.writable.map((entry) => entry.mount), ['/boot']);
+  assert.match(facts.quirks.join('\n'), /lost on reboot/u);
 });
 
 test('a disk-backed root is never called ephemeral', async () => {

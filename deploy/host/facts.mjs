@@ -104,6 +104,18 @@ export function parseMounts(text) {
   }).filter((entry) => entry.mount && entry.filesystem);
 }
 
+/** `/proc/partitions` is the fallback when `lsblk` is not installed: it
+ *  carries names and sizes, but no filesystem, mountpoint or read-only flag. */
+export function parsePartitions(text) {
+  return rows(text)
+    .filter((line) => /^\d+\s+\d+\s+\d+\s+\S+$/u.test(line))
+    .map((line) => {
+      const [major, minor, blocks, name] = line.split(/\s+/u);
+      return { major: Number(major), minor: Number(minor), name, size: Number(blocks) * 1024 };
+    })
+    .map(({ name, size }) => ({ name, size, type: null, filesystem: null, mount: null, readOnly: false, model: null }));
+}
+
 export function parseMeminfo(text) {
   const values = {};
   for (const line of rows(text)) {
@@ -153,12 +165,15 @@ function parseUpsc(text) {
 const VIRTUAL_FILESYSTEMS = new Set([
   'proc', 'sysfs', 'devtmpfs', 'devpts', 'tmpfs', 'ramfs', 'cgroup', 'cgroup2',
   'securityfs', 'pstore', 'bpf', 'debugfs', 'tracefs', 'configfs', 'fusectl',
-  'mqueue', 'hugetlbfs', 'autofs', 'efivarfs', 'binfmt_misc', 'rpc_pipefs',
+  'mqueue', 'hugetlbfs', 'autofs', 'efivarfs', 'binfmt_misc', 'rpc_pipefs', 'nsfs',
 ]);
 
 /** Root filesystems that are an image being unpacked rather than a disk being
  *  written, so changes to them are discarded on the next boot. */
-const IMAGE_FILESYSTEMS = new Set(['squashfs', 'erofs', 'overlay', 'ramfs', 'tmpfs', 'cramfs']);
+const IMAGE_FILESYSTEMS = new Set(['squashfs', 'erofs', 'overlay', 'ramfs', 'tmpfs', 'rootfs', 'cramfs']);
+
+/** Container bookkeeping mounts: writable, but not the operator's storage. */
+const RUNTIME_MOUNT = /^\/(?:var\/lib\/docker|run\/docker)(?:\/|$)/u;
 
 const proxyPattern = /godoxy|traefik|caddy|nginx|npm|swag/iu;
 
@@ -202,11 +217,16 @@ export async function collectFacts({
     : null;
   const disks = parseDisks(await sh('df -hP -x tmpfs -x devtmpfs 2>/dev/null'));
 
-  const blockDevices = parseBlockDevices(await sh('lsblk -P -l -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT,RO,MODEL 2>/dev/null')).slice(0, 40);
+  const lsblkDevices = parseBlockDevices(await sh('lsblk -P -l -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT,RO,MODEL 2>/dev/null')).slice(0, 40);
+  const blockDevices = lsblkDevices.length
+    ? lsblkDevices
+    : parsePartitions(await readOr('/proc/partitions')).slice(0, 40);
   const mounts = parseMounts(await readOr('/proc/mounts'));
   const rootFilesystem = mounts.find((entry) => entry.mount === '/') ?? null;
   const writableMounts = mounts.filter((entry) => !entry.readOnly
     && !VIRTUAL_FILESYSTEMS.has(entry.filesystem)
+    && !IMAGE_FILESYSTEMS.has(entry.filesystem)
+    && !RUNTIME_MOUNT.test(entry.mount)
     && entry.mount !== '/');
   const raid = rows(await readOr('/proc/mdstat')).filter((line) => /^md\d+/u.test(line)).slice(0, 8);
   const pools = (await have('zpool'))
@@ -278,6 +298,7 @@ export async function collectFacts({
   if (app) quirks.push(`This GJC deployment runs as container ${app.name}${app.ports ? ` (${app.ports})` : ''}; for file paths and installed tools the container is a different machine from the host.`);
   if (dockerRootDir) quirks.push(`Docker keeps its state under ${dockerRootDir}; on an image-backed or small-boot host that path must be on persistent storage or containers vanish on reboot.`);
   if (!ssPath) quirks.push('`ss` is not installed; use `netstat -lntu` or /proc/net/tcp to see listening sockets.');
+  if (!lsblkDevices.length && blockDevices.length) quirks.push('`lsblk` is not installed: the block device list comes from /proc/partitions, which has sizes and names but no filesystem, mountpoint or read-only flag. Use `mount` for the mapping.');
   if (!gateway) quirks.push('No default IPv4 gateway is configured: outbound network access fails until a route is added.');
   if (raid.length) quirks.push(`Software RAID is active (${raid.map((line) => line.split(/\s+/u)[0]).join(', ')}): read /proc/mdstat before touching a member disk.`);
   if (pools.length) quirks.push(`ZFS pools present: ${pools.map((pool) => `${pool.name} (${pool.health})`).join(', ')}: check \`zpool status\` before touching disks, and do not scrub while a backup runs.`);
