@@ -23,11 +23,6 @@ services:
       # are kept, the gate just stops enforcing them.
       - NO_AUTH=${NO_AUTH:-}
       - ALLOWED_HOSTS=${ALLOWED_HOSTS:-*}
-      # Set to 1 only when a reverse proxy (nginx, godoxy, Caddy, etc.) in
-      # front of this container terminates TLS itself; it lets the Remote CUA
-      # companion connect over the proxy's X-Forwarded-Proto header instead of
-      # requiring this container to see TLS directly. Leave unset otherwise.
-      - GAJAE_TRUST_PROXY_TLS=${GAJAE_TRUST_PROXY_TLS:-}
       
       # Storage and Data
       - DATABASE_PATH=/data/auth.db

@@ -12,7 +12,7 @@ test('loopback binds are quiet', () => {
 });
 
 test('HOST is honoured: any non-loopback bind is reported, never refused', () => {
-    for (const host of ['0.0.0.0', '::', '192.168.0.10', '100.123.228.51']) {
+    for (const host of ['0.0.0.0', '::', '192.168.0.10', '198.51.100.51']) {
         const result = evaluateExposure({ host });
         assert.equal(result.level, 'warn', host);
         assert.equal(result.reason, 'remote-bind');

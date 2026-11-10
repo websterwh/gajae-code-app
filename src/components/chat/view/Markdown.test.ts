@@ -7,7 +7,7 @@ import { createElement } from 'react';
 import { isBrowserHref, Markdown } from './Markdown.js';
 
 test('only absolute HTTP links are handed to the external browser', () => {
-  assert.equal(isBrowserHref('http://100.78.133.28:8080'), true);
+  assert.equal(isBrowserHref('http://100.64.0.1:8080'), true);
   assert.equal(isBrowserHref('https://example.com/path'), true);
   assert.equal(isBrowserHref('mailto:test@example.com'), false);
   assert.equal(isBrowserHref('/workspace/file.ts'), false);

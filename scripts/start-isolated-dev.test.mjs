@@ -16,11 +16,11 @@ test('loopback hosts are admitted without remote exposure', () => {
 });
 
 test('only a current Tailscale IPv4 is admitted remotely', () => {
-  assert.deepEqual(admitQaHost('100.78.133.28', ['100.78.133.28']), {
-    host: '100.78.133.28',
+  assert.deepEqual(admitQaHost('100.64.0.1', ['100.64.0.1']), {
+    host: '100.64.0.1',
     remote: true,
   });
-  assert.throws(() => admitQaHost('192.168.1.10', ['100.78.133.28']), /Refusing non-loopback/);
+  assert.throws(() => admitQaHost('192.168.1.10', ['100.64.0.1']), /Refusing non-loopback/);
   assert.throws(() => admitQaHost('203.0.113.8', []), /Refusing non-loopback/);
 });
 
@@ -47,11 +47,11 @@ test('the isolated environment binds only the admitted host and scrubs the retir
   const env = isolatedQaEnvironment({
     parentEnv: { GAJAE_ALLOW_UNAUTH_REMOTE: '1' },
     qaHome: '/tmp/qa-two',
-    host: '100.78.133.28',
+    host: '100.64.0.1',
     vitePort: '5174',
     serverPort: '3101',
   });
-  assert.equal(env.HOST, '100.78.133.28');
+  assert.equal(env.HOST, '100.64.0.1');
   assert.equal(env.GAJAE_ALLOW_UNAUTH_REMOTE, undefined);
 });
 

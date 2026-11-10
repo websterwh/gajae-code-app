@@ -137,7 +137,7 @@ The generated app at
 `src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Gajae Code App.app`
 passed these checks:
 
-- Opened `http://100.78.133.28:8080/` in the Workspace Browser panel and showed
+- Opened `http://100.64.0.1:8080/` in the Workspace Browser panel and showed
   the live todo-list Chromium frame.
 - Killed only the owned browser sidecar. The app reaped the orphaned Chromium,
   started a new sidecar and Chromium process, restored the same URL and tab, and

@@ -95,7 +95,6 @@ revision is required.
 | `SERVER_PORT` | `3001` | Port the internal WebUI server listens on. |
 | `NO_AUTH` | unset | Set to `1` to disable sign-in entirely as a break-glass. Saved OIDC settings are kept and apply again once it is unset. |
 | `ALLOWED_HOSTS` | `*` | Admitted hostnames/origins (`*` allows all, or enter comma-separated domains). |
-| `GAJAE_TRUST_PROXY_TLS` | unset | Set to `1` only when a reverse proxy in front of this container terminates TLS itself, so the Remote CUA companion's `wss://` upgrade is accepted via `X-Forwarded-Proto`. |
 | `DATABASE_PATH` | `/data/auth.db` | Path to persistent SQLite database. |
 | `WORKSPACES_ROOT` | `/workspace` | Default directory root for GJC agent projects. |
 | `GJC_WORKER_AGENT_DIR` | `/root/.gjc/agent` | Storage directory for agent sessions and custom skills. |
@@ -111,7 +110,7 @@ revision is required.
 | `GITHUB_APPS` | *(empty)* | Comma-separated GitHub release apps installed via Aqua (`skylot/jadx,iBotPeaches/Apktool`). |
 | `AUTO_UPDATE_PACKAGES` | `true` | Automatically upgrade all installed packages on container boot. |
 | `CHECK_PACKAGE_UPDATES` | `true` | Check and log available package updates. |
-| `POST_COMMANDS` | *(empty)* | Custom shell commands executed after provisioning (e.g. `adb connect 192.168.1.79:5555`). |
+| `POST_COMMANDS` | *(empty)* | Custom shell commands executed after provisioning (e.g. `adb connect 192.0.2.79:5555`). |
 ### Direct SSH & GJC CLI Access
 | Variable | Default | Description |
 |---|---|---|

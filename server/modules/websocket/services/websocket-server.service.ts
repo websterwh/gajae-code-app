@@ -7,6 +7,7 @@ import { automationService } from '@/modules/automation/index.js';
 import { handleChatConnection } from '@/modules/websocket/services/chat-websocket.service.js';
 import { handleShellConnection } from '@/modules/websocket/services/shell-websocket.service.js';
 import { verifyWebSocketClient } from '@/modules/websocket/services/websocket-auth.service.js';
+import { isPrivateAddress } from '@/shared/peer-address.js';
 import type { AuthenticatedWebSocketRequest } from '@/shared/types.js';
 
 type UpgradeVerifier = Parameters<typeof verifyWebSocketClient>[1];
@@ -33,22 +34,29 @@ function connectionPath(request: AuthenticatedWebSocketRequest): string {
 
 /**
  * Whether a `/remote-cua` upgrade arrived over an actually-encrypted
- * transport, either directly or through a trusted reverse proxy.
+ * transport, either directly or through a reverse proxy that terminates TLS.
  *
  * `x-forwarded-proto` is attacker-controllable on any request that reaches
  * this process directly (this is a raw Node upgrade handler, not an Express
- * `req`; `trust proxy` does not gate it), so it is only honored when the
- * deployer has explicitly set `GAJAE_TRUST_PROXY_TLS=1` - the same opt-in
- * shape as `ALLOWED_HOSTS` and `GAJAE_ALLOW_UNAUTH_REMOTE`.
+ * `req`; `trust proxy` does not gate it), so it counts only when the peer that
+ * sent it is loopback or on a private network - which is what a proxy on this
+ * host or its container network is, and what an internet client is not. That is
+ * the same rule the sign-in gate uses to decide who a request is, so there is
+ * no separate switch to set, and no opt-in that stays forgotten on a
+ * deployment that needs it.
  */
 export function isEncryptedRemoteCuaUpgrade(
-  info: { req: { headers: Record<string, string | string[] | undefined>; socket: { encrypted?: boolean } } },
-  env: { trustProxyTls?: string; nodeEnv?: string } = { trustProxyTls: process.env.GAJAE_TRUST_PROXY_TLS, nodeEnv: process.env.NODE_ENV },
+  info: {
+    req: {
+      headers: Record<string, string | string[] | undefined>;
+      socket: { encrypted?: boolean; remoteAddress?: string };
+    };
+  },
+  env: { nodeEnv?: string } = { nodeEnv: process.env.NODE_ENV },
 ): boolean {
   const host = String(info.req.headers.host ?? '').split(':', 1)[0];
   const localhost = host === 'localhost' || host === '127.0.0.1' || host === '::1';
-  const behindTlsProxy = env.trustProxyTls === '1' || env.trustProxyTls === 'true';
-  const forwardedHttps = behindTlsProxy
+  const forwardedHttps = isPrivateAddress(String(info.req.socket.remoteAddress ?? ''))
     && String(info.req.headers['x-forwarded-proto'] ?? '').split(',', 1)[0].trim() === 'https';
   return Boolean(info.req.socket.encrypted) || forwardedHttps || (localhost && env.nodeEnv !== 'production');
 }
