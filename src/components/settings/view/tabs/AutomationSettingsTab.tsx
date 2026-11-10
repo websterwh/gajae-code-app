@@ -55,6 +55,14 @@ type RemoteDevice = {
   };
 };
 
+type HostControl = {
+  available: boolean;
+  socketPath: string;
+  reachable: boolean;
+  enabled: boolean;
+  capabilities: { facts: boolean; containers: boolean; restart: boolean };
+};
+
 const selectClass = 'touch-manipulation rounded-lg border border-input bg-card p-2.5 text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary';
 function companionPlatform(): string {
   const platform = navigator.userAgent.includes('Windows') ? 'windows-x64.exe'
@@ -82,6 +90,7 @@ export default function AutomationSettingsTab() {
   const [egoActivity, setEgoActivity] = useState(false);
   const [egoFrames, setEgoFrames] = useState(false);
   const [computerUse, setComputerUse] = useState(false);
+  const [hostControl, setHostControl] = useState<HostControl | null>(null);
   const [remoteDevices, setRemoteDevices] = useState<RemoteDevice[]>([]);
   const [selectedRemoteDeviceId, setSelectedRemoteDeviceId] = useState<string | undefined>();
   const [pairingToken, setPairingToken] = useState<string | null>(null);
@@ -98,7 +107,7 @@ export default function AutomationSettingsTab() {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const [statusResponse, grantsResponse, backendResponse, egoReadinessResponse, egoActivityResponse, computerUseResponse, remoteDevicesResponse] = await Promise.all([
+      const [statusResponse, grantsResponse, backendResponse, egoReadinessResponse, egoActivityResponse, computerUseResponse, remoteDevicesResponse, hostControlResponse] = await Promise.all([
         fetch('/api/automation/status'),
         fetch('/api/automation/grants'),
         fetch('/api/automation/browser-backend'),
@@ -108,6 +117,7 @@ export default function AutomationSettingsTab() {
         fetch('/api/automation/ego-activity'),
         fetch('/api/automation/computer-use'),
         fetch('/api/automation/remote-computers'),
+        fetch('/api/host/status'),
       ]);
       if (statusResponse.ok) setStatus(await statusResponse.json() as Status);
       if (grantsResponse.ok) setGrants(await grantsResponse.json() as Grants);
@@ -134,6 +144,7 @@ export default function AutomationSettingsTab() {
         setSelectedRemoteDeviceId(remote.selectedDeviceId);
         setCompanionDownloadTemplate(typeof remote.companionDownloadTemplate === 'string' ? remote.companionDownloadTemplate : null);
       }
+      if (hostControlResponse.ok) setHostControl(await hostControlResponse.json() as HostControl);
     } finally {
       setLoading(false);
     }
@@ -197,6 +208,18 @@ export default function AutomationSettingsTab() {
       return;
     }
     setComputerUse((await response.json() as { enabled?: boolean }).enabled === true);
+  };
+
+  // Host control is saved server-side and re-read, so the switches always show
+  // what the server will actually enforce.
+  const saveHostControl = async (patch: { enabled?: boolean; facts?: boolean; containers?: boolean; restart?: boolean }) => {
+    const response = await fetch('/api/host/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+    if (!response.ok) return;
+    setHostControl(await response.json() as HostControl);
   };
 
   const pairRemoteComputer = async () => {
@@ -444,12 +467,52 @@ export default function AutomationSettingsTab() {
               ariaLabel={t('automation.computerUse.label')}
             />
           </SettingsRow>
-          <div className="flex items-center justify-between gap-4 p-4">
-            <div>
-              <p className="text-sm font-medium text-foreground">Host control</p>
-              <p className="mt-1 text-xs text-muted-foreground">Not available in this container. Planned: letting this container drive the host machine it runs on.</p>
-            </div>
-          </div>
+          {hostControl ? (
+            <>
+              <SettingsRow label={t('automation.hostControl.label')} description={t('automation.hostControl.description')}>
+                <SettingsToggle
+                  checked={hostControl.enabled}
+                  disabled={!hostControl.available}
+                  onChange={(value) => void saveHostControl({ enabled: value })}
+                  ariaLabel={t('automation.hostControl.label')}
+                />
+              </SettingsRow>
+              {hostControl.available ? (
+                <p className="px-4 pb-4 text-xs text-muted-foreground" role="status">
+                  {hostControl.reachable
+                    ? t('automation.hostControl.socketReachable', { path: hostControl.socketPath })
+                    : t('automation.hostControl.socketUnreachable', { path: hostControl.socketPath })}
+                </p>
+              ) : (
+                <p className="px-4 pb-4 text-xs text-muted-foreground">{t('automation.hostControl.unavailable')}</p>
+              )}
+              {hostControl.available && hostControl.enabled ? (
+                <>
+                  <SettingsRow label={t('automation.hostControl.facts')} description={t('automation.hostControl.factsDescription')}>
+                    <SettingsToggle
+                      checked={hostControl.capabilities.facts}
+                      onChange={(value) => void saveHostControl({ facts: value })}
+                      ariaLabel={t('automation.hostControl.facts')}
+                    />
+                  </SettingsRow>
+                  <SettingsRow label={t('automation.hostControl.containers')} description={t('automation.hostControl.containersDescription')}>
+                    <SettingsToggle
+                      checked={hostControl.capabilities.containers}
+                      onChange={(value) => void saveHostControl({ containers: value })}
+                      ariaLabel={t('automation.hostControl.containers')}
+                    />
+                  </SettingsRow>
+                  <SettingsRow label={t('automation.hostControl.restart')} description={t('automation.hostControl.restartDescription')}>
+                    <SettingsToggle
+                      checked={hostControl.capabilities.restart}
+                      onChange={(value) => void saveHostControl({ restart: value })}
+                      ariaLabel={t('automation.hostControl.restart')}
+                    />
+                  </SettingsRow>
+                </>
+              ) : null}
+            </>
+          ) : null}
         </SettingsCard>
         <SettingsCard className="mt-3">
           <div className="flex items-center justify-between gap-4 p-4">

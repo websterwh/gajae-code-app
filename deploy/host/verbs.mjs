@@ -16,7 +16,9 @@ const TARGET = /^[A-Za-z0-9][A-Za-z0-9_.@-]{0,63}$/u;
 export const VERBS = [
   { id: 'host.info', summary: 'Kernel, distro, uptime', mutating: false, command: 'uname -a; cat /etc/os-release; uptime' },
   { id: 'host.disk', summary: 'Filesystem usage', mutating: false, command: 'df -hP -x tmpfs -x devtmpfs' },
-  { id: 'host.memory', summary: 'Memory usage', mutating: false, command: 'free -m' },
+  { id: 'host.storage', summary: 'Block devices, RAID and pools', mutating: false, command: "lsblk -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT,RO 2>/dev/null; cat /proc/mdstat 2>/dev/null; command -v zpool >/dev/null 2>&1 && zpool list" },
+  // /proc instead of `free`: procps is not guaranteed on a small host.
+  { id: 'host.memory', summary: 'Memory, swap and load', mutating: false, command: 'cat /proc/meminfo /proc/swaps /proc/loadavg' },
   { id: 'host.network', summary: 'Interface addresses', mutating: false, command: 'ip -br addr' },
   { id: 'host.listeners', summary: 'Listening TCP/UDP sockets', mutating: false, command: 'ss -lntu' },
   { id: 'docker.ps', summary: 'Running containers', mutating: false, command: "docker ps --format 'table {{.Names}}\\t{{.Image}}\\t{{.Status}}\\t{{.Ports}}'" },

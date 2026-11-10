@@ -114,6 +114,7 @@ import {
     createBrowserDesktopRestartReader,
     createComputerDesktopRestartReader,
 } from './modules/automation/index.js';
+import { hostControlRoutes } from './modules/host-control/index.js';
 import { validateApiKey, authenticateToken, authenticateWebSocket } from './middleware/auth.js';
 import { c } from './utils/colors.js';
 import { evaluateExposure } from './utils/exposure-guard.js';
@@ -318,6 +319,11 @@ app.use('/api/providers', authenticateToken, providerRoutes);
 // the normal owner authentication both run before these routes.
 app.use('/api/automation', authenticateToken, automationRoutes);
 app.use('/api/browser', authenticateToken, createBrowserAutomationRouter());
+
+// Host control (protected). Inert unless GAJAE_HOST_CONTROL is set, and then
+// only the capabilities switched on in Settings: the module owns the Docker
+// socket client and has no generic request path.
+app.use('/api/host', authenticateToken, hostControlRoutes);
 
 // Agent API Routes (uses API key authentication)
 
