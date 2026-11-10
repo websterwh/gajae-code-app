@@ -72,15 +72,25 @@ function ensureOwner(identity: { email: string; name?: string }): { id: number; 
 }
 
 /**
- * Settings stay writable while enforcement is off, and while the request comes
- * straight from the container's own network: a bad provider must leave a way
- * back in. Requests that arrived through a proxy (`x-forwarded-for`) still need
- * a session, so the bypass cannot be reached from outside.
+ * Settings are readable and writable by exactly the clients the sign-in gate
+ * already admits without a session: the local-access list (which is how a LAN
+ * deployment uses the app at all), loopback, or any session holder. Anything
+ * else - including a request that arrives through a proxy from an address the
+ * gate would have challenged - needs a session, so this can never be a way in
+ * from outside.
+ *
+ * Mirroring the gate matters for more than convenience: a stricter rule here
+ * answered 401 to the Settings tab of a client the app had just let in, and the
+ * tab rendered its empty defaults, so a configured deployment showed sign-in as
+ * switched off.
  */
 function requireOwnerWhenEnforced(request: Request, response: Response): boolean {
   const config = readOidcConfig();
   if (!oidcEnforcing(config) || noAuthEnabled()) return true;
   if (readSession(request.headers.cookie)) return true;
+  // Same expression the gate uses, so `x-forwarded-for` is what decides here too.
+  const address = request.ip ?? request.socket.remoteAddress ?? '';
+  if (config.allowLocal && clientAddressAllowed(address, config.allowedIps)) return true;
   const proxied = request.headers['x-forwarded-for'] !== undefined;
   if (!proxied && clientAddressAllowed(request.socket.remoteAddress ?? '', [])) return true;
   fail(response, 401, 'SIGN_IN_REQUIRED', 'Sign in to change authentication settings.');
