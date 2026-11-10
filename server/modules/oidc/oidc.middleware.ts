@@ -37,9 +37,9 @@ export function isExemptPath(pathname: string): boolean {
 /**
  * The deliberate break-glass switch: NO_AUTH (or GAJAE_NO_AUTH) turns the gate
  * off without touching the stored settings, so a broken provider cannot lock the
- * operator out. GAJAE_ALLOW_UNAUTH_REMOTE is deliberately not consulted here -
- * container images ship it as 1 for the bind guard, which would have switched
- * sign-in off for every deployment that never asked for that.
+ * operator out. The retired GAJAE_ALLOW_UNAUTH_REMOTE bind flag is never read
+ * here: images shipped it as 1, which would have switched sign-in off for every
+ * deployment that never asked for that.
  */
 export function noAuthEnabled(): boolean {
   return process.env.NO_AUTH === '1' || process.env.GAJAE_NO_AUTH === '1';
@@ -99,6 +99,27 @@ export function clientAddressAllowed(address: string, entries: string[]): boolea
 }
 
 /**
+ * The address to judge. `x-forwarded-for` is believed only when the peer that
+ * sent it is itself local - a reverse proxy on the host or the container
+ * network. Anywhere else the header is a value the client typed, and `trust
+ * proxy` would happily adopt it: a direct request to the published port could
+ * claim `192.168.1.50` and be treated as a LAN client. Everything that makes an
+ * access decision goes through here so the gate and the settings guard cannot
+ * drift apart.
+ */
+export function clientAddress(request: {
+  socket?: { remoteAddress?: string };
+  headers: Record<string, unknown>;
+  ip?: string;
+}): string {
+  const socket = stripMappedV4(String(request.socket?.remoteAddress ?? '').trim());
+  if (request.headers['x-forwarded-for'] !== undefined && isPrivateAddress(socket)) {
+    return stripMappedV4(String(request.ip ?? socket).trim());
+  }
+  return socket;
+}
+
+/**
  * Sign-in gate. Inert unless an issuer, client id and secret are all present, and
  * never applied to the desktop shell, which authenticates per boot with its own
  * key. Addresses on the local-access list skip it, and every request that
@@ -111,10 +132,7 @@ export function createOidcGate() {
     if (isDesktopMode() || !oidcEnforcing(config) || isExemptPath(request.path)) return next();
     if (noAuthEnabled()) return next();
 
-    if (config.allowLocal) {
-      const address = request.ip ?? request.socket.remoteAddress ?? '';
-      if (clientAddressAllowed(address, config.allowedIps)) return next();
-    }
+    if (config.allowLocal && clientAddressAllowed(clientAddress(request), config.allowedIps)) return next();
 
     const session = readSession(request.headers.cookie);
     if (session) return next();

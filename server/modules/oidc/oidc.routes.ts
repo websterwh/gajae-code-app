@@ -12,7 +12,7 @@ import {
   writeOidcConfig,
   type OidcConfig,
 } from './oidc.config.js';
-import { clientAddressAllowed, createOidcGate, noAuthEnabled } from './oidc.middleware.js';
+import { clientAddress, clientAddressAllowed, createOidcGate, noAuthEnabled } from './oidc.middleware.js';
 import {
   buildAuthorizeUrl,
   completeSignIn,
@@ -88,8 +88,8 @@ function requireOwnerWhenEnforced(request: Request, response: Response): boolean
   const config = readOidcConfig();
   if (!oidcEnforcing(config) || noAuthEnabled()) return true;
   if (readSession(request.headers.cookie)) return true;
-  // Same expression the gate uses, so `x-forwarded-for` is what decides here too.
-  const address = request.ip ?? request.socket.remoteAddress ?? '';
+  // Same resolver the gate uses, so the two can never disagree about an address.
+  const address = clientAddress(request);
   if (config.allowLocal && clientAddressAllowed(address, config.allowedIps)) return true;
   const proxied = request.headers['x-forwarded-for'] !== undefined;
   if (!proxied && clientAddressAllowed(request.socket.remoteAddress ?? '', [])) return true;
