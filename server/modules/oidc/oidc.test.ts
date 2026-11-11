@@ -4,7 +4,7 @@ import { createServer, type Server } from 'node:http';
 import test from 'node:test';
 
 import { normalizeIssuer, oidcEnforcing, validateOidcConfig, type OidcConfig } from './oidc.config.js';
-import { clientAddress, clientAddressAllowed, isExemptPath, noAuthEnabled, requiresSession } from './oidc.middleware.js';
+import { clientAddress, clientAddressAllowed, coversLocalBypass, isExemptPath, noAuthEnabled, requiresSession } from './oidc.middleware.js';
 import {
   buildAuthorizeUrl,
   completeSignIn,
@@ -249,4 +249,12 @@ test('the gate is inert until the config is complete, and exempts automation', (
   for (const path of ['/api/settings', '/api/hostile']) {
     assert.equal(requiresSession(path), false, path);
   }
+  // The deployment's own opt-in is what lets the bypass cover host control:
+  // the variable is set in the container environment, never by a request, and
+  // without it every /api/host route is inert, so a sign-in would protect
+  // nothing but would lock the operator out of the switch they just enabled.
+  assert.equal(coversLocalBypass('/api/settings', {}), true);
+  assert.equal(coversLocalBypass('/api/host/status', {}), false);
+  assert.equal(coversLocalBypass('/api/host/status', { GAJAE_HOST_CONTROL: '0' }), false);
+  assert.equal(coversLocalBypass('/api/host/status', { GAJAE_HOST_CONTROL: '1' }), true);
 });
