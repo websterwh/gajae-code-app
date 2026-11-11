@@ -8,7 +8,8 @@ import test from 'node:test';
 import express from 'express';
 
 import { dockerClient, DockerSocketError, isContainerName, listTarEntries, parseExecFrames, type HostControlClient } from './docker-socket.js';
-import { createHostControlRouter, type HostControlStore } from './host-control.routes.js';
+import { createHostControlRouter, type HostControlStore, type HostProfileStore } from './host-control.routes.js';
+import type { SavedHostProfile } from './host-profile.store.js';
 import {
   applyHostControlPatch,
   DEFAULT_HOST_CONTROL_SETTINGS,
@@ -27,6 +28,15 @@ function fakeStore(initial: Partial<HostControlSettings> = {}): HostControlStore
       settings = applyHostControlPatch(settings, patch);
       return settings;
     },
+  };
+}
+
+/** Detection is remembered in the database; tests keep it in a variable instead. */
+function fakeProfiles(): HostProfileStore {
+  let saved: SavedHostProfile | null = null;
+  return {
+    read: () => saved,
+    write: (profile) => (saved = { detectedAt: 1, profile }),
   };
 }
 
@@ -108,6 +118,7 @@ test('without the env var every route refuses and the socket is never opened', a
       enabled: true,
       capabilities: capabilities({ containers: true, restart: true }),
       targets: [],
+      host: null,
     });
     assert.equal((await server.request('/containers')).status, 409);
     assert.equal((await server.request('/containers/gajae-app/restart', { method: 'POST' })).status, 409);
@@ -599,7 +610,9 @@ test('discovery names the manager it can see and who else holds the socket', asy
       ];
     },
   };
-  const server = await serve(createHostControlRouter({ client, store: fakeStore({ enabled: true, discovery: true }), env: ENABLED_ENV }));
+  const server = await serve(createHostControlRouter({
+    client, store: fakeStore({ enabled: true, discovery: true }), profiles: fakeProfiles(), env: ENABLED_ENV,
+  }));
   try {
     const response = await server.request('/discovery');
     assert.equal(response.status, 200);
@@ -612,6 +625,13 @@ test('discovery names the manager it can see and who else holds the socket', asy
     assert.deepEqual(profile.stacks, [{ project: 'mos', services: ['web', 'db'], containers: ['mos-web', 'mos-db'] }]);
     assert.deepEqual(profile.unmanaged, ['portainer', 'adhoc']);
     assert.ok(profile.guidance.some((line) => line.includes('Unraid is present')));
+
+    // The detection is stored, and the cheap status read reports it, so a
+    // caller that never ran the detection still learns the machine's OS.
+    const snapshot = await (await server.request('/status')).json() as {
+      host: { os: string; kernelVersion: string; detectedAt: number } | null;
+    };
+    assert.deepEqual(snapshot.host, { os: 'Linux', kernelVersion: '6.12.10-Unraid', detectedAt: 1 });
   } finally {
     await server.close();
   }
@@ -624,6 +644,8 @@ test('discovery and the new capabilities are each their own switch', async () =>
   const post = (body: unknown) => ({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   try {
     assert.equal((await server.request('/discovery')).status, 403);
+    // Nothing detected yet, and detection is off, so status says nothing about the host.
+    assert.equal(((await (await server.request('/status')).json()) as { host: unknown }).host, null);
     assert.equal((await server.request('/verbs')).status, 403);
     assert.equal((await server.request('/exec', post({ container: 'mos-web', verb: 'os' }))).status, 403);
     assert.equal((await server.request('/files?container=mos-web&path=/etc/hostname')).status, 403);

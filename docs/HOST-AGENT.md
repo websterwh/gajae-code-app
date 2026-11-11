@@ -143,6 +143,13 @@ It also reports the brand-agnostic facts that matter more than any name:
 - **guidance** - the one-line consequences of the above, so an agent knows
   whether to act here or in Portainer/the appliance's own manager.
 
+Each detection is also stored (`host.profile.v1` in `app_config`), and
+`GET /api/host/status` then reports `host.os`, `host.kernelVersion` and
+`host.detectedAt` while `discovery` is on. An agent that arrives after the
+operator pressed Detect - or after the container restarted - therefore knows
+which machine it is standing on without re-reading the daemon or asking for
+another detection.
+
 ## Which transport to use
 
 Two shapes, on purpose:
