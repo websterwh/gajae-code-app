@@ -39,7 +39,12 @@ export type HostControlClient = {
   restart(name: string): Promise<void>;
 };
 
-export type DockerSocketErrorCode = 'DOCKER_UNAVAILABLE' | 'DOCKER_TIMEOUT' | 'DOCKER_HTTP' | 'INVALID_CONTAINER';
+export type DockerSocketErrorCode =
+  | 'DOCKER_UNAVAILABLE'
+  | 'DOCKER_TIMEOUT'
+  | 'DOCKER_HTTP'
+  | 'DOCKER_NOT_FOUND'
+  | 'INVALID_CONTAINER';
 
 export class DockerSocketError extends Error {
   readonly code: DockerSocketErrorCode;
@@ -130,7 +135,12 @@ function parseContainers(body: string): HostContainer[] {
 export function dockerClient({
   socketPath = dockerSocketPath(),
   timeoutMs = 5000,
-}: { socketPath?: string; timeoutMs?: number } = {}): HostControlClient {
+  // A restart is not a read: the daemon stops the container, waits out its
+  // stop grace period and starts it again, which routinely outlasts the
+  // deadline that suits a JSON listing. Reporting a timeout for a restart
+  // that is in fact happening would be worse than waiting.
+  restartTimeoutMs = 60_000,
+}: { socketPath?: string; timeoutMs?: number; restartTimeoutMs?: number } = {}): HostControlClient {
   return {
     async ping() {
       try {
@@ -157,8 +167,14 @@ export function dockerClient({
       if (!isContainerName(name)) {
         throw new DockerSocketError('INVALID_CONTAINER', `${JSON.stringify(name)} is not a container name.`);
       }
-      const { status } = await socketRequest(socketPath, 'POST', `/containers/${encodeURIComponent(name)}/restart`, timeoutMs);
+      const { status } = await socketRequest(
+        socketPath,
+        'POST',
+        `/containers/${encodeURIComponent(name)}/restart`,
+        restartTimeoutMs,
+      );
       // 304 means "already restarting", which is still the state the caller asked for.
+      if (status === 404) throw new DockerSocketError('DOCKER_NOT_FOUND', `There is no container called ${JSON.stringify(name)}.`);
       if (status !== 204 && status !== 304) throw new DockerSocketError('DOCKER_HTTP', `The Docker daemon answered ${status}.`);
     },
   };

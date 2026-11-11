@@ -28,7 +28,10 @@ function refuse(response: Response, status: number, error: string, detail: strin
 
 function dockerFailure(response: Response, error: unknown): Response {
   if (error instanceof DockerSocketError) {
-    return refuse(response, error.code === 'INVALID_CONTAINER' ? 400 : 503, error.code, error.message);
+    if (error.code === 'INVALID_CONTAINER') return refuse(response, 400, error.code, error.message);
+    // A name the daemon does not know is the caller's mistake, not an outage.
+    if (error.code === 'DOCKER_NOT_FOUND') return refuse(response, 404, error.code, error.message);
+    return refuse(response, 503, error.code, error.message);
   }
   return refuse(response, 503, 'DOCKER_UNAVAILABLE', 'The Docker daemon could not be reached.');
 }

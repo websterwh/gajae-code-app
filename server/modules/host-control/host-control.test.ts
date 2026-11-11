@@ -7,7 +7,7 @@ import test from 'node:test';
 
 import express from 'express';
 
-import { dockerClient, DockerSocketError, isContainerName } from './docker-socket.js';
+import { dockerClient, DockerSocketError, isContainerName, type HostControlClient } from './docker-socket.js';
 import { createHostControlRouter, type HostControlStore } from './host-control.routes.js';
 import {
   applyHostControlPatch,
@@ -273,6 +273,74 @@ test('a daemon that accepts the connection but never answers times out', async (
     for (const socket of held) socket.destroy();
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await unlink(socketPath).catch(() => {});
+  }
+});
+
+test('a restart gets a longer deadline than the read endpoints', async () => {
+  const socketPath = join(tmpdir(), `gjc-restart-budget-${process.pid}-${Math.random().toString(16).slice(2)}.sock`);
+  const server = createServer((request, response) => {
+    if (request.url === '/containers/slow/restart') {
+      setTimeout(() => { response.statusCode = 204; response.end(); }, 300);
+      return;
+    }
+    // Every other endpoint is as slow as the restart, so only the long budget survives.
+    setTimeout(() => { response.statusCode = 200; response.end('{}'); }, 300);
+  });
+  await new Promise<void>((resolve) => server.listen(socketPath, resolve));
+  try {
+    // The read deadline is far too short for a 300ms restart; the restart budget covers it.
+    const client = dockerClient({ socketPath, timeoutMs: 50, restartTimeoutMs: 2000 });
+    await client.restart('slow');
+    await assert.rejects(
+      () => client.info(),
+      (error: unknown) => error instanceof DockerSocketError && error.code === 'DOCKER_TIMEOUT',
+    );
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await unlink(socketPath).catch(() => {});
+  }
+});
+
+test('a container the daemon does not know is a 404, not a broken daemon', async () => {
+  const socketPath = join(tmpdir(), `gjc-ghost-${process.pid}-${Math.random().toString(16).slice(2)}.sock`);
+  const server = createServer((_request, response) => {
+    response.statusCode = 404;
+    response.end('{"message":"No such container: ghost"}');
+  });
+  await new Promise<void>((resolve) => server.listen(socketPath, resolve));
+  try {
+    const client = dockerClient({ socketPath });
+    await assert.rejects(
+      () => client.restart('ghost'),
+      (error: unknown) => error instanceof DockerSocketError && error.code === 'DOCKER_NOT_FOUND',
+    );
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await unlink(socketPath).catch(() => {});
+  }
+
+  const ghostClient: HostControlClient = {
+    async ping() { return true; },
+    async info() {
+      return {
+        serverVersion: 'dev', operatingSystem: 'Linux', kernelVersion: '6.18', ncpu: 1,
+        memTotal: 1, containers: 0, containersRunning: 0, containersStopped: 0, images: 0,
+      };
+    },
+    async list() { return []; },
+    async restart() { throw new DockerSocketError('DOCKER_NOT_FOUND', 'There is no container called "ghost".'); },
+  };
+  const http = await serve(createHostControlRouter({
+    client: ghostClient,
+    store: fakeStore({ enabled: true, restart: true }),
+    env: ENABLED_ENV,
+  }));
+  try {
+    const restart = await http.request('/containers/ghost/restart', { method: 'POST' });
+    assert.equal(restart.status, 404);
+    assert.equal((await restart.json() as { error: string }).error, 'DOCKER_NOT_FOUND');
+  } finally {
+    await http.close();
   }
 });
 
