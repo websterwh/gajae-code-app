@@ -10,7 +10,14 @@ ARG APP_REPOSITORY=https://github.com/websterwh/gajae-code-app.git
 ARG APP_REF=main
 ARG APP_SOURCE_REFRESH=manual
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Retried: a runner that cannot reach the archive for one moment should not fail
+# a release, and a stale index here turns the install into "no installation
+# candidate" rather than a clear network error.
+RUN for attempt in 1 2 3 4 5; do \
+        apt-get -o Acquire::Retries=5 update && break; \
+        echo "apt-get update failed on attempt ${attempt}"; sleep 5; \
+    done && \
+    apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
     git \

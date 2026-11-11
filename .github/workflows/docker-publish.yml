@@ -36,6 +36,12 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          # The builder container inherits the host network so its resolver is the
+          # runner's own. On the default bridge the build containers got a resolver
+          # that could not resolve anything, which broke the very first apt step
+          # while registry pulls kept working.
+          driver-opts: network=host
 
       - name: Extract Docker metadata
         id: meta
