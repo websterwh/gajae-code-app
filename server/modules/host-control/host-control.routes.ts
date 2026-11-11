@@ -17,7 +17,8 @@ import {
   type HostControlSettings,
 } from './host-control.settings.js';
 import { describeExecVerbs, EXEC_VERBS, findExecVerb } from './exec-verbs.js';
-import { detectHost } from './host-discovery.js';
+import { detectHost, type HostProfile } from './host-discovery.js';
+import { readSavedHostProfile, saveHostProfile, type SavedHostProfile } from './host-profile.store.js';
 
 export type HostControlStore = {
   read(): HostControlSettings;
@@ -25,6 +26,13 @@ export type HostControlStore = {
 };
 
 const defaultStore: HostControlStore = { read: readHostControlSettings, write: writeHostControlSettings };
+
+export type HostProfileStore = {
+  read(): SavedHostProfile | null;
+  write(profile: HostProfile): SavedHostProfile;
+};
+
+const defaultProfiles: HostProfileStore = { read: readSavedHostProfile, write: saveHostProfile };
 
 /** Capabilities that also have to be scoped to a named container. */
 const SCOPED: ReadonlySet<HostCapability> = new Set<HostCapability>(['docker', 'shell', 'files']);
@@ -57,8 +65,14 @@ function dockerFailure(response: Response, error: unknown): Response {
 export function createHostControlRouter({
   client,
   store = defaultStore,
+  profiles = defaultProfiles,
   env = process.env,
-}: { client?: HostControlClient; store?: HostControlStore; env?: NodeJS.ProcessEnv } = {}): Router {
+}: {
+  client?: HostControlClient;
+  store?: HostControlStore;
+  profiles?: HostProfileStore;
+  env?: NodeJS.ProcessEnv;
+} = {}): Router {
   const router = Router();
   const docker = (): HostControlClient => client ?? dockerClient({ socketPath: dockerSocketPath(env) });
 
@@ -66,6 +80,10 @@ export function createHostControlRouter({
     const available = hostControlAvailable(env);
     const settings = store.read();
     const capability = (name: HostCapability) => settings[name];
+    // The last saved detection rides along with the cheap status read, so a
+    // caller learns which machine this is without triggering another one - and
+    // only while detection is switched on, since the answer names the host.
+    const saved = allowsHostCapability(settings, 'discovery') ? profiles.read() : null;
     return {
       available,
       socketPath: dockerSocketPath(env),
@@ -73,6 +91,13 @@ export function createHostControlRouter({
       enabled: settings.enabled,
       capabilities: Object.fromEntries(HOST_CAPABILITIES.map((name) => [name, capability(name)])),
       targets: settings.targets,
+      host: saved
+        ? {
+          os: saved.profile.runtime.operatingSystem,
+          kernelVersion: saved.profile.runtime.kernelVersion,
+          detectedAt: saved.detectedAt,
+        }
+        : null,
     };
   };
 
@@ -171,7 +196,11 @@ export function createHostControlRouter({
     try {
       response.set('Cache-Control', 'no-store');
       const [info, containers] = await Promise.all([docker().info(), docker().list()]);
-      response.json({ profile: detectHost({ info, containers, socketPath: dockerSocketPath(env) }) });
+      const profile = detectHost({ info, containers, socketPath: dockerSocketPath(env) });
+      // Kept, not just returned: this is the only place the picture is built,
+      // so this is the only place it can be remembered for later callers.
+      const saved = profiles.write(profile);
+      response.json({ profile, detectedAt: saved.detectedAt });
     } catch (error) {
       dockerFailure(response, error);
     }

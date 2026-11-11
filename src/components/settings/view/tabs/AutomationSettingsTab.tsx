@@ -66,9 +66,12 @@ type HostControl = {
   enabled: boolean;
   capabilities: Record<HostCapabilityKey, boolean>;
   targets: string[];
+  /** The last saved detection, so the OS line survives a reload. */
+  host: { os: string; kernelVersion: string; detectedAt: number } | null;
 };
 
 type HostDiscoveryProfile = {
+  runtime: { serverVersion: string; operatingSystem: string; kernelVersion: string; driver: string; swarm: string; hostName: string };
   managers: Array<{ id: string; label: string; evidence: string[] }>;
   socketHolders: string[];
   stacks: Array<{ project: string; services: string[]; containers: string[] }>;
@@ -76,8 +79,23 @@ type HostDiscoveryProfile = {
   guidance: string[];
 };
 
-// Order matters: reads first, then the abilities that reach into a container.
-const HOST_CAPABILITY_ROWS: readonly HostCapabilityKey[] = ['facts', 'containers', 'discovery', 'restart', 'docker', 'shell', 'files'];
+// Reading is one switch here: Docker's own facts and the derived "what is
+// managing this host" answer are the same two reads, so they turn on together.
+const HOST_READ: readonly HostCapabilityKey[] = ['facts', 'discovery'];
+
+// Everything that acts on containers, under one group switch. Each row stays
+// its own permission on the server; this only sets all five at once.
+const DOCKER_ROWS: readonly HostCapabilityKey[] = ['containers', 'restart', 'docker', 'shell', 'files'];
+
+// The daemon already reports the distro's pretty name ("Debian GNU/Linux 12
+// (bookworm)"), properly capitalised. Rewriting it would produce "Debian
+// Gnu/linux", so it is shown as reported; the kernel is the fallback for a
+// daemon that names no OS at all.
+function describeHostOs(profile: HostDiscoveryProfile): string {
+  const os = profile.runtime.operatingSystem.trim();
+  if (os.length > 0) return os;
+  return profile.runtime.kernelVersion.trim();
+}
 
 const selectClass = 'touch-manipulation rounded-lg border border-input bg-card p-2.5 text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary';
 function companionPlatform(): string {
@@ -109,7 +127,7 @@ export default function AutomationSettingsTab() {
   const [hostControl, setHostControl] = useState<HostControl | null>(null);
   const [targetsDraft, setTargetsDraft] = useState('');
   const [hostControlError, setHostControlError] = useState<string | null>(null);
-  const [hostProfile, setHostProfile] = useState<HostDiscoveryProfile | null>(null);
+  const [detectedOs, setDetectedOs] = useState<string | null>(null);
   const [detectingHost, setDetectingHost] = useState(false);
   const [detectError, setDetectError] = useState<string | null>(null);
   const [remoteDevices, setRemoteDevices] = useState<RemoteDevice[]>([]);
@@ -249,9 +267,9 @@ export default function AutomationSettingsTab() {
     setHostControl(await response.json() as HostControl);
   };
 
-  // Discovery answers "what is actually running this host": the daemon's own
-  // facts plus every container that holds the socket, so the agent knows
-  // whether it is driving plain docker, compose, or an appliance's manager.
+  // Discovery answers "what is actually running this host". The server keeps
+  // the answer, so this only has to show the part the operator asked for: the
+  // OS. Everything else is there for the agent through /api/host/status.
   const detectHostEnvironment = async () => {
     setDetectingHost(true);
     setDetectError(null);
@@ -262,7 +280,7 @@ export default function AutomationSettingsTab() {
         return;
       }
       const { profile } = await response.json() as { profile: HostDiscoveryProfile };
-      setHostProfile(profile);
+      setDetectedOs(describeHostOs(profile));
     } catch {
       setDetectError(t('automation.hostControl.detectFailed'));
     } finally {
@@ -410,6 +428,10 @@ export default function AutomationSettingsTab() {
     ...(grants?.always.applications ?? []).map((value) => ({ kind: 'application' as const, value })),
   ];
 
+  const hostReadOn = hostControl !== null && HOST_READ.every((capability) => hostControl.capabilities[capability] === true);
+  const dockerGroupOn = hostControl !== null && DOCKER_ROWS.every((capability) => hostControl.capabilities[capability] === true);
+  const shownOs = detectedOs ?? hostControl?.host?.os ?? null;
+
   return (
     <div className="space-y-6">
       <SettingsSection title={t('automation.browserBackend.title')} description={t('automation.browserBackend.description')}>
@@ -542,19 +564,54 @@ export default function AutomationSettingsTab() {
           )}
           {hostControl?.available === true && hostControl.enabled ? (
             <>
-              {HOST_CAPABILITY_ROWS.map((capability) => (
-                <SettingsRow
-                  key={capability}
-                  label={t(`automation.hostControl.${capability}`)}
-                  description={t(`automation.hostControl.${capability}Description`)}
+              {/* Read first, then the one fact the operator actually wants
+                 from it: the OS, right under the switch that allows it. */}
+              <SettingsRow label={t('automation.hostControl.hostInfo')} description={t('automation.hostControl.hostInfoDescription')}>
+                <SettingsToggle
+                  checked={hostReadOn}
+                  onChange={(value) => void saveHostControl({ facts: value, discovery: value })}
+                  ariaLabel={t('automation.hostControl.hostInfo')}
+                />
+              </SettingsRow>
+              <div className="flex items-center justify-between gap-3 px-4 pb-4">
+                <p className="min-w-0 truncate text-sm text-foreground" role="status">
+                  {detectingHost ? t('automation.hostControl.detecting') : shownOs ?? ''}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void detectHostEnvironment()}
+                  disabled={detectingHost || !hostReadOn}
+                  className="shrink-0 rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
                 >
+                  {t('automation.hostControl.detect')}
+                </button>
+              </div>
+              {/* One group switch, then the individual permissions under it.
+                 The server still checks each row on its own. */}
+              <div className="pl-6">
+                <SettingsRow label={t('automation.hostControl.dockerGroup')} description={t('automation.hostControl.dockerGroupDescription')}>
                   <SettingsToggle
-                    checked={hostControl.capabilities[capability] === true}
-                    onChange={(value) => void saveHostControl({ [capability]: value } as HostControlPatch)}
-                    ariaLabel={t(`automation.hostControl.${capability}`)}
+                    checked={dockerGroupOn}
+                    onChange={(value) => void saveHostControl(
+                      Object.fromEntries(DOCKER_ROWS.map((capability) => [capability, value])) as HostControlPatch,
+                    )}
+                    ariaLabel={t('automation.hostControl.dockerGroup')}
                   />
                 </SettingsRow>
-              ))}
+                {DOCKER_ROWS.map((capability) => (
+                  <SettingsRow
+                    key={capability}
+                    label={t(`automation.hostControl.${capability}`)}
+                    description={t(`automation.hostControl.${capability}Description`)}
+                  >
+                    <SettingsToggle
+                      checked={hostControl.capabilities[capability] === true}
+                      onChange={(value) => void saveHostControl({ [capability]: value } as HostControlPatch)}
+                      ariaLabel={t(`automation.hostControl.${capability}`)}
+                    />
+                  </SettingsRow>
+                ))}
+              </div>
               {/* The scope for everything that reaches further than a restart:
                  state changes, commands and file reads only touch containers
                  this list names. Empty means none, not all of them. */}
@@ -571,34 +628,8 @@ export default function AutomationSettingsTab() {
                   className={`${selectClass} sm:w-64`}
                 />
               </SettingsRow>
-              <div className="space-y-2 px-4 pb-4 text-xs text-muted-foreground">
-                <button
-                  type="button"
-                  onClick={() => void detectHostEnvironment()}
-                  disabled={detectingHost || hostControl.capabilities.discovery !== true}
-                  className="rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {detectingHost ? t('automation.hostControl.detecting') : t('automation.hostControl.detect')}
-                </button>
-                {hostControlError ? <p role="alert" className="text-destructive">{hostControlError}</p> : null}
-                {detectError ? <p role="alert" className="text-destructive">{detectError}</p> : null}
-                {hostProfile ? (
-                  <div className="space-y-1">
-                    <p className="text-foreground">
-                      {hostProfile.managers.length > 0
-                        ? t('automation.hostControl.detectedManagers', { list: hostProfile.managers.map((manager) => manager.label).join(', ') })
-                        : t('automation.hostControl.detectedNone')}
-                    </p>
-                    {hostProfile.socketHolders.length > 0
-                      ? <p>{t('automation.hostControl.socketHolders', { list: hostProfile.socketHolders.join(', ') })}</p>
-                      : null}
-                    {hostProfile.stacks.length > 0
-                      ? <p>{t('automation.hostControl.stacks', { list: hostProfile.stacks.map((stack) => `${stack.project} (${stack.services.length || stack.containers.length})`).join(', ') })}</p>
-                      : null}
-                    {hostProfile.guidance.map((line) => <p key={line}>• {line}</p>)}
-                  </div>
-                ) : null}
-              </div>
+              {hostControlError ? <p role="alert" className="px-4 pb-4 text-xs text-destructive">{hostControlError}</p> : null}
+              {detectError ? <p role="alert" className="px-4 pb-4 text-xs text-destructive">{detectError}</p> : null}
             </>
           ) : null}
         </SettingsCard>
