@@ -67,21 +67,72 @@ broken.
 
 `server/modules/host-control/` is the app side of the socket mount:
 
-| Route | Capability |
-|---|---|
-| `GET /api/host/status` | none - availability, socket path, reachability |
-| `GET /api/host/info` | `facts` |
-| `GET /api/host/containers` | `containers` |
-| `POST /api/host/containers/:name/restart` | `restart` |
-| `PUT /api/host/settings` | none - only while `GAJAE_HOST_CONTROL` is set |
+| Route | Capability | Scope |
+|---|---|---|
+| `GET /api/host/status` | none - availability, socket path, reachability, current switches | - |
+| `GET /api/host/info` | `facts` | - |
+| `GET /api/host/containers` | `containers` | - |
+| `GET /api/host/discovery` | `discovery` | - |
+| `POST /api/host/containers/:name/restart` | `restart` | the named container |
+| `POST /api/host/containers/:name/action` | `docker` | allowed list |
+| `GET /api/host/verbs` | `shell` | - |
+| `POST /api/host/exec` | `shell` | allowed list |
+| `GET /api/host/files` | `files` | allowed list |
+| `PUT /api/host/settings` | none - only while `GAJAE_HOST_CONTROL` is set | - |
 
 Every route checks the env gate on each request, then the capability, so a
 process started without the variable cannot be talked into host access and one
-that loses it stops answering immediately. The client has four fixed requests
-(`/_ping`, `/info`, `/containers/json?all=1`, `POST /containers/{name}/restart`)
-and a container name that must match `^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`. There
-is no generic request function, so nothing above the client can reach an
-endpoint that is not on that list.
+that loses it stops answering immediately. The three reaching capabilities
+(`docker`, `shell`, `files`) also check the operator's **allowed containers**
+list, a set of name globs; an empty list means they reach nothing, so a switch
+that is on is permission to act, not permission to act on everything.
+
+The client is one named method per endpoint - `/_ping`, `/info`,
+`/containers/json?all=1`, `POST /containers/{name}/{start|stop|restart|pause|unpause}`,
+`POST /containers/{name}/exec` + `POST /exec/{id}/start` + `GET /exec/{id}/json`,
+and `GET /containers/{name}/archive?path=` - with a container name that must
+match `^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$` and an archive path that must be
+absolute with no `..` segment. There is no generic request function, so nothing
+above the client can reach an endpoint that is not on that list.
+
+## The scoped shell and file reads
+
+`POST /containers/:name/exec` takes a **verb id**, never a command: `os`,
+`uptime`, `memory`, `processes`, `disk`, `root`, `network`. Each verb is one
+fixed argv in `exec-verbs.ts`, the output is capped at 64 KiB, and the run gets
+20 seconds. A caller cannot pass a flag, a pipeline or an environment variable,
+and nothing reads a container's environment, because that is where its secrets
+live.
+
+These commands run *inside a named container*. A shell **on the host** would
+require launching a privileged container with the host root mounted, which is
+root-equivalent control and exactly what this surface exists to avoid; that path
+stays in `gajae-host.mjs` over SSH, where the operator runs it deliberately.
+
+`GET /files?container=&path=` reads one file or lists one directory through
+Docker's `archive` endpoint: read-only, 256 KiB per file, paths must be absolute
+and `..` is refused. Those paths are the *container's* filesystem, so they only
+contain host files where a bind mount puts them there.
+
+## Discovery
+
+`GET /api/host/discovery` answers "what kind of machine is this" from the two
+reads the app already has - `/info` and the container list - and never from a
+product name in the logic. Detectors are rows in `HOST_MANAGERS`
+(`host-discovery.ts`): each has a label and the signals it recognises (kernel or
+OS string, image reference, container name, label key), and the profile reports
+the evidence line next to every verdict. Adding another appliance is a table
+row, not a branch.
+
+It also reports the brand-agnostic facts that matter more than any name:
+
+- **socket holders** - every container that mounts the daemon socket, i.e. every
+  other thing that already manages this daemon;
+- **compose stacks** - grouped by `com.docker.compose.project`, with their
+  services, because a container in a stack is recreated from its file;
+- **unmanaged containers** - nothing declares them, so nothing recreates them;
+- **guidance** - the one-line consequences of the above, so an agent knows
+  whether to act here or in Portainer/the appliance's own manager.
 
 ## Which transport to use
 
@@ -96,9 +147,10 @@ Two shapes, on purpose:
 
 Mounting `/var/run/docker.sock` gives the container root-equivalent control of
 the host, and it is reachable from anything that can talk to the app. That is
-why it is off by default, split into three capabilities, and why a socket proxy
-that exposes only `/info` and `/containers` is the recommended form: the app
-never needs the rest of the API, and `restart` is the only write it asks for.
+why it is off by default, split into seven independent capabilities, scoped by
+an allowed-containers list, and why a socket proxy is the recommended form: the
+exact routes listed above are all it needs, and a proxy that refuses the rest of
+the API still leaves every switch working.
 
 ## Verb model
 
