@@ -460,7 +460,7 @@ test('no withheld runtime features are reported, because none are overridden', a
  * two switches over the same two daemon reads, so they are one switch here, and
  * the detection's answer - the OS - sits beside the button that fetches it.
  */
-test('host reading is one switch, and detection is a button on its left followed by the saved answer', async () => {
+test('host reading is one switch, and detection sits left of it with the answer in the description slot', async () => {
   const calls = fakeApi({
     hostControl: {
       enabled: true,
@@ -481,12 +481,13 @@ test('host reading is one switch, and detection is a button on its left followed
   ]);
 
   const detect = screen.getByRole('button', { name: hostControl.detect! }) as HTMLButtonElement;
+  const readSwitch = screen.getByRole('switch', { name: hostControl.hostInfo! });
+  // Detect is part of the read row and comes before the switch it depends on.
+  assert.equal(detect.compareDocumentPosition(readSwitch) & 4, 4, 'the detect button sits left of its switch');
   fireEvent.click(detect);
-  const os = await screen.findByText('Devuan GNU/Linux 6 (excalibur)');
-  // The button comes first, and the answer it produced follows it.
-  assert.equal(detect.compareDocumentPosition(os) & 4, 4, 'the detect button sits left of the OS it reports');
+  await screen.findByText('Devuan GNU/Linux 6 (excalibur)');
   // Nothing else about the host is printed: the profile is the agent's, not the tab's.
-  assert.equal(screen.queryByText('webby'), null);
+  assert.equal(screen.queryByText('Webby'), null);
 });
 
 /*

@@ -566,30 +566,33 @@ export default function AutomationSettingsTab() {
           )}
           {hostControl?.available === true && hostControl.enabled ? (
             <>
-              {/* Read first, then the one fact the operator actually wants
-                 from it: the OS, right under the switch that allows it. */}
-              <SettingsRow label={t('automation.hostControl.hostInfo')} description={t('automation.hostControl.hostInfoDescription')}>
-                <SettingsToggle
-                  checked={hostReadOn}
-                  onChange={(value) => void saveHostControl({ facts: value, discovery: value })}
-                  ariaLabel={t('automation.hostControl.hostInfo')}
-                />
+              {/* One row, one right-hand cluster: the button that refreshes the
+                 answer sits left of the switch that permits it, and the answer
+                 itself takes the description slot once it is known, so it lines
+                 up with the text of every other row instead of floating in a
+                 strip of its own. */}
+              <SettingsRow
+                label={t('automation.hostControl.hostInfo')}
+                description={!detectingHost && shownOs
+                  ? <span role="status" className="font-medium text-foreground">{shownOs}</span>
+                  : t('automation.hostControl.hostInfoDescription')}
+              >
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => void detectHostEnvironment()}
+                    disabled={detectingHost || !hostReadOn}
+                    className="rounded-lg border border-input px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {detectingHost ? t('automation.hostControl.detecting') : t('automation.hostControl.detect')}
+                  </button>
+                  <SettingsToggle
+                    checked={hostReadOn}
+                    onChange={(value) => void saveHostControl({ facts: value, discovery: value })}
+                    ariaLabel={t('automation.hostControl.hostInfo')}
+                  />
+                </div>
               </SettingsRow>
-              {/* Button first: the action reads left to right, and the answer
-                 it produces sits beside it. */}
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
-                <button
-                  type="button"
-                  onClick={() => void detectHostEnvironment()}
-                  disabled={detectingHost || !hostReadOn}
-                  className="shrink-0 rounded-lg border border-input px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {detectingHost ? t('automation.hostControl.detecting') : t('automation.hostControl.detect')}
-                </button>
-                {!detectingHost && shownOs ? (
-                  <p className="min-w-0 truncate text-sm font-medium text-foreground" role="status">{shownOs}</p>
-                ) : null}
-              </div>
               {/* The group sits level with every other row; only its rows are
                  inset, under a rule, so the nesting is visible without
                  pushing the group itself to the right. Turned off, it hides
