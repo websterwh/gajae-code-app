@@ -7,7 +7,7 @@ import test from 'node:test';
 
 import express from 'express';
 
-import { dockerClient, isContainerName } from './docker-socket.js';
+import { dockerClient, DockerSocketError, isContainerName } from './docker-socket.js';
 import { createHostControlRouter, type HostControlStore } from './host-control.routes.js';
 import {
   applyHostControlPatch,
@@ -200,6 +200,80 @@ test('a missing socket is reported, not thrown from the health check', async () 
   const client = dockerClient({ socketPath: join(tmpdir(), `gjc-missing-${process.pid}.sock`), timeoutMs: 500 });
   assert.equal(await client.ping(), false);
   await assert.rejects(() => client.list(), /not reachable/u);
+});
+
+test('turning the master switch off is visible over HTTP and re-enabling grants nothing back', async () => {
+  const calls: string[] = [];
+  const store = fakeStore({ enabled: true, facts: true, containers: true, restart: true });
+  const server = await serve(createHostControlRouter({ client: fakeClient(calls), store, env: ENABLED_ENV }));
+  try {
+    const off = await server.request('/settings', json({ enabled: false }));
+    assert.equal(off.status, 200);
+    assert.deepEqual((await off.json() as { capabilities: unknown }).capabilities, {
+      facts: false, containers: false, restart: false,
+    });
+    assert.equal((await server.request('/containers')).status, 403);
+    assert.equal((await server.request('/containers/gajae-app/restart', { method: 'POST' })).status, 403);
+
+    const on = await server.request('/settings', json({ enabled: true }));
+    assert.equal(on.status, 200);
+    assert.deepEqual((await on.json() as { capabilities: unknown }).capabilities, {
+      facts: false, containers: false, restart: false,
+    });
+    assert.equal((await server.request('/containers')).status, 403);
+    assert.equal(calls.filter((call) => call.startsWith('restart')).length, 0);
+  } finally {
+    await server.close();
+  }
+});
+
+test('daemon failures are 503 with their own code, never a 500', async () => {
+  const failing = {
+    async ping() { return true; },
+    async info() { throw new DockerSocketError('DOCKER_TIMEOUT', 'The Docker daemon did not answer in time.'); },
+    async list() { throw new DockerSocketError('DOCKER_HTTP', 'The Docker daemon answered 404.'); },
+    async restart() { throw new DockerSocketError('DOCKER_HTTP', 'The Docker daemon answered 404.'); },
+  };
+  const server = await serve(createHostControlRouter({
+    client: failing,
+    store: fakeStore({ enabled: true, facts: true, containers: true, restart: true }),
+    env: ENABLED_ENV,
+  }));
+  try {
+    const info = await server.request('/info');
+    assert.equal(info.status, 503);
+    assert.equal((await info.json() as { error: string }).error, 'DOCKER_TIMEOUT');
+
+    const list = await server.request('/containers');
+    assert.equal(list.status, 503);
+    assert.equal((await list.json() as { error: string }).error, 'DOCKER_HTTP');
+
+    const restart = await server.request('/containers/missing/restart', { method: 'POST' });
+    assert.equal(restart.status, 503);
+    assert.equal((await restart.json() as { error: string }).error, 'DOCKER_HTTP');
+  } finally {
+    await server.close();
+  }
+});
+
+test('a daemon that accepts the connection but never answers times out', async () => {
+  const socketPath = join(tmpdir(), `gjc-stall-${process.pid}-${Math.random().toString(16).slice(2)}.sock`);
+  const held: Array<import('node:net').Socket> = [];
+  const server = createServer(() => { /* accept and stay silent */ });
+  server.on('connection', (socket) => held.push(socket));
+  await new Promise<void>((resolve) => server.listen(socketPath, resolve));
+  try {
+    const client = dockerClient({ socketPath, timeoutMs: 200 });
+    await assert.rejects(
+      () => client.info(),
+      (error: unknown) => error instanceof DockerSocketError && error.code === 'DOCKER_TIMEOUT',
+    );
+    assert.equal(await client.ping(), false);
+  } finally {
+    for (const socket of held) socket.destroy();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await unlink(socketPath).catch(() => {});
+  }
 });
 
 test('container names are the only thing that can reach the socket', () => {

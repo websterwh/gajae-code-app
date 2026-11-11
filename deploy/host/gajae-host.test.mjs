@@ -125,6 +125,38 @@ test('facts describe an image-backed non-systemd host with a proxy and the app c
   assert.match(quirks, /cgroup v2/u);
 });
 
+test('a systemd host with a disk-backed root flips every shape-dependent answer', async () => {
+  const systemdHost = async (command) => {
+    if (command.includes('command -v systemctl rc-service')) return { code: 0, stdout: '/usr/bin/systemctl\n/usr/sbin/service', stderr: '' };
+    if (command.includes('systemctl list-units')) return { code: 0, stdout: 'docker.service\nssh.service', stderr: '' };
+    if (command.includes('readlink -f /sbin/init')) return { code: 0, stdout: '/lib/systemd/systemd', stderr: '' };
+    if (command.includes('lsblk')) {
+      return {
+        code: 0,
+        stdout: 'NAME="sda" SIZE="500107862016" TYPE="disk" FSTYPE="" MOUNTPOINT="" RO="0" MODEL="Samsung"\n'
+          + 'NAME="sda2" SIZE="499000000000" TYPE="part" FSTYPE="ext4" MOUNTPOINT="/" RO="0" MODEL=""',
+        stderr: '',
+      };
+    }
+    return fakeHost(command);
+  };
+  const facts = await factsFor({
+    run: systemdHost,
+    read: async (file) => {
+      if (file === '/proc/mounts') return '/dev/sda2 / ext4 rw,relatime 0 0\n/dev/sda1 /boot/efi vfat rw 0 0\n';
+      if (file === '/proc/1/comm') return 'systemd\n';
+      return readFake(file);
+    },
+  });
+
+  assert.equal(facts.init.systemd, true);
+  assert.equal(facts.services.manager, 'systemctl');
+  assert.deepEqual(facts.services.running, ['docker.service', 'ssh.service']);
+  assert.equal(facts.storage.rootImageBacked, false);
+  assert.doesNotMatch(facts.quirks.join('\n'), /lost on reboot|unpacked at boot/u);
+  assert.doesNotMatch(renderAgentsMd(facts, { root: '/srv/app' }), /unpacked at boot/u);
+});
+
 test('a host without lsblk still lists disks from /proc/partitions', async () => {
   const facts = await factsFor({
     run: async (command) => (command.includes('lsblk')

@@ -27,6 +27,17 @@ export const OIDC_EXEMPT_PREFIXES = [
   '/.well-known',
 ] as const;
 
+/**
+ * Paths the local-access bypass never covers. A trusted LAN address is a
+ * convenience for reading the app, not a grant of control over the Docker
+ * daemon, so host control needs a session even from the LAN.
+ */
+export const SESSION_ONLY_PREFIXES = ['/api/host'] as const;
+
+export function requiresSession(pathname: string): boolean {
+  return SESSION_ONLY_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
+
 const STATIC_FILE = /\.[a-z0-9]{1,8}$/iu;
 
 export function isExemptPath(pathname: string): boolean {
@@ -120,7 +131,7 @@ export function createOidcGate() {
     if (isDesktopMode() || !oidcEnforcing(config) || isExemptPath(request.path)) return next();
     if (noAuthEnabled()) return next();
 
-    if (config.allowLocal && clientAddressAllowed(clientAddress(request), config.allowedIps)) return next();
+    if (config.allowLocal && !requiresSession(request.path) && clientAddressAllowed(clientAddress(request), config.allowedIps)) return next();
 
     const session = readSession(request.headers.cookie);
     if (session) return next();

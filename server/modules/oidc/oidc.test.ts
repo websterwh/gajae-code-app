@@ -4,7 +4,7 @@ import { createServer, type Server } from 'node:http';
 import test from 'node:test';
 
 import { normalizeIssuer, oidcEnforcing, validateOidcConfig, type OidcConfig } from './oidc.config.js';
-import { clientAddress, clientAddressAllowed, isExemptPath, noAuthEnabled } from './oidc.middleware.js';
+import { clientAddress, clientAddressAllowed, isExemptPath, noAuthEnabled, requiresSession } from './oidc.middleware.js';
 import {
   buildAuthorizeUrl,
   completeSignIn,
@@ -238,7 +238,15 @@ test('the gate is inert until the config is complete, and exempts automation', (
   for (const path of ['/health', '/api/auth/oidc/start', '/api/gjc/jobs', '/api/automation/computer', '/api/browser/cdp', '/ws', '/assets/index-abc.js']) {
     assert.equal(isExemptPath(path), true, `${path} must stay reachable`);
   }
-  for (const path of ['/', '/api/providers/sessions', '/api/settings']) {
+  for (const path of ['/', '/api/providers/sessions', '/api/settings', '/api/host/containers']) {
     assert.equal(isExemptPath(path), false, `${path} must require a session`);
+  }
+  // A trusted LAN address may read the app without signing in, but it never
+  // reaches host control that way.
+  for (const path of ['/api/host', '/api/host/containers', '/api/host/containers/app/restart']) {
+    assert.equal(requiresSession(path), true, `${path} must not skip sign-in for local addresses`);
+  }
+  for (const path of ['/api/settings', '/api/hostile']) {
+    assert.equal(requiresSession(path), false, path);
   }
 });
