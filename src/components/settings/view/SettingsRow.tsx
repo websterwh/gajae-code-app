@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 
 import { cn } from '../../../utils/cn';
 
-type SettingsRowProps = { label: string; description?: string; children: ReactNode; className?: string };
+type SettingsRowProps = { label: string; description?: ReactNode; children: ReactNode; className?: string };
 
 export default function SettingsRow({ label, description, children, className }: SettingsRowProps) {
   const descriptionNode = description ? (
