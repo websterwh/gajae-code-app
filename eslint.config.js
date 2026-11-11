@@ -86,17 +86,29 @@ const browserConfig = recommendedConfig(
   { react: { version: 'detect' }, tailwindcss: { cssConfigPath: './src/index.css' } },
 );
 
+// eslint-plugin-boundaries 7 makes every element descriptor folder-based, so a
+// single file can no longer be an element type: each one is a file descriptor
+// (a category) instead, and the policies below select it with
+// `file: { categories }`. A file descriptor also has a deprecated `type`, which
+// exists only to read old `mode: 'file'` descriptors, so it is not used here.
 const backendElements = [
-  { type: 'gjc-engine-api', pattern: ['server/gjc-engine.ts'], mode: 'file' },
-  { type: 'gjc-engine-client', pattern: ['server/gjc-worker-client.ts'], mode: 'file' },
-  { type: 'gjc-engine', pattern: engineFiles, mode: 'file' },
   {
-    type: 'backend-shared-type-contract',
+    type: 'backend-module',
+    pattern: 'server/modules/*',
+    capture: ['moduleName'],
+  },
+];
+
+const backendFiles = [
+  { category: 'gjc-engine-api', pattern: ['server/gjc-engine.ts'] },
+  { category: 'gjc-engine-client', pattern: ['server/gjc-worker-client.ts'] },
+  { category: 'gjc-engine', pattern: engineFiles },
+  {
+    category: 'backend-shared-type-contract',
     pattern: ['server/shared/types.{js,ts}', 'server/shared/interfaces.{js,ts}'],
-    mode: 'file',
   },
   {
-    type: 'backend-shared-utils',
+    category: 'backend-shared-utils',
     pattern: [
       'server/shared/utils.{js,ts}',
       'server/shared/frontmatter.ts',
@@ -112,18 +124,10 @@ const backendElements = [
       'server/middleware/desktop-auth.js',
       'server/middleware/auth.js',
     ],
-    mode: 'file',
   },
   {
-    type: 'backend-legacy-runtime',
+    category: 'backend-legacy-runtime',
     pattern: ['server/projects.js', 'server/utils/runtime-paths.js'],
-    mode: 'file',
-  },
-  {
-    type: 'backend-module',
-    pattern: 'server/modules/*',
-    mode: 'folder',
-    capture: ['moduleName'],
   },
 ];
 
@@ -133,6 +137,7 @@ function backendSettings() {
   return {
     'boundaries/include': ['server/**/*.{js,ts}'],
     'boundaries/elements': backendElements,
+    'boundaries/files': backendFiles,
     'import/resolver': { typescript, node },
     'import-x/resolver-next': [
       createTypeScriptImportResolver(typescript),
@@ -141,30 +146,45 @@ function backendSettings() {
   };
 }
 
-const boundaryRules = [
+// Selectors are entity selectors (`{ element: { ... } }`, `{ file: { ... } }`);
+// the flat form still works but is deprecated, and `internalPath` moved to the
+// element's `fileInternalPath`. Engine and shared files are matched by file
+// category, everything else by element type, and a policy matches on one axis
+// at a time - hence one policy per from/to pair.
+const boundaryPolicies = [
   {
-    from: { type: 'backend-module' },
-    to: { type: 'backend-shared-type-contract' },
+    from: { element: { type: 'backend-module' } },
+    to: { file: { categories: 'backend-shared-type-contract' } },
     disallow: { dependency: { kind: ['value', 'typeof'] } },
     message: 'Backend modules may only use `import type` when importing from server/shared/types.ts or server/shared/interfaces.ts.',
   },
   {
-    to: { type: 'backend-module' },
-    disallow: { to: { internalPath: '**' } },
+    to: { element: { type: 'backend-module' } },
+    disallow: { to: { element: { fileInternalPath: '**' } } },
     message: 'Cross-module imports must go through that module\'s barrel file (server/modules/<module>/index.ts or index.js).',
   },
   {
-    to: { type: 'backend-module' },
-    allow: { to: { internalPath: ['index', 'index.{js,mjs,cjs,ts,tsx}'] } },
+    to: { element: { type: 'backend-module' } },
+    allow: { to: { element: { fileInternalPath: ['index', 'index.{js,mjs,cjs,ts,tsx}'] } } },
   },
   {
-    from: { type: 'gjc-engine' },
-    disallow: { to: { type: ['backend-module', 'backend-legacy-runtime'] } },
+    from: { file: { categories: 'gjc-engine' } },
+    disallow: { to: { element: { type: 'backend-module' } } },
     message: 'The GJC engine may not import the app around it, barrel included. Move the shared piece next to the engine, or pass it through server/gjc-worker-protocol.ts.',
   },
   {
-    from: { type: ['backend-module', 'gjc-engine-client'] },
-    disallow: { to: { type: 'gjc-engine' } },
+    from: { file: { categories: 'gjc-engine' } },
+    disallow: { to: { file: { categories: 'backend-legacy-runtime' } } },
+    message: 'The GJC engine may not import the app around it, barrel included. Move the shared piece next to the engine, or pass it through server/gjc-worker-protocol.ts.',
+  },
+  {
+    from: { element: { type: 'backend-module' } },
+    disallow: { to: { file: { categories: 'gjc-engine' } } },
+    message: 'Import the engine through server/gjc-engine.ts. Its exports are the published surface; if what you need is missing, export it there deliberately.',
+  },
+  {
+    from: { file: { categories: 'gjc-engine-client' } },
+    disallow: { to: { file: { categories: 'gjc-engine' } } },
     message: 'Import the engine through server/gjc-engine.ts. Its exports are the published surface; if what you need is missing, export it there deliberately.',
   },
 ];
@@ -193,9 +213,9 @@ const serverConfig = {
       'boundaries/dependencies': ['error', {
         default: 'allow',
         checkInternals: false,
-        rules: boundaryRules,
+        policies: boundaryPolicies,
       }],
-      'boundaries/no-unknown': 'error',
+      'boundaries/no-unknown-dependencies': 'error',
     },
     backendSettings(),
   ),
