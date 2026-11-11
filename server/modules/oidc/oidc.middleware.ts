@@ -3,6 +3,8 @@ import type { NextFunction, Request, Response } from 'express';
 import { isDesktopMode } from '@/middleware/desktop-auth.js';
 import { isPrivateAddress, stripMappedV4 } from '@/shared/peer-address.js';
 
+import { hostControlAvailable } from '../host-control/index.js';
+
 import { oidcEnforcing, readOidcConfig } from './oidc.config.js';
 import { readSession } from './oidc.sessions.js';
 
@@ -28,14 +30,31 @@ export const OIDC_EXEMPT_PREFIXES = [
 ] as const;
 
 /**
- * Paths the local-access bypass never covers. A trusted LAN address is a
- * convenience for reading the app, not a grant of control over the Docker
- * daemon, so host control needs a session even from the LAN.
+ * Paths the local-access bypass never covers on its own. A trusted LAN address
+ * is a convenience for reading the app, not a grant of control over the Docker
+ * daemon, so host control needs either a session or the deployment's own
+ * opt-in (see `coversLocalBypass`).
  */
 export const SESSION_ONLY_PREFIXES = ['/api/host'] as const;
 
 export function requiresSession(pathname: string): boolean {
   return SESSION_ONLY_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
+
+/**
+ * Whether the local-access bypass reaches a path.
+ *
+ * Host control is the one surface it does not reach by default, because a LAN
+ * address is not a statement about the Docker daemon. `GAJAE_HOST_CONTROL` is:
+ * the operator puts it in the container's environment beside the socket mount,
+ * and no request can set it. Requiring a sign-in on top of it was a dead end
+ * for the LAN topology the bypass exists for - the operator who opted in still
+ * could not reach their own switch - so the opt-in stands in for the session.
+ * Without the variable every `/api/host` route is inert anyway, and with it the
+ * capabilities stay off until they are switched on in Settings.
+ */
+export function coversLocalBypass(pathname: string, env: NodeJS.ProcessEnv = process.env): boolean {
+  return !requiresSession(pathname) || hostControlAvailable(env);
 }
 
 const STATIC_FILE = /\.[a-z0-9]{1,8}$/iu;
@@ -131,7 +150,7 @@ export function createOidcGate() {
     if (isDesktopMode() || !oidcEnforcing(config) || isExemptPath(request.path)) return next();
     if (noAuthEnabled()) return next();
 
-    if (config.allowLocal && !requiresSession(request.path) && clientAddressAllowed(clientAddress(request), config.allowedIps)) return next();
+    if (config.allowLocal && coversLocalBypass(request.path) && clientAddressAllowed(clientAddress(request), config.allowedIps)) return next();
 
     const session = readSession(request.headers.cookie);
     if (session) return next();

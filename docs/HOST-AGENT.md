@@ -80,6 +80,15 @@ broken.
 | `GET /api/host/files` | `files` | allowed list |
 | `PUT /api/host/settings` | none - only while `GAJAE_HOST_CONTROL` is set | - |
 
+None of these routes answers a LAN client that `allowLocal` admits without a
+sign-in unless the deployment also set `GAJAE_HOST_CONTROL`: the bypass covers
+read-only app surfaces, not the Docker daemon. With the variable set, that is
+the grant - it lives in the container's environment beside the socket mount and
+no request can set it - so the bypass covers `/api/host` too, and the capability
+switches still decide what any caller may do. Without it, `/api/host/status`
+answers `401 SIGN_IN_REQUIRED` in that topology, which the Settings tab reports
+instead of hiding the section.
+
 Every route checks the env gate on each request, then the capability, so a
 process started without the variable cannot be talked into host access and one
 that loses it stops answering immediately. The three reaching capabilities
