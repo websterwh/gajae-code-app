@@ -193,7 +193,7 @@
       "detecting": "Detecting...",
       "detectFailed": "The host could not be read; check the switch above and the socket.",
       "dockerGroup": "Docker",
-      "dockerGroupDescription": "Switches everything below at once.",
+      "dockerGroupDescription": "Turn on to choose what the agent may do with containers.",
       "containers": "View containers",
       "containersDescription": "Every container with its image, state and status.",
       "restart": "Restart a container",
