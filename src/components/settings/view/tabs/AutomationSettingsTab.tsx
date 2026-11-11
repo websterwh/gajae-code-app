@@ -55,13 +55,29 @@ type RemoteDevice = {
   };
 };
 
+type HostCapabilityKey = 'facts' | 'containers' | 'restart' | 'discovery' | 'docker' | 'shell' | 'files';
+
+type HostControlPatch = Partial<{ enabled: boolean; targets: string[] } & Record<HostCapabilityKey, boolean>>;
+
 type HostControl = {
   available: boolean;
   socketPath: string;
   reachable: boolean;
   enabled: boolean;
-  capabilities: { facts: boolean; containers: boolean; restart: boolean };
+  capabilities: Record<HostCapabilityKey, boolean>;
+  targets: string[];
 };
+
+type HostDiscoveryProfile = {
+  managers: Array<{ id: string; label: string; evidence: string[] }>;
+  socketHolders: string[];
+  stacks: Array<{ project: string; services: string[]; containers: string[] }>;
+  unmanaged: string[];
+  guidance: string[];
+};
+
+// Order matters: reads first, then the abilities that reach into a container.
+const HOST_CAPABILITY_ROWS: readonly HostCapabilityKey[] = ['facts', 'containers', 'discovery', 'restart', 'docker', 'shell', 'files'];
 
 const selectClass = 'touch-manipulation rounded-lg border border-input bg-card p-2.5 text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary';
 function companionPlatform(): string {
@@ -91,6 +107,11 @@ export default function AutomationSettingsTab() {
   const [egoFrames, setEgoFrames] = useState(false);
   const [computerUse, setComputerUse] = useState(false);
   const [hostControl, setHostControl] = useState<HostControl | null>(null);
+  const [targetsDraft, setTargetsDraft] = useState('');
+  const [hostControlError, setHostControlError] = useState<string | null>(null);
+  const [hostProfile, setHostProfile] = useState<HostDiscoveryProfile | null>(null);
+  const [detectingHost, setDetectingHost] = useState(false);
+  const [detectError, setDetectError] = useState<string | null>(null);
   const [remoteDevices, setRemoteDevices] = useState<RemoteDevice[]>([]);
   const [selectedRemoteDeviceId, setSelectedRemoteDeviceId] = useState<string | undefined>();
   const [pairingToken, setPairingToken] = useState<string | null>(null);
@@ -212,14 +233,41 @@ export default function AutomationSettingsTab() {
 
   // Host control is saved server-side and re-read, so the switches always show
   // what the server will actually enforce.
-  const saveHostControl = async (patch: { enabled?: boolean; facts?: boolean; containers?: boolean; restart?: boolean }) => {
+  const saveHostControl = async (patch: HostControlPatch) => {
     const response = await fetch('/api/host/settings', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch),
     });
-    if (!response.ok) return;
+    if (!response.ok) {
+      // The draft must not look saved when the server kept the old scope.
+      setHostControlError(t('automation.hostControl.saveFailed'));
+      if (hostControl) setTargetsDraft(hostControl.targets.join(', '));
+      return;
+    }
+    setHostControlError(null);
     setHostControl(await response.json() as HostControl);
+  };
+
+  // Discovery answers "what is actually running this host": the daemon's own
+  // facts plus every container that holds the socket, so the agent knows
+  // whether it is driving plain docker, compose, or an appliance's manager.
+  const detectHostEnvironment = async () => {
+    setDetectingHost(true);
+    setDetectError(null);
+    try {
+      const response = await fetch('/api/host/discovery');
+      if (!response.ok) {
+        setDetectError(t('automation.hostControl.detectFailed'));
+        return;
+      }
+      const { profile } = await response.json() as { profile: HostDiscoveryProfile };
+      setHostProfile(profile);
+    } catch {
+      setDetectError(t('automation.hostControl.detectFailed'));
+    } finally {
+      setDetectingHost(false);
+    }
   };
 
   const pairRemoteComputer = async () => {
@@ -293,6 +341,11 @@ export default function AutomationSettingsTab() {
   useEffect(() => {
     void refresh().catch(() => setLoading(false));
   }, [refresh]);
+
+  // The server is the scope of record; the field only edits a draft of it.
+  useEffect(() => {
+    if (hostControl) setTargetsDraft(hostControl.targets.join(', '));
+  }, [hostControl]);
 
   // A companion that just registered (--pair or plain --server) needs this
   // page to show up as "needs approval" or online without a manual reload.
@@ -458,6 +511,99 @@ export default function AutomationSettingsTab() {
         </SettingsSection>
       ) : null}
 
+      {/* Its own section, not a row buried in the browser card: host control
+         is the one switch here that reaches the machine the app runs on.
+         It renders even when /api/host/status could not be read, because a
+         row that silently disappears reads as "this build has no such
+         setting" - which is what a LAN session that has not signed in sees,
+         since host control is not exempt from the sign-in gate. */}
+      <SettingsSection title={t('automation.hostControl.label')} description={t('automation.hostControl.description')}>
+        <SettingsCard>
+          <SettingsRow label={t('automation.hostControl.enableLabel')} description={t('automation.hostControl.enableDescription')}>
+            <SettingsToggle
+              checked={hostControl?.enabled === true}
+              disabled={hostControl?.available !== true}
+              onChange={(value) => void saveHostControl({ enabled: value })}
+              ariaLabel={t('automation.hostControl.enableLabel')}
+            />
+          </SettingsRow>
+          {hostControl === null ? (
+            // Not role="status": this note is a standing explanation, and the
+            // browser-launch status line is the only live one on the tab.
+            <p className="px-4 pb-4 text-xs text-muted-foreground">{t('automation.hostControl.statusFailed')}</p>
+          ) : hostControl.available ? (
+            <p className="px-4 pb-4 text-xs text-muted-foreground" role="status">
+              {hostControl.reachable
+                ? t('automation.hostControl.socketReachable', { path: hostControl.socketPath })
+                : t('automation.hostControl.socketUnreachable', { path: hostControl.socketPath })}
+            </p>
+          ) : (
+            <p className="px-4 pb-4 text-xs text-muted-foreground">{t('automation.hostControl.unavailable')}</p>
+          )}
+          {hostControl?.available === true && hostControl.enabled ? (
+            <>
+              {HOST_CAPABILITY_ROWS.map((capability) => (
+                <SettingsRow
+                  key={capability}
+                  label={t(`automation.hostControl.${capability}`)}
+                  description={t(`automation.hostControl.${capability}Description`)}
+                >
+                  <SettingsToggle
+                    checked={hostControl.capabilities[capability] === true}
+                    onChange={(value) => void saveHostControl({ [capability]: value } as HostControlPatch)}
+                    ariaLabel={t(`automation.hostControl.${capability}`)}
+                  />
+                </SettingsRow>
+              ))}
+              {/* The scope for everything that reaches further than a restart:
+                 state changes, commands and file reads only touch containers
+                 this list names. Empty means none, not all of them. */}
+              <SettingsRow label={t('automation.hostControl.targets')} description={t('automation.hostControl.targetsDescription')}>
+                <input
+                  aria-label={t('automation.hostControl.targets')}
+                  value={targetsDraft}
+                  placeholder={t('automation.hostControl.targetsPlaceholder')}
+                  onChange={(event) => setTargetsDraft(event.target.value)}
+                  onBlur={() => {
+                    const patterns = targetsDraft.split(',').map((value) => value.trim()).filter((value) => value.length > 0);
+                    if (patterns.join('\u0000') !== hostControl.targets.join('\u0000')) void saveHostControl({ targets: patterns });
+                  }}
+                  className={`${selectClass} sm:w-64`}
+                />
+              </SettingsRow>
+              <div className="space-y-2 px-4 pb-4 text-xs text-muted-foreground">
+                <button
+                  type="button"
+                  onClick={() => void detectHostEnvironment()}
+                  disabled={detectingHost || hostControl.capabilities.discovery !== true}
+                  className="rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {detectingHost ? t('automation.hostControl.detecting') : t('automation.hostControl.detect')}
+                </button>
+                {hostControlError ? <p role="alert" className="text-destructive">{hostControlError}</p> : null}
+                {detectError ? <p role="alert" className="text-destructive">{detectError}</p> : null}
+                {hostProfile ? (
+                  <div className="space-y-1">
+                    <p className="text-foreground">
+                      {hostProfile.managers.length > 0
+                        ? t('automation.hostControl.detectedManagers', { list: hostProfile.managers.map((manager) => manager.label).join(', ') })
+                        : t('automation.hostControl.detectedNone')}
+                    </p>
+                    {hostProfile.socketHolders.length > 0
+                      ? <p>{t('automation.hostControl.socketHolders', { list: hostProfile.socketHolders.join(', ') })}</p>
+                      : null}
+                    {hostProfile.stacks.length > 0
+                      ? <p>{t('automation.hostControl.stacks', { list: hostProfile.stacks.map((stack) => `${stack.project} (${stack.services.length || stack.containers.length})`).join(', ') })}</p>
+                      : null}
+                    {hostProfile.guidance.map((line) => <p key={line}>• {line}</p>)}
+                  </div>
+                ) : null}
+              </div>
+            </>
+          ) : null}
+        </SettingsCard>
+      </SettingsSection>
+
       <SettingsSection title={t('automation.title')} description={t('automation.description')}>
         <SettingsCard divided>
           <SettingsRow label={t('automation.computerUse.label')} description={t('automation.computerUse.description')}>
@@ -467,52 +613,6 @@ export default function AutomationSettingsTab() {
               ariaLabel={t('automation.computerUse.label')}
             />
           </SettingsRow>
-          {hostControl ? (
-            <>
-              <SettingsRow label={t('automation.hostControl.label')} description={t('automation.hostControl.description')}>
-                <SettingsToggle
-                  checked={hostControl.enabled}
-                  disabled={!hostControl.available}
-                  onChange={(value) => void saveHostControl({ enabled: value })}
-                  ariaLabel={t('automation.hostControl.label')}
-                />
-              </SettingsRow>
-              {hostControl.available ? (
-                <p className="px-4 pb-4 text-xs text-muted-foreground" role="status">
-                  {hostControl.reachable
-                    ? t('automation.hostControl.socketReachable', { path: hostControl.socketPath })
-                    : t('automation.hostControl.socketUnreachable', { path: hostControl.socketPath })}
-                </p>
-              ) : (
-                <p className="px-4 pb-4 text-xs text-muted-foreground">{t('automation.hostControl.unavailable')}</p>
-              )}
-              {hostControl.available && hostControl.enabled ? (
-                <>
-                  <SettingsRow label={t('automation.hostControl.facts')} description={t('automation.hostControl.factsDescription')}>
-                    <SettingsToggle
-                      checked={hostControl.capabilities.facts}
-                      onChange={(value) => void saveHostControl({ facts: value })}
-                      ariaLabel={t('automation.hostControl.facts')}
-                    />
-                  </SettingsRow>
-                  <SettingsRow label={t('automation.hostControl.containers')} description={t('automation.hostControl.containersDescription')}>
-                    <SettingsToggle
-                      checked={hostControl.capabilities.containers}
-                      onChange={(value) => void saveHostControl({ containers: value })}
-                      ariaLabel={t('automation.hostControl.containers')}
-                    />
-                  </SettingsRow>
-                  <SettingsRow label={t('automation.hostControl.restart')} description={t('automation.hostControl.restartDescription')}>
-                    <SettingsToggle
-                      checked={hostControl.capabilities.restart}
-                      onChange={(value) => void saveHostControl({ restart: value })}
-                      ariaLabel={t('automation.hostControl.restart')}
-                    />
-                  </SettingsRow>
-                </>
-              ) : null}
-            </>
-          ) : null}
         </SettingsCard>
         <SettingsCard className="mt-3">
           <div className="flex items-center justify-between gap-4 p-4">
