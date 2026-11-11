@@ -23,6 +23,12 @@ type ApiOptions = {
   browserOpen?: Response | Error;
   browserReady?: boolean;
   grants?: { always: { origins: string[]; applications: string[] } };
+  /** Answer /api/host/* for real; left out, the tab sees no host surface at all. */
+  hostControl?: {
+    enabled: boolean;
+    capabilities: Record<string, boolean>;
+    host: { os: string; kernelVersion: string; detectedAt: number } | null;
+  };
 };
 
 const originalFetch = globalThis.fetch;
@@ -44,6 +50,16 @@ function fakeApi(options: ApiOptions = {}) {
   let egoFrames = options.egoFrames ?? false;
   let computerUse = options.computerUse ?? false;
   let grants = options.grants ?? { always: { origins: [], applications: [] } };
+  const hostControl = options.hostControl;
+  const hostStatus = () => ({
+    available: true,
+    socketPath: '/var/run/docker.sock',
+    reachable: true,
+    enabled: hostControl?.enabled === true,
+    capabilities: hostControl?.capabilities ?? {},
+    targets: [],
+    host: hostControl?.host ?? null,
+  });
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const path = typeof input === 'string' ? input : input instanceof URL ? input.pathname : input.url;
     const method = init?.method ?? 'GET';
@@ -99,6 +115,28 @@ function fakeApi(options: ApiOptions = {}) {
     }
     if (path === '/api/automation/remote-computers') {
       return new Response(JSON.stringify({ devices: [], companionDownloadTemplate: null }));
+    }
+    if (hostControl && path === '/api/host/status') {
+      return new Response(JSON.stringify(hostStatus()));
+    }
+    if (hostControl && path === '/api/host/settings' && method === 'PUT') {
+      for (const [key, value] of Object.entries(body as Record<string, unknown>)) {
+        if (typeof value !== 'boolean') continue;
+        if (key === 'enabled') hostControl.enabled = value;
+        else hostControl.capabilities[key] = value;
+      }
+      return new Response(JSON.stringify(hostStatus()));
+    }
+    if (hostControl && path === '/api/host/discovery') {
+      const detectedAt = 1;
+      hostControl.host = { os: 'Devuan GNU/Linux 6 (excalibur)', kernelVersion: '6.12.10-mos', detectedAt };
+      return new Response(JSON.stringify({
+        detectedAt,
+        profile: {
+          runtime: { serverVersion: '28.0.0', operatingSystem: 'Devuan GNU/Linux 6 (excalibur)', kernelVersion: '6.12.10-mos', driver: 'overlay2', swarm: 'inactive', hostName: 'webby' },
+          managers: [], socketHolders: [], stacks: [], unmanaged: [], guidance: [],
+        },
+      }));
     }
     if (path === '/api/automation/remote-computers/pairings' && method === 'POST') {
       return new Response(JSON.stringify({ token: 'fake-pairing-token' }));
@@ -415,4 +453,82 @@ test('no withheld runtime features are reported, because none are overridden', a
     const translated = JSON.parse(readFileSync(file, 'utf8')) as { automation?: Record<string, unknown> };
     assert.deepEqual(Object.keys(translated.automation ?? {}).filter((key) => key.startsWith('withheld')), [], locale);
   }
+});
+
+/*
+ * Host control: reading Docker's facts and detecting what manages the host were
+ * two switches over the same two daemon reads, so they are one switch here, and
+ * the detection's answer - the OS - sits beside the button that fetches it.
+ */
+test('host reading is one switch, and detection is a button on its left followed by the saved answer', async () => {
+  const calls = fakeApi({
+    hostControl: {
+      enabled: true,
+      capabilities: { facts: false, discovery: false, containers: false, restart: false, docker: false, shell: false, files: false },
+      host: null,
+    },
+  });
+  await mount();
+  const hostControl = english.automation.hostControl as Record<string, string>;
+
+  const read = await screen.findByRole('switch', { name: hostControl.hostInfo! });
+  assert.equal(read.getAttribute('aria-checked'), 'false');
+
+  fireEvent.click(read);
+  await waitFor(() => assert.equal(screen.getByRole('switch', { name: hostControl.hostInfo! }).getAttribute('aria-checked'), 'true'));
+  assert.deepEqual(calls.filter((call) => call.path === '/api/host/settings').map((call) => call.body), [
+    { facts: true, discovery: true },
+  ]);
+
+  const detect = screen.getByRole('button', { name: hostControl.detect! }) as HTMLButtonElement;
+  fireEvent.click(detect);
+  const os = await screen.findByText('Devuan GNU/Linux 6 (excalibur)');
+  // The button comes first, and the answer it produced follows it.
+  assert.equal(detect.compareDocumentPosition(os) & 4, 4, 'the detect button sits left of the OS it reports');
+  // Nothing else about the host is printed: the profile is the agent's, not the tab's.
+  assert.equal(screen.queryByText('webby'), null);
+});
+
+/*
+ * The group row is the main one and is not indented; only its rows are, and
+ * they are hidden while the group is off so the card stays one screen tall.
+ */
+test('the docker group hides its rows while it is off and sets all of them at once', async () => {
+  const calls = fakeApi({
+    hostControl: {
+      enabled: true,
+      capabilities: { facts: false, discovery: false, containers: false, restart: false, docker: false, shell: false, files: false },
+      host: null,
+    },
+  });
+  await mount();
+  const hostControl = english.automation.hostControl as Record<string, string>;
+
+  const group = await screen.findByRole('switch', { name: hostControl.dockerGroup! });
+  assert.equal(group.getAttribute('aria-checked'), 'false');
+  assert.equal(screen.queryByRole('switch', { name: hostControl.containers! }), null, 'off means the group\'s rows are not shown');
+
+  fireEvent.click(group);
+  await waitFor(() => assert.ok(screen.getByRole('switch', { name: hostControl.containers! })));
+  assert.deepEqual(calls.filter((call) => call.path === '/api/host/settings').map((call) => call.body), [
+    { containers: true, restart: true, docker: true, shell: true, files: true },
+  ]);
+
+  fireEvent.click(screen.getByRole('switch', { name: hostControl.dockerGroup! }));
+  await waitFor(() => assert.equal(screen.queryByRole('switch', { name: hostControl.containers! }), null));
+});
+
+/* A saved detection is shown on load, without running one again. */
+test('a stored detection renders its OS on load instead of waiting for the button', async () => {
+  const calls = fakeApi({
+    hostControl: {
+      enabled: true,
+      capabilities: { facts: true, discovery: true, containers: false, restart: false, docker: false, shell: false, files: false },
+      host: { os: 'Debian GNU/Linux 12 (bookworm)', kernelVersion: '6.1.0-18-amd64', detectedAt: 1 },
+    },
+  });
+  await mount();
+
+  assert.ok(await screen.findByText('Debian GNU/Linux 12 (bookworm)'));
+  assert.equal(calls.some((call) => call.path === '/api/host/discovery'), false, 'opening Settings never runs a detection');
 });

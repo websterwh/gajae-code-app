@@ -429,7 +429,9 @@ export default function AutomationSettingsTab() {
   ];
 
   const hostReadOn = hostControl !== null && HOST_READ.every((capability) => hostControl.capabilities[capability] === true);
-  const dockerGroupOn = hostControl !== null && DOCKER_ROWS.every((capability) => hostControl.capabilities[capability] === true);
+  // On when anything below is on: the group only reveals its rows, so it must
+  // not read "off" while one of those rows is still granting something.
+  const dockerGroupOn = hostControl !== null && DOCKER_ROWS.some((capability) => hostControl.capabilities[capability] === true);
   const shownOs = detectedOs ?? hostControl?.host?.os ?? null;
 
   return (
@@ -540,7 +542,7 @@ export default function AutomationSettingsTab() {
          setting" - which is what a LAN session that has not signed in sees,
          since host control is not exempt from the sign-in gate. */}
       <SettingsSection title={t('automation.hostControl.label')} description={t('automation.hostControl.description')}>
-        <SettingsCard>
+        <SettingsCard divided>
           <SettingsRow label={t('automation.hostControl.enableLabel')} description={t('automation.hostControl.enableDescription')}>
             <SettingsToggle
               checked={hostControl?.enabled === true}
@@ -552,15 +554,15 @@ export default function AutomationSettingsTab() {
           {hostControl === null ? (
             // Not role="status": this note is a standing explanation, and the
             // browser-launch status line is the only live one on the tab.
-            <p className="px-4 pb-4 text-xs text-muted-foreground">{t('automation.hostControl.statusFailed')}</p>
+            <p className="px-4 py-3 text-xs text-muted-foreground">{t('automation.hostControl.statusFailed')}</p>
           ) : hostControl.available ? (
-            <p className="px-4 pb-4 text-xs text-muted-foreground" role="status">
+            <p className="px-4 py-3 text-xs text-muted-foreground" role="status">
               {hostControl.reachable
                 ? t('automation.hostControl.socketReachable', { path: hostControl.socketPath })
                 : t('automation.hostControl.socketUnreachable', { path: hostControl.socketPath })}
             </p>
           ) : (
-            <p className="px-4 pb-4 text-xs text-muted-foreground">{t('automation.hostControl.unavailable')}</p>
+            <p className="px-4 py-3 text-xs text-muted-foreground">{t('automation.hostControl.unavailable')}</p>
           )}
           {hostControl?.available === true && hostControl.enabled ? (
             <>
@@ -573,45 +575,54 @@ export default function AutomationSettingsTab() {
                   ariaLabel={t('automation.hostControl.hostInfo')}
                 />
               </SettingsRow>
-              <div className="flex items-center justify-between gap-3 px-4 pb-4">
-                <p className="min-w-0 truncate text-sm text-foreground" role="status">
-                  {detectingHost ? t('automation.hostControl.detecting') : shownOs ?? ''}
-                </p>
+              {/* Button first: the action reads left to right, and the answer
+                 it produces sits beside it. */}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
                 <button
                   type="button"
                   onClick={() => void detectHostEnvironment()}
                   disabled={detectingHost || !hostReadOn}
-                  className="shrink-0 rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                  className="shrink-0 rounded-lg border border-input px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {t('automation.hostControl.detect')}
+                  {detectingHost ? t('automation.hostControl.detecting') : t('automation.hostControl.detect')}
                 </button>
+                {!detectingHost && shownOs ? (
+                  <p className="min-w-0 truncate text-sm font-medium text-foreground" role="status">{shownOs}</p>
+                ) : null}
               </div>
-              {/* One group switch, then the individual permissions under it.
-                 The server still checks each row on its own. */}
-              <div className="pl-6">
-                <SettingsRow label={t('automation.hostControl.dockerGroup')} description={t('automation.hostControl.dockerGroupDescription')}>
-                  <SettingsToggle
-                    checked={dockerGroupOn}
-                    onChange={(value) => void saveHostControl(
-                      Object.fromEntries(DOCKER_ROWS.map((capability) => [capability, value])) as HostControlPatch,
-                    )}
-                    ariaLabel={t('automation.hostControl.dockerGroup')}
-                  />
-                </SettingsRow>
-                {DOCKER_ROWS.map((capability) => (
-                  <SettingsRow
-                    key={capability}
-                    label={t(`automation.hostControl.${capability}`)}
-                    description={t(`automation.hostControl.${capability}Description`)}
-                  >
-                    <SettingsToggle
-                      checked={hostControl.capabilities[capability] === true}
-                      onChange={(value) => void saveHostControl({ [capability]: value } as HostControlPatch)}
-                      ariaLabel={t(`automation.hostControl.${capability}`)}
-                    />
-                  </SettingsRow>
-                ))}
-              </div>
+              {/* The group sits level with every other row; only its rows are
+                 inset, under a rule, so the nesting is visible without
+                 pushing the group itself to the right. Turned off, it hides
+                 them and takes their grants with it. */}
+              <SettingsRow label={t('automation.hostControl.dockerGroup')} description={t('automation.hostControl.dockerGroupDescription')}>
+                <SettingsToggle
+                  checked={dockerGroupOn}
+                  onChange={(value) => void saveHostControl(
+                    Object.fromEntries(DOCKER_ROWS.map((capability) => [capability, value])) as HostControlPatch,
+                  )}
+                  ariaLabel={t('automation.hostControl.dockerGroup')}
+                />
+              </SettingsRow>
+              {dockerGroupOn ? (
+                <div className="bg-muted/20 py-1">
+                  <div className="ml-4 border-l border-border pl-1">
+                    {DOCKER_ROWS.map((capability) => (
+                      <SettingsRow
+                        key={capability}
+                        className="py-3"
+                        label={t(`automation.hostControl.${capability}`)}
+                        description={t(`automation.hostControl.${capability}Description`)}
+                      >
+                        <SettingsToggle
+                          checked={hostControl.capabilities[capability] === true}
+                          onChange={(value) => void saveHostControl({ [capability]: value } as HostControlPatch)}
+                          ariaLabel={t(`automation.hostControl.${capability}`)}
+                        />
+                      </SettingsRow>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               {/* The scope for everything that reaches further than a restart:
                  state changes, commands and file reads only touch containers
                  this list names. Empty means none, not all of them. */}
@@ -628,8 +639,8 @@ export default function AutomationSettingsTab() {
                   className={`${selectClass} sm:w-64`}
                 />
               </SettingsRow>
-              {hostControlError ? <p role="alert" className="px-4 pb-4 text-xs text-destructive">{hostControlError}</p> : null}
-              {detectError ? <p role="alert" className="px-4 pb-4 text-xs text-destructive">{detectError}</p> : null}
+              {hostControlError ? <p role="alert" className="px-4 py-3 text-xs text-destructive">{hostControlError}</p> : null}
+              {detectError ? <p role="alert" className="px-4 py-3 text-xs text-destructive">{detectError}</p> : null}
             </>
           ) : null}
         </SettingsCard>
