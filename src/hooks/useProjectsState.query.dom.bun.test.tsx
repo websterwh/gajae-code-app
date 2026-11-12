@@ -518,9 +518,15 @@ test('a late sidebar refresh cannot restore the project or session the viewer le
   const second = { ...project(), projectId: 'project-2', displayName: 'Project two' };
   let resolveRefresh!: (response: Response) => void;
   let calls = 0;
-  globalThis.fetch = async () => calls++ === 0
-    ? new Response(JSON.stringify([first, second]))
-    : new Promise<Response>((resolve) => { resolveRefresh = resolve; });
+  globalThis.fetch = async (input) => {
+    // The reload shares this handler with the project refetch: it is a second
+    // request, not the one this test is holding open.
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    if (String(url).includes('/models/reload')) return new Response(JSON.stringify({ success: true, data: {} }));
+    return calls++ === 0
+      ? new Response(JSON.stringify([first, second]))
+      : new Promise<Response>((resolve) => { resolveRefresh = resolve; });
+  };
   try {
     const harness = renderHarness();
     await waitFor(() => assert.equal(harness.getState().projects.length, 2));

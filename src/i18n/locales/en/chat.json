@@ -40,7 +40,8 @@
       "info": "Notice",
       "warning": "Warning",
       "error": "Error"
-    }
+    },
+    "retryFailedTurn": "Retry this turn"
   },
   "tools": {
     "error": "Tool problem",

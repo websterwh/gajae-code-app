@@ -23,6 +23,8 @@ export interface MessageRenderProps {
   showImagePreviews?: boolean;
   selectedProject?: Project | null;
   provider: Provider | string;
+  /** Set only for the failure that ends the transcript; see MessageComponent. */
+  onRetryFailedTurn?: () => void;
 }
 
 interface GroupedMessageListProps extends MessageRenderProps {
@@ -81,6 +83,7 @@ export default function GroupedMessageList({ items, prevMessage, ...renderProps 
         showImagePreviews={renderProps.showImagePreviews}
         selectedProject={renderProps.selectedProject}
         provider={renderProps.provider}
+        onRetryFailedTurn={renderProps.onRetryFailedTurn}
       />,
     );
   }

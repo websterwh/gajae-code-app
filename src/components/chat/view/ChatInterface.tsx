@@ -237,6 +237,20 @@ function ChatInterface({
     })
     : null;
 
+  // Only the failure that ends the transcript can be retried: it resends the
+  // turn that produced it, and the server pins the session's model the same
+  // way the first attempt did, so a retry never silently changes model.
+  const retryFailedTurn = useCallback(() => {
+    const sessionId = session.currentSessionId ?? selectedSession?.id ?? null;
+    if (!sessionId || session.isProcessing) return;
+    const content = [...session.chatMessages]
+      .reverse()
+      .find((message) => message.type === 'user' && String(message.content ?? '').trim().length > 0)?.content;
+    if (content === undefined || content === null) return;
+    sendMessage({ type: 'chat.send', sessionId, content: String(content) });
+  }, [selectedSession?.id, sendMessage, session.chatMessages, session.currentSessionId, session.isProcessing]);
+  const endsInFailure = session.chatMessages[session.chatMessages.length - 1]?.type === 'error';
+
   if (!selectedProject) {
     return <ProjectSelectionNotice text={t('projectSelection.startChatWithProvider', {
       provider: 'Gajae Code',
@@ -363,6 +377,7 @@ function ChatInterface({
               isLoadingAllMessages={session.isLoadingAllMessages}
               loadAllJustFinished={session.loadAllJustFinished}
               showLoadAllOverlay={session.showLoadAllOverlay}
+              retryFailedTurn={endsInFailure ? retryFailedTurn : undefined}
               createDiff={session.createDiff}
               onFileOpen={onFileOpen}
               onShowSettings={onShowSettings}

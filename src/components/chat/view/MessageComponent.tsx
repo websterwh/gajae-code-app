@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangleIcon, InfoIcon, OctagonAlertIcon } from 'lucide-react';
+import { AlertTriangleIcon, InfoIcon, OctagonAlertIcon, RotateCcw } from 'lucide-react';
 
 import SessionProviderLogo from '../../llm-logo-provider/SessionProviderLogo';
 import type {
@@ -39,6 +39,8 @@ type MessageComponentProps = {
   showImagePreviews?: boolean;
   selectedProject?: Project | null;
   provider: Provider | string;
+  /** Present only on the failure that ends the transcript: resends the turn. */
+  onRetryFailedTurn?: () => void;
 };
 
 type InteractiveOption = {
@@ -74,7 +76,7 @@ const NOTICE_STYLES = {
   },
 } as const;
 
-const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, density, showImagePreviews = true, selectedProject, provider }: MessageComponentProps) => {
+const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, density, showImagePreviews = true, selectedProject, provider, onRetryFailedTurn }: MessageComponentProps) => {
   const densityRules = toolOutputDensityRules(density);
   // Remounting the cards on a level change is what discards the folds and
   // unfolds the reader made by hand under the previous level.
@@ -223,6 +225,22 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, d
                 <span className="sr-only">{t(`messageTypes.notice.${level}`)}</span>
                 <span dir="auto" className="max-h-80 min-w-0 overflow-auto wrap-break-word whitespace-pre-wrap">{message.content}</span>
               </div>
+              {message.type === 'error' && onRetryFailedTurn ? (
+                // The run stopped, so there is nothing to wait for and nothing
+                // in the transcript to click: one round button under the
+                // failure sends the same turn again.
+                <div className="mt-1 flex pl-1">
+                  <button
+                    type="button"
+                    onClick={onRetryFailedTurn}
+                    aria-label={t('messageTypes.retryFailedTurn', { defaultValue: 'Retry this turn' })}
+                    title={t('messageTypes.retryFailedTurn', { defaultValue: 'Retry this turn' })}
+                    className="flex h-6 w-6 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden"
+                  >
+                    <RotateCcw className="h-3 w-3" aria-hidden="true" />
+                  </button>
+                </div>
+              ) : null}
             </div>
           );
         })()

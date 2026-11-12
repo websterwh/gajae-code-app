@@ -60,6 +60,8 @@ interface ChatMessagesPaneProps {
   isLoadingAllMessages: boolean;
   loadAllJustFinished: boolean;
   showLoadAllOverlay: boolean;
+  /** Resends the failed turn; only worth passing when the transcript ends in one. */
+  retryFailedTurn?: () => void;
   createDiff: any;
   onFileOpen?: (filePath: string, diffInfo?: CodeEditorDiffInfo | null) => void;
   onShowSettings?: () => void;
@@ -92,6 +94,7 @@ function ChatMessagesPane({
   isLoadingAllMessages,
   loadAllJustFinished,
   showLoadAllOverlay,
+  retryFailedTurn,
   createDiff,
   onFileOpen,
   onShowSettings,
@@ -179,6 +182,7 @@ function ChatMessagesPane({
                     showImagePreviews,
                     selectedProject,
                     provider: displayProvider,
+                    onRetryFailedTurn: retryFailedTurn,
                   };
                   return (
                     <div key={stablePaneKey} data-scroll-anchor={stablePaneKey} className="flow-root">
