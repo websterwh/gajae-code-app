@@ -636,8 +636,8 @@ Developer ID`. The keychain is deleted at the end of the job.
 Without `APPLE_CERTIFICATE_P12` the job builds the ad-hoc image it always has
 and says so in the log. `APPLE_CERTIFICATE_P12` set with any of the other four
 missing fails the job rather than shipping a half-signed image. The
-environment's secrets are only released to a `workflow_dispatch` from `main`,
-never to a pull request.
+environment's secrets are only released to a run from `main` or from the
+matching `vVERSION` tag, never to a pull request.
 
 ## Automated packaged-server smoke (Mac)
 

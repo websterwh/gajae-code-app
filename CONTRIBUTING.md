@@ -53,8 +53,7 @@ only on manual dispatch. Do not send Linux desktop changes unless a
 maintainer asked for them.
 
 `.github/workflows/desktop-macos.yml` runs on pull requests, pushes to
-`main`, and manual dispatch on `macos-15`, the supported arm64 image since
-GitHub retired macOS 14 in November 2026. It builds the embedded server
+`main`, and manual dispatch on `macos-15`. It builds the embedded server
 payload, checks Tauri Rust formatting, runs the shell's locked Cargo tests,
 and assembles an ad-hoc app bundle. It uploads nothing and publishes nothing.
 Ordinary source verification remains in the existing CI workflow; `npm run

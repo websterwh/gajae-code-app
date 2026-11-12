@@ -78,8 +78,9 @@ gh api repos/devswha/gajae-code-app/actions/runners \
 
 Observed September 6, 2026 (KST): both secret lists were `[]`, the environment
 had no protection rules or deployment branch policy, and the repository had
-zero self-hosted runners. The workflow itself rejects dispatches outside
-`refs/heads/main`; do not describe this as a protected environment policy.
+zero self-hosted runners. The workflow itself rejects any run whose ref is
+neither `refs/heads/main` nor the `vVERSION` tag matching `package.json`; do
+not describe this as a protected environment policy.
 Before introducing CI credentials, the owner should configure the intended
 environment access restrictions. A local Mac cannot be selected as an
 Actions runner without separately provisioning and securing that runner.
