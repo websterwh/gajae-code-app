@@ -599,7 +599,7 @@ jobs:
             --team-id "$APPLE_TEAM_ID" \
             --assets-dir release-assets \
             --updater-public-key-file "$GAJAE_UPDATER_PUBLIC_KEY_FILE" \
-            "${publish_args[@]}"
+            ${publish_args[@]+"${publish_args[@]}"}
 
       # A release created with GITHUB_TOKEN does not raise `release: published`,
       # so a separate notification workflow listening for that event never runs.
