@@ -19,9 +19,10 @@ import { dirname, join, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { verifyCopiedFromImage } from './verify-macos-image-copy.mjs';
+import { UPDATER_ASSET_LIMITS } from './updater-artifacts.mjs';
 
 const rootDir = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
-const MAX_DMG_BYTES = 250 * 1024 * 1024;
+const MAX_DMG_BYTES = UPDATER_ASSET_LIMITS.maxDmgBytes;
 const signingIdentity = process.env.APPLE_SIGNING_IDENTITY?.trim() || '-';
 
 function arg(name, fallback) {
