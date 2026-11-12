@@ -1,6 +1,9 @@
 name: Release Gajae Code App
 
 on:
+  push:
+    tags:
+      - 'v[0-9]*'
   workflow_dispatch:
     inputs:
       publish:
@@ -14,18 +17,27 @@ permissions:
 
 jobs:
   release-policy:
-    name: Validate protected release ref
+    name: Validate release ref
     runs-on: ubuntu-22.04
     timeout-minutes: 5
     steps:
-      - name: Require main branch
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Require main branch or the matching version tag
         env:
           RELEASE_REF: ${{ github.ref }}
         run: |
-          if [ "$RELEASE_REF" != "refs/heads/main" ]; then
-            echo "Releases may only be dispatched from refs/heads/main." >&2
-            exit 1
+          set -euo pipefail
+          VERSION_TAG="v$(sed -n 's/^  "version": "\([^"]*\)",$/\1/p' package.json)"
+          test -n "$VERSION_TAG" -a "$VERSION_TAG" != "v"
+          if [ "$RELEASE_REF" = "refs/heads/main" ] || [ "$RELEASE_REF" = "refs/tags/$VERSION_TAG" ]; then
+            exit 0
           fi
+          echo "Releases run from refs/heads/main or refs/tags/$VERSION_TAG, not $RELEASE_REF." >&2
+          exit 1
 
   build:
     name: Build Node 22 Linux x64 server artifact
@@ -149,8 +161,6 @@ jobs:
     name: Build macOS arm64 desktop DMG
     needs: release-policy
     timeout-minutes: 90
-    # macOS 14 images were retired on 2026-11-02; jobs asking for macos-14 are
-    # rejected at runner allocation. macos-15 is the supported arm64 image.
     runs-on: macos-15
     # Published desktop assets require Developer ID signing and notarization.
     # Local ad-hoc builds remain available through the packaging scripts.
@@ -473,8 +483,6 @@ jobs:
       - build
       - desktop-macos
       - ubuntu-24-compatibility
-    # macOS 14 images were retired on 2026-11-02; jobs asking for macos-14 are
-    # rejected at runner allocation. macos-15 is the supported arm64 image.
     runs-on: macos-15
     environment: release
     timeout-minutes: 30
