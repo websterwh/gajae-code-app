@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { mkdtemp, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -203,38 +203,77 @@ test('failed authentication, command timeout, and unexpected notarization respon
   assert.ok(!JSON.stringify(result).includes(marker));
 });
 
-test('workflow requires all signing inputs before expensive macOS work and cannot fall back to ad-hoc', () => {
+test('the signing lane is chosen by credential presence alone and a partial set fails closed', () => {
+  const body = stepShell('Determine the signing lane');
+  const laneInputs = [...REQUIRED_SIGNING_SECRETS, 'GAJAE_UPDATER_PUBLIC_KEY',
+    'TAURI_SIGNING_PRIVATE_KEY', 'TAURI_SIGNING_PRIVATE_KEY_PASSWORD'];
+  assert.equal(laneInputs.length, 8);
+  const directory = mkdtempSync(join(tmpdir(), 'gajae-lane-test-'));
+  const output = join(directory, 'output');
+  const summary = join(directory, 'summary');
+  const lane = names => {
+    writeFileSync(output, '');
+    writeFileSync(summary, '');
+    const env = { PATH: process.env.PATH, GITHUB_OUTPUT: output, GITHUB_STEP_SUMMARY: summary };
+    for (const name of laneInputs) env[name] = names.includes(name) ? 'fixture-value' : '';
+    const result = spawnSync('bash', ['-c', body], { env, encoding: 'utf8' });
+    return { status: result.status, output: readFileSync(output, 'utf8') };
+  };
+  try {
+    assert.deepEqual(lane([]), { status: 0, output: 'signing=false\n' });
+    assert.deepEqual(lane(laneInputs), { status: 0, output: 'signing=true\n' });
+    for (const missing of laneInputs) {
+      const partial = laneInputs.filter(name => name !== missing);
+      assert.equal(lane(partial).status, 1, `missing ${missing} must fail closed`);
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('the workflow gates every signing step behind the lane and never downgrades silently', () => {
   const desktop = workflow.slice(workflow.indexOf('  desktop-macos:'), workflow.indexOf('  ubuntu-24-compatibility:'));
   assert.match(desktop, /environment: release/);
   assert.doesNotMatch(desktop.slice(0, desktop.indexOf('\n    steps:')), /TAURI_SIGNING_PRIVATE_KEY/);
-  for (const name of ['Require release signing credentials', 'Build canonical macOS updater assets']) {
-    for (const secret of ['TAURI_SIGNING_PRIVATE_KEY', 'TAURI_SIGNING_PRIVATE_KEY_PASSWORD']) {
-      assert.ok(workflowStep(name).includes(`${secret}: ` + '${{ secrets.' + secret + ' }}'));
-    }
-  }
+  assert.match(desktop, /signed: \$\{\{ steps\.lane\.outputs\.signing }}/);
   assert.deepEqual([...desktop.matchAll(/\$\{\{ secrets\.(APPLE_[A-Z0-9_]+) }}/g)].map(match => match[1]), REQUIRED_SIGNING_SECRETS);
+  for (const name of ['Require release signing credentials', 'Install and verify Minisign 0.12',
+    'Prepare updater public key and reviewed source notes', 'Import the Developer ID certificate into a throwaway keychain',
+    'Build canonical macOS updater assets']) {
+    assert.match(workflowStep(name), /if: steps\.lane\.outputs\.signing == 'true'/, name);
+  }
   assert.match(workflowStep('Require release signing credentials'), /node scripts\/release\/check-signing-readiness\.mjs --mode ci/);
-  const preflight = desktop.indexOf('- name: Require release signing credentials');
-  assert.ok(preflight < desktop.indexOf('- name: Set up Rust'));
-  assert.ok(preflight < desktop.indexOf('- name: Install dependencies'));
-  assert.ok(preflight < desktop.indexOf('- name: Build and verify embedded macOS server payload'));
-  assert.doesNotMatch(desktop, /signed=false/);
+  const lane = desktop.indexOf('- name: Determine the signing lane');
+  assert.ok(lane < desktop.indexOf('- name: Set up Rust'));
+  assert.ok(lane < desktop.indexOf('- name: Install dependencies'));
+  assert.ok(lane < desktop.indexOf('- name: Build and verify embedded macOS server payload'));
+  const build = workflowStep('Build Tauri app bundle (Tauri\'s own ad-hoc pass)');
+  assert.match(build, /GJC_UPDATE_MODE=disabled/);
+  assert.match(build, /GJC_UPDATE_MODE=production/);
   const importStep = workflowStep('Import the Developer ID certificate into a throwaway keychain');
   assert.ok(importStep.indexOf('GAJAE_SIGNING_KEYCHAIN=') < importStep.indexOf('security import'));
   assert.match(workflowStep('Remove the signing keychain'), /if: always\(\)/);
+  const publish = workflow.slice(workflow.lastIndexOf('\n  publish:'));
+  assert.match(publish, /publish-unsigned-release\.mjs/);
+  assert.match(publish, /ci-release\.mjs/);
 });
 
-test('the actual publication guard rejects missing/false/malformed signing output and accepts only true', () => {
-  const body = stepShell('Require signed desktop before publication');
-  assert.match(workflowStep('Require signed desktop before publication'), /DESKTOP_SIGNED: \$\{\{ needs\.desktop-macos\.outputs\.signed }}/);
+test('publication requires an explicit signing decision and refuses anything else', () => {
+  const body = stepShell('Require a desktop artifact decision before publication');
+  assert.match(workflowStep('Require a desktop artifact decision before publication'),
+    /DESKTOP_SIGNED: \$\{\{ needs\.desktop-macos\.outputs\.signed }}/);
   const publishStart = workflow.lastIndexOf('\n  publish:');
   assert.notEqual(publishStart, -1);
   const publish = workflow.slice(publishStart);
-  const guardIndex = publish.indexOf('- name: Require signed desktop before publication');
+  const guardIndex = publish.indexOf('- name: Require a desktop artifact decision before publication');
   const serverDownloadIndex = publish.indexOf('- name: Download canonical server release assets');
   assert.ok(guardIndex >= 0 && serverDownloadIndex >= 0 && guardIndex < serverDownloadIndex);
-  for (const signed of ['', 'false', 'TRUE', ' true ', 'true\n', 'true']) {
+  for (const signed of ['true', 'false']) {
     const result = spawnSync('bash', ['-c', body], { env: { ...process.env, DESKTOP_SIGNED: signed }, encoding: 'utf8' });
-    assert.equal(result.status, signed === 'true' ? 0 : 1, JSON.stringify(signed));
+    assert.equal(result.status, 0, JSON.stringify(signed));
+  }
+  for (const signed of ['', 'TRUE', ' true ', 'true\n', 'yes', 'adhoc']) {
+    const result = spawnSync('bash', ['-c', body], { env: { ...process.env, DESKTOP_SIGNED: signed }, encoding: 'utf8' });
+    assert.equal(result.status, 1, JSON.stringify(signed));
   }
 });

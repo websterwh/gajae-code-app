@@ -633,11 +633,16 @@ and staples it, regenerates the `.sha256`, and in the mounted-image smoke
 requires `stapler validate` and `spctl -a -t exec` → `source=Notarized
 Developer ID`. The keychain is deleted at the end of the job.
 
-Without `APPLE_CERTIFICATE_P12` the job builds the ad-hoc image it always has
-and says so in the log. `APPLE_CERTIFICATE_P12` set with any of the other four
-missing fails the job rather than shipping a half-signed image. The
-environment's secrets are only released to a run from `main` or from the
-matching `vVERSION` tag, never to a pull request.
+Signing is optional and the lane is chosen by credential presence alone. With
+none of the eight inputs set (`APPLE_*`, `TAURI_SIGNING_PRIVATE_KEY`,
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, `GAJAE_UPDATER_PUBLIC_KEY`) the job
+builds the same ad-hoc bundle the pull-request lane builds, compiles the
+updater out, and publishes a four-asset unsigned release — DMG, DMG checksum,
+server archive, server checksum — so macOS requires *Open Anyway* on first
+launch. Setting some of the eight but not all of them fails the job rather
+than shipping a half-signed or accidentally unsigned image. The environment's
+secrets are only released to a run from `main` or from the matching `vVERSION`
+tag, never to a pull request.
 
 ## Automated packaged-server smoke (Mac)
 

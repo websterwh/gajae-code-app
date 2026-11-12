@@ -119,14 +119,21 @@ The hosted workflow cannot ingest an already signed local DMG. Use the
 explicit draft-first path in `scripts/release/LOCAL-RELEASE.md`: the local
 verifier binds the draft ID/tag/commit and independent asset hashes, checks
 signatures/staples/Gatekeeper and versions, then publishes only when invoked
-with `--publish`. This path requires no hosted signing secrets and preserves
-the workflow's unsigned-publication guard. Neither route was dispatched or
-published while implementing these checks.
+with `--publish`. Neither route was dispatched or published while implementing
+these checks.
 
-Hosted dispatch is also draft-only by default. Its explicit `publish` input
-authorizes publication only after the shared verifier has rechecked all eight
-assets, signatures, exact commit, complete desktop-version history and mutable
-draft/tag inputs. Announcements run only after successful explicit publication.
+Signing is optional in `release.yml` and the lane is chosen by credential
+presence alone. With all eight inputs present the job signs, notarizes and
+publishes the eight-asset updater release, and the shared verifier rechecks
+every asset, signature, the exact commit, the complete desktop-version history
+and the mutable draft/tag inputs before any publication. With none of them
+present it builds the same ad-hoc bundle the pull-request lane builds,
+compiles the updater out, and publishes a four-asset unsigned release (DMG,
+DMG checksum, server archive, server checksum) through
+`scripts/release/publish-unsigned-release.mjs`; macOS then requires *Open
+Anyway* on first launch. A partially configured credential set fails the job
+instead of downgrading silently. A `vVERSION` tag push publishes; a manual
+dispatch drafts unless its `publish` input is set.
 
 ## Bounded validation after integration
 

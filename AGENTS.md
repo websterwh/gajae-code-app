@@ -129,7 +129,12 @@ ad-hoc app bundle. `npm run verify` does not cover these desktop shell checks;
 `cargo test` needs the sidecar and payload present, so run
 `npm run server:payload:macos` first on a clean checkout. Signing,
 notarization and publication stay in `release.yml`, which runs on a `vVERSION`
-tag push matching `package.json` or on manual dispatch.
+tag push matching `package.json` or on manual dispatch. With no signing
+credentials it builds the same ad-hoc bundle and publishes a four-asset
+unsigned release (DMG, DMG checksum, server archive, server checksum) with the
+updater compiled out; macOS then asks for *Open Anyway* on first launch. With
+the complete credential set it publishes the signed, notarized eight-asset
+updater release instead.
 
 `.github/workflows/desktop-linux.yml` is dispatch-only and does not gate
 merges. When explicitly asked for a Linux desktop build: it produces
