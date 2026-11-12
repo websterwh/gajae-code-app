@@ -75,6 +75,12 @@ const stapled = existsSync(stapledTicket);
 if (stapled) {
   run('codesign', ['--verify', '--deep', '--strict', appPath]);
   run('xcrun', ['stapler', 'validate', appPath]);
+} else if (signingIdentity === '-') {
+  // An unsigned release ships the bundle `tauri build` already sealed ad-hoc.
+  // The finalize pass belongs to the Developer ID lane: it rebuilds the shell
+  // against the restamped runtime manifest so every nested Mach-O can be
+  // re-signed, which needs the updater build binding and a real identity.
+  run('codesign', ['--verify', '--deep', '--strict', appPath]);
 } else {
   run(process.execPath, [join(rootDir, 'scripts/release/finalize-macos-app.mjs'), '--app', appPath]);
 }

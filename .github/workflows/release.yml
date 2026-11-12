@@ -367,6 +367,7 @@ jobs:
       - name: Build canonical installable DMG
         env:
           RELEASE_VERSION: ${{ steps.metadata.outputs.release_tag }}
+          GJC_UPDATE_MODE: ${{ steps.lane.outputs.signing == 'true' && 'production' || 'disabled' }}
         run: npm run desktop:dmg:macos -- --artifact-version "${RELEASE_VERSION#v}"
 
       - name: Notarize and staple the DMG
