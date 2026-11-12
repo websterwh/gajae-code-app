@@ -26,7 +26,7 @@ export const UPDATER_ASSET_LIMITS = Object.freeze({
   maxPayloadBytes: 2 * 1024 ** 3,
   maxArchiveBytes: 250 * 1024 ** 2,
   maxExpandedBytes: 1 * 1024 ** 3,
-  maxDmgBytes: 250 * 1024 ** 2,
+  maxDmgBytes: 320 * 1024 ** 2,
   maxChecksumBytes: 1024,
   maxSignatureBytes: 16 * 1024,
   maxManifestBytes: 64 * 1024,

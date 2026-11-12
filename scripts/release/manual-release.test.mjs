@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 import { releaseCommand } from './local-release-command.mjs';
 import { manualReleaseOptions, processManualRelease } from './manual-release.mjs';
-import { assetNames } from './updater-artifacts.mjs';
+import { assetNames, UPDATER_ASSET_LIMITS } from './updater-artifacts.mjs';
 
 const version = '2.0.0-beta.10';
 const commit = 'a'.repeat(40);
@@ -190,7 +190,7 @@ test('invalid release metadata and extra or duplicate assets fail before any dow
     release => { release.assets[0].id = release.assets[1].id; },
     release => { release.assets[0].id = '1'; }, release => { release.assets[0].id = 0; },
     release => { release.assets[0].state = 'starter'; }, release => { delete release.assets[0].state; },
-    release => { release.assets[0].size = 0; }, release => { release.assets[0].size = 250 * 1024 ** 2 + 1; },
+    release => { release.assets[0].size = 0; }, release => { release.assets[0].size = UPDATER_ASSET_LIMITS.maxDmgBytes + 1; },
     release => { release.assets[2].size = 1025; }, release => { release.assets[0].digest = 'bad'; },
     release => { release.assets[0].updated_at = 'yesterday'; }, release => { release.assets[0].label = '\u0000'; },
   ]) {
