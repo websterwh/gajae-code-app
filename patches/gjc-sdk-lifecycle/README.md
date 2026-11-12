@@ -1,10 +1,11 @@
 # GJC SDK lifecycle remediation — app-owned patch
 
-Status: ported to exactly **0.17.6** on September 25, 2026 and applied through a
-clean `rm -rf node_modules && npm ci`. All 32 files passed pristine 0.17.6
-before-hash validation and installation; check-only subsequently verified all 32.
-The previous verified pin was 0.16.4 (September 8, 2026); see
-[0.17.6 port](#0176-port) for every re-anchored edit and every 0.17.6 addition.
+Status: ported to exactly **0.20.0** on November 11, 2026. All 32 files pass
+pristine 0.20.0 before-hash validation and replay; the 0.17.6 pin it replaces was
+verified on September 25, 2026 through a clean `rm -rf node_modules && npm ci`.
+The earliest verified pin was 0.16.4 (September 8, 2026); see
+[0.20.0 port](#0200-port) for every re-anchored edit and every 0.20.0 addition,
+and [0.17.6 port](#0176-port) for the port before it.
 The app, worker and native validators share `shared/sdkLifecyclePolicy.json`
 (maximum 32 files). This is not
 an updater/plugin fork, an upstream publication, or permission to clear
@@ -165,6 +166,35 @@ by hand: the manifest is applied only by `npm run apply:sdk-patch`/postinstall.
 These APIs are additions to the Bun source runtime, not changes to npm declaration
 files. The async-local iterator retention is qualified for the pinned Bun runtime;
 it does not constitute browser or other JavaScript-runtime qualification.
+
+## 0.20.0 port
+
+Replay of the 0.17.6 manifest against pristine 0.20.0: 13 of 32 files applied
+unchanged (only their hashes changed); 19 files had edits whose anchor moved
+(61 of 209). **No edit was dropped.** None of the guarantees is implemented
+upstream: `getAppLifecycleActivity`, `awaitAppLifecycleSettlement`,
+`setAppLifecycleAdmission`, `appFactoryUnknown` and
+`awaitPhysicalRunResources` still match zero files in 0.20.0.
+
+Four files are byte-identical to 0.17.6 (`ai/src/utils/event-stream.ts`,
+`ai/src/providers/google-shared.ts`, `ai/src/providers/pi-native-client.ts`,
+`coding-agent/src/sdk/host/query/revision-store.ts`), so their edits needed no
+re-anchoring at all.
+
+Where 0.20.0 changed the shape rather than the wording, the edit was re-derived
+with the same semantics instead of being moved verbatim:
+
+| File | Edits | Decision | Reason / new anchor |
+| --- | --- | --- | --- |
+| `coding-agent/src/sdk/session.ts` | #3, #6, #9, #14, #15, #24, #25 | re-anchored | `hasSession = true` moved ahead of the task-move cleanup registration, so transition cleanup is now registered at the owned-MCP cleanup boundary; the credential-disabled handler and the host/notification unknown markers keep their own anchors around the new `ownerEndpointGeneration` block. |
+| | #7 | re-anchored | failed-creation disposal now runs inside `attemptCleanup` on `ownedAsyncJobManager`; the retained-disposal join is unchanged. |
+| `coding-agent/src/sdk/host/session-runtime.ts` | #0, #5, #6, #7, #11, #16, #19, #20, #25 | re-anchored | the `./host` import is a single-line value import now; `submission` is assigned rather than initialized; `session_shutdown` also closes pending asks; gate-resolution draining uses a cleared `setTimeout` instead of `Bun.sleep`. |
+| `ai/src/auth-storage.ts` | #3, #4, #5, #9, #10, #11, #12, #13 | re-anchored | usage probes and OAuth refreshes gained `expectedRevision`, per-context in-flight keys and try/catch lease release; every app-owned promise is still wrapped by `#ownAppTask`. |
+| `coding-agent/src/config/model-registry.ts` | #3, #4, #8, #9 | re-anchored | background refresh is keyed per context (`#backgroundRefreshes`) instead of one promise, and the catalog callback became async with settings flush; activity, fence, settlement and dispose-flag edits follow the new shape. |
+| `coding-agent/src/config/settings.ts` | #0, #1, #2 | re-anchored | the debounced save now uses `reserveDeferredSettingsSave` with a completion slot; revision bumps stay on slot capture and save failure. |
+| `coding-agent/src/sdk/host/host.ts` | #0, #3, #5 | re-anchored | imports gained `EventReplayGap`/`RESPONSE_CEILING_BYTES`; the owner and `own`/`retain`/`schedule`/`cancelTimer` helpers are unchanged in semantics. |
+| `coding-agent/src/session/agent-session.ts` | #5, #9, #12 | re-anchored | `awaitDisposeCompletion` already initializes the retained promise upstream, so only `#joinPhysicalExecutions` is added; `#sessionShutdownReason` sits after `#disposeTerminalError`. |
+| `ai/src/stream.ts`, `ai/src/providers/*` | provider anchors | re-anchored | producer wraps adopt the current import/argument layout; `gitlab-duo` adopts its inner transport before forwarding, as before. |
 
 ## 0.17.6 port
 

@@ -13,7 +13,7 @@
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-yellow.svg"></a>
   <a href="https://github.com/devswha/gajae-code-app/releases/latest"><img alt="Version 2.0.0-beta.20" src="https://img.shields.io/badge/version-2.0.0--beta.20-blue"></a>
   <a href="#quick-start"><img alt="Platforms: macOS arm64 | Linux server" src="https://img.shields.io/badge/Platforms-macOS%20arm64%20%7C%20Linux%20server-green"></a>
-  <a href="https://github.com/devswha/gajae-code"><img alt="Runtime: Gajae Code SDK 0.17.6" src="https://img.shields.io/badge/Runtime-Gajae%20Code%20SDK%200.17.6-blueviolet"></a>
+  <a href="https://github.com/devswha/gajae-code"><img alt="Runtime: Gajae Code SDK 0.20.0" src="https://img.shields.io/badge/Runtime-Gajae%20Code%20SDK%200.20.0-blueviolet"></a>
 </p>
 
 <p align="center">
@@ -85,7 +85,7 @@ A card answered in one tab closes in every other viewer. Always deny is offered 
 
 |  |  |
 |---|---|
-| **Runtime** | Gajae Code SDK 0.17.6 on Bun 1.4.0, bundled, driven in an isolated worker; prompts pass through an owner-readable temp file, never a process argument |
+| **Runtime** | Gajae Code SDK 0.20.0 on Bun 1.4.0, bundled, driven in an isolated worker; prompts pass through an owner-readable temp file, never a process argument |
 | **Where things live** | Database, assets and cache under `~/.gajae-app`; transcripts stay in the runtime's own session files and are never copied into the app's database |
 | **Network** | Loopback by default and fail-closed (it can run shell commands); cross-origin callers are rejected on HTTP and WebSocket |
 | **Trust boundary** | One owner: whoever reaches the server is the owner, so the network is the boundary — loopback, a tailnet, or a proxy that authenticates in front. Managed worktrees run git without the system or user gitconfig; a checkout filter in a repository's own `.git/config` (git-lfs is one) still runs, the same trust `git status` places in a checkout you opened |

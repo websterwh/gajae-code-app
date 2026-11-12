@@ -8,7 +8,7 @@ export type GjcBuiltinModelProfile = {
 };
 
 /**
- * Built-in model profiles of the pinned @gajae-code/coding-agent (0.17.6).
+ * Built-in model profiles of the pinned @gajae-code/coding-agent (0.20.0).
  *
  * The upstream runtime module imports Bun-only utilities, so the Node sidecar
  * cannot load it directly and keeps this copy. Names, order and roles mirror

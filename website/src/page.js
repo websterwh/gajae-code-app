@@ -16,7 +16,7 @@ import {
  * The Gajae Code SDK version bundled with the checked-in release (v2.0.0-beta.20).
  * Update it by hand when CHECKED_IN_RELEASE moves to a build with a new SDK pin.
  */
-export const BUNDLED_SDK_VERSION = '0.17.6';
+export const BUNDLED_SDK_VERSION = '0.20.0';
 
 /** The release the footage and stills under public/media were recorded in. */
 export const RECORDED_VERSION = '2.0.0-beta.20';
