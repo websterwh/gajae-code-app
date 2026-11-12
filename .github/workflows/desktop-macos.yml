@@ -22,7 +22,9 @@ concurrency:
 jobs:
   shell:
     name: Build macOS arm64 desktop shell (ad-hoc)
-    runs-on: macos-14
+    # macOS 14 images were retired on 2026-11-02; a macos-14 job is now
+    # rejected at runner allocation, before any step can run.
+    runs-on: macos-15
     timeout-minutes: 60
     steps:
       - name: Checkout
