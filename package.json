@@ -19,9 +19,7 @@
     "dist-native/",
     "scripts/",
     "patches/gjc-sdk-lifecycle/manifest.json",
-    "patches/gjc-sdk-lifecycle/README.md",
-    "patches/extract-zip-symlink-leaf/manifest.json",
-    "patches/extract-zip-symlink-leaf/README.md"
+    "patches/gjc-sdk-lifecycle/README.md"
   ],
   "homepage": "https://github.com/devswha/gajae-code-app",
   "repository": {
@@ -36,9 +34,9 @@
     "dev:isolated": "node scripts/start-isolated-dev.mjs",
     "server": "node dist-server/server/index.js",
     "server:dev": "tsx --tsconfig server/tsconfig.json server/index.js",
-    "preserver:dev": "npm run check:extract-zip-patch && npm run fill:runtime-manifest && npm run build:core:dev",
+    "preserver:dev": "npm run fill:runtime-manifest && npm run build:core:dev",
     "server:dev-watch": "tsx watch --tsconfig server/tsconfig.json server/index.js",
-    "preserver:dev-watch": "npm run check:extract-zip-patch && npm run fill:runtime-manifest && npm run build:core:dev",
+    "preserver:dev-watch": "npm run fill:runtime-manifest && npm run build:core:dev",
     "client": "vite",
     "desktop": "node src-tauri/scripts/tauri.mjs dev",
     "desktop:dev": "node src-tauri/scripts/tauri.mjs dev",
@@ -55,15 +53,13 @@
     "build:client": "vite build",
     "build:core": "node scripts/build-rust-core.mjs --release",
     "build:core:dev": "node scripts/build-rust-core.mjs",
-    "prebuild:server": "npm run check:sdk-patch && npm run check:extract-zip-patch && node scripts/fill-runtime-manifest.mjs && node scripts/generate-command-surface.mjs && node -e \"require('node:fs').rmSync('dist-server', { recursive: true, force: true })\"",
+    "prebuild:server": "npm run check:sdk-patch && node scripts/fill-runtime-manifest.mjs && node scripts/generate-command-surface.mjs && node -e \"require('node:fs').rmSync('dist-server', { recursive: true, force: true })\"",
     "build:server": "tsc -p server/tsconfig.json && tsc-alias -p server/tsconfig.json",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p server/tsconfig.json",
     "check:identity": "node scripts/check-identity.mjs",
     "apply:sdk-patch": "node scripts/apply-sdk-lifecycle-patch.mjs",
     "check:sdk-patch": "node scripts/apply-sdk-lifecycle-patch.mjs --check",
-    "apply:extract-zip-patch": "node scripts/apply-extract-zip-patch.mjs",
-    "check:extract-zip-patch": "node scripts/apply-extract-zip-patch.mjs --check",
     "audit": "node scripts/check-audit.mjs",
     "audit:react": "npx react-doctor@latest",
     "check:core": "cargo fmt --manifest-path native/gajae-core/Cargo.toml -- --check && cargo clippy --locked --manifest-path native/gajae-core/Cargo.toml --all-targets -- -D warnings && cargo test --locked --manifest-path native/gajae-core/Cargo.toml",
@@ -73,16 +69,16 @@
     "icon:preview": "node scripts/generate-app-icon.mjs --preview",
     "test": "node scripts/run-tests.mjs",
     "smoke:packaged-server": "node scripts/release/smoke-packaged-server.mjs",
-    "pretest": "npm run check:sdk-patch && npm run check:extract-zip-patch && npm run build:core:dev",
-    "test:e2e:gjc": "npm run check:sdk-patch && npm run check:extract-zip-patch && TSX_TSCONFIG_PATH=server/tsconfig.json node --import tsx --test --test-concurrency=1 server/e2e/gjc-slice4.browser.e2e.ts server/e2e/gjc-slice4.wire.e2e.ts",
+    "pretest": "npm run check:sdk-patch && npm run build:core:dev",
+    "test:e2e:gjc": "npm run check:sdk-patch && TSX_TSCONFIG_PATH=server/tsconfig.json node --import tsx --test --test-concurrency=1 server/e2e/gjc-slice4.browser.e2e.ts server/e2e/gjc-slice4.wire.e2e.ts",
     "poc:opencodex:cua": "node scripts/check-opencodex-cua-poc.mjs",
     "companion:debug": "cargo run --manifest-path companion-rs/Cargo.toml --",
     "companion:build": "node scripts/build-agent-desktop-companion.mjs",
     "lint": "eslint src/ server/ shared/ scripts/ vite.config.js",
     "lint:fix": "eslint src/ server/ shared/ scripts/ vite.config.js --fix",
-    "verify": "npm run check:sdk-patch && npm run check:extract-zip-patch && npm run audit && npm run check:licenses && npm run check:notices && npm run typecheck && npm run check:core && npm test && npm run test:e2e:gjc && npm run lint && npm run check:identity && npm run build",
+    "verify": "npm run check:sdk-patch && npm run audit && npm run check:licenses && npm run check:notices && npm run typecheck && npm run check:core && npm test && npm run test:e2e:gjc && npm run lint && npm run check:identity && npm run build",
     "start": "npm run build && npm run server",
-    "postinstall": "node scripts/fix-node-pty.js && node scripts/apply-sdk-lifecycle-patch.mjs && node scripts/apply-extract-zip-patch.mjs",
+    "postinstall": "node scripts/fix-node-pty.js && node scripts/apply-sdk-lifecycle-patch.mjs",
     "prepare": "husky",
     "check:licenses": "node scripts/check-dependency-licenses.mjs",
     "generate:notices": "node scripts/generate-third-party-notices.mjs",
@@ -135,7 +131,16 @@
     "brace-expansion@>=1.0.0 <2.0.0": "1.1.21",
     "brace-expansion@>=2.0.0 <3.0.0": "2.1.7",
     "brace-expansion@>=4.0.0 <6.0.0": "5.0.12",
-    "undici@>=7.0.0 <7.30.1": "7.30.2"
+    "undici@>=7.0.0 <7.30.1": "7.30.2",
+    "puppeteer-core": "25.17.0",
+    "@puppeteer/browsers": "3.2.7",
+    "basic-ftp": "6.2.6",
+    "@gajae-code/ai": {
+      "zod": "4.6.7"
+    },
+    "@gajae-code/coding-agent": {
+      "zod": "4.6.7"
+    }
   },
   "dependencies": {
     "@gajae-code/coding-agent": "0.20.0",
