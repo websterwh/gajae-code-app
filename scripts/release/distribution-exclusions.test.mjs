@@ -13,6 +13,17 @@ import {
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dirname, '..', '..');
 
+// The shipped list is empty since the 0.20.0 runtime stopped pulling mupdf and
+// elkjs. These fixtures keep the removal and stub machinery covered.
+const FIXTURE_EXCLUSIONS = [
+  { package: 'mupdf', license: 'AGPL-3.0-or-later', stub: null },
+  { package: 'elkjs', license: 'EPL-2.0', stub: 'elkjs' },
+];
+
+test('the shipped exclusion list is empty under the 0.20.0 dependency graph', () => {
+  assert.deepEqual(EXCLUDED_FROM_DISTRIBUTION, []);
+});
+
 async function fakeTree(packages) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'gajae-exclusions-'));
   const nodeModules = path.join(root, 'node_modules');
@@ -26,7 +37,7 @@ async function fakeTree(packages) {
 }
 
 test('every exclusion with a stub points at a first-party MIT package of the same name', async () => {
-  for (const entry of EXCLUDED_FROM_DISTRIBUTION) {
+  for (const entry of FIXTURE_EXCLUSIONS) {
     if (!entry.stub) continue;
     const manifest = JSON.parse(
       await fs.readFile(path.join(REPOSITORY_ROOT, 'scripts', 'release', 'stubs', entry.stub, 'package.json'), 'utf8'),
@@ -38,15 +49,15 @@ test('every exclusion with a stub points at a first-party MIT package of the sam
 });
 
 test('removing the excluded packages installs the stub with the replaced version', async () => {
-  const versions = Object.fromEntries(EXCLUDED_FROM_DISTRIBUTION.map((entry, index) => [entry.package, `9.${index}.0`]));
+  const versions = Object.fromEntries(FIXTURE_EXCLUSIONS.map((entry, index) => [entry.package, `9.${index}.0`]));
   const { root, nodeModules } = await fakeTree(versions);
   try {
-    const result = await removeExcludedDistributionPackages(fs, path, nodeModules);
-    assert.deepEqual(result.removed, EXCLUDED_FROM_DISTRIBUTION.map((entry) => entry.package));
-    assert.deepEqual(result.stubbed, EXCLUDED_FROM_DISTRIBUTION.filter((entry) => entry.stub).map((entry) => entry.package));
+    const result = await removeExcludedDistributionPackages(fs, path, nodeModules, FIXTURE_EXCLUSIONS);
+    assert.deepEqual(result.removed, FIXTURE_EXCLUSIONS.map((entry) => entry.package));
+    assert.deepEqual(result.stubbed, FIXTURE_EXCLUSIONS.filter((entry) => entry.stub).map((entry) => entry.package));
     assert.match(describeDistributionExclusions(result), /^Excluded mupdf, elkjs; stubbed elkjs/);
 
-    for (const entry of EXCLUDED_FROM_DISTRIBUTION) {
+    for (const entry of FIXTURE_EXCLUSIONS) {
       const dir = path.join(nodeModules, ...entry.package.split('/'));
       if (!entry.stub) {
         await assert.rejects(fs.access(dir), 'a plain exclusion leaves nothing behind');
@@ -66,7 +77,7 @@ test('removing the excluded packages installs the stub with the replaced version
 test('the elkjs stub satisfies the import surface beautiful-mermaid touches and fails only on layout', async () => {
   const { root, nodeModules } = await fakeTree({ elkjs: '0.11.1' });
   try {
-    await removeExcludedDistributionPackages(fs, path, nodeModules);
+    await removeExcludedDistributionPackages(fs, path, nodeModules, FIXTURE_EXCLUSIONS);
     // The exact specifier from beautiful-mermaid/src/elk-instance.ts.
     const bundled = pathToFileURL(path.join(nodeModules, 'elkjs', 'lib', 'elk.bundled.js')).href;
     const { default: ELKBundled } = await import(bundled);
