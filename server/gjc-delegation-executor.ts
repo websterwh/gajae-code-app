@@ -358,7 +358,7 @@ export class GjcDelegationExecutor {
       const settings = await parent.settings.cloneForCwd(parent.sessionManager.getCwd());
       // Delegated work never starts independent goal loops or background model roles.
       settings.override('goal.enabled', false);
-      settings.override('memory.enabled', false);
+      settings.override('memory.backend', 'off');
       settings.override('compaction.enabled', false);
       settings.override('tools.discoveryMode', 'off');
       settings.override('mcp.discoveryMode', false);

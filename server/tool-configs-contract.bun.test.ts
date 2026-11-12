@@ -94,10 +94,10 @@ test('apply_patch is the edit tool under its wire name', async () => {
  */
 const APP_WRITTEN_FIELDS: Readonly<Record<string, readonly string[]>> = {
   ask: ['answers'],
-  // `computer` is a discriminated union of one schema per action, which the
-  // generated catalog flattens to no properties at all. These are the fields
-  // its union members declare.
-  computer: ['action', 'actions', 'text', 'keys'],
+  // `computer` is the app's own automation tool, not the runtime's: it sends
+  // `{ action, arguments }`, while the catalog entry it shadows is the runtime's
+  // per-action union. These are the fields either side declares.
+  computer: ['action', 'arguments', 'actions', 'text', 'keys'],
 };
 
 /** Records every field an accessor touches, and answers undefined to all of them. */

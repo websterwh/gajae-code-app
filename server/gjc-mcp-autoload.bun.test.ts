@@ -20,10 +20,10 @@ import { applyGjcToolSettingsPolicy } from './gjc-bun-sdk-adapter.js';
  *   which the runtime loads unless `mcp.enableProjectConfig` is set to false.
  *
  * Both depend on runtime behaviour the app does not own - conventional
- * autoload, the "unset means true" reading of `mcp.enableProjectConfig`, and
- * the always-include of conventional tools past an explicit `toolNames` - so
- * both are pinned against the real SDK with a real stdio server. A bun test
- * because the package cannot be imported from node at all.
+ * autoload, the user-scope opt-in a project-scope stdio server needs, and the
+ * always-include of conventional tools past an explicit `toolNames` - so both
+ * are pinned against the real SDK with a real stdio server. A bun test because
+ * the package cannot be imported from node at all.
  */
 
 const STDIO_MCP_SERVER = `
@@ -40,7 +40,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
 });
 `;
 
-async function fixture() {
+async function fixture(options: { projectStdio?: boolean } = {}) {
   const scratch = join(await realpath(process.cwd()), '.tmp');
   await mkdir(scratch, { recursive: true });
   const root = await mkdtemp(join(scratch, 'gjc-mcp-autoload-'));
@@ -48,6 +48,11 @@ async function fixture() {
   const agentDir = join(root, 'agent');
   await mkdir(join(cwd, '.gjc'), { recursive: true });
   await mkdir(agentDir);
+  if (options.projectStdio) {
+    // The user's own opt-in, in the user config: a project file cannot grant
+    // the spawn that the runtime otherwise refuses.
+    await writeFile(join(agentDir, 'config.yml'), 'mcp:\n  enableProjectConfig: true\n');
+  }
   const server = join(root, 'probe-mcp-server.mjs');
   await writeFile(server, STDIO_MCP_SERVER);
   const registration = (name: string) => JSON.stringify({
@@ -58,7 +63,7 @@ async function fixture() {
 
   const authStorage = await discoverAuthStorage(agentDir);
   const settings = await Settings.loadForScope({ cwd, agentDir });
-  settings.override('memory.enabled', false);
+  settings.override('memory.backend', 'off');
   settings.override('skills.enabled', false);
   const registry = new ModelRegistry(authStorage, join(agentDir, 'models.yml'), settings, { agentDir });
   // No transport is ever reached: the session is inspected, never prompted.
@@ -91,7 +96,7 @@ async function fixture() {
 const userTool = 'mcp__userscope_probe_echo';
 const projectTool = 'mcp__projectscope_probe_echo';
 
-test('with the app policy, both scopes load as in the CLI', async () => {
+test('with the app policy, the user scope loads and project stdio stays behind the user opt-in, as in the CLI', async () => {
   const f = await fixture();
   try {
     applyGjcToolSettingsPolicy(f.settings);
@@ -99,10 +104,25 @@ test('with the app policy, both scopes load as in the CLI', async () => {
     try {
       const active = session.getActiveToolNames();
       assert.ok(active.includes(userTool), `user-scope MCP tool missing from: ${active.join(', ')}`);
-      assert.ok(active.includes(projectTool), `project-scope MCP tool missing from: ${active.join(', ')}`);
-      // Always-on, not merely discoverable: the tools were not in `toolNames`,
-      // yet they are active for the model right now.
+      // Always-on, not merely discoverable: the tool was not in `toolNames`,
+      // yet it is active for the model right now.
       assert.ok(session.getToolByName(userTool), 'the user-scope tool must be executable, not just listed');
+      // The runtime spawns a project-scope stdio server only after the user
+      // opts in; the app replaces the CLI, not that decision.
+      assert.ok(!active.includes(projectTool), `project stdio must remain opted out: ${active.join(', ')}`);
+    } finally { await session.dispose(); }
+  } finally { await f.close(); }
+});
+
+test('a user who opted project stdio in gets both scopes', async () => {
+  const f = await fixture({ projectStdio: true });
+  try {
+    applyGjcToolSettingsPolicy(f.settings);
+    const session = await f.open();
+    try {
+      const active = session.getActiveToolNames();
+      assert.ok(active.includes(userTool), `user-scope MCP tool missing from: ${active.join(', ')}`);
+      assert.ok(active.includes(projectTool), `project-scope MCP tool missing from: ${active.join(', ')}`);
       assert.ok(session.getToolByName(projectTool), 'the project-scope tool must be executable, not just listed');
     } finally { await session.dispose(); }
   } finally { await f.close(); }

@@ -187,7 +187,20 @@ async function receiveAudio(req, res) {
     },
     limits: { fileSize: 25 * 1024 * 1024 },
   });
-  const failure = await new Promise((resolve) => upload.single('audio')(req, res, resolve)).catch((error) => error);
+  // The abort can land while the dynamic import above is still resolving. Multer
+  // then attaches to a request that is already gone and never calls back, which
+  // would leave this route - and its admission lease - waiting forever, so the
+  // abort itself settles the receive.
+  const failure = await new Promise((resolve) => {
+    const finish = (error) => {
+      req.off('aborted', aborted);
+      resolve(error ?? null);
+    };
+    const aborted = () => finish(new Error('Request aborted'));
+    if (req.aborted) return finish(new Error('Request aborted'));
+    req.once('aborted', aborted);
+    return upload.single('audio')(req, res, (error) => finish(error));
+  }).catch((error) => error);
   const storageFailures = [];
   for (let settled = 0; settled < operations.length;) {
     const batch = operations.slice(settled);
@@ -293,6 +306,10 @@ router.post('/transcribe', asyncHandler(async (req, res) => {
   try {
     await receiveAudio(req, res);
   } catch (err) {
+    // Multer's wording for an unexpected field has changed between releases
+    // ("Unexpected field" became "Unexpected file field"); the client contract
+    // is the field name, not the library's phrasing.
+    if (err?.code === 'LIMIT_UNEXPECTED_FILE') return res.status(400).json({ error: 'Unexpected field' });
     return res.status(400).json({ error: err.message });
   }
   if (!req.file) return res.status(400).json({ error: 'No audio uploaded' });

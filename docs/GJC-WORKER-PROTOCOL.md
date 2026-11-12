@@ -115,6 +115,8 @@ scope is fixed by this specification, and a frame that gets it wrong is rejected
 | `oauth.cancel` | global | Abandon an attempt in progress. |
 | `session.start` | scoped | Create a conversation and run its first turn. |
 | `session.resume` | scoped | Attach to a conversation that already exists. |
+| `session.fork` | scoped | Copy a persisted conversation at its recorded leaf into a new session, without sharing its transcript, and return the successor session id. |
+| `session.branch` | scoped | Branch a persisted conversation at a chosen entry, the headless form of `/tree`, and return the successor session id. |
 | `turn.start` | scoped | Run a turn in an existing conversation. |
 | `turn.abort` | scoped | Stop the running turn. |
 | `turn.steer` | scoped | Inject input into the running turn without ending it. |

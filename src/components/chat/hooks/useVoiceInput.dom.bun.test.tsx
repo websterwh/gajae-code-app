@@ -96,7 +96,8 @@ test('unmount flushes the last recorded audio and retains an external transcript
   const recorder = await start(view); view.unmount();
   assert.equal(recorder.stops, 1); assert.equal(device.track.stops, 1); await busy();
   const completing = recorder.complete();
-  await waitFor(() => assert.equal(requested, 'https://voice.fixture/v1/audio/transcriptions')); await busy();
+  // The client posts to the app's own proxy; the backend host is server-side.
+  await waitFor(() => assert.equal(requested, '/api/voice/transcribe')); await busy();
   response.resolve(new Response('{"text":"keep after departure"}')); await completing;
   assert.deepEqual(received, [['keep after departure', false]]); await idle();
 });

@@ -89,13 +89,14 @@
     "enableDescription": "新增麥克風按鈕並加入朗讀控制.",
     "backendTitle": "後端",
     "backendDescription": "使用OpenAI、Groq或本地服務如LocalAI、Speaches或Kokoro-FastAPI。留空則採用伺服器預設值.",
-    "baseUrl": "服務URL",
-    "apiKey": "服務API金鑰",
     "sttModel": "語音辨識模型",
-    "ttsModel": "語音合成模型",
     "voice": "語音",
     "format": "聲音檔案格式",
-    "note": "瀏覽器會直接連接至自訂的基本URL，因此必須允許CORS。留空則使用伺服器後端."
+    "note": "瀏覽器會直接連接至自訂的基本URL，因此必須允許CORS。留空則使用伺服器後端.",
+    "sttBaseUrl": "語音辨識 URL",
+    "ttsBaseUrl": "語音合成 URL",
+    "sttApiKey": "語音辨識 API 金鑰",
+    "ttsApiKey": "語音合成 API 金鑰"
   },
   "preferences": {
     "sections": {
@@ -124,7 +125,8 @@
     "notifications": "通知",
     "automation": "自動化",
     "about": "關於",
-    "permissions": "權限"
+    "permissions": "權限",
+    "authentication": "身分驗證"
   },
   "automation": {
     "browserBackend": {
@@ -153,7 +155,22 @@
       "activityFrameDescription": "在展開該列期間，每秒左右更新一次代理所在頁面的小圖。這是你已登入瀏覽器的縮小截圖，僅在展開時擷取，且不會儲存。",
       "saveFailed": "無法儲存瀏覽器後端。"
     },
-    "builtinBrowser": { "title": "內建瀏覽器", "description": "在可調整寬度的右側面板中開啟內建瀏覽器，不受所選 GJC 後端影響。", "label": "內建瀏覽器", "note": "僅在 macOS 桌面應用程式中可用。關閉前會一直保留瀏覽器擁有權。HTTP(S) 聊天連結一律在外部瀏覽器中開啟。", "open": "開啟瀏覽器", "opened": "已開啟內建瀏覽器。", "failed": "無法開啟瀏覽器。", "errors": { "busy": "內建瀏覽器正在使用中。請先關閉，再為此工作階段開啟。", "unavailable": "內建瀏覽器目前無法使用。請等待應用程式伺服器重新連線後再試。", "invalidUrl": "無法開啟此位址。請使用 HTTP 或 HTTPS 位址。", "stale": "要求完成前瀏覽器頁面已變更。請再試一次。", "failed": "無法開啟內建瀏覽器。請再試一次。" } },
+    "builtinBrowser": {
+      "title": "內建瀏覽器",
+      "description": "在可調整寬度的右側面板中開啟內建瀏覽器，不受所選 GJC 後端影響。",
+      "label": "內建瀏覽器",
+      "note": "僅在 macOS 桌面應用程式中可用。關閉前會一直保留瀏覽器擁有權。HTTP(S) 聊天連結一律在外部瀏覽器中開啟。",
+      "open": "開啟瀏覽器",
+      "opened": "已開啟內建瀏覽器。",
+      "failed": "無法開啟瀏覽器。",
+      "errors": {
+        "busy": "內建瀏覽器正在使用中。請先關閉，再為此工作階段開啟。",
+        "unavailable": "內建瀏覽器目前無法使用。請等待應用程式伺服器重新連線後再試。",
+        "invalidUrl": "無法開啟此位址。請使用 HTTP 或 HTTPS 位址。",
+        "stale": "要求完成前瀏覽器頁面已變更。請再試一次。",
+        "failed": "無法開啟內建瀏覽器。請再試一次。"
+      }
+    },
     "title": "瀏覽器和原生應用程式",
     "description": "檢視單獨安裝的 CUA 驅動程式。",
     "computerUse": {
@@ -173,7 +190,38 @@
     "noGrants": "無存儲自動化批准。",
     "origin": "網站原始碼",
     "application": "桌面應用程式",
-    "revoke": "移除批准"
+    "revoke": "移除批准",
+    "hostControl": {
+      "label": "主機控制",
+      "description": "透過掛載在旁邊的 Docker 通訊端，對執行此容器的機器採取動作。",
+      "enableLabel": "啟用主機控制",
+      "enableDescription": "關閉後，下方所有權限都會失效。",
+      "statusFailed": "無法讀取主機狀態，因此這些開關無效；請登入後重新載入。",
+      "unavailable": "設定 GAJAE_HOST_CONTROL=1、掛載 Docker 通訊端，然後重新啟動容器。",
+      "socketReachable": "可在 {{path}} 存取通訊端。",
+      "socketUnreachable": "無法在 {{path}} 存取通訊端；請檢查掛載與守護程序。",
+      "hostInfo": "主機與守護程序資訊",
+      "hostInfoDescription": "Docker 版本、核心與計數，以及管理此主機的對象。",
+      "detect": "偵測",
+      "detecting": "正在偵測...",
+      "detectFailed": "無法讀取主機；請檢查上方的開關與通訊端。",
+      "dockerGroup": "Docker",
+      "dockerGroupDescription": "開啟後可選擇代理能對容器做什麼。",
+      "containers": "檢視容器",
+      "containersDescription": "每個容器及其映像、狀態與現況。",
+      "restart": "重新啟動容器",
+      "restartDescription": "依名稱重新啟動單一容器，不受下方清單限制。",
+      "docker": "啟動、停止與暫停容器",
+      "dockerDescription": "僅對下方清單中的容器變更狀態；不會建立或刪除任何內容。",
+      "shell": "執行允許的命令",
+      "shellDescription": "在清單中的容器裡執行一條固定命令；你選擇動詞，而不是命令字串。",
+      "files": "讀取容器內的檔案",
+      "filesDescription": "一個檔案或一個目錄，唯讀，最大 256 KiB。",
+      "targets": "允許的容器",
+      "targetsDescription": "以逗號分隔的名稱樣式，如 mos-*、immich_*；留空表示什麼都不允許，重新啟動不受影響。",
+      "targetsPlaceholder": "mos-*, immich_*",
+      "saveFailed": "主機控制設定未儲存；伺服器保留了先前的值。"
+    }
   },
   "notifications": {
     "title": "通知",
@@ -269,5 +317,41 @@
     "empty": "所有工作區都像 GJC CLI 一樣無需詢問即可執行。",
     "loading": "載入中…",
     "error": "無法載入權限。"
+  },
+  "authentication": {
+    "title": "登入",
+    "loadFailed": "請登入以檢視或變更這些設定。此處若為空預設值，會看起來像登入已關閉。",
+    "intro": "允許擁有者透過 OpenID Connect 提供者登入。端點來自提供者的探索文件。",
+    "enabled": "要求登入",
+    "enabledHint": "在簽發者、用戶端 ID 與密鑰全部儲存之前，此閘道會保持關閉，這樣打錯字就不會把你鎖在外面。",
+    "issuer": "簽發者 URL",
+    "issuerHint": "提供者的基底 URL，或探索文件的完整 URL（…/.well-known/openid-configuration）——兩者皆可。",
+    "clientId": "用戶端 ID",
+    "clientSecret": "用戶端密鑰",
+    "secretKept": "已儲存密鑰。留空則保留。",
+    "scopes": "範圍",
+    "scopesHint": "openid 一律會被要求，groups 則承載成員資格宣告。沒有另外的管理員範圍：提供者端的群組成員資格就是閘道。",
+    "redirectUri": "重新導向 URI",
+    "redirectUriHint": "留空則從請求推導：/api/auth/oidc/callback",
+    "allowedGroups": "允許的群組",
+    "allowedGroupsHint": "提供者在 groups 宣告中確認的名稱，以逗號分隔。留空則接受提供者允許登入的任何帳戶；groups 範圍會自動要求。",
+    "localTitle": "本機存取",
+    "localIntro": "對外部保留登入，同時讓你自己網路中的機器直接進入。",
+    "localAccess": "允許本機網路免登入",
+    "localAccessHint": "來自下方位址的請求會跳過登入閘道。清單為空時，允許回送位址與私有網段（10/8、172.16/12、192.168/16、fc00::/7）。",
+    "allowedIps": "允許的 IP 位址",
+    "allowedIpsHint": "以逗號分隔的位址或 IPv4 CIDR 網段，例如 192.168.1.0/24、10.0.0.5。",
+    "discover": "測試探索",
+    "save": "儲存",
+    "saved": "已儲存",
+    "saveFailed": "無法儲存設定。",
+    "discoveryFailed": "探索失敗。",
+    "endpoints": "探索到的端點",
+    "session": "你的工作階段",
+    "sessionHint": "閘道關閉時不需要登入。",
+    "signedInAs": "已登入為 {{name}}",
+    "signedOut": "未登入",
+    "signIn": "登入",
+    "signOut": "登出"
   }
 }

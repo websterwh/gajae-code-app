@@ -67,4 +67,5 @@ export const GJC_AGENT_TOOLS_WITHHELD: Readonly<Record<string, string>> = {
   cron: 'Scheduled prompts fire into a live session; the app disposes the SDK session when each turn ends, so a schedule would never fire.',
   goal: 'Enabled conditionally by the SDK adapter for a capable app view with scoped lifecycle controls and bounded continuation; excluded from delegated sessions and clients without controls.',
   move_session: 'Permanently repoints the SDK session cwd, which the app binds to the session\u2019s project; the /move command is excluded for the same reason.',
+  report_issue: 'Off by default in the runtime: it records tool-quality reports into the runtime\u2019s own local database, which serves runtime debugging rather than the app\u2019s tool surface.',
 };

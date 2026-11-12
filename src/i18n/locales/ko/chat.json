@@ -40,7 +40,8 @@
       "info": "알림 메시지",
       "warning": "경고",
       "error": "오류 발생"
-    }
+    },
+    "retryFailedTurn": "다시 시도"
   },
   "tools": {
     "error": "도구 문제",
@@ -133,7 +134,9 @@
       "description": "현재 워크스페이스에서 사용할 스킬을 선택합니다.",
       "search": "스킬 검색",
       "noMatches": "일치하는 스킬이 없습니다."
-    }
+    },
+    "agentConfigurationCurrent": "현재",
+    "btw": "참고로 — 에이전트에게 덧붙일 말 보내기"
   },
   "session": {
     "loading": {

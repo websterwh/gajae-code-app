@@ -40,7 +40,8 @@
       "info": "Hinweis",
       "warning": "Warnung",
       "error": "Problem"
-    }
+    },
+    "retryFailedTurn": "Erneut versuchen"
   },
   "tools": {
     "error": "Werkzeugproblem",
@@ -86,6 +87,7 @@
       "noMatches": "Keine Konfigurationen stimmen überein.",
       "signInRequired": "Melden Sie sich in den Einstellungen bei {{provider}} an, um diese Voreinstellung zu verwenden"
     },
+    "agentConfigurationCurrent": "Aktuell",
     "attachImages": "Bilder hinzufügen",
     "attachment": {
       "onlyImages": "Es können nur Bilder hinzugefügt werden, daher wurde {{names}} nicht übernommen. Verweise stattdessen mit @ auf eine Textdatei oder füge ihren Inhalt ein.",
@@ -96,6 +98,7 @@
       "dismiss": "Hinweis schließen"
     },
     "send": "Senden",
+    "btw": "Übrigens – schick dem Agenten eine Randnotiz",
     "stop": "Stopp",
     "hintText": {
       "ctrlEnter": "Senden mit Ctrl+Enter • Zeilenumbruch mit Shift+Enter • Modi ändern mit Tab • Befehle mit /",

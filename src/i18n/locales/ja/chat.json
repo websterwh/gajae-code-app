@@ -40,7 +40,8 @@
       "info": "お知らせ",
       "warning": "警告",
       "error": "エラー"
-    }
+    },
+    "retryFailedTurn": "再試行"
   },
   "tools": {
     "error": "ツールエラー",
@@ -133,7 +134,9 @@
       "description": "現在のワークスペースで使うスキルを選びます。",
       "search": "スキルを検索",
       "noMatches": "一致するスキルはありません。"
-    }
+    },
+    "agentConfigurationCurrent": "現在",
+    "btw": "ちなみに — エージェントに補足を送る"
   },
   "session": {
     "loading": {

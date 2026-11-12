@@ -89,13 +89,14 @@
     "enableDescription": "Show the mic button and the read-aloud button on messages.。",
     "backendTitle": "Backend",
     "backendDescription": "Point at OpenAI, Groq, or a local server (LocalAI, Speaches, Kokoro-FastAPI). Leave blank to use the server default.。",
-    "baseUrl": "Base URL",
-    "apiKey": "API key",
     "sttModel": "Speech-to-text model",
-    "ttsModel": "Text-to-speech model",
     "voice": "Voice",
     "format": "Audio format",
-    "note": "A custom base URL is called directly by your browser and must allow browser CORS requests. Leave it blank to use the server-configured backend.。"
+    "note": "A custom base URL is called directly by your browser and must allow browser CORS requests. Leave it blank to use the server-configured backend.。",
+    "sttBaseUrl": "音声認識の URL",
+    "ttsBaseUrl": "音声合成の URL",
+    "sttApiKey": "音声認識の API キー",
+    "ttsApiKey": "音声合成の API キー"
   },
   "preferences": {
     "sections": {
@@ -124,7 +125,8 @@
     "notifications": "通知",
     "automation": "Automation",
     "about": "概要",
-    "permissions": "権限"
+    "permissions": "権限",
+    "authentication": "認証"
   },
   "automation": {
     "browserBackend": {
@@ -153,7 +155,22 @@
       "activityFrameDescription": "エージェントが開いているページの小さな画像を、行を展開している間だけ約1秒ごとに更新して表示します。ログイン中のブラウザを縮小して撮影したもので、保存はしません。",
       "saveFailed": "ブラウザバックエンドを保存できませんでした。"
     },
-    "builtinBrowser": { "title": "内蔵ブラウザ", "description": "選択したGJCバックエンドに関係なく、内蔵ブラウザーを幅の調整ができる右パネルで開きます。", "label": "内蔵ブラウザ", "note": "macOS デスクトップアプリでのみ利用できます。閉じるまでブラウザの所有権が維持されます。HTTP(S) のチャットリンクは常に外部ブラウザで開きます。", "open": "ブラウザを開く", "opened": "内蔵ブラウザを開きました。", "failed": "ブラウザを開けませんでした。", "errors": { "busy": "内蔵ブラウザはすでに使用中です。このセッションで開く前に閉じてください。", "unavailable": "内蔵ブラウザを利用できません。アプリサーバーの再接続を待ってから、もう一度お試しください。", "invalidUrl": "このアドレスは開けません。HTTP または HTTPS のアドレスを使用してください。", "stale": "リクエストの完了前にブラウザページが変更されました。もう一度お試しください。", "failed": "内蔵ブラウザを開けませんでした。もう一度お試しください。" } },
+    "builtinBrowser": {
+      "title": "内蔵ブラウザ",
+      "description": "選択したGJCバックエンドに関係なく、内蔵ブラウザーを幅の調整ができる右パネルで開きます。",
+      "label": "内蔵ブラウザ",
+      "note": "macOS デスクトップアプリでのみ利用できます。閉じるまでブラウザの所有権が維持されます。HTTP(S) のチャットリンクは常に外部ブラウザで開きます。",
+      "open": "ブラウザを開く",
+      "opened": "内蔵ブラウザを開きました。",
+      "failed": "ブラウザを開けませんでした。",
+      "errors": {
+        "busy": "内蔵ブラウザはすでに使用中です。このセッションで開く前に閉じてください。",
+        "unavailable": "内蔵ブラウザを利用できません。アプリサーバーの再接続を待ってから、もう一度お試しください。",
+        "invalidUrl": "このアドレスは開けません。HTTP または HTTPS のアドレスを使用してください。",
+        "stale": "リクエストの完了前にブラウザページが変更されました。もう一度お試しください。",
+        "failed": "内蔵ブラウザを開けませんでした。もう一度お試しください。"
+      }
+    },
     "title": "ブラウザとネイティブアプリケーション",
     "description": "別途インストールされた CUA Driver を確認します。",
     "computerUse": {
@@ -173,7 +190,38 @@
     "noGrants": "保存された自動化の承認はありません。",
     "origin": "サイトのオリジン",
     "application": "デスクトップアプリケーション",
-    "revoke": "承認を削除"
+    "revoke": "承認を削除",
+    "hostControl": {
+      "label": "ホスト制御",
+      "description": "このコンテナが動くマシンを、隣にマウントした Docker ソケット経由で操作します。",
+      "enableLabel": "ホスト制御を有効にする",
+      "enableDescription": "オフにすると、以下の権限はすべて失われます。",
+      "statusFailed": "ホストの状態を読み取れないため、このスイッチは無効です。サインインして再読み込みしてください。",
+      "unavailable": "GAJAE_HOST_CONTROL=1 を設定し、Docker ソケットをマウントしてからコンテナを再起動してください。",
+      "socketReachable": "{{path}} のソケットに接続できます。",
+      "socketUnreachable": "{{path}} のソケットに接続できません。マウントとデーモンを確認してください。",
+      "hostInfo": "ホストとデーモンの情報",
+      "hostInfoDescription": "Docker のバージョン、カーネル、コンテナ数に加え、このホストを管理しているもの。",
+      "detect": "検出",
+      "detecting": "検出中...",
+      "detectFailed": "ホストを読み取れません。上のスイッチとソケットを確認してください。",
+      "dockerGroup": "Docker",
+      "dockerGroupDescription": "オンにすると、エージェントがコンテナに対して行える操作を選べます。",
+      "containers": "コンテナを表示",
+      "containersDescription": "各コンテナのイメージ、状態、ステータス。",
+      "restart": "コンテナを再起動",
+      "restartDescription": "下の一覧に縛られず、名前で 1 つのコンテナを再起動します。",
+      "docker": "コンテナの起動・停止・一時停止",
+      "dockerDescription": "下の一覧にあるコンテナの状態変更のみ。作成や削除は行いません。",
+      "shell": "許可されたコマンドを実行",
+      "shellDescription": "一覧にあるコンテナ内で固定のコマンドを 1 つ。選ぶのは動詞だけで、コマンド文字列は指定しません。",
+      "files": "コンテナ内のファイルを読む",
+      "filesDescription": "ファイル 1 つまたはディレクトリ 1 つを読み取り専用で、最大 256 KiB。",
+      "targets": "許可するコンテナ",
+      "targetsDescription": "mos-*、immich_* のようなカンマ区切りの名前パターン。空なら何も許可せず、再起動は影響を受けません。",
+      "targetsPlaceholder": "mos-*, immich_*",
+      "saveFailed": "ホスト制御の設定を保存できませんでした。サーバーは以前の値を保持しています。"
+    }
   },
   "notifications": {
     "title": "通知",
@@ -269,5 +317,41 @@
     "empty": "すべてのワークスペースが GJC CLI と同じく確認なしで実行されます。",
     "loading": "読み込み中…",
     "error": "権限を読み込めませんでした。"
+  },
+  "authentication": {
+    "title": "サインイン",
+    "loadFailed": "これらの設定を表示・変更するにはサインインしてください。ここが空の既定値だと、サインインがオフに見えてしまいます。",
+    "intro": "所有者が OpenID Connect プロバイダーでサインインできるようにします。エンドポイントはプロバイダーの discovery ドキュメントから取得します。",
+    "enabled": "サインインを必須にする",
+    "enabledHint": "issuer、クライアント ID、シークレットがすべて保存されるまでゲートはオフのままなので、打ち間違いで締め出されることはありません。",
+    "issuer": "Issuer URL",
+    "issuerHint": "プロバイダーのベース URL、または discovery ドキュメントの完全な URL（…/.well-known/openid-configuration）のどちらでも構いません。",
+    "clientId": "クライアント ID",
+    "clientSecret": "クライアントシークレット",
+    "secretKept": "シークレットが保存されています。保持するには空のままにしてください。",
+    "scopes": "スコープ",
+    "scopesHint": "openid は常に要求され、groups が所属のクレームを運びます。管理者用のスコープは別にありません。プロバイダー側のグループ所属がゲートです。",
+    "redirectUri": "リダイレクト URI",
+    "redirectUriHint": "空のままにするとリクエストから導出します: /api/auth/oidc/callback",
+    "allowedGroups": "許可するグループ",
+    "allowedGroupsHint": "プロバイダーが groups クレームで示す名前をカンマ区切りで指定します。空ならプロバイダーがサインインさせる任意のアカウントを許可し、groups スコープは自動的に要求されます。",
+    "localTitle": "ローカルアクセス",
+    "localIntro": "外部にはサインインを求めつつ、自分のネットワーク内のマシンはそのまま通します。",
+    "localAccess": "ローカルネットワークをサインインなしで許可",
+    "localAccessHint": "以下のアドレスからのリクエストはサインインゲートを省略します。一覧が空の場合はループバックとプライベート範囲（10/8、172.16/12、192.168/16、fc00::/7）が許可されます。",
+    "allowedIps": "許可する IP アドレス",
+    "allowedIpsHint": "カンマ区切りのアドレスまたは IPv4 CIDR 範囲。例: 192.168.1.0/24, 10.0.0.5。",
+    "discover": "discovery を試す",
+    "save": "保存",
+    "saved": "保存しました",
+    "saveFailed": "設定を保存できませんでした。",
+    "discoveryFailed": "discovery に失敗しました。",
+    "endpoints": "検出したエンドポイント",
+    "session": "現在のセッション",
+    "sessionHint": "ゲートがオフの間はサインイン不要です。",
+    "signedInAs": "{{name}} としてサインイン中",
+    "signedOut": "サインインしていません",
+    "signIn": "サインイン",
+    "signOut": "サインアウト"
   }
 }

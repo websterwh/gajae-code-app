@@ -75,7 +75,8 @@ test('the SDK settings policy keeps the user\u2019s own tool and MCP settings, a
   assert.equal(settings.get('tools.discoveryMode'), 'all');
   assert.equal(settings.get('mcp.discoveryMode'), true);
   assert.equal(settings.get('mcp.enableProjectConfig'), true);
-  // An unset project-MCP setting stays unset, which the runtime reads as on.
+  // An unset project-MCP setting stays unset: the runtime reads its own
+  // default, and the app never writes that choice for the user.
   const untouched = Settings.isolated({});
   applyGjcToolSettingsPolicy(untouched);
   assert.equal(untouched.has('mcp.enableProjectConfig'), false);
@@ -210,7 +211,7 @@ test('tools that reach outside this machine are offered as in the CLI', () => {
 });
 
 test('only tools the per-turn session lifetime or the project binding cannot carry are withheld', () => {
-  assert.deepEqual(Object.keys(GJC_AGENT_TOOLS_WITHHELD).sort(), ['cron', 'goal', 'job', 'monitor', 'move_session']);
+  assert.deepEqual(Object.keys(GJC_AGENT_TOOLS_WITHHELD).sort(), ['cron', 'goal', 'job', 'monitor', 'move_session', 'report_issue']);
 });
 
 test('browser and computer use the app-owned automation transports', () => {

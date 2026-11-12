@@ -100,7 +100,7 @@ function requireOwnerWhenEnforced(request: Request, response: Response): boolean
 export function createOidcRouter() {
   const router = express.Router();
 
-  router.get('/status', (_request, response) => {
+  router.get('/status', asyncHandler((_request, response) => {
     const config = readOidcConfig();
     ok(response, {
       enabled: config.enabled,
@@ -109,14 +109,14 @@ export function createOidcRouter() {
       localAccess: config.allowLocal,
       loginUrl: '/api/auth/oidc/start',
     });
-  });
+  }));
 
-  router.get('/config', (request, response) => {
+  router.get('/config', asyncHandler((request, response) => {
     if (!requireOwnerWhenEnforced(request, response)) return;
     ok(response, publicOidcConfig(readOidcConfig()));
-  });
+  }));
 
-  router.put('/config', (request, response) => {
+  router.put('/config', asyncHandler((request, response) => {
     if (!requireOwnerWhenEnforced(request, response)) return;
     const body = (request.body ?? {}) as Record<string, unknown>;
     const next = writeOidcConfig({
@@ -134,7 +134,7 @@ export function createOidcRouter() {
     const problem = validateOidcConfig(next);
     if (problem) return fail(response, 400, 'OIDC_CONFIG_INVALID', problem);
     ok(response, publicOidcConfig(next));
-  });
+  }));
 
   /** Auto discovery, surfaced to the settings tab before anything is saved. */
   router.post('/discover', asyncHandler(async (request, response) => {
@@ -218,17 +218,17 @@ export function createOidcRouter() {
     return response.redirect(302, destination);
   }));
 
-  router.post('/logout', (request, response) => {
+  router.post('/logout', asyncHandler((request, response) => {
     response.setHeader('set-cookie', clearedCookie(SESSION_COOKIE, request.secure));
     ok(response, { signedOut: true });
-  });
+  }));
 
   /** Who the current cookie belongs to, for the settings tab and the shell. */
-  router.get('/session', (request, response) => {
+  router.get('/session', asyncHandler((request, response) => {
     const session = readSession(request.headers.cookie);
     if (!session) return fail(response, 401, 'SIGN_IN_REQUIRED', 'No sign-in session.');
     return ok(response, { email: session.email, name: session.name ?? '', sub: session.sub, expiresAt: session.exp });
-  });
+  }));
 
   return router;
 }

@@ -40,7 +40,8 @@
       "info": "注意",
       "warning": "警告",
       "error": "錯誤"
-    }
+    },
+    "retryFailedTurn": "重試"
   },
   "tools": {
     "error": "工具問題",
@@ -133,7 +134,9 @@
       "description": "選擇要在目前工作區中使用的技能。",
       "search": "搜尋技能",
       "noMatches": "沒有符合的技能。"
-    }
+    },
+    "agentConfigurationCurrent": "目前",
+    "btw": "順帶一提 — 傳一則附註給代理"
   },
   "session": {
     "loading": {

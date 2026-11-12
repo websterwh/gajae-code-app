@@ -49,6 +49,14 @@ const querySessionId = (raw: unknown): string | undefined => raw === undefined
   ? undefined
   : typeof raw === 'string' ? sessionFrom(raw) : invalid('Invalid sessionId.', 'INVALID_SESSION_ID');
 
+// Express's default parser leaves `projectId[]=x` as its own key, so reading
+// only `query.projectId` would treat a bracketed scope as absent and silently
+// widen the request to every project. A bracketed key is therefore never a
+// scope: it is a malformed one, and callers reject it like an empty value.
+const queryScope = (query: Request['query'], name: string): unknown => (
+  Object.keys(query).some((key) => key.startsWith(`${name}[`)) ? [] : query[name]
+);
+
 const queryFlag = (raw: unknown, name: string): boolean | undefined => {
   if (raw === undefined) return undefined;
   const text = queryText(raw);
@@ -117,16 +125,16 @@ router.post('/:provider/models/reload', asyncHandler(async (req: Request, res: R
 
 router.get('/:provider/skills', asyncHandler(async (req: Request, res: Response) => {
   const provider = providerFrom(req.params.provider);
-  const projectId = queryText(req.query.projectId);
-  const sessionId = querySessionId(req.query.sessionId);
+  const projectId = queryText(queryScope(req.query, 'projectId'));
+  const sessionId = querySessionId(queryScope(req.query, 'sessionId'));
   const workspace = sessionId ? await resolveSessionCommandWorkspace(projectId, sessionId) : undefined;
   res.json(createApiSuccessResponse({ provider, skills: await providerSkillsService.listProviderSkills(provider, projectId, workspace) }));
 }));
 
 router.get('/:provider/commands', asyncHandler(async (req: Request, res: Response) => {
   providerFrom(req.params.provider);
-  const projectId = queryText(req.query.projectId);
-  const sessionId = querySessionId(req.query.sessionId);
+  const projectId = queryText(queryScope(req.query, 'projectId'));
+  const sessionId = querySessionId(queryScope(req.query, 'sessionId'));
   const workspace = sessionId ? await resolveSessionCommandWorkspace(projectId, sessionId) : undefined;
   res.json(createApiSuccessResponse({ provider: 'gjc', commands: await providerCommandsService.listProviderCommands(projectId, workspace) }));
 }));
@@ -272,8 +280,8 @@ router.get('/search/sessions', asyncHandler(async (req: Request, res: Response) 
     await sessionConversationsSearchService.search({
       query: searchQuery(req.query.q),
       limit: searchLimit(req.query.limit),
-      projectId: req.query.projectId === undefined ? undefined
-        : queryText(req.query.projectId) ?? invalid('projectId must be a non-empty string.', 'INVALID_QUERY_PARAMETER'),
+      projectId: queryScope(req.query, 'projectId') === undefined ? undefined
+        : queryText(queryScope(req.query, 'projectId')) ?? invalid('projectId must be a non-empty string.', 'INVALID_QUERY_PARAMETER'),
       signal: cancellation.signal,
       onProgress: ({ projectResult, totalMatches, scannedProjects, totalProjects }) => {
         if (disconnected) return;
