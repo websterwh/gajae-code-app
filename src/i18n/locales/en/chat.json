@@ -41,7 +41,7 @@
       "warning": "Warning",
       "error": "Error"
     },
-    "retryFailedTurn": "Retry this turn"
+    "retryFailedTurn": "Retry"
   },
   "tools": {
     "error": "Tool problem",
