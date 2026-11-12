@@ -32,6 +32,7 @@ import { readUpdaterSidecar } from './updater-signature.mjs';
 import { resolveReleaseTag } from './updater-history.mjs';
 
 const COMMIT = /^[a-f0-9]{40}$/;
+const REPO_SLUG = /^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9._-]{1,100}$/;
 const TAG = /^v\d+\.\d+\.\d+(?:-[A-Za-z0-9]+(?:[.-][A-Za-z0-9]+)*)?$/;
 const SAFE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,179}$/;
 const PATH_CONTROL = /[\u0000-\u001f\u007f]/u;
@@ -123,8 +124,13 @@ async function inspectAssets(assetsDirectory, names) {
 }
 
 function validateOptions({ repo, tag, commit, assetsDirectory, publish = false,
-  checkoutRoot = process.cwd() }) {
-  demand(repo === REPOSITORY_SLUG, `Release repository is restricted to ${REPOSITORY_SLUG}.`);
+  checkoutRoot = process.cwd(), actionsRepository = process.env.GITHUB_REPOSITORY }) {
+  demand(REPO_SLUG.test(repo ?? ''), 'Release repository must be an explicit owner/repo slug.');
+  // The product's canonical repository, or the repository this workflow runs
+  // in: a fork lane publishes its own tag there, and anything else could file
+  // a release against a repository the run was never started for.
+  demand(repo === REPOSITORY_SLUG || repo === actionsRepository,
+    `Release repository is restricted to ${REPOSITORY_SLUG} or the repository this workflow runs in.`);
   demand(TAG.test(tag ?? ''), 'Explicit canonical release tag is required.');
   demand(COMMIT.test(commit ?? ''), 'Explicit full lowercase 40-character commit is required.');
   demand(typeof publish === 'boolean', 'Publish must be boolean.');
@@ -175,8 +181,11 @@ export async function processUnsignedRelease({
   assetsDirectory,
   publish = false,
   checkoutRoot = process.cwd(),
+  actionsRepository = process.env.GITHUB_REPOSITORY,
 } = {}, { run = releaseCommand } = {}) {
-  const options = validateOptions({ repo, tag, commit, assetsDirectory, publish, checkoutRoot });
+  const options = validateOptions({
+    repo, tag, commit, assetsDirectory, publish, checkoutRoot, actionsRepository,
+  });
   demand(typeof run === 'function', 'Release command dependency is invalid.');
   const api = async (path, args = []) => {
     const result = await run('gh', ['api', '--hostname', 'github.com',
@@ -342,6 +351,9 @@ async function main() {
       error: unknown
         ? 'Publication outcome is unknown; inspect the release before any retry.'
         : 'Unsigned release failed; inspect the reported draft before any retry.',
+      // Commands suppress raw output, so the message is the only account of
+      // why the run stopped; a bare status would be undiagnosable.
+      reason: typeof error?.message === 'string' ? error.message : String(error),
       ...(error?.draftId === undefined ? {} : { draftId: error.draftId }),
     })}\n`);
     process.exitCode = 1;
