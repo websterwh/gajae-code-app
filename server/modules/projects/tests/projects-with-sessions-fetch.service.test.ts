@@ -4,6 +4,13 @@ import test from 'node:test';
 import { projectsDb, sessionsDb } from '@/modules/database/index.js';
 import { getArchivedProjectsWithSessions, getProjectsWithSessions } from '@/modules/projects/services/projects-with-sessions-fetch.service.js';
 
+// The eager fetch also sweeps sessions whose transcript file vanished, which is
+// a read of the real sessions table. This file never opens a database, so that
+// sweep is stubbed as empty; otherwise the test only passes where some earlier
+// run happened to create the schema in the home directory.
+(sessionsDb as unknown as { getAllSessionsWithTranscriptPath: () => unknown[] })
+  .getAllSessionsWithTranscriptPath = () => [];
+
 type Stubs = {
   getProjectPaths: typeof projectsDb.getProjectPaths;
   getInitialSessionPagesByProject: typeof sessionsDb.getInitialSessionPagesByProject;
