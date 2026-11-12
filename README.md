@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/devswha/gajae-code-app/releases/latest"><b>Download for Mac — signed and notarized</b></a> ·
+  <a href="https://github.com/devswha/gajae-code-app/releases/latest"><b>Download for Mac</b></a> ·
   <a href="https://devswha.github.io/gajae-code-app/"><b>Website</b></a>
 </p>
 
@@ -41,7 +41,7 @@ Gajae Code App is a self-hosted web and desktop interface for [Gajae Code](https
 
 ## Quick Start
 
-**macOS (Apple Silicon, macOS 13+) — the desktop app.** Download the DMG from [Releases](https://github.com/devswha/gajae-code-app/releases/latest), verify it, drag it to Applications, open it. The image is signed with a Developer ID and notarized by Apple, so Gatekeeper opens it like any other app. After that the app checks for updates itself; downloading and restarting happen only when you click ([how updates work](docs/DESKTOP-CLICK-UPDATE.md)).
+**macOS (Apple Silicon, macOS 13+) — the desktop app.** Download the DMG from [Releases](https://github.com/devswha/gajae-code-app/releases/latest), verify it, drag it to Applications, open it. The image is ad-hoc signed, not notarized, so macOS blocks the first launch: open **System Settings → Privacy & Security**, click **Open Anyway**, and confirm. Because there is no Developer ID, the bundled updater is switched off in these builds; updating means downloading the next DMG.
 
 ```bash
 cd ~/Downloads
