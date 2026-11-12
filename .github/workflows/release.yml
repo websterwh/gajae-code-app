@@ -149,7 +149,9 @@ jobs:
     name: Build macOS arm64 desktop DMG
     needs: release-policy
     timeout-minutes: 90
-    runs-on: macos-14
+    # macOS 14 images were retired on 2026-11-02; jobs asking for macos-14 are
+    # rejected at runner allocation. macos-15 is the supported arm64 image.
+    runs-on: macos-15
     # Published desktop assets require Developer ID signing and notarization.
     # Local ad-hoc builds remain available through the packaging scripts.
     # See scripts/release/SIGNING-READINESS.md for read-only readiness checks.
@@ -471,7 +473,9 @@ jobs:
       - build
       - desktop-macos
       - ubuntu-24-compatibility
-    runs-on: macos-14
+    # macOS 14 images were retired on 2026-11-02; jobs asking for macos-14 are
+    # rejected at runner allocation. macos-15 is the supported arm64 image.
+    runs-on: macos-15
     environment: release
     timeout-minutes: 30
     permissions:

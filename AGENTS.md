@@ -122,7 +122,7 @@ dist-native/bun test src/shared/view/ui/ActionMenu.dom.bun.test.tsx
 `npm test` has a `pretest` that builds the Rust core (debug); tests fail without it.
 
 Desktop shell CI is `.github/workflows/desktop-macos.yml` (PR/push-main on
-`macos-14`): it builds the embedded server payload (`server:payload:macos`),
+`macos-15`, which is the supported arm64 image since macOS 14 was retired): it builds the embedded server payload (`server:payload:macos`),
 runs `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` and
 `cargo test --locked --manifest-path src-tauri/Cargo.toml`, and assembles an
 ad-hoc app bundle. `npm run verify` does not cover these desktop shell checks;
