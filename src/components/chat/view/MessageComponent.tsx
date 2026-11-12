@@ -228,16 +228,20 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, d
               {message.type === 'error' && onRetryFailedTurn ? (
                 // The run stopped, so there is nothing to wait for and nothing
                 // in the transcript to click: one round button under the
-                // failure sends the same turn again.
+                // failure sends the same turn again. It stays a 24px circle
+                // until hovered, when the label slides out to the right.
                 <div className="mt-1 flex pl-1">
                   <button
                     type="button"
                     onClick={onRetryFailedTurn}
-                    aria-label={t('messageTypes.retryFailedTurn', { defaultValue: 'Retry this turn' })}
-                    title={t('messageTypes.retryFailedTurn', { defaultValue: 'Retry this turn' })}
-                    className="flex h-6 w-6 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden"
+                    aria-label={t('messageTypes.retryFailedTurn', { defaultValue: 'Retry' })}
+                    title={t('messageTypes.retryFailedTurn', { defaultValue: 'Retry' })}
+                    className="group/retry flex h-6 items-center justify-center rounded-full border border-border bg-card px-[5px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden"
                   >
-                    <RotateCcw className="h-3 w-3" aria-hidden="true" />
+                    <RotateCcw className="h-3 w-3 shrink-0" aria-hidden="true" />
+                    <span className="max-w-0 overflow-hidden text-[11px] leading-none whitespace-nowrap opacity-0 transition-all duration-150 group-hover/retry:ml-1 group-hover/retry:max-w-12 group-hover/retry:opacity-100 group-focus-visible/retry:ml-1 group-focus-visible/retry:max-w-12 group-focus-visible/retry:opacity-100">
+                      {t('messageTypes.retryFailedTurn', { defaultValue: 'Retry' })}
+                    </span>
                   </button>
                 </div>
               ) : null}
