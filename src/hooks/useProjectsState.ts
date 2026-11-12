@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { NavigateFunction } from 'react-router-dom';
 
 import type { ServerEvent } from '../contexts/WebSocketContext';
-import { api } from '../utils/api';
+import { api, authenticatedFetch } from '../utils/api';
 import { readPersistedProjectId, useAppShellStore } from '../stores/useAppShellStore';
 import { useSessionAttentionStore } from '../stores/useSessionAttentionStore';
 import type { LLMProvider, LoadingProgress, Project, ProjectSession } from '../types/app';
@@ -327,7 +327,16 @@ export function useProjectsState({ sessionId, navigate, subscribe, isMobile, act
 
   const handleSidebarRefresh = useCallback(async () => {
     try {
-      await query.refetch();
+      // The sidebar's reload is the one button that has to make the backend
+      // notice upstream changes, so it re-reads the model catalog alongside
+      // the projects. A failed reload must not cost the refresh.
+      const [, reloaded] = await Promise.all([
+        query.refetch(),
+        authenticatedFetch('/api/providers/gjc/models/reload', { method: 'POST' })
+          .then((response) => response.ok)
+          .catch(() => false),
+      ]);
+      if (reloaded) window.dispatchEvent(new Event('gajae:models-reloaded'));
       const refreshed = client.getQueryData<Project[]>(PROJECTS_QUERY_KEY) ?? [];
       const current = useAppShellStore.getState();
       const project = current.selectedProject && refreshed.find((candidate) => candidate.projectId === current.selectedProject?.projectId);

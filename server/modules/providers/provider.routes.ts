@@ -109,6 +109,12 @@ router.get('/:provider/models', asyncHandler(async (req: Request, res: Response)
   res.json(createApiSuccessResponse({ provider, models: result.models, cache: result.cache }));
 }));
 
+router.post('/:provider/models/reload', asyncHandler(async (req: Request, res: Response) => {
+  const provider = providerFrom(req.params.provider);
+  const result = await providerModelsService.reloadProviderModels(provider);
+  res.json(createApiSuccessResponse({ provider, models: result.models, cache: result.cache }));
+}));
+
 router.get('/:provider/skills', asyncHandler(async (req: Request, res: Response) => {
   const provider = providerFrom(req.params.provider);
   const projectId = queryText(req.query.projectId);

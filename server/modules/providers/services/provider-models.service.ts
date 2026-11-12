@@ -165,6 +165,19 @@ export const createProviderModelsService = (dependencies: ProviderModelsServiceD
       }
       return requested || undefined;
     },
+    /**
+     * The operator's reload: forget the catalog, including the copy written to
+     * disk, and read it from the provider again. A model that appeared or
+     * vanished upstream shows up here without restarting the server, and the
+     * fresh answer is what the cache is refilled with.
+     */
+    async reloadProviderModels(provider: LLMProvider): Promise<ProviderModelsResult> {
+      remembered.clear();
+      fetching.clear();
+      diskRead = undefined;
+      diskWasRead = false;
+      return getProviderModels(provider, { bypassCache: true });
+    },
     clearCache(): void {
       remembered.clear();
       fetching.clear();

@@ -131,6 +131,15 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
     void loadProviderModels();
   }, [loadProviderModels]);
 
+  // The sidebar's reload re-reads the catalog on the server. Listening for it
+  // here is what makes the model pickers show the same list without a page
+  // reload, which is otherwise the only way this hook learns of a change.
+  useEffect(() => {
+    const onReloaded = () => { void loadProviderModels(true); };
+    window.addEventListener('gajae:models-reloaded', onReloaded);
+    return () => window.removeEventListener('gajae:models-reloaded', onReloaded);
+  }, [loadProviderModels]);
+
   const hardRefreshProviderModels = useCallback(() => loadProviderModels(true), [loadProviderModels]);
   const selectProviderModel = useCallback(async (targetProvider: LLMProvider, model: string, sessionId?: string | null) => {
     if (targetProvider !== GJC_PROVIDER) throw new Error('Only GJC models can be selected.');
