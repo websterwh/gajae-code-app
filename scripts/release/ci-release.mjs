@@ -75,6 +75,13 @@ function productVersionFromTag(tag) {
   return productVersion;
 }
 
+// The product's canonical repository, or the repository this workflow runs in:
+// a signed lane started in a fork publishes its own tag there, and anything
+// else could file a release against a repository the run was never started for.
+function isAllowedRepository(repo, actionsRepository) {
+  return repo === REPOSITORY_SLUG || repo === actionsRepository;
+}
+
 function validateOptions({
   repo,
   tag,
@@ -84,8 +91,10 @@ function validateOptions({
   publicKeyFile,
   publish = false,
   checkoutRoot = process.cwd(),
+  actionsRepository = process.env.GITHUB_REPOSITORY,
 } = {}) {
-  demand(repo === REPOSITORY_SLUG, `Release repository is restricted to ${REPOSITORY_SLUG}.`);
+  demand(isAllowedRepository(repo, actionsRepository),
+    `Release repository is restricted to ${REPOSITORY_SLUG} or the repository this workflow runs in.`);
   const productVersion = productVersionFromTag(tag);
   demand(COMMIT.test(commit ?? ''), 'Explicit full lowercase 40-character commit is required.');
   demand(TEAM_ID.test(teamId ?? ''), 'Explicit 10-character team ID is required.');
@@ -362,6 +371,7 @@ export async function processCiRelease({
   publicKeyFile,
   publish = false,
   checkoutRoot = process.cwd(),
+  actionsRepository,
 } = {}, {
   run = releaseCommand,
   verifySignature = verifyUpdaterSignature,
@@ -373,6 +383,7 @@ export async function processCiRelease({
 } = {}) {
   const options = validateOptions({
     repo, tag, commit, teamId, assetsDirectory, publicKeyFile, publish, checkoutRoot,
+    actionsRepository,
   });
   demand(platform === 'darwin' && arch === 'arm64',
     'CI release requires macOS arm64.');
@@ -648,7 +659,8 @@ async function main() {
       process.stdout.write(usage);
       return;
     }
-    demand(values.repo === REPOSITORY_SLUG && values.tag && values.commit
+    demand(isAllowedRepository(values.repo, process.env.GITHUB_REPOSITORY)
+      && values.tag && values.commit
       && values['team-id'] && values['assets-dir'] && values['updater-public-key-file'],
     'All explicit release arguments are required.');
   } catch {

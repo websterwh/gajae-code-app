@@ -103,8 +103,9 @@ function makeRunner(state) {
     assert.equal(Number.isSafeInteger(options.timeout), true);
     assert.equal(args.includes('--clobber'), false);
     const endpoint = args[3] ?? '';
-    if (endpoint.startsWith(`repos/${REPOSITORY_SLUG}/git/matching-refs/tags/`)) {
-      const encodedTag = endpoint.slice(`repos/${REPOSITORY_SLUG}/git/matching-refs/tags/`.length);
+    const slug = state.repo ?? REPOSITORY_SLUG;
+    if (endpoint.startsWith(`repos/${slug}/git/matching-refs/tags/`)) {
+      const encodedTag = endpoint.slice(`repos/${slug}/git/matching-refs/tags/`.length);
       const releaseTag = decodeURIComponent(encodedTag);
       const object = state.tagRefs?.get(releaseTag);
       return {
@@ -114,14 +115,14 @@ function makeRunner(state) {
         stderr: '',
       };
     }
-    if (endpoint.startsWith(`repos/${REPOSITORY_SLUG}/releases?`)) {
+    if (endpoint.startsWith(`repos/${slug}/releases?`)) {
       const page = Number(new URLSearchParams(endpoint.slice(endpoint.indexOf('?') + 1)).get('page'));
       return {
         stdout: JSON.stringify(state.existingPages?.[page - 1] ?? (page === 1 ? state.existing ?? [] : [])),
         stderr: '',
       };
     }
-    if (endpoint === `repos/${REPOSITORY_SLUG}/releases`) {
+    if (endpoint === `repos/${slug}/releases`) {
       state.createCount += 1;
       if (state.createError) throw new Error('transport fixture failure');
       return {
@@ -529,4 +530,42 @@ test('rejects duplicate or inconsistent GitHub upload identities', async t => {
   };
   await assert.rejects(processCiRelease(input(state), dependencies(runState)), /Duplicate uploaded asset ID/i);
   assert.equal(runState.uploadCount, 2);
+});
+
+test('accepts the repository the workflow runs in and refuses any other', async t => {
+  const state = await fixture(t);
+  const fork = 'websterwh/gajae-code-app';
+  const forkState = {
+    names: state.names,
+    bodies: state.bodies,
+    calls: [],
+    createCount: 0,
+    uploadCount: 0,
+    existing: [],
+    repo: fork,
+  };
+  const result = await processCiRelease(input(state, { repo: fork, actionsRepository: fork }),
+    dependencies(forkState));
+  assert.equal(result.status, 'verified-draft');
+  assert.equal(result.repo, fork);
+  assert.equal(forkState.uploadCount, 8);
+  assert.ok(forkState.calls.some(call => call.args[3] === `repos/${fork}/releases`));
+
+  for (const repository of [
+    { repo: 'someone/else', actionsRepository: fork },
+    { repo: fork, actionsRepository: 'someone/else' },
+    { repo: fork, actionsRepository: null },
+  ]) {
+    await assert.rejects(
+      processCiRelease(input(state, repository), dependencies({
+        names: state.names,
+        bodies: state.bodies,
+        calls: [],
+        createCount: 0,
+        uploadCount: 0,
+        existing: [],
+      })),
+      /restricted to/i,
+    );
+  }
 });
