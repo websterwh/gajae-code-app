@@ -105,6 +105,12 @@ export type SdkRunConfig = {
    * means the session is switched to `prompt` mode and this policy answers.
    */
   permissions?: GjcRunPermissions;
+  /**
+   * Re-run the turn the transcript ends on instead of adding another one.
+   * The resume path drops the failed tail before prompting, which is what
+   * GJC's `/retry` does to its own conversation.
+   */
+  retryLastTurn?: boolean;
 };
 
 /**
@@ -218,6 +224,26 @@ type ActiveRun = {
   appSessionId?: string;
   delegation?: GjcDelegationExecutor;
 };
+
+/**
+ * `/retry`'s first step: keep the conversation up to, but not including, the
+ * turn the transcript ends on. The prompt that follows re-issues that turn,
+ * so a retry never stacks a second copy of the message under the failure.
+ * The rewrite carries the same history marker the runtime's own retry uses,
+ * so both the resumed context and the transcript see one turn.
+ */
+function dropFailedTurn(session: Awaited<ReturnType<typeof createAgentSession>>['session']): void {
+  let lastUserIndex = -1;
+  for (const [index, message] of session.agent.state.messages.entries()) {
+    if (message.role === 'user') lastUserIndex = index;
+  }
+  // Nothing user-authored survived the resume, so the prompt below is the
+  // whole turn, exactly as a first send would be.
+  if (lastUserIndex < 0) return;
+  session.agent.replaceMessages(session.agent.state.messages.slice(0, lastUserIndex), {
+    historyRewrite: { reason: 'retry', preserveSeededPrefix: true },
+  });
+}
 
 const FAILURE = 'GJC SDK configuration is invalid.';
 
@@ -455,6 +481,7 @@ function configFromOptions(value: Record<string, unknown>): SdkRunConfig {
     || (candidate.browserBackend !== undefined && !isGjcBrowserBackend(candidate.browserBackend))
     || (candidate.builtinBrowserAvailable !== undefined && typeof candidate.builtinBrowserAvailable !== 'boolean')
     || (candidate.computerUse !== undefined && typeof candidate.computerUse !== 'boolean')
+    || (candidate.retryLastTurn !== undefined && typeof candidate.retryLastTurn !== 'boolean')
   ) throw new Error(FAILURE);
   // A malformed policy block throws GjcRunPermissionsError, which keeps its
   // `invalid_permissions` code so the worker can answer with that code and the
@@ -1569,6 +1596,7 @@ export class GjcBunSdkAdapter implements GjcWorkerRuntime {
         try {
           if (promptMessage !== null) {
             this.#assertHealthy();
+            if (config.retryLastTurn) dropFailedTurn(result.session);
             // Attachments ride as an <images_input> block: the title above used
             // the bare user text, the model reads the files its own way.
             await result.session.prompt(appendImagesInputTag(promptMessage, config.images));
