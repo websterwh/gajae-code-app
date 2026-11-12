@@ -104,7 +104,7 @@ function providerRunId(run: NonNullable<ReturnType<typeof chatRunRegistry.getRun
  * server, so an allowlist is the only shape that stays correct when the worker
  * learns a new option.
  */
-const CLIENT_CHAT_OPTION_NAMES: readonly string[] = ['effort', 'sessionSummary'];
+const CLIENT_CHAT_OPTION_NAMES: readonly string[] = ['effort', 'sessionSummary', 'retryLastTurn'];
 
 function clientChatOptions(requestOptions: AnyRecord): AnyRecord {
   const accepted: AnyRecord = {};

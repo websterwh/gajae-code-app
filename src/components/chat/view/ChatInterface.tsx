@@ -237,9 +237,11 @@ function ChatInterface({
     })
     : null;
 
-  // Only the failure that ends the transcript can be retried: it resends the
-  // turn that produced it, and the server pins the session's model the same
-  // way the first attempt did, so a retry never silently changes model.
+  // Only the failure that ends the transcript can be retried. This is GJC's
+  // own `/retry`: the runtime drops the failed tail from the resumed
+  // conversation and issues the same prompt again, so the retry re-runs the
+  // turn instead of stacking a second copy of it, and the session's pinned
+  // model still answers it.
   const retryFailedTurn = useCallback(() => {
     const sessionId = session.currentSessionId ?? selectedSession?.id ?? null;
     if (!sessionId || session.isProcessing) return;
@@ -247,7 +249,7 @@ function ChatInterface({
       .reverse()
       .find((message) => message.type === 'user' && String(message.content ?? '').trim().length > 0)?.content;
     if (content === undefined || content === null) return;
-    sendMessage({ type: 'chat.send', sessionId, content: String(content) });
+    sendMessage({ type: 'chat.send', sessionId, content: String(content), options: { retryLastTurn: true } });
   }, [selectedSession?.id, sendMessage, session.chatMessages, session.currentSessionId, session.isProcessing]);
   const endsInFailure = session.chatMessages[session.chatMessages.length - 1]?.type === 'error';
 

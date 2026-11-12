@@ -302,7 +302,7 @@ test('chat.send forwards only the browser\'s own UI options, never session or to
       sessionId: 'contract-session',
       content: 'run it',
       options: {
-        effort: 'high', sessionSummary: 'A label',
+        effort: 'high', sessionSummary: 'A label', retryLastTurn: true,
         sessionRoot: '/etc', cwd: '/etc', projectPath: '/etc',
         toolNames: ['bash', 'computer'], spawns: '*', bashPolicy: { allowedPrefixes: ['sudo'] },
         credential: { kind: 'inline', value: 'secret' }, browserBackend: 'builtin',
@@ -313,6 +313,9 @@ test('chat.send forwards only the browser\'s own UI options, never session or to
 
     assert.equal(receivedOptions?.effort, 'high');
     assert.equal(receivedOptions?.sessionSummary, 'A label');
+    // A retry is a UI intent, not policy: it rides through while the runtime
+    // knobs below stay server-owned.
+    assert.equal(receivedOptions?.retryLastTurn, true);
     assert.equal(receivedOptions?.model, 'pinned-model');
     assert.equal(receivedOptions?.cwd, '/workspace/contract-project');
     assert.equal(receivedOptions?.projectPath, '/workspace/contract-project');
