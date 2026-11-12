@@ -330,13 +330,16 @@ jobs:
         # that would chase a feed it cannot verify.
         env:
           SIGNED: ${{ steps.lane.outputs.signing }}
-          GJC_UPDATE_FEED_ORIGIN: https://api.github.com
-          GJC_UPDATE_PUBKEY: ${{ vars.GJC_UPDATE_PUBKEY }}
+          UPDATER_PUBKEY: ${{ vars.GJC_UPDATE_PUBKEY }}
         run: |
           set -euo pipefail
+          # A disabled build rejects feed and public-key input outright, so the
+          # production bindings are exported only on the signed lane.
           if [ "$SIGNED" = "true" ]; then
+            test -n "${UPDATER_PUBKEY:-}" || { echo "Repository variable GJC_UPDATE_PUBKEY is required for an updater release." >&2; exit 1; }
             export GJC_UPDATE_MODE=production
-            test -n "${GJC_UPDATE_PUBKEY:-}" || { echo "Repository variable GJC_UPDATE_PUBKEY is required for an updater release." >&2; exit 1; }
+            export GJC_UPDATE_FEED_ORIGIN=https://api.github.com
+            export GJC_UPDATE_PUBKEY="$UPDATER_PUBKEY"
           else
             export GJC_UPDATE_MODE=disabled
           fi
