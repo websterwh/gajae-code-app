@@ -80,7 +80,7 @@ async function appRun(
 
   const authStorage = await discoverAuthStorage(agentDir);
   const settings = await Settings.loadForScope({ cwd, agentDir });
-  settings.override('memory.enabled', false);
+  settings.override('memory.backend', 'off');
   settings.override('startup.networkPrewarm', false);
   applyGjcToolSettingsPolicy(settings);
   if (inheritedRuntimeBackend) settings.override('browser.backend', inheritedRuntimeBackend);

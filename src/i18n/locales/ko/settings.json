@@ -89,13 +89,14 @@
     "enableDescription": "메시지에 마이크와 읽기 기능을 추가합니다.",
     "backendTitle": "백엔드",
     "backendDescription": "OpenAI, Groq 또는 LocalAI, Speaches, Kokoro-FastAPI 같은 로컬 서비스를 사용합니다. 비어있으면 서버 기본 설정을 사용합니다.",
-    "baseUrl": "서비스 URL",
-    "apiKey": "서비스 API 키",
     "sttModel": "음성 인식 모델",
-    "ttsModel": "음성 합성 모델",
     "voice": "음성",
     "format": "음성 파일 형식",
-    "note": "브라우저는 직접 커스텀 기본 URL에 연결하므로 CORS를 허용해야 합니다. 비어있으면 서버 백엔드 사용."
+    "note": "브라우저는 직접 커스텀 기본 URL에 연결하므로 CORS를 허용해야 합니다. 비어있으면 서버 백엔드 사용.",
+    "sttBaseUrl": "음성 인식 URL",
+    "ttsBaseUrl": "음성 합성 URL",
+    "sttApiKey": "음성 인식 API 키",
+    "ttsApiKey": "음성 합성 API 키"
   },
   "preferences": {
     "sections": {
@@ -124,7 +125,8 @@
     "notifications": "알림 메시지",
     "automation": "자동화",
     "about": "소개",
-    "permissions": "권한"
+    "permissions": "권한",
+    "authentication": "인증"
   },
   "automation": {
     "browserBackend": {
@@ -153,7 +155,22 @@
       "activityFrameDescription": "에이전트가 보고 있는 페이지의 작은 그림을 행을 펼친 동안 1초에 한 번쯤 갱신해서 보여줍니다. 로그인된 브라우저를 축소 캡처한 것이며, 행을 펼친 동안에만 찍고 저장하지 않습니다.",
       "saveFailed": "브라우저 백엔드를 저장하지 못했습니다."
     },
-    "builtinBrowser": { "title": "내장 브라우저", "description": "선택한 GJC 백엔드와 관계없이 내장 브라우저를 너비 조절이 가능한 오른쪽 패널로 엽니다.", "label": "내장 브라우저", "note": "macOS 데스크톱 앱에서만 사용할 수 있습니다. 닫을 때까지 브라우저 소유권이 유지됩니다. HTTP(S) 채팅 링크는 항상 외부 브라우저에서 열립니다.", "open": "브라우저 열기", "opened": "내장 브라우저를 열었습니다.", "failed": "브라우저를 열 수 없습니다.", "errors": { "busy": "내장 브라우저가 이미 사용 중입니다. 이 세션에서 열기 전에 닫아 주세요.", "unavailable": "내장 브라우저를 사용할 수 없습니다. 앱 서버가 다시 연결된 후 재시도하세요.", "invalidUrl": "이 주소는 열 수 없습니다. HTTP 또는 HTTPS 주소를 사용하세요.", "stale": "요청이 끝나기 전에 브라우저 페이지가 변경되었습니다. 다시 시도하세요.", "failed": "내장 브라우저를 열 수 없습니다. 다시 시도하세요." } },
+    "builtinBrowser": {
+      "title": "내장 브라우저",
+      "description": "선택한 GJC 백엔드와 관계없이 내장 브라우저를 너비 조절이 가능한 오른쪽 패널로 엽니다.",
+      "label": "내장 브라우저",
+      "note": "macOS 데스크톱 앱에서만 사용할 수 있습니다. 닫을 때까지 브라우저 소유권이 유지됩니다. HTTP(S) 채팅 링크는 항상 외부 브라우저에서 열립니다.",
+      "open": "브라우저 열기",
+      "opened": "내장 브라우저를 열었습니다.",
+      "failed": "브라우저를 열 수 없습니다.",
+      "errors": {
+        "busy": "내장 브라우저가 이미 사용 중입니다. 이 세션에서 열기 전에 닫아 주세요.",
+        "unavailable": "내장 브라우저를 사용할 수 없습니다. 앱 서버가 다시 연결된 후 재시도하세요.",
+        "invalidUrl": "이 주소는 열 수 없습니다. HTTP 또는 HTTPS 주소를 사용하세요.",
+        "stale": "요청이 끝나기 전에 브라우저 페이지가 변경되었습니다. 다시 시도하세요.",
+        "failed": "내장 브라우저를 열 수 없습니다. 다시 시도하세요."
+      }
+    },
     "title": "브라우저와 네이티브 애플리케이션",
     "description": "별도로 설치된 CUA Driver를 검토하세요.",
     "computerUse": {
@@ -173,7 +190,38 @@
     "noGrants": "저장된 자동화 승인 없음.",
     "origin": "사이트 원본",
     "application": "데스크톱 애플리케이션",
-    "revoke": "승인 취소"
+    "revoke": "승인 취소",
+    "hostControl": {
+      "label": "호스트 제어",
+      "description": "이 컨테이너가 실행되는 머신을 옆에 마운트된 Docker 소켓으로 제어합니다.",
+      "enableLabel": "호스트 제어 사용",
+      "enableDescription": "끄면 아래의 모든 권한이 사라집니다.",
+      "statusFailed": "호스트 상태를 읽을 수 없어 이 스위치가 동작하지 않습니다. 로그인한 뒤 새로고침하세요.",
+      "unavailable": "GAJAE_HOST_CONTROL=1을 설정하고 Docker 소켓을 마운트한 뒤 컨테이너를 다시 시작하세요.",
+      "socketReachable": "{{path}}에서 소켓에 연결할 수 있습니다.",
+      "socketUnreachable": "{{path}}에서 소켓에 연결할 수 없습니다. 마운트와 데몬을 확인하세요.",
+      "hostInfo": "호스트 및 데몬 정보",
+      "hostInfoDescription": "Docker 버전, 커널, 컨테이너 수와 이 호스트를 관리하는 대상입니다.",
+      "detect": "감지",
+      "detecting": "감지 중...",
+      "detectFailed": "호스트를 읽을 수 없습니다. 위 스위치와 소켓을 확인하세요.",
+      "dockerGroup": "Docker",
+      "dockerGroupDescription": "켜면 에이전트가 컨테이너로 할 수 있는 일을 선택할 수 있습니다.",
+      "containers": "컨테이너 보기",
+      "containersDescription": "이미지, 상태, 현황을 포함한 각 컨테이너.",
+      "restart": "컨테이너 재시작",
+      "restartDescription": "아래 목록과 무관하게 이름으로 컨테이너 하나를 재시작합니다.",
+      "docker": "컨테이너 시작, 중지, 일시중지",
+      "dockerDescription": "아래 목록에 있는 컨테이너의 상태 변경만 수행하며, 생성하거나 삭제하지 않습니다.",
+      "shell": "허용된 명령 실행",
+      "shellDescription": "목록에 있는 컨테이너 안에서 고정된 명령 하나를 실행합니다. 동사만 고르며 명령 문자열은 지정하지 않습니다.",
+      "files": "컨테이너 내부 파일 읽기",
+      "filesDescription": "파일 하나 또는 디렉터리 하나를 읽기 전용으로, 최대 256 KiB.",
+      "targets": "허용된 컨테이너",
+      "targetsDescription": "mos-*, immich_* 같은 쉼표로 구분된 이름 패턴. 비어 있으면 아무것도 허용하지 않으며 재시작은 영향을 받지 않습니다.",
+      "targetsPlaceholder": "mos-*, immich_*",
+      "saveFailed": "호스트 제어 설정이 저장되지 않았습니다. 서버는 이전 값을 유지했습니다."
+    }
   },
   "notifications": {
     "title": "알림 메시지",
@@ -269,5 +317,41 @@
     "empty": "모든 워크스페이스가 GJC CLI처럼 묻지 않고 실행합니다.",
     "loading": "불러오는 중…",
     "error": "권한 정보를 불러오지 못했습니다."
+  },
+  "authentication": {
+    "title": "로그인",
+    "loadFailed": "이 설정을 보거나 바꾸려면 로그인하세요. 여기서 빈 기본값은 로그인이 꺼진 것처럼 보이게 합니다.",
+    "intro": "소유자가 OpenID Connect 공급자로 로그인하도록 허용합니다. 엔드포인트는 공급자의 검색 문서에서 가져옵니다.",
+    "enabled": "로그인 요구",
+    "enabledHint": "issuer, 클라이언트 ID, 시크릿이 모두 저장되기 전까지는 게이트가 꺼진 상태로 유지되어 오타로 잠기는 일이 없습니다.",
+    "issuer": "Issuer URL",
+    "issuerHint": "공급자의 기본 URL 또는 검색 문서의 전체 URL(…/.well-known/openid-configuration) 중 어느 것이든 됩니다.",
+    "clientId": "클라이언트 ID",
+    "clientSecret": "클라이언트 시크릿",
+    "secretKept": "시크릿이 저장되어 있습니다. 유지하려면 비워 두세요.",
+    "scopes": "스코프",
+    "scopesHint": "openid는 항상 요청되며 groups가 소속 클레임을 전달합니다. 별도의 관리자 스코프는 없습니다. 공급자 측 그룹 소속이 게이트입니다.",
+    "redirectUri": "리디렉션 URI",
+    "redirectUriHint": "비워 두면 요청에서 도출합니다: /api/auth/oidc/callback",
+    "allowedGroups": "허용된 그룹",
+    "allowedGroupsHint": "공급자가 groups 클레임에서 주장하는 이름을 쉼표로 구분해 지정합니다. 비어 있으면 공급자가 로그인시키는 모든 계정을 허용하며 groups 스코프는 자동으로 요청됩니다.",
+    "localTitle": "로컬 접근",
+    "localIntro": "외부에는 로그인을 유지하면서 내 네트워크의 머신은 바로 들어오게 합니다.",
+    "localAccess": "로그인 없이 로컬 네트워크 허용",
+    "localAccessHint": "아래 주소에서 온 요청은 로그인 게이트를 건너뜁니다. 목록이 비어 있으면 루프백과 사설 대역(10/8, 172.16/12, 192.168/16, fc00::/7)이 허용됩니다.",
+    "allowedIps": "허용된 IP 주소",
+    "allowedIpsHint": "쉼표로 구분된 주소 또는 IPv4 CIDR 대역, 예: 192.168.1.0/24, 10.0.0.5.",
+    "discover": "검색 테스트",
+    "save": "저장",
+    "saved": "저장됨",
+    "saveFailed": "설정을 저장하지 못했습니다.",
+    "discoveryFailed": "검색에 실패했습니다.",
+    "endpoints": "검색된 엔드포인트",
+    "session": "내 세션",
+    "sessionHint": "게이트가 꺼져 있는 동안에는 로그인이 필요하지 않습니다.",
+    "signedInAs": "{{name}}(으)로 로그인됨",
+    "signedOut": "로그인하지 않음",
+    "signIn": "로그인",
+    "signOut": "로그아웃"
   }
 }

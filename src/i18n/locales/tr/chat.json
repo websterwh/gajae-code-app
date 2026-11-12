@@ -40,7 +40,8 @@
       "info": "Uyarı",
       "warning": "Uyarı mesajı",
       "error": "Hata mesajı"
-    }
+    },
+    "retryFailedTurn": "Yeniden dene"
   },
   "tools": {
     "error": "Takım sorunu",
@@ -133,7 +134,9 @@
       "description": "Geçerli çalışma alanında kullanılacak beceriyi seçin.",
       "search": "Beceri ara",
       "noMatches": "Eşleşen beceri yok."
-    }
+    },
+    "agentConfigurationCurrent": "Geçerli",
+    "btw": "Bu arada — ajana bir not gönder"
   },
   "session": {
     "loading": {

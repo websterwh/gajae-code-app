@@ -426,41 +426,41 @@ test('proxyProvider and proxyMode: always rewrites built-in preset role selector
     baseUrl: https://proxy.example.com/v1
     api: openai-responses
     models:
-      - id: gpt-5.6-terra
-        name: Terra
-      - id: gpt-5.6-luna
+      - id: gpt-6-luna
         name: Luna
-      - id: gpt-5.6-sol
+      - id: gpt-6.1-sol
         name: Sol
+      - id: gpt-6-astra
+        name: Astra
 `, 'utf8');
 
   const catalog = await new GjcProviderModels(homeDir, async () => ({
     ok: true,
     result: {
       models: [
-        { value: 'test-proxy/gpt-5.6-terra', label: 'Terra' },
-        { value: 'test-proxy/gpt-5.6-luna', label: 'Luna' },
-        { value: 'test-proxy/gpt-5.6-sol', label: 'Sol' },
+        { value: 'test-proxy/gpt-6-luna', label: 'Luna' },
+        { value: 'test-proxy/gpt-6.1-sol', label: 'Sol' },
+        { value: 'test-proxy/gpt-6-astra', label: 'Astra' },
       ],
     },
   })).getSupportedModels();
 
   const codexMedium = catalog.OPTIONS.find((option) => option.value === 'profile:codex-medium');
   assert.ok(codexMedium, 'codex-medium preset should exist');
-  assert.equal(codexMedium.roles?.default, 'test-proxy/gpt-5.6-sol:low');
-  assert.equal(codexMedium.roles?.planner, 'test-proxy/gpt-5.6-terra:high');
-  assert.equal(codexMedium.roles?.executor, 'test-proxy/gpt-5.6-terra:low');
+  assert.equal(codexMedium.roles?.default, 'test-proxy/gpt-6.1-sol:low');
+  assert.equal(codexMedium.roles?.planner, 'test-proxy/gpt-6.1-sol:high');
+  assert.equal(codexMedium.roles?.executor, 'test-proxy/gpt-6.1-sol:low');
 
   const lunamaxxing = catalog.OPTIONS.find((option) => option.value === 'profile:lunamaxxing');
   assert.ok(lunamaxxing, 'lunamaxxing preset should exist');
-  assert.equal(lunamaxxing.roles?.default, 'test-proxy/gpt-5.6-luna:medium');
-  assert.equal(lunamaxxing.roles?.planner, 'test-proxy/gpt-5.6-luna:max');
+  assert.equal(lunamaxxing.roles?.default, 'test-proxy/gpt-6-luna:medium');
+  assert.equal(lunamaxxing.roles?.planner, 'test-proxy/gpt-6-luna:max');
 
   // Proxy models should be retained in MODELS
   const modelValues = catalog.MODELS?.map((m) => m.value) ?? [];
-  assert.ok(modelValues.includes('test-proxy/gpt-5.6-terra'));
-  assert.ok(modelValues.includes('test-proxy/gpt-5.6-luna'));
-  assert.ok(modelValues.includes('test-proxy/gpt-5.6-sol'));
+  assert.ok(modelValues.includes('test-proxy/gpt-6-luna'));
+  assert.ok(modelValues.includes('test-proxy/gpt-6.1-sol'));
+  assert.ok(modelValues.includes('test-proxy/gpt-6-astra'));
 });
 
 test('proxyProvider with proxyMode: fallback preserves directly authenticated provider selectors', async (t) => {
@@ -479,12 +479,12 @@ test('proxyProvider with proxyMode: fallback preserves directly authenticated pr
     baseUrl: https://proxy.example.com/v1
     api: openai-responses
     models:
-      - id: gpt-5.6-terra
-        name: Terra
-      - id: gpt-5.6-luna
+      - id: gpt-6-luna
         name: Luna
-      - id: gpt-5.6-sol
+      - id: gpt-6.1-sol
         name: Sol
+      - id: gpt-6-astra
+        name: Astra
 `, 'utf8');
 
   // openai-codex is directly authenticated in runtime
@@ -492,8 +492,8 @@ test('proxyProvider with proxyMode: fallback preserves directly authenticated pr
     ok: true,
     result: {
       models: [
-        { value: 'openai-codex/gpt-5.6-terra', label: 'Terra Direct' },
-        { value: 'test-proxy/gpt-5.6-luna', label: 'Luna Proxy' },
+        { value: 'openai-codex/gpt-6-astra', label: 'Astra Direct' },
+        { value: 'test-proxy/gpt-6-luna', label: 'Luna Proxy' },
       ],
     },
   })).getSupportedModels();
@@ -501,5 +501,5 @@ test('proxyProvider with proxyMode: fallback preserves directly authenticated pr
   const codexMedium = catalog.OPTIONS.find((option) => option.value === 'profile:codex-medium');
   assert.ok(codexMedium);
   // In fallback mode with openai-codex directly authenticated, openai-codex selectors should be preserved
-  assert.equal(codexMedium.roles?.default, 'openai-codex/gpt-5.6-sol:low');
+  assert.equal(codexMedium.roles?.default, 'openai-codex/gpt-6.1-sol:low');
 });

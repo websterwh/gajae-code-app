@@ -40,7 +40,8 @@
       "info": "通知",
       "warning": "提示",
       "error": "系统错误"
-    }
+    },
+    "retryFailedTurn": "重试"
   },
   "tools": {
     "error": "工具问题",
@@ -133,7 +134,9 @@
       "description": "选择要在当前工作区中使用的技能。",
       "search": "搜索技能",
       "noMatches": "没有匹配的技能。"
-    }
+    },
+    "agentConfigurationCurrent": "当前",
+    "btw": "顺便说一句 — 给智能体发一条附注"
   },
   "session": {
     "loading": {

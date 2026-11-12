@@ -24,11 +24,11 @@ export const GJC_BUILTIN_MODEL_PROFILES: readonly GjcBuiltinModelProfile[] = [
       "label": "Codex Eco",
       "group": "CODEX",
       "roles": {
-          "default": "openai-codex/gpt-5.6-terra:low",
-          "planner": "openai-codex/gpt-5.6-luna:high",
-          "executor": "openai-codex/gpt-5.6-luna:low",
-          "architect": "openai-codex/gpt-5.6-terra:high",
-          "critic": "openai-codex/gpt-5.6-terra:xhigh"
+          "default": "openai-codex/gpt-6-luna:low",
+          "planner": "openai-codex/gpt-6-luna:high",
+          "executor": "openai-codex/gpt-6-luna:low",
+          "architect": "openai-codex/gpt-6-luna:high",
+          "critic": "openai-codex/gpt-6-luna:xhigh"
       }
   },
   {
@@ -36,11 +36,11 @@ export const GJC_BUILTIN_MODEL_PROFILES: readonly GjcBuiltinModelProfile[] = [
       "label": "Codex Medium",
       "group": "CODEX",
       "roles": {
-          "default": "openai-codex/gpt-5.6-sol:low",
-          "planner": "openai-codex/gpt-5.6-terra:high",
-          "executor": "openai-codex/gpt-5.6-terra:low",
-          "architect": "openai-codex/gpt-5.6-sol:high",
-          "critic": "openai-codex/gpt-5.6-sol:xhigh"
+          "default": "openai-codex/gpt-6.1-sol:low",
+          "planner": "openai-codex/gpt-6.1-sol:high",
+          "executor": "openai-codex/gpt-6.1-sol:low",
+          "architect": "openai-codex/gpt-6.1-sol:high",
+          "critic": "openai-codex/gpt-6.1-sol:xhigh"
       }
   },
   {
@@ -48,11 +48,11 @@ export const GJC_BUILTIN_MODEL_PROFILES: readonly GjcBuiltinModelProfile[] = [
       "label": "Codex Pro",
       "group": "CODEX",
       "roles": {
-          "default": "openai-codex/gpt-5.6-sol:medium",
-          "planner": "openai-codex/gpt-5.6-sol:high",
-          "executor": "openai-codex/gpt-5.6-terra:medium",
-          "architect": "openai-codex/gpt-5.6-sol:xhigh",
-          "critic": "openai-codex/gpt-5.6-sol:max"
+          "default": "openai-codex/gpt-6.1-sol:medium",
+          "planner": "openai-codex/gpt-6.1-sol:high",
+          "executor": "openai-codex/gpt-6.1-sol:medium",
+          "architect": "openai-codex/gpt-6.1-sol:xhigh",
+          "critic": "openai-codex/gpt-6.1-sol:max"
       }
   },
   {
@@ -60,11 +60,11 @@ export const GJC_BUILTIN_MODEL_PROFILES: readonly GjcBuiltinModelProfile[] = [
       "label": "Lunamaxxing",
       "group": "CODEX",
       "roles": {
-          "default": "openai-codex/gpt-5.6-luna:medium",
-          "planner": "openai-codex/gpt-5.6-luna:max",
-          "executor": "openai-codex/gpt-5.6-luna:xhigh",
-          "architect": "openai-codex/gpt-5.6-luna:max",
-          "critic": "openai-codex/gpt-5.6-luna:max"
+          "default": "openai-codex/gpt-6-luna:medium",
+          "planner": "openai-codex/gpt-6-luna:max",
+          "executor": "openai-codex/gpt-6-luna:xhigh",
+          "architect": "openai-codex/gpt-6-luna:max",
+          "critic": "openai-codex/gpt-6-luna:max"
       }
   },
   {
@@ -74,9 +74,9 @@ export const GJC_BUILTIN_MODEL_PROFILES: readonly GjcBuiltinModelProfile[] = [
       "roles": {
           "default": "openai-codex/gpt-6-astra:medium",
           "planner": "openai-codex/gpt-6-astra:xhigh",
-          "executor": "openai-codex/gpt-5.6-luna:xhigh",
-          "architect": "openai-codex/gpt-5.6-terra:xhigh",
-          "critic": "openai-codex/gpt-5.6-sol:high"
+          "executor": "openai-codex/gpt-6-luna:xhigh",
+          "architect": "openai-codex/gpt-6.1-sol:xhigh",
+          "critic": "openai-codex/gpt-6.1-sol:high"
       }
   },
   {
@@ -86,9 +86,9 @@ export const GJC_BUILTIN_MODEL_PROFILES: readonly GjcBuiltinModelProfile[] = [
       "roles": {
           "default": "openai-codex/gpt-6-astra:medium",
           "planner": "openai-codex/gpt-6-astra:xhigh",
-          "executor": "openai-codex/gpt-5.6-luna:max",
-          "architect": "openai-codex/gpt-5.6-terra:xhigh",
-          "critic": "openai-codex/gpt-5.6-sol:xhigh"
+          "executor": "openai-codex/gpt-6-luna:max",
+          "architect": "openai-codex/gpt-6.1-sol:xhigh",
+          "critic": "openai-codex/gpt-6.1-sol:xhigh"
       }
   },
   {
@@ -97,8 +97,8 @@ export const GJC_BUILTIN_MODEL_PROFILES: readonly GjcBuiltinModelProfile[] = [
       "group": "CODEX",
       "roles": {
           "default": "openai-codex/gpt-6-astra:medium",
-          "planner": "openai-codex/gpt-5.6-sol:max",
-          "executor": "openai-codex/gpt-5.6-sol:max",
+          "planner": "openai-codex/gpt-6.1-sol:max",
+          "executor": "openai-codex/gpt-6.1-sol:max",
           "architect": "openai-codex/gpt-6-astra:max",
           "critic": "openai-codex/gpt-6-astra:max"
       }
@@ -336,11 +336,11 @@ export const GJC_BUILTIN_MODEL_PROFILES: readonly GjcBuiltinModelProfile[] = [
       "label": "Claude Opus",
       "group": "CLAUDE",
       "roles": {
-          "default": "anthropic/claude-opus-5:xhigh",
-          "planner": "anthropic/claude-opus-5:low",
-          "executor": "anthropic/claude-sonnet-5",
-          "architect": "anthropic/claude-opus-5:xhigh",
-          "critic": "anthropic/claude-opus-5:high"
+          "default": "anthropic/claude-opus-5-5:medium",
+          "planner": "anthropic/claude-opus-5-5:medium",
+          "executor": "anthropic/claude-sonnet-5-5",
+          "architect": "anthropic/claude-opus-5-5:high",
+          "critic": "anthropic/claude-opus-5-5:high"
       }
   },
   {
@@ -350,7 +350,7 @@ export const GJC_BUILTIN_MODEL_PROFILES: readonly GjcBuiltinModelProfile[] = [
       "roles": {
           "default": "anthropic/claude-fable-5-1:xhigh",
           "planner": "anthropic/claude-fable-5-1:low",
-          "executor": "anthropic/claude-sonnet-5",
+          "executor": "anthropic/claude-sonnet-5-5",
           "architect": "anthropic/claude-fable-5-1:xhigh",
           "critic": "anthropic/claude-fable-5-1:high"
       }
@@ -720,11 +720,11 @@ export const GJC_BUILTIN_MODEL_PROFILES: readonly GjcBuiltinModelProfile[] = [
       "label": "Opus + Codex",
       "group": "COMBOS",
       "roles": {
-          "default": "anthropic/claude-opus-5:xhigh",
-          "planner": "anthropic/claude-sonnet-5",
-          "executor": "openai-codex/gpt-5.6-terra:low",
-          "architect": "openai-codex/gpt-5.6-sol:high",
-          "critic": "openai-codex/gpt-5.6-sol:xhigh"
+          "default": "anthropic/claude-opus-5-5:medium",
+          "planner": "anthropic/claude-sonnet-5-5",
+          "executor": "openai-codex/gpt-6.1-sol:low",
+          "architect": "openai-codex/gpt-6.1-sol:high",
+          "critic": "openai-codex/gpt-6.1-sol:xhigh"
       }
   },
   {
@@ -732,10 +732,10 @@ export const GJC_BUILTIN_MODEL_PROFILES: readonly GjcBuiltinModelProfile[] = [
       "label": "Codex + OpenCodeGo",
       "group": "COMBOS",
       "roles": {
-          "default": "openai-codex/gpt-5.6-sol:low",
+          "default": "openai-codex/gpt-6.1-sol:low",
           "planner": "opencode-go/kimi-k3",
           "executor": "opencode-go/deepseek-v4-pro",
-          "architect": "openai-codex/gpt-5.6-sol:high",
+          "architect": "openai-codex/gpt-6.1-sol:high",
           "critic": "opencode-go/mimo-v2.5-pro"
       }
   },
@@ -745,10 +745,10 @@ export const GJC_BUILTIN_MODEL_PROFILES: readonly GjcBuiltinModelProfile[] = [
       "group": "COMBOS",
       "roles": {
           "default": "anthropic/claude-fable-5-1:high",
-          "planner": "anthropic/claude-opus-5:medium",
-          "executor": "openai-codex/gpt-5.6-terra:medium",
-          "architect": "openai-codex/gpt-5.6-sol:xhigh",
-          "critic": "anthropic/claude-opus-5:high"
+          "planner": "anthropic/claude-opus-5-5:medium",
+          "executor": "openai-codex/gpt-6.1-sol:medium",
+          "architect": "openai-codex/gpt-6.1-sol:xhigh",
+          "critic": "anthropic/claude-opus-5-5:high"
       }
   },
   {
@@ -758,7 +758,7 @@ export const GJC_BUILTIN_MODEL_PROFILES: readonly GjcBuiltinModelProfile[] = [
       "roles": {
           "default": "openai-codex/gpt-6-astra:medium",
           "planner": "openai-codex/gpt-6-astra:xhigh",
-          "executor": "openai-codex/gpt-5.6-luna:max",
+          "executor": "openai-codex/gpt-6-luna:max",
           "architect": "anthropic/claude-fable-5-1:xhigh",
           "critic": "anthropic/claude-fable-5-1:xhigh"
       }
@@ -769,10 +769,10 @@ export const GJC_BUILTIN_MODEL_PROFILES: readonly GjcBuiltinModelProfile[] = [
       "group": "COMBOS",
       "roles": {
           "default": "openai-codex/gpt-6-astra:medium",
-          "planner": "anthropic/claude-opus-5:medium",
-          "executor": "openai-codex/gpt-5.6-luna:max",
+          "planner": "anthropic/claude-opus-5-5:medium",
+          "executor": "openai-codex/gpt-6-luna:max",
           "architect": "anthropic/claude-fable-5-1:xhigh",
           "critic": "anthropic/claude-fable-5-1:xhigh"
       }
-  }
+  },
 ];

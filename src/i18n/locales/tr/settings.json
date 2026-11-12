@@ -89,13 +89,14 @@
     "enableDescription": "Mesajlara mikrofon ve sesli okuma kontrolleri ekleyin.",
     "backendTitle": "Arka uç",
     "backendDescription": "OpenAI, Groq veya LocalAI, Speaches veya Kokoro-FastAPI gibi yerel bir hizmeti kullanın. Sunucu varsayılanı için boş bırakın.",
-    "baseUrl": "Hizmet URL'si",
-    "apiKey": "Hizmet API anahtarı",
     "sttModel": "Konuşma tanıma modeli",
-    "ttsModel": "Konuşma sentezi modeli",
     "voice": "Ses",
     "format": "Ses dosyası formatı",
-    "note": "Tarayıcı özel bir temel URL ile doğrudan iletişim kurar, dolayısıyla CORS'a izin vermesi gerekir. Sunucu arka ucunu kullanmak için boş bırakın."
+    "note": "Tarayıcı özel bir temel URL ile doğrudan iletişim kurar, dolayısıyla CORS'a izin vermesi gerekir. Sunucu arka ucunu kullanmak için boş bırakın.",
+    "sttBaseUrl": "Konuşma tanıma URL’si",
+    "ttsBaseUrl": "Konuşma sentezi URL’si",
+    "sttApiKey": "Konuşma tanıma API anahtarı",
+    "ttsApiKey": "Konuşma sentezi API anahtarı"
   },
   "preferences": {
     "sections": {
@@ -124,7 +125,8 @@
     "notifications": "Bildirimler",
     "automation": "Otomasyon",
     "about": "Hakkında",
-    "permissions": "İzinler"
+    "permissions": "İzinler",
+    "authentication": "Kimlik doğrulama"
   },
   "automation": {
     "browserBackend": {
@@ -153,7 +155,22 @@
       "activityFrameDescription": "Ajanın bulunduğu sayfanın küçük bir görüntüsünü, satır açıkken saniyede bir kadar yenileyerek gösterir. Oturumu açık tarayıcının küçültülmüş bir görüntüsüdür, yalnızca satır genişletilmişken alınır ve saklanmaz.",
       "saveFailed": "Tarayıcı arka ucu kaydedilemedi."
     },
-    "builtinBrowser": { "title": "Yerleşik tarayıcı", "description": "Seçilen GJC arka ucundan bağımsız olarak yerleşik tarayıcıyı genişliği ayarlanabilir sağ panelde açın.", "label": "Yerleşik tarayıcı", "note": "Yalnızca macOS masaüstü uygulamasında kullanılabilir. Kapatılana kadar tarayıcının sahibi bir oturumdur. HTTP(S) sohbet bağlantıları her zaman harici tarayıcıda açılır.", "open": "Tarayıcıyı aç", "opened": "Yerleşik tarayıcı açıldı.", "failed": "Tarayıcı açılamadı.", "errors": { "busy": "Yerleşik tarayıcı zaten kullanımda. Bu oturum için açmadan önce kapatın.", "unavailable": "Yerleşik tarayıcı kullanılamıyor. Uygulama sunucusunun yeniden bağlanmasını bekleyip tekrar deneyin.", "invalidUrl": "Bu adres açılamıyor. Bir HTTP veya HTTPS adresi kullanın.", "stale": "İstek tamamlanmadan tarayıcı sayfası değişti. Tekrar deneyin.", "failed": "Yerleşik tarayıcı açılamadı. Tekrar deneyin." } },
+    "builtinBrowser": {
+      "title": "Yerleşik tarayıcı",
+      "description": "Seçilen GJC arka ucundan bağımsız olarak yerleşik tarayıcıyı genişliği ayarlanabilir sağ panelde açın.",
+      "label": "Yerleşik tarayıcı",
+      "note": "Yalnızca macOS masaüstü uygulamasında kullanılabilir. Kapatılana kadar tarayıcının sahibi bir oturumdur. HTTP(S) sohbet bağlantıları her zaman harici tarayıcıda açılır.",
+      "open": "Tarayıcıyı aç",
+      "opened": "Yerleşik tarayıcı açıldı.",
+      "failed": "Tarayıcı açılamadı.",
+      "errors": {
+        "busy": "Yerleşik tarayıcı zaten kullanımda. Bu oturum için açmadan önce kapatın.",
+        "unavailable": "Yerleşik tarayıcı kullanılamıyor. Uygulama sunucusunun yeniden bağlanmasını bekleyip tekrar deneyin.",
+        "invalidUrl": "Bu adres açılamıyor. Bir HTTP veya HTTPS adresi kullanın.",
+        "stale": "İstek tamamlanmadan tarayıcı sayfası değişti. Tekrar deneyin.",
+        "failed": "Yerleşik tarayıcı açılamadı. Tekrar deneyin."
+      }
+    },
     "title": "Tarayıcı ve yerel uygulamalar",
     "description": "Ayrı olarak yüklenen CUA Sürücüsünü inceleyin.",
     "computerUse": {
@@ -173,7 +190,38 @@
     "noGrants": "Kaydedilmiş otomasyon onayı yok.",
     "origin": "Sitenin kökeni",
     "application": "Masaüstü uygulaması",
-    "revoke": "Onayı kaldır"
+    "revoke": "Onayı kaldır",
+    "hostControl": {
+      "label": "Ana makine denetimi",
+      "description": "Bu kapsayıcının çalıştığı makinede, yanına bağlanan Docker soketi üzerinden işlem yapın.",
+      "enableLabel": "Ana makine denetimini etkinleştir",
+      "enableDescription": "Kapatmak aşağıdaki tüm izinleri kaldırır.",
+      "statusFailed": "Ana makine durumu okunamadı, bu nedenle bu anahtarlar etkisiz; oturum açıp yeniden yükleyin.",
+      "unavailable": "GAJAE_HOST_CONTROL=1 ayarlayın, Docker soketini bağlayın ve kapsayıcıyı yeniden başlatın.",
+      "socketReachable": "Sokete {{path}} üzerinden erişilebiliyor.",
+      "socketUnreachable": "Sokete {{path}} üzerinden erişilemiyor; bağlamayı ve arka plan hizmetini kontrol edin.",
+      "hostInfo": "Ana makine ve arka plan hizmeti bilgileri",
+      "hostInfoDescription": "Docker sürümü, çekirdek ve sayımlar ile bu ana makineyi yöneten şey.",
+      "detect": "Algıla",
+      "detecting": "Algılanıyor...",
+      "detectFailed": "Ana makine okunamadı; yukarıdaki anahtarı ve soketi kontrol edin.",
+      "dockerGroup": "Docker",
+      "dockerGroupDescription": "Aracının kapsayıcılarla neler yapabileceğini seçmek için açın.",
+      "containers": "Kapsayıcıları görüntüle",
+      "containersDescription": "Her kapsayıcı görüntüsü, durumu ve hâliyle.",
+      "restart": "Kapsayıcıyı yeniden başlat",
+      "restartDescription": "Aşağıdaki listeyle sınırlı olmadan tek bir kapsayıcıyı adıyla yeniden başlatın.",
+      "docker": "Kapsayıcıları başlat, durdur ve duraklat",
+      "dockerDescription": "Aşağıdaki listedeki kapsayıcılar için durum değişiklikleri; hiçbir şey oluşturulmaz veya silinmez.",
+      "shell": "İzin verilen komutları çalıştır",
+      "shellDescription": "Listedeki bir kapsayıcıda tek bir sabit komut; bir fiil seçersiniz, asla bir komut satırı değil.",
+      "files": "Kapsayıcı içindeki dosyaları oku",
+      "filesDescription": "Tek bir dosya veya tek bir dizin, salt okunur, en fazla 256 KiB.",
+      "targets": "İzin verilen kapsayıcılar",
+      "targetsDescription": "mos-*, immich_* gibi virgülle ayrılmış ad kalıpları; boş hiçbir şey demektir ve yeniden başlatma bundan etkilenmez.",
+      "targetsPlaceholder": "mos-*, immich_*",
+      "saveFailed": "Ana makine denetimi ayarları kaydedilmedi; sunucu önceki değerlerini korudu."
+    }
   },
   "notifications": {
     "title": "Uygulama bildirimleri",
@@ -269,5 +317,41 @@
     "empty": "Her çalışma alanı, GJC CLI gibi sormadan çalışır.",
     "loading": "Yükleniyor…",
     "error": "İzinler yüklenemedi."
+  },
+  "authentication": {
+    "title": "Oturum açma",
+    "loadFailed": "Bu ayarları görmek veya değiştirmek için oturum açın. Buradaki boş varsayılanlar, oturum açma kapalıymış gibi görünürdü.",
+    "intro": "Sahibin bir OpenID Connect sağlayıcısıyla oturum açmasına izin verin. Uç noktalar sağlayıcının keşif belgesinden gelir.",
+    "enabled": "Oturum açmayı zorunlu kıl",
+    "enabledHint": "Sağlayıcı, istemci kimliği ve gizli anahtar birlikte kaydedilene kadar kapı kapalı kalır; böylece bir yazım hatası sizi dışarıda bırakamaz.",
+    "issuer": "Sağlayıcı URL’si",
+    "issuerHint": "Sağlayıcının temel URL’si veya keşif belgesinin tam URL’si (…/.well-known/openid-configuration) — ikisi de kabul edilir.",
+    "clientId": "İstemci kimliği",
+    "clientSecret": "İstemci gizli anahtarı",
+    "secretKept": "Bir gizli anahtar kayıtlı. Korumak için boş bırakın.",
+    "scopes": "Kapsamlar",
+    "scopesHint": "openid her zaman istenir ve groups üyelik iddiasını taşır. Ayrı bir yönetici kapsamı yoktur: sağlayıcınızdaki grup üyeliği kapıdır.",
+    "redirectUri": "Yönlendirme URI’si",
+    "redirectUriHint": "İstekten türetmek için boş bırakın: /api/auth/oidc/callback",
+    "allowedGroups": "İzin verilen gruplar",
+    "allowedGroupsHint": "Sağlayıcının groups iddiasında belirttiği, virgülle ayrılmış adlar. Boş, sağlayıcının oturum açtırdığı her hesabı kabul eder; groups kapsamı otomatik istenir.",
+    "localTitle": "Yerel erişim",
+    "localIntro": "Dış dünya için oturum açmayı korurken kendi ağınızdaki makineler doğrudan girsin.",
+    "localAccess": "Yerel ağlara oturum açmadan izin ver",
+    "localAccessHint": "Aşağıdaki adreslerden gelen istekler oturum açma kapısını atlar. Liste boşsa geri döngü ve özel aralıklar (10/8, 172.16/12, 192.168/16, fc00::/7) izinlidir.",
+    "allowedIps": "İzin verilen IP adresleri",
+    "allowedIpsHint": "Virgülle ayrılmış adresler veya IPv4 CIDR aralıkları, ör. 192.168.1.0/24, 10.0.0.5.",
+    "discover": "Keşfi dene",
+    "save": "Kaydet",
+    "saved": "Kaydedildi",
+    "saveFailed": "Ayarlar kaydedilemedi.",
+    "discoveryFailed": "Keşif başarısız oldu.",
+    "endpoints": "Bulunan uç noktalar",
+    "session": "Oturumunuz",
+    "sessionHint": "Kapı kapalıyken oturum açma gerekmez.",
+    "signedInAs": "{{name}} olarak oturum açıldı",
+    "signedOut": "Oturum açılmadı",
+    "signIn": "Oturum aç",
+    "signOut": "Oturumu kapat"
   }
 }

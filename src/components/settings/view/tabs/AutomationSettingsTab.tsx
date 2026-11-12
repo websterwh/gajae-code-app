@@ -659,6 +659,25 @@ export default function AutomationSettingsTab() {
             />
           </SettingsRow>
         </SettingsCard>
+        {/* The driver's own report: which agent-desktop this host runs and
+           whether the two permissions it needs are granted. It is diagnostics,
+           not a switch, so it stays visible on plain web where launching the
+           desktop app is hidden. */}
+        {status?.cua?.installed ? (
+          <SettingsCard className="mt-3">
+            <div className="p-4">
+              <p className="text-sm font-medium text-foreground">
+                {status.cua.version ? `${status.cua.version} · ${status.cua.daemon}` : status.cua.daemon}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t('automation.accessibility')}: {t(`automation.${status.cua.accessibility ? 'granted' : 'missing'}`)}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {t('automation.screenRecording')}: {t(`automation.${status.cua.screenRecording ? 'granted' : 'missing'}`)}
+              </p>
+            </div>
+          </SettingsCard>
+        ) : null}
         <SettingsCard className="mt-3">
           <div className="flex items-center justify-between gap-4 p-4">
             <div>

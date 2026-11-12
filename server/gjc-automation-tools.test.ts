@@ -205,7 +205,7 @@ test('agent computer asks for application access before controlling it', async (
     assert.ok(computer);
     await computer.execute(
       'tool-call-2',
-      { action: 'click', arguments: { pid: 42, x: 10, y: 10 } },
+      { action: 'desktop_click', arguments: { pid: 42, x: 10, y: 10 } },
       undefined,
     );
 
@@ -264,7 +264,7 @@ test('agent computer preserves MCP image and text blocks without duplicating lar
     assert.ok(computer);
     const result = await computer.execute(
       'tool-call-large-output',
-      { action: 'get_window_state', arguments: { pid: 42, window_id: 7 } },
+      { action: 'desktop_snapshot', arguments: { pid: 42, window_id: 7 } },
       undefined,
     ) as { content: Array<Record<string, unknown>>; details: Record<string, unknown> };
 
@@ -325,7 +325,7 @@ test('agent computer exposes compact structured metadata even when the original 
     assert.ok(computer);
     const result = await computer.execute(
       'tool-call-small-output',
-      { action: 'get_window_state', arguments: { pid: 42, window_id: 7 } },
+      { action: 'desktop_snapshot', arguments: { pid: 42, window_id: 7 } },
       undefined,
     ) as { content: Array<Record<string, unknown>>; details: Record<string, unknown> };
 
@@ -499,7 +499,7 @@ test('bypass materializes a session application grant instead of skipping server
     const { computer } = createGjcAutomationTools('bypass-computer', {
       async select() { assert.fail('bypass must not ask'); },
     }, { socketPath: bridge.socketPath, token: TEST_TOKEN }, 'bypass');
-    await computer!.execute('click', { action: 'click', arguments: { pid: 42, x: 10, y: 20 } }, undefined);
+    await computer!.execute('click', { action: 'desktop_click', arguments: { pid: 42, x: 10, y: 20 } }, undefined);
 
     assert.deepEqual(bridge.requests.map((request) => request.operation), ['authorize', 'authorize', undefined]);
     assert.ok(bridge.requests.every((request) => request.sessionId === 'bypass-computer'));
@@ -524,8 +524,8 @@ test('bypass never writes a persistent always grant on the user\u2019s behalf', 
     const { computer } = createGjcAutomationTools('bypass-persistence', {
       async select() { assert.fail('bypass must not ask'); },
     }, { socketPath: bridge.socketPath, token: TEST_TOKEN }, 'bypass');
-    await computer!.execute('a', { action: 'click', arguments: { pid: 42, x: 1, y: 1 } }, undefined);
-    await computer!.execute('b', { action: 'type_text', arguments: { pid: 42, text: 'hi' } }, undefined);
+    await computer!.execute('a', { action: 'desktop_click', arguments: { pid: 42, x: 1, y: 1 } }, undefined);
+    await computer!.execute('b', { action: 'desktop_type', arguments: { pid: 42, text: 'hi' } }, undefined);
     assert.ok(!scopes.includes('always'), 'a trusted run must not persist an always grant');
     assert.deepEqual([...new Set(scopes)], ['session']);
   } finally { await bridge.close(); }
@@ -540,7 +540,7 @@ test('a denied standard-mode computer approval still fails closed', async () => 
       async select() { return 'Deny'; },
     }, { socketPath: bridge.socketPath, token: TEST_TOKEN }, 'ask');
     await assert.rejects(
-      computer!.execute('click', { action: 'click', arguments: { pid: 42, x: 1, y: 1 } }, undefined),
+      computer!.execute('click', { action: 'desktop_click', arguments: { pid: 42, x: 1, y: 1 } }, undefined),
       /Computer access to TextEdit was denied/u,
     );
     assert.deepEqual(bridge.requests.map((request) => request.operation), ['authorize']);
@@ -599,7 +599,7 @@ test('bypass preserves backend authorization failures', async () => {
     const { computer } = createGjcAutomationTools('invalid-target', {
       async select() { assert.fail('must preserve the backend rejection'); },
     }, { socketPath: rejected.socketPath, token: TEST_TOKEN }, 'bypass');
-    await assert.rejects(computer!.execute('bad-target', { action: 'click', arguments: { pid: 42 } }, undefined), /resolvable application/);
+    await assert.rejects(computer!.execute('bad-target', { action: 'desktop_click', arguments: { pid: 42 } }, undefined), /resolvable application/);
     assert.equal(rejected.requests.length, 1);
   } finally { await rejected.close(); }
 });
@@ -612,7 +612,7 @@ test('already-cancelled bypass tools do not connect or authorize any action', as
     }, { socketPath: bridge.socketPath, token: TEST_TOKEN }, 'bypass');
     const signal = AbortSignal.abort();
     await assert.rejects(tools.browser!.execute('cancelled-browser', { action: 'open', url: 'https://example.com' }, signal), /cancelled/);
-    await assert.rejects(tools.computer!.execute('cancelled-computer', { action: 'click', arguments: { pid: 42 } }, signal), /cancelled/);
+    await assert.rejects(tools.computer!.execute('cancelled-computer', { action: 'desktop_click', arguments: { pid: 42 } }, signal), /cancelled/);
     assert.deepEqual(bridge.requests, []);
   } finally { await bridge.close(); }
 });

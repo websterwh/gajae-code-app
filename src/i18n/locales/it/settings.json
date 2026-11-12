@@ -89,13 +89,14 @@
     "enableDescription": "Aggiungi controlli per microfono e lettura ad alta voce ai messaggi.",
     "backendTitle": "Backend",
     "backendDescription": "Utilizza OpenAI, Groq o un servizio locale come LocalAI, Speaches o Kokoro-FastAPI. Lascia vuoto per l'impostazione predefinita del server.",
-    "baseUrl": "URL del servizio",
-    "apiKey": "Chiave di servizio API",
     "sttModel": "Modello di riconoscimento vocale",
-    "ttsModel": "Modello di sintesi vocale",
     "voice": "Voce",
     "format": "Formato del file audio",
-    "note": "Il browser contatta direttamente un URL di base personalizzato e deve quindi consentire CORS. Lascia vuoto questo campo per usare il backend del server."
+    "note": "Il browser contatta direttamente un URL di base personalizzato e deve quindi consentire CORS. Lascia vuoto questo campo per usare il backend del server.",
+    "sttBaseUrl": "URL di riconoscimento vocale",
+    "ttsBaseUrl": "URL di sintesi vocale",
+    "sttApiKey": "Chiave API per il riconoscimento vocale",
+    "ttsApiKey": "Chiave API per la sintesi vocale"
   },
   "preferences": {
     "sections": {
@@ -124,7 +125,8 @@
     "notifications": "Avvisi",
     "automation": "Automazione",
     "about": "Circa",
-    "permissions": "Permessi"
+    "permissions": "Permessi",
+    "authentication": "Autenticazione"
   },
   "automation": {
     "browserBackend": {
@@ -153,7 +155,22 @@
       "activityFrameDescription": "Aggiunge una piccola immagine della pagina su cui si trova l'agente, aggiornata circa una volta al secondo mentre la riga è aperta. È una cattura ridotta del tuo browser con la sessione attiva, scattata solo a riga espansa e mai memorizzata.",
       "saveFailed": "Impossibile salvare il backend del browser."
     },
-    "builtinBrowser": { "title": "Browser integrato", "description": "Apri il browser integrato in un pannello destro ridimensionabile, indipendentemente dal backend GJC selezionato.", "label": "Browser integrato", "note": "Disponibile solo nell’app macOS. Una sessione mantiene la proprietà del browser fino alla chiusura. I link HTTP(S) della chat si aprono sempre nel browser esterno.", "open": "Apri browser", "opened": "Browser integrato aperto.", "failed": "Impossibile aprire il browser.", "errors": { "busy": "Il browser integrato è già in uso. Chiudilo prima di aprirlo per questa sessione.", "unavailable": "Il browser integrato non è disponibile. Attendi che il server dell’app si riconnetta e riprova.", "invalidUrl": "Questo indirizzo non può essere aperto. Usa un indirizzo HTTP o HTTPS.", "stale": "La pagina del browser è cambiata prima del completamento della richiesta. Riprova.", "failed": "Impossibile aprire il browser integrato. Riprova." } },
+    "builtinBrowser": {
+      "title": "Browser integrato",
+      "description": "Apri il browser integrato in un pannello destro ridimensionabile, indipendentemente dal backend GJC selezionato.",
+      "label": "Browser integrato",
+      "note": "Disponibile solo nell’app macOS. Una sessione mantiene la proprietà del browser fino alla chiusura. I link HTTP(S) della chat si aprono sempre nel browser esterno.",
+      "open": "Apri browser",
+      "opened": "Browser integrato aperto.",
+      "failed": "Impossibile aprire il browser.",
+      "errors": {
+        "busy": "Il browser integrato è già in uso. Chiudilo prima di aprirlo per questa sessione.",
+        "unavailable": "Il browser integrato non è disponibile. Attendi che il server dell’app si riconnetta e riprova.",
+        "invalidUrl": "Questo indirizzo non può essere aperto. Usa un indirizzo HTTP o HTTPS.",
+        "stale": "La pagina del browser è cambiata prima del completamento della richiesta. Riprova.",
+        "failed": "Impossibile aprire il browser integrato. Riprova."
+      }
+    },
     "title": "Browser e applicazioni native",
     "description": "Controlla il CUA Driver installato separatamente.",
     "computerUse": {
@@ -173,7 +190,38 @@
     "noGrants": "Nessuna approvazione di automazione salvata.",
     "origin": "Origine del sito",
     "application": "Applicazione desktop",
-    "revoke": "Rimuovi l'approvazione"
+    "revoke": "Rimuovi l'approvazione",
+    "hostControl": {
+      "label": "Controllo host",
+      "description": "Agisci sulla macchina su cui gira questo container, tramite il socket Docker montato accanto.",
+      "enableLabel": "Abilita il controllo host",
+      "enableDescription": "Disattivandolo cadono tutte le autorizzazioni sottostanti.",
+      "statusFailed": "Impossibile leggere lo stato dell’host, quindi questi interruttori sono inerti; accedi e ricarica.",
+      "unavailable": "Imposta GAJAE_HOST_CONTROL=1, monta il socket Docker e riavvia il container.",
+      "socketReachable": "Socket raggiungibile su {{path}}.",
+      "socketUnreachable": "Socket non raggiungibile su {{path}}; controlla il mount e il daemon.",
+      "hostInfo": "Informazioni su host e daemon",
+      "hostInfoDescription": "Versione, kernel e conteggi di Docker, e cosa gestisce questo host.",
+      "detect": "Rileva",
+      "detecting": "Rilevamento...",
+      "detectFailed": "Impossibile leggere l’host; controlla l’interruttore sopra e il socket.",
+      "dockerGroup": "Docker",
+      "dockerGroupDescription": "Attiva per scegliere cosa l’agente può fare con i container.",
+      "containers": "Mostra container",
+      "containersDescription": "Ogni container con immagine, stato e condizione.",
+      "restart": "Riavvia un container",
+      "restartDescription": "Riavvia un container per nome, senza i limiti dell’elenco sottostante.",
+      "docker": "Avvia, ferma e sospendi container",
+      "dockerDescription": "Cambi di stato per i container dell’elenco sottostante; nulla viene creato o rimosso.",
+      "shell": "Esegui comandi consentiti",
+      "shellDescription": "Un comando fisso dentro un container dell’elenco; scegli un verbo, mai una riga di comando.",
+      "files": "Leggi file nei container",
+      "filesDescription": "Un file o una directory, in sola lettura, fino a 256 KiB.",
+      "targets": "Container consentiti",
+      "targetsDescription": "Schemi di nomi separati da virgole come mos-*, immich_*; vuoto significa niente, e il riavvio non ne è toccato.",
+      "targetsPlaceholder": "mos-*, immich_*",
+      "saveFailed": "Le impostazioni del controllo host non sono state salvate; il server ha mantenuto i valori precedenti."
+    }
   },
   "notifications": {
     "title": "Avvisi",
@@ -269,5 +317,41 @@
     "empty": "Ogni spazio di lavoro viene eseguito senza chiedere, come la CLI GJC.",
     "loading": "Caricamento…",
     "error": "Impossibile caricare i permessi."
+  },
+  "authentication": {
+    "title": "Accesso",
+    "loadFailed": "Accedi per vedere o modificare queste impostazioni. Valori predefiniti vuoti qui farebbero sembrare l’accesso disattivato.",
+    "intro": "Consenti al proprietario di accedere con un provider OpenID Connect. Gli endpoint provengono dal documento di discovery del provider.",
+    "enabled": "Richiedi l’accesso",
+    "enabledHint": "Finché issuer, client ID e secret non sono tutti salvati, il controllo resta disattivo così un refuso non può bloccarti fuori.",
+    "issuer": "URL dell’issuer",
+    "issuerHint": "URL di base del provider, oppure l’URL completo del documento di discovery (…/.well-known/openid-configuration): entrambi sono accettati.",
+    "clientId": "Client ID",
+    "clientSecret": "Client secret",
+    "secretKept": "Un secret è salvato. Lascia vuoto per conservarlo.",
+    "scopes": "Scope",
+    "scopesHint": "openid viene sempre richiesto, e groups porta l’attestazione di appartenenza. Non esiste uno scope admin separato: l’appartenenza ai gruppi presso il provider è il controllo.",
+    "redirectUri": "URI di reindirizzamento",
+    "redirectUriHint": "Lascia vuoto per ricavarlo dalla richiesta: /api/auth/oidc/callback",
+    "allowedGroups": "Gruppi consentiti",
+    "allowedGroupsHint": "Nomi separati da virgole che il provider attesta nel claim groups. Vuoto accetta qualsiasi account che il provider fa accedere; lo scope groups viene richiesto automaticamente.",
+    "localTitle": "Accesso locale",
+    "localIntro": "Mantieni l’accesso per il mondo esterno mentre le macchine della tua rete entrano direttamente.",
+    "localAccess": "Consenti le reti locali senza accesso",
+    "localAccessHint": "Le richieste dagli indirizzi sottostanti saltano il controllo di accesso. Con l’elenco vuoto sono consentiti loopback e intervalli privati (10/8, 172.16/12, 192.168/16, fc00::/7).",
+    "allowedIps": "Indirizzi IP consentiti",
+    "allowedIpsHint": "Indirizzi o intervalli CIDR IPv4 separati da virgole, ad es. 192.168.1.0/24, 10.0.0.5.",
+    "discover": "Prova la discovery",
+    "save": "Salva",
+    "saved": "Salvato",
+    "saveFailed": "Impossibile salvare le impostazioni.",
+    "discoveryFailed": "Discovery non riuscita.",
+    "endpoints": "Endpoint rilevati",
+    "session": "La tua sessione",
+    "sessionHint": "L’accesso non è richiesto finché il controllo è disattivo.",
+    "signedInAs": "Accesso come {{name}}",
+    "signedOut": "Non hai effettuato l’accesso",
+    "signIn": "Accedi",
+    "signOut": "Esci"
   }
 }

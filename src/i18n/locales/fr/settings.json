@@ -89,13 +89,14 @@
     "enableDescription": "Ajoutez un microphone et des commandes de lecture à haute voix aux messages.",
     "backendTitle": "Back-end",
     "backendDescription": "Utilisez OpenAI, Groq ou un service local tel que LocalAI, Speaches ou Kokoro-FastAPI. Laissez vide pour la valeur par défaut du serveur.",
-    "baseUrl": "URL du service",
-    "apiKey": "Clé de service API",
     "sttModel": "Modèle de reconnaissance vocale",
-    "ttsModel": "Modèle de synthèse vocale",
     "voice": "Voix",
     "format": "Format de fichier son",
-    "note": "Le navigateur contacte directement une URL de base personnalisée et doit donc autoriser CORS. Laissez ce champ vide pour utiliser le backend du serveur."
+    "note": "Le navigateur contacte directement une URL de base personnalisée et doit donc autoriser CORS. Laissez ce champ vide pour utiliser le backend du serveur.",
+    "sttBaseUrl": "URL de reconnaissance vocale",
+    "ttsBaseUrl": "URL de synthèse vocale",
+    "sttApiKey": "Clé API de reconnaissance vocale",
+    "ttsApiKey": "Clé API de synthèse vocale"
   },
   "preferences": {
     "sections": {
@@ -124,7 +125,8 @@
     "notifications": "Alertes",
     "automation": "Automatisation",
     "about": "À propos",
-    "permissions": "Permissions"
+    "permissions": "Permissions",
+    "authentication": "Authentification"
   },
   "automation": {
     "browserBackend": {
@@ -153,7 +155,22 @@
       "activityFrameDescription": "Ajoute une petite image de la page où se trouve l'agent, actualisée environ une fois par seconde tant que la ligne est ouverte. C'est une capture réduite de votre navigateur connecté, prise uniquement quand la ligne est déployée, et jamais stockée.",
       "saveFailed": "Le backend du navigateur n'a pas pu être enregistré."
     },
-    "builtinBrowser": { "title": "Navigateur intégré", "description": "Ouvrez le navigateur intégré dans un panneau droit redimensionnable, indépendamment du backend GJC sélectionné.", "label": "Navigateur intégré", "note": "Disponible uniquement dans l’app macOS. Une session conserve la propriété du navigateur jusqu’à sa fermeture. Les liens HTTP(S) du chat s’ouvrent toujours dans le navigateur externe.", "open": "Ouvrir le navigateur", "opened": "Navigateur intégré ouvert.", "failed": "Impossible d’ouvrir le navigateur.", "errors": { "busy": "Le navigateur intégré est déjà utilisé. Fermez-le avant de l’ouvrir pour cette session.", "unavailable": "Le navigateur intégré est indisponible. Attendez que le serveur de l’app se reconnecte, puis réessayez.", "invalidUrl": "Cette adresse ne peut pas être ouverte. Utilisez une adresse HTTP ou HTTPS.", "stale": "La page du navigateur a changé avant la fin de la requête. Réessayez.", "failed": "Impossible d’ouvrir le navigateur intégré. Réessayez." } },
+    "builtinBrowser": {
+      "title": "Navigateur intégré",
+      "description": "Ouvrez le navigateur intégré dans un panneau droit redimensionnable, indépendamment du backend GJC sélectionné.",
+      "label": "Navigateur intégré",
+      "note": "Disponible uniquement dans l’app macOS. Une session conserve la propriété du navigateur jusqu’à sa fermeture. Les liens HTTP(S) du chat s’ouvrent toujours dans le navigateur externe.",
+      "open": "Ouvrir le navigateur",
+      "opened": "Navigateur intégré ouvert.",
+      "failed": "Impossible d’ouvrir le navigateur.",
+      "errors": {
+        "busy": "Le navigateur intégré est déjà utilisé. Fermez-le avant de l’ouvrir pour cette session.",
+        "unavailable": "Le navigateur intégré est indisponible. Attendez que le serveur de l’app se reconnecte, puis réessayez.",
+        "invalidUrl": "Cette adresse ne peut pas être ouverte. Utilisez une adresse HTTP ou HTTPS.",
+        "stale": "La page du navigateur a changé avant la fin de la requête. Réessayez.",
+        "failed": "Impossible d’ouvrir le navigateur intégré. Réessayez."
+      }
+    },
     "title": "Navigateur et applications natives",
     "description": "Vérifiez le CUA Driver installé séparément.",
     "computerUse": {
@@ -173,7 +190,38 @@
     "noGrants": "Aucune approbation d’automatisation enregistrée.",
     "origin": "Origine du site",
     "application": "Application de bureau",
-    "revoke": "Supprimer l'approbation"
+    "revoke": "Supprimer l'approbation",
+    "hostControl": {
+      "label": "Contrôle de l’hôte",
+      "description": "Agir sur la machine qui exécute ce conteneur, via le socket Docker monté à côté.",
+      "enableLabel": "Activer le contrôle de l’hôte",
+      "enableDescription": "Le désactiver retire toutes les permissions ci-dessous.",
+      "statusFailed": "L’état de l’hôte est illisible, ces interrupteurs sont donc sans effet ; connectez-vous et rechargez.",
+      "unavailable": "Définissez GAJAE_HOST_CONTROL=1, montez le socket Docker, puis redémarrez le conteneur.",
+      "socketReachable": "Socket accessible à {{path}}.",
+      "socketUnreachable": "Socket inaccessible à {{path}} ; vérifiez le montage et le démon.",
+      "hostInfo": "Informations sur l’hôte et le démon",
+      "hostInfoDescription": "Version, noyau et décomptes de Docker, ainsi que ce qui gère cet hôte.",
+      "detect": "Détecter",
+      "detecting": "Détection...",
+      "detectFailed": "L’hôte est illisible ; vérifiez l’interrupteur ci-dessus et le socket.",
+      "dockerGroup": "Docker",
+      "dockerGroupDescription": "Activez pour choisir ce que l’agent peut faire avec les conteneurs.",
+      "containers": "Voir les conteneurs",
+      "containersDescription": "Chaque conteneur avec son image, son état et son statut.",
+      "restart": "Redémarrer un conteneur",
+      "restartDescription": "Redémarrer un conteneur par son nom, sans être limité par la liste ci-dessous.",
+      "docker": "Démarrer, arrêter et suspendre des conteneurs",
+      "dockerDescription": "Changements d’état des conteneurs de la liste ci-dessous ; rien n’est créé ni supprimé.",
+      "shell": "Exécuter des commandes autorisées",
+      "shellDescription": "Une commande fixe dans un conteneur de la liste ; vous choisissez un verbe, jamais une ligne de commande.",
+      "files": "Lire des fichiers dans les conteneurs",
+      "filesDescription": "Un fichier ou un répertoire, en lecture seule, jusqu’à 256 Kio.",
+      "targets": "Conteneurs autorisés",
+      "targetsDescription": "Motifs de noms séparés par des virgules, comme mos-*, immich_* ; vide ne signifie rien, et le redémarrage n’est pas concerné.",
+      "targetsPlaceholder": "mos-*, immich_*",
+      "saveFailed": "Les réglages de contrôle de l’hôte n’ont pas été enregistrés ; le serveur a conservé ses valeurs précédentes."
+    }
   },
   "notifications": {
     "title": "Alertes",
@@ -269,5 +317,41 @@
     "empty": "Chaque espace de travail s’exécute sans demander, comme la CLI GJC.",
     "loading": "Chargement…",
     "error": "Impossible de charger les permissions."
+  },
+  "authentication": {
+    "title": "Connexion",
+    "loadFailed": "Connectez-vous pour voir ou modifier ces réglages. Des valeurs par défaut vides ici donneraient l’impression que la connexion est désactivée.",
+    "intro": "Permettez au propriétaire de se connecter via un fournisseur OpenID Connect. Les points de terminaison viennent du document de découverte du fournisseur.",
+    "enabled": "Exiger la connexion",
+    "enabledHint": "Tant que l’émetteur, l’ID client et le secret ne sont pas tous enregistrés, le contrôle reste désactivé pour qu’une faute de frappe ne vous verrouille pas dehors.",
+    "issuer": "URL de l’émetteur",
+    "issuerHint": "URL de base du fournisseur, ou URL complète du document de découverte (…/.well-known/openid-configuration) – les deux sont acceptées.",
+    "clientId": "ID client",
+    "clientSecret": "Secret client",
+    "secretKept": "Un secret est enregistré. Laissez vide pour le conserver.",
+    "scopes": "Portées",
+    "scopesHint": "openid est toujours demandé, et groups porte la revendication d’appartenance. Il n’y a pas de portée d’administration distincte : l’appartenance aux groupes chez votre fournisseur fait office de contrôle.",
+    "redirectUri": "URI de redirection",
+    "redirectUriHint": "Laissez vide pour la déduire de la requête : /api/auth/oidc/callback",
+    "allowedGroups": "Groupes autorisés",
+    "allowedGroupsHint": "Noms séparés par des virgules que le fournisseur atteste dans sa revendication groups. Vide accepte tout compte que le fournisseur connecte ; la portée groups est demandée automatiquement.",
+    "localTitle": "Accès local",
+    "localIntro": "Gardez la connexion pour l’extérieur pendant que les machines de votre réseau entrent directement.",
+    "localAccess": "Autoriser les réseaux locaux sans connexion",
+    "localAccessHint": "Les requêtes venant des adresses ci-dessous contournent le contrôle de connexion. Si la liste est vide, la boucle locale et les plages privées (10/8, 172.16/12, 192.168/16, fc00::/7) sont autorisées.",
+    "allowedIps": "Adresses IP autorisées",
+    "allowedIpsHint": "Adresses ou plages CIDR IPv4 séparées par des virgules, par ex. 192.168.1.0/24, 10.0.0.5.",
+    "discover": "Tester la découverte",
+    "save": "Enregistrer",
+    "saved": "Enregistré",
+    "saveFailed": "Les réglages n’ont pas pu être enregistrés.",
+    "discoveryFailed": "La découverte a échoué.",
+    "endpoints": "Points de terminaison découverts",
+    "session": "Votre session",
+    "sessionHint": "La connexion n’est pas requise tant que le contrôle est désactivé.",
+    "signedInAs": "Connecté en tant que {{name}}",
+    "signedOut": "Non connecté",
+    "signIn": "Se connecter",
+    "signOut": "Se déconnecter"
   }
 }

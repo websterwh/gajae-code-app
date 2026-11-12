@@ -28,8 +28,23 @@ function startHeartbeat(socket: Parameters<typeof handleChatConnection>[0]): voi
   socket.on('error', stopHeartbeat);
 }
 
+/**
+ * The pathname of an upgrade target, or `null` when the target is not a URL.
+ * `new URL` throws on targets such as `//[`, and a throw inside `verifyClient`
+ * leaves the handshake unanswered instead of aborting it: the client would wait
+ * forever for a response that a malformed target must never earn. Callers treat
+ * `null` as a target that is not one of their routes.
+ */
+function upgradePath(raw: string | undefined): string | null {
+  try {
+    return new URL(raw ?? '/', 'http://localhost').pathname;
+  } catch {
+    return null;
+  }
+}
+
 function connectionPath(request: AuthenticatedWebSocketRequest): string {
-  return new URL(request.url ?? '/', 'http://localhost').pathname;
+  return upgradePath(request.url) ?? '';
 }
 
 /**
@@ -66,7 +81,7 @@ export function createWebSocketServer(server: HttpServer, dependencies: GatewayD
     // The companion has no API key. It authenticates its device credential in
     // the first protocol frame; this exception is deliberately path-scoped.
     verifyClient: (info: Parameters<VerifyClientCallbackSync<AuthenticatedWebSocketRequest>>[0]) => {
-      const path = new URL(info.req.url ?? '/', 'http://localhost').pathname;
+      const path = upgradePath(info.req.url);
       if (path !== '/remote-cua') return verifyWebSocketClient(info, dependencies.verifyClient);
       return isEncryptedRemoteCuaUpgrade(info as never);
     },

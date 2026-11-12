@@ -89,13 +89,14 @@
     "enableDescription": "添加麦克风和朗读控制到消息中。",
     "backendTitle": "后端",
     "backendDescription": "使用OpenAI、Groq或本地服务如LocalAI、Speaches或Kokoro-FastAPI。留空则采用服务器默认设置。",
-    "baseUrl": "服务URL",
-    "apiKey": "服务API密钥",
     "sttModel": "语音识别模型",
-    "ttsModel": "语音合成模型",
     "voice": "语音",
     "format": "声音文件格式",
-    "note": "浏览器直接连接到自定义的基础URL，因此必须允许CORS。留空将使用服务器后端。"
+    "note": "浏览器直接连接到自定义的基础URL，因此必须允许CORS。留空将使用服务器后端。",
+    "sttBaseUrl": "语音识别 URL",
+    "ttsBaseUrl": "语音合成 URL",
+    "sttApiKey": "语音识别 API 密钥",
+    "ttsApiKey": "语音合成 API 密钥"
   },
   "preferences": {
     "sections": {
@@ -124,7 +125,8 @@
     "notifications": "通知",
     "automation": "自动化",
     "about": "关于",
-    "permissions": "权限"
+    "permissions": "权限",
+    "authentication": "身份验证"
   },
   "automation": {
     "browserBackend": {
@@ -153,7 +155,22 @@
       "activityFrameDescription": "在展开该行期间，每秒左右刷新一次智能体所在页面的小图。这是对你已登录浏览器的缩小截图，仅在展开时拍摄，且不做存储。",
       "saveFailed": "无法保存浏览器后端。"
     },
-    "builtinBrowser": { "title": "内置浏览器", "description": "在可调整宽度的右侧面板中打开内置浏览器，不受所选 GJC 后端影响。", "label": "内置浏览器", "note": "仅在 macOS 桌面应用中可用。关闭前会一直保留浏览器所有权。HTTP(S) 聊天链接始终在外部浏览器中打开。", "open": "打开浏览器", "opened": "已打开内置浏览器。", "failed": "无法打开浏览器。", "errors": { "busy": "内置浏览器正在使用中。请先关闭，再为此会话打开。", "unavailable": "内置浏览器暂不可用。请等待应用服务器重新连接后再试。", "invalidUrl": "无法打开此地址。请使用 HTTP 或 HTTPS 地址。", "stale": "请求完成前浏览器页面已发生变化。请重试。", "failed": "无法打开内置浏览器。请重试。" } },
+    "builtinBrowser": {
+      "title": "内置浏览器",
+      "description": "在可调整宽度的右侧面板中打开内置浏览器，不受所选 GJC 后端影响。",
+      "label": "内置浏览器",
+      "note": "仅在 macOS 桌面应用中可用。关闭前会一直保留浏览器所有权。HTTP(S) 聊天链接始终在外部浏览器中打开。",
+      "open": "打开浏览器",
+      "opened": "已打开内置浏览器。",
+      "failed": "无法打开浏览器。",
+      "errors": {
+        "busy": "内置浏览器正在使用中。请先关闭，再为此会话打开。",
+        "unavailable": "内置浏览器暂不可用。请等待应用服务器重新连接后再试。",
+        "invalidUrl": "无法打开此地址。请使用 HTTP 或 HTTPS 地址。",
+        "stale": "请求完成前浏览器页面已发生变化。请重试。",
+        "failed": "无法打开内置浏览器。请重试。"
+      }
+    },
     "title": "浏览器和原生应用",
     "description": "查看单独安装的 CUA 驱动程序。",
     "computerUse": {
@@ -173,7 +190,38 @@
     "noGrants": "没有保存的自动化批准。",
     "origin": "站点来源",
     "application": "桌面应用",
-    "revoke": "移除批准"
+    "revoke": "移除批准",
+    "hostControl": {
+      "label": "主机控制",
+      "description": "通过挂载在旁边的 Docker 套接字，对运行此容器的机器执行操作。",
+      "enableLabel": "启用主机控制",
+      "enableDescription": "关闭后，下方所有权限都会失效。",
+      "statusFailed": "无法读取主机状态，因此这些开关无效；请登录后重新加载。",
+      "unavailable": "设置 GAJAE_HOST_CONTROL=1，挂载 Docker 套接字，然后重启容器。",
+      "socketReachable": "套接字可在 {{path}} 访问。",
+      "socketUnreachable": "套接字无法在 {{path}} 访问；请检查挂载和守护进程。",
+      "hostInfo": "主机与守护进程信息",
+      "hostInfoDescription": "Docker 版本、内核和计数，以及管理此主机的对象。",
+      "detect": "检测",
+      "detecting": "正在检测...",
+      "detectFailed": "无法读取主机；请检查上方的开关和套接字。",
+      "dockerGroup": "Docker",
+      "dockerGroupDescription": "开启后可选择智能体可以对容器做什么。",
+      "containers": "查看容器",
+      "containersDescription": "每个容器及其镜像、状态和现况。",
+      "restart": "重启容器",
+      "restartDescription": "按名称重启单个容器，不受下方列表限制。",
+      "docker": "启动、停止和暂停容器",
+      "dockerDescription": "仅对下方列表中的容器改变状态；不会创建或删除任何内容。",
+      "shell": "运行允许的命令",
+      "shellDescription": "在列表中的容器里运行一条固定命令；你选择动词，而不是命令字符串。",
+      "files": "读取容器内的文件",
+      "filesDescription": "一个文件或一个目录，只读，最大 256 KiB。",
+      "targets": "允许的容器",
+      "targetsDescription": "以逗号分隔的名称模式，如 mos-*、immich_*；留空表示什么都不允许，重启不受影响。",
+      "targetsPlaceholder": "mos-*, immich_*",
+      "saveFailed": "主机控制设置未保存；服务器保留了之前的值。"
+    }
   },
   "notifications": {
     "title": "通知",
@@ -269,5 +317,41 @@
     "empty": "所有工作区都像 GJC CLI 一样无需询问即可运行。",
     "loading": "加载中…",
     "error": "无法加载权限。"
+  },
+  "authentication": {
+    "title": "登录",
+    "loadFailed": "请登录以查看或更改这些设置。此处若为空默认值，会看起来像登录已关闭。",
+    "intro": "允许所有者通过 OpenID Connect 提供方登录。端点来自提供方的发现文档。",
+    "enabled": "要求登录",
+    "enabledHint": "在颁发者、客户端 ID 和密钥全部保存之前，该门禁保持关闭，这样拼写错误就不会把你锁在外面。",
+    "issuer": "颁发者 URL",
+    "issuerHint": "提供方的基址 URL，或发现文档的完整 URL（…/.well-known/openid-configuration）——两者均可。",
+    "clientId": "客户端 ID",
+    "clientSecret": "客户端密钥",
+    "secretKept": "已存储密钥。留空则保留。",
+    "scopes": "作用域",
+    "scopesHint": "openid 始终会被请求，groups 承载成员资格声明。没有单独的管理员作用域：提供方的群组成员资格就是门禁。",
+    "redirectUri": "重定向 URI",
+    "redirectUriHint": "留空则从请求推导：/api/auth/oidc/callback",
+    "allowedGroups": "允许的群组",
+    "allowedGroupsHint": "提供方在 groups 声明中确认的名称，以逗号分隔。留空则接受提供方允许登录的任何账户；groups 作用域会自动请求。",
+    "localTitle": "本地访问",
+    "localIntro": "对外部保留登录，同时让你自己网络中的机器直接进入。",
+    "localAccess": "允许本地网络免登录",
+    "localAccessHint": "来自下方地址的请求会跳过登录门禁。列表为空时，允许回环地址和私有网段（10/8、172.16/12、192.168/16、fc00::/7）。",
+    "allowedIps": "允许的 IP 地址",
+    "allowedIpsHint": "以逗号分隔的地址或 IPv4 CIDR 网段，例如 192.168.1.0/24、10.0.0.5。",
+    "discover": "测试发现",
+    "save": "保存",
+    "saved": "已保存",
+    "saveFailed": "无法保存设置。",
+    "discoveryFailed": "发现失败。",
+    "endpoints": "已发现的端点",
+    "session": "你的会话",
+    "sessionHint": "门禁关闭时无需登录。",
+    "signedInAs": "已登录为 {{name}}",
+    "signedOut": "未登录",
+    "signIn": "登录",
+    "signOut": "退出登录"
   }
 }

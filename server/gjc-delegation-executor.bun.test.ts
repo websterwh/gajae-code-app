@@ -79,11 +79,15 @@ async function fixture(
   const cwd = join(root, 'project');
   const agentDir = join(root, 'agent');
   await mkdir(cwd);
-  execFileSync('git', ['init', '-q'], { cwd });
+  execFileSync('git', ['init', '-q', '-b', 'work'], { cwd });
   await writeFile(join(cwd, '.gitignore'), '.gjc/\nartifacts/\n');
   execFileSync('git', ['add', '.gitignore'], { cwd });
   execFileSync('git', ['-c', 'user.name=Offline fixture', '-c', 'user.email=fixture@invalid',
     'commit', '-qm', 'Initialize offline fixture'], { cwd });
+  // The runtime's change-set capture needs an authoritative integration base
+  // that is not the checked-out branch, so keep `main` at the initial commit
+  // while the fixture works on `work`.
+  execFileSync('git', ['branch', 'main'], { cwd });
   const authStorage = await discoverAuthStorage(agentDir);
   const credential = { expected: 'offline-delegation-credential' };
   if (storedCredentials) {
@@ -94,7 +98,7 @@ async function fixture(
     credential.expected = 'offline-account-a';
   }
   const settings = await Settings.loadForScope({ cwd, agentDir });
-  settings.override('memory.enabled', false);
+  settings.override('memory.backend', 'off');
   settings.override('goal.enabled', false);
   settings.override('astEdit.enabled', false);
   settings.override('mcp.discoveryMode', false);

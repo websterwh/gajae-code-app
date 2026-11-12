@@ -89,13 +89,14 @@
     "enableDescription": "Fügen Sie Nachrichten Mikrofon- und Vorlesesteuerungen hinzu.",
     "backendTitle": "Backend",
     "backendDescription": "Verwenden Sie OpenAI, Groq oder einen lokalen Dienst wie LocalAI, Speaches oder Kokoro-FastAPI. Für den Server-Standardwert leer lassen.",
-    "baseUrl": "Dienst-URL",
-    "apiKey": "Dienstschlüssel API",
     "sttModel": "Spracherkennungsmodell",
-    "ttsModel": "Sprachsynthesemodell",
     "voice": "Stimme",
     "format": "Sounddateiformat",
-    "note": "Der Browser ruft eine benutzerdefinierte Basis-URL direkt auf und benötigt daher CORS. Lassen Sie das Feld leer, um das Server-Backend zu verwenden."
+    "note": "Der Browser ruft eine benutzerdefinierte Basis-URL direkt auf und benötigt daher CORS. Lassen Sie das Feld leer, um das Server-Backend zu verwenden.",
+    "sttBaseUrl": "URL für Spracherkennung",
+    "ttsBaseUrl": "URL für Sprachausgabe",
+    "sttApiKey": "API-Schlüssel für Spracherkennung",
+    "ttsApiKey": "API-Schlüssel für Sprachausgabe"
   },
   "preferences": {
     "sections": {
@@ -124,7 +125,8 @@
     "notifications": "Hinweise",
     "automation": "Automatisierung",
     "about": "Über",
-    "permissions": "Berechtigungen"
+    "permissions": "Berechtigungen",
+    "authentication": "Anmeldung"
   },
   "automation": {
     "browserBackend": {
@@ -153,7 +155,22 @@
       "activityFrameDescription": "Zeigt ein kleines Bild der Seite, auf der der Agent ist, und aktualisiert es etwa im Sekundentakt, solange die Zeile geöffnet ist. Es ist eine verkleinerte Aufnahme deines angemeldeten Browsers, nur bei geöffneter Zeile, und wird nie gespeichert.",
       "saveFailed": "Das Browser-Backend konnte nicht gespeichert werden."
     },
-    "builtinBrowser": { "title": "Integrierter Browser", "description": "Öffnet den integrierten Browser in einem rechten Bereich mit veränderbarer Breite, unabhängig vom gewählten GJC-Backend.", "label": "Integrierter Browser", "note": "Nur in der macOS-Desktop-App verfügbar. Der Browser bleibt bis zum Schließen im Besitz einer Sitzung. HTTP(S)-Chat-Links werden immer im externen Browser geöffnet.", "open": "Browser öffnen", "opened": "Integrierter Browser geöffnet.", "failed": "Browser konnte nicht geöffnet werden.", "errors": { "busy": "Der integrierte Browser wird bereits verwendet. Schließen Sie ihn, bevor Sie ihn für diese Sitzung öffnen.", "unavailable": "Der integrierte Browser ist nicht verfügbar. Warten Sie, bis der App-Server wieder verbunden ist, und versuchen Sie es erneut.", "invalidUrl": "Diese Adresse kann nicht geöffnet werden. Verwenden Sie eine HTTP- oder HTTPS-Adresse.", "stale": "Die Browserseite hat sich vor Abschluss der Anfrage geändert. Versuchen Sie es erneut.", "failed": "Der integrierte Browser konnte nicht geöffnet werden. Versuchen Sie es erneut." } },
+    "builtinBrowser": {
+      "title": "Integrierter Browser",
+      "description": "Öffnet den integrierten Browser in einem rechten Bereich mit veränderbarer Breite, unabhängig vom gewählten GJC-Backend.",
+      "label": "Integrierter Browser",
+      "note": "Nur in der macOS-Desktop-App verfügbar. Der Browser bleibt bis zum Schließen im Besitz einer Sitzung. HTTP(S)-Chat-Links werden immer im externen Browser geöffnet.",
+      "open": "Browser öffnen",
+      "opened": "Integrierter Browser geöffnet.",
+      "failed": "Browser konnte nicht geöffnet werden.",
+      "errors": {
+        "busy": "Der integrierte Browser wird bereits verwendet. Schließen Sie ihn, bevor Sie ihn für diese Sitzung öffnen.",
+        "unavailable": "Der integrierte Browser ist nicht verfügbar. Warten Sie, bis der App-Server wieder verbunden ist, und versuchen Sie es erneut.",
+        "invalidUrl": "Diese Adresse kann nicht geöffnet werden. Verwenden Sie eine HTTP- oder HTTPS-Adresse.",
+        "stale": "Die Browserseite hat sich vor Abschluss der Anfrage geändert. Versuchen Sie es erneut.",
+        "failed": "Der integrierte Browser konnte nicht geöffnet werden. Versuchen Sie es erneut."
+      }
+    },
     "title": "Browser und native Anwendungen",
     "description": "Überprüfen Sie den separat installierten CUA Driver.",
     "computerUse": {
@@ -173,7 +190,38 @@
     "noGrants": "Keine gespeicherten Automatisierungsgenehmigungen.",
     "origin": "Herkunft der Website",
     "application": "Desktop-Anwendung",
-    "revoke": "Genehmigung entfernen"
+    "revoke": "Genehmigung entfernen",
+    "hostControl": {
+      "label": "Host-Steuerung",
+      "description": "Auf dem Rechner handeln, auf dem dieser Container läuft – über den daneben eingebundenen Docker-Socket.",
+      "enableLabel": "Host-Steuerung aktivieren",
+      "enableDescription": "Beim Ausschalten entfallen alle Berechtigungen darunter.",
+      "statusFailed": "Der Host-Status konnte nicht gelesen werden, daher sind diese Schalter wirkungslos; melden Sie sich an und laden Sie neu.",
+      "unavailable": "Setzen Sie GAJAE_HOST_CONTROL=1, binden Sie den Docker-Socket ein und starten Sie den Container neu.",
+      "socketReachable": "Socket unter {{path}} erreichbar.",
+      "socketUnreachable": "Socket unter {{path}} nicht erreichbar; prüfen Sie den Mount und den Daemon.",
+      "hostInfo": "Host- und Daemon-Informationen",
+      "hostInfoDescription": "Docker-Version, Kernel und Anzahl der Container sowie das, was diesen Host verwaltet.",
+      "detect": "Erkennen",
+      "detecting": "Wird erkannt ...",
+      "detectFailed": "Der Host konnte nicht gelesen werden; prüfen Sie den Schalter oben und den Socket.",
+      "dockerGroup": "Docker",
+      "dockerGroupDescription": "Einschalten, um festzulegen, was der Agent mit Containern tun darf.",
+      "containers": "Container anzeigen",
+      "containersDescription": "Jeder Container mit Image, Zustand und Status.",
+      "restart": "Container neu starten",
+      "restartDescription": "Einen Container nach Namen neu starten, unabhängig von der Liste unten.",
+      "docker": "Container starten, stoppen und pausieren",
+      "dockerDescription": "Zustandsänderungen für Container auf der Liste unten; nichts wird erstellt oder entfernt.",
+      "shell": "Freigegebene Befehle ausführen",
+      "shellDescription": "Ein fester Befehl in einem Container auf der Liste; Sie wählen ein Verb, nie eine Befehlszeile.",
+      "files": "Dateien in Containern lesen",
+      "filesDescription": "Eine Datei oder ein Verzeichnis, schreibgeschützt, bis 256 KiB.",
+      "targets": "Erlaubte Container",
+      "targetsDescription": "Komma-getrennte Namensmuster wie mos-*, immich_*; leer bedeutet nichts, und Neustart ist davon nicht betroffen.",
+      "targetsPlaceholder": "mos-*, immich_*",
+      "saveFailed": "Die Host-Steuerungseinstellungen wurden nicht gespeichert; der Server behielt seine bisherigen Werte."
+    }
   },
   "notifications": {
     "title": "Hinweise",
@@ -269,5 +317,41 @@
     "empty": "Jeder Workspace läuft wie die GJC-CLI ohne Nachfrage.",
     "loading": "Wird geladen…",
     "error": "Berechtigungen konnten nicht geladen werden."
+  },
+  "authentication": {
+    "title": "Anmeldung",
+    "loadFailed": "Melden Sie sich an, um diese Einstellungen zu sehen oder zu ändern. Leere Standardwerte hier sähen so aus, als sei die Anmeldung ausgeschaltet.",
+    "intro": "Lassen Sie den Eigentümer sich über einen OpenID-Connect-Anbieter anmelden. Die Endpunkte stammen aus dem Discovery-Dokument des Anbieters.",
+    "enabled": "Anmeldung verlangen",
+    "enabledHint": "Solange Aussteller, Client-ID und Secret nicht alle gespeichert sind, bleibt die Sperre aus, damit ein Tippfehler Sie nicht aussperren kann.",
+    "issuer": "Aussteller-URL",
+    "issuerHint": "Basis-URL des Anbieters oder die vollständige URL des Discovery-Dokuments (…/.well-known/openid-configuration) – beides wird akzeptiert.",
+    "clientId": "Client-ID",
+    "clientSecret": "Client-Secret",
+    "secretKept": "Ein Secret ist gespeichert. Leer lassen, um es zu behalten.",
+    "scopes": "Scopes",
+    "scopesHint": "openid wird immer angefordert, und groups enthält die Mitgliedschaftsangabe. Es gibt keinen eigenen Admin-Scope: die Gruppenmitgliedschaft bei Ihrem Anbieter ist die Sperre.",
+    "redirectUri": "Weiterleitungs-URI",
+    "redirectUriHint": "Leer lassen, um sie aus der Anfrage abzuleiten: /api/auth/oidc/callback",
+    "allowedGroups": "Erlaubte Gruppen",
+    "allowedGroupsHint": "Komma-getrennte Namen, die der Anbieter in seinem groups-Anspruch bestätigt. Leer akzeptiert jedes Konto, bei dem der Anbieter eine Anmeldung durchführt; der groups-Scope wird automatisch angefordert.",
+    "localTitle": "Lokaler Zugang",
+    "localIntro": "Behalten Sie die Anmeldung für die Außenwelt, während Rechner in Ihrem eigenen Netz direkt hereinkommen.",
+    "localAccess": "Lokale Netzwerke ohne Anmeldung zulassen",
+    "localAccessHint": "Anfragen von den untenstehenden Adressen umgehen die Anmeldesperre. Ist die Liste leer, sind Loopback und private Bereiche (10/8, 172.16/12, 192.168/16, fc00::/7) erlaubt.",
+    "allowedIps": "Erlaubte IP-Adressen",
+    "allowedIpsHint": "Komma-getrennte Adressen oder IPv4-CIDR-Bereiche, z. B. 192.168.1.0/24, 10.0.0.5.",
+    "discover": "Discovery testen",
+    "save": "Speichern",
+    "saved": "Gespeichert",
+    "saveFailed": "Die Einstellungen konnten nicht gespeichert werden.",
+    "discoveryFailed": "Discovery fehlgeschlagen.",
+    "endpoints": "Gefundene Endpunkte",
+    "session": "Ihre Sitzung",
+    "sessionHint": "Eine Anmeldung ist nicht erforderlich, solange die Sperre aus ist.",
+    "signedInAs": "Angemeldet als {{name}}",
+    "signedOut": "Nicht angemeldet",
+    "signIn": "Anmelden",
+    "signOut": "Abmelden"
   }
 }

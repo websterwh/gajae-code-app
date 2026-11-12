@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { copyFile, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import net from 'node:net';
@@ -1580,9 +1580,12 @@ async function identityFixture(behavior: {
   const cwd = join(root, 'project');
   const agentDir = join(root, 'agent');
   await mkdir(cwd);
+  // Project-scope extension and skill discovery resolves through the repository
+  // root, so the fixture must be a repository for that layer to exist.
+  execFileSync('git', ['init', '-q'], { cwd });
   const authStorage = await discoverAuthStorage(agentDir);
   const settings = await Settings.loadForScope({ cwd, agentDir });
-  settings.override('memory.enabled', false);
+  settings.override('memory.backend', 'off');
   settings.override('skills.enabled', false);
   const registry = new ModelRegistry(authStorage, join(agentDir, 'models.yml'), settings, { agentDir });
   // This synthetic Astra fixture has no registered transport and no real credentials.
@@ -1689,14 +1692,18 @@ test('top-level sessions load discovered extension modules and hooks as the CLI 
       `export default function () { globalThis.${marker}.push(${JSON.stringify(name)}); }\n`;
     const agentExtension = join(agentDir, 'extensions', 'agent-scope.ts');
     const projectExtension = join(cwd, '.gjc', 'extensions', 'project-scope.ts');
-    const settingsExtension = join(f.root, 'settings-scope.ts');
     const projectHook = join(cwd, '.gjc', 'hooks', 'pre', 'bash.ts');
     for (const [file, name] of [[agentExtension, 'agent-extension'], [projectExtension, 'project-extension'],
-      [settingsExtension, 'settings-extension'], [projectHook, 'project-hook']] as const) {
+      [projectHook, 'project-hook']] as const) {
       await mkdir(join(file, '..'), { recursive: true });
       await writeFile(file, module(name));
     }
-    f.settings.override('extensions', [settingsExtension]);
+    /*
+     * Both project surfaces stay stored-only: a repository's `.gjc/extensions`
+     * and `.gjc/hooks` trees are not auto-executed just because a session opened
+     * in that checkout. The agent directory is the authority for modules and
+     * hooks alike, exactly as in the CLI.
+     */
     // Discovery caches directory listings; the fixture created these trees after startup.
     resetCapabilityCache();
     type Activity = { getAppLifecycleActivity(): { unknown: string[] } };
@@ -1705,16 +1712,15 @@ test('top-level sessions load discovered extension modules and hooks as the CLI 
       assert.equal(input.disableExtensionDiscovery, undefined, 'discovery must not be switched off');
       assert.equal(input.preloadedExtensions, undefined, 'the runtime discovers extensions itself');
       const paths = session.extensionRunner!.getExtensionPaths();
-      for (const file of [agentExtension, projectExtension, settingsExtension]) {
-        assert.ok(paths.includes(file), `${file} must load: ${JSON.stringify(paths)}`);
-      }
-      assert.ok(paths.includes(`hook:${await realpath(projectHook)}`) || paths.includes(`hook:${projectHook}`),
-        `project hook must load: ${JSON.stringify(paths)}`);
+      assert.ok(paths.includes(agentExtension), `${agentExtension} must load: ${JSON.stringify(paths)}`);
+      assert.equal(paths.includes(projectExtension), false, `a project extension must not load: ${JSON.stringify(paths)}`);
+      assert.equal(paths.includes(`hook:${await realpath(projectHook)}`) || paths.includes(`hook:${projectHook}`), false,
+        `a project hook must not load: ${JSON.stringify(paths)}`);
       assert.ok(paths.includes('bundled:grok-build'), `bundled Grok must load: ${JSON.stringify(paths)}`);
       const { unknown } = (session as unknown as Activity).getAppLifecycleActivity();
       assert.ok(unknown.includes('sdk_extension_effects_unrepresented'), JSON.stringify(unknown));
     });
-    assert.deepEqual([...loaded].sort(), ['agent-extension', 'project-extension', 'project-hook', 'settings-extension']);
+    assert.deepEqual([...loaded].sort(), ['agent-extension']);
   } finally {
     delete (globalThis as Record<string, unknown>)[marker];
     await f.close();
@@ -1943,7 +1949,7 @@ async function rawSdkDelegationFixture() {
   await mkdir(cwd);
   const authStorage = await discoverAuthStorage(agentDir);
   const settings = await Settings.loadForScope({ cwd, agentDir });
-  settings.override('memory.enabled', false);
+  settings.override('memory.backend', 'off');
   settings.override('skills.enabled', false);
   settings.override('goal.enabled', false);
   settings.override('task.agentModelOverrides', { executor: 'openai-codex/gpt-6-astra' });
@@ -1971,7 +1977,7 @@ async function rawSdkDelegationFixture() {
   } };
 }
 
-test('raw SDK builtin delegation bypasses parent permissions; app replacement remains necessary', { timeout: 15_000 }, async () => {
+test('raw SDK builtin delegation inherits the parent permission policy', { timeout: 15_000 }, async () => {
   const f = await rawSdkDelegationFixture();
   let calls = 0;
   let issuedTool = false;
@@ -2019,8 +2025,13 @@ test('raw SDK builtin delegation bypasses parent permissions; app replacement re
       });
       const settled = await subagent.execute('offline-await', { action: 'await', timeout_ms: 5000 });
       assert.ok(calls > 0, JSON.stringify({ launch, settled }));
-      assert.ok(observedToolResults.some((result) => !result.isError
-        && JSON.stringify(result.content).includes('child-allowed')),
+      // The pinned runtime applies the parent's permission mode to a raw SDK
+      // child, so the canary never runs. The app's own executor is still the
+      // delegation surface - for model pinning, app-owned tools and settled
+      // receipts - but no longer to paper over a permission bypass.
+      assert.ok(observedToolResults.length > 0, JSON.stringify({ calls, issuedTool, observedToolResults }));
+      assert.ok(observedToolResults.every((result) => result.isError
+        && JSON.stringify(result.content).includes('rejected by session permission policy')),
       JSON.stringify({ calls, issuedTool, observedToolResults, launch, settled }));
       // The application has its own independent positive safety fixture in
       // gjc-delegation-executor.bun.test.ts. Never convert this unsafe SDK
@@ -2669,7 +2680,7 @@ test('the production adapter passes bypass to automation without answering real 
     await session.promptStarted.promise;
     const tools = f.factoryOptions[0]!.automationTools as AutomationTools;
     await tools.browser!.execute('browser-bypass', { action: 'open', url: 'https://example.com' }, AbortSignal.timeout(5_000));
-    await tools.computer!.execute('computer-bypass', { action: 'click', arguments: { pid: 42, x: 1, y: 1 } }, AbortSignal.timeout(5_000));
+    await tools.computer!.execute('computer-bypass', { action: 'desktop_click', arguments: { pid: 42, x: 1, y: 1 } }, AbortSignal.timeout(5_000));
     assert.equal(methods(f.frames).filter(method => method === 'ask.presented').length, 0);
     assert.deepEqual(requests.map(item => item.operation), ['authorize', 'open', 'authorize', 'authorize', undefined]);
     assert.ok(requests.every(item => item.sessionId === 'automation-app-session'));
@@ -3950,7 +3961,7 @@ test('patched SDK retains Codex prewarm until physical completion while public d
   await mkdir(cwd);
   const authStorage = await discoverAuthStorage(agentDir);
   const settings = await Settings.loadForScope({ cwd, agentDir });
-  settings.override('memory.enabled', false);
+  settings.override('memory.backend', 'off');
   settings.override('skills.enabled', false);
   settings.override('startup.networkPrewarm', false);
   settings.override('providers.openaiWebsockets', 'on');

@@ -47,7 +47,8 @@ test('actual ChatInterface passes the hook freeze state through its composer sur
     const path = String(url);
     const body = path.endsWith('/api/auth/user') ? { user: { id: 'owner', username: 'owner' } }
       : path.endsWith('/permissions') ? { data: { projectId: 'project', mode: 'ask', allowAlways: [] } }
-        : path.includes('/files') ? [] : {};
+        : path.includes('/api/voice/health') ? { configured: true }
+          : path.includes('/files') ? [] : {};
     return new Response(JSON.stringify(body));
   };
   localStorage.setItem('uiPreferences', JSON.stringify({ voiceEnabled: true }));

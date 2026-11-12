@@ -176,6 +176,9 @@ export class RemoteComputerHub {
         reject(error);
       };
       const timer = setTimeout(() => finish(new Error('Remote computer request timed out.')), REMOTE_CALL_TIMEOUT_MS);
+      // A call in flight must not be the reason the process cannot shut down;
+      // the deadline still fires while the server is running.
+      timer.unref();
       connection.pending.set(requestId, { resolve, reject, timer });
       signal?.addEventListener('abort', () => finish(new Error('Remote computer request cancelled.')), { once: true });
       connection.socket.send(JSON.stringify(request));

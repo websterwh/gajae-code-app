@@ -40,7 +40,8 @@
       "info": "Avis",
       "warning": "Avertissement",
       "error": "Problème"
-    }
+    },
+    "retryFailedTurn": "Réessayer"
   },
   "tools": {
     "error": "Problème d'outil",
@@ -133,7 +134,9 @@
       "description": "Choisissez une compétence à utiliser dans l’espace de travail actuel.",
       "search": "Rechercher des compétences",
       "noMatches": "Aucune compétence ne correspond."
-    }
+    },
+    "agentConfigurationCurrent": "Actuelle",
+    "btw": "Au fait — envoyer une remarque à l’agent"
   },
   "session": {
     "loading": {

@@ -27,10 +27,14 @@ afterEach(() => {
 });
 
 async function materializeToolSession(session: { getToolByName(name: string): unknown; getAllToolNames(): string[] }): Promise<ToolSession> {
-  const job = session.getToolByName('job') as { materializeForTests?: () => Promise<{ session?: ToolSession }> } | undefined;
-  if (!job?.materializeForTests) throw new Error(`Job tool unavailable: ${session.getAllToolNames().join(', ')}`);
-  const toolSession = (await job.materializeForTests()).session;
-  if (!toolSession) throw new Error('Job tool exposed no tool session');
+  // The runtime dropped the test materializer it used to expose on JobTool and
+  // now hands back an extension wrapper around a lazy descriptor. Unwrapping
+  // both reaches the JobTool instance, whose private ToolSession is the exact
+  // session every tool sees - which is what this contract is about.
+  const registered = session.getToolByName('job') as { getInnerTool?: () => unknown } | undefined;
+  const lazy = (registered?.getInnerTool?.() ?? registered) as { materialize?: () => Promise<unknown> } | undefined;
+  const toolSession = (await lazy?.materialize?.() as { session?: ToolSession } | undefined)?.session;
+  if (!toolSession) throw new Error(`Job tool unavailable: ${session.getAllToolNames().join(', ')}`);
   return toolSession;
 }
 

@@ -40,7 +40,8 @@
       "info": "Avviso",
       "warning": "Avvertimento",
       "error": "Problema"
-    }
+    },
+    "retryFailedTurn": "Riprova"
   },
   "tools": {
     "error": "Problema con lo strumento",
@@ -133,7 +134,9 @@
       "description": "Scegli una skill da usare nello spazio di lavoro corrente.",
       "search": "Cerca skill",
       "noMatches": "Nessuna skill corrisponde."
-    }
+    },
+    "agentConfigurationCurrent": "Attuale",
+    "btw": "A proposito — invia una nota all’agente"
   },
   "session": {
     "loading": {
