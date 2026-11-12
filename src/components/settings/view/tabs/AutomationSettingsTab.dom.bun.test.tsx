@@ -507,7 +507,10 @@ test('the docker group hides its rows while it is off and sets all of them at on
 
   const group = await screen.findByRole('switch', { name: hostControl.dockerGroup! });
   assert.equal(group.getAttribute('aria-checked'), 'false');
-  assert.equal(screen.queryByRole('switch', { name: hostControl.containers! }), null, 'off means the group\'s rows are not shown');
+  // Compare a boolean, not the element: formatting a mounted element walks the
+  // React fiber tree, which is enough to exhaust the 5 s test timeout on a
+  // loaded runner before the retry ever sees the rows go away.
+  assert.equal(screen.queryByRole('switch', { name: hostControl.containers! }) === null, true, 'off means the group\'s rows are not shown');
 
   fireEvent.click(group);
   await waitFor(() => assert.ok(screen.getByRole('switch', { name: hostControl.containers! })));
@@ -516,7 +519,7 @@ test('the docker group hides its rows while it is off and sets all of them at on
   ]);
 
   fireEvent.click(screen.getByRole('switch', { name: hostControl.dockerGroup! }));
-  await waitFor(() => assert.equal(screen.queryByRole('switch', { name: hostControl.containers! }), null));
+  await waitFor(() => assert.equal(screen.queryByRole('switch', { name: hostControl.containers! }) === null, true));
 });
 
 /* A saved detection is shown on load, without running one again. */
