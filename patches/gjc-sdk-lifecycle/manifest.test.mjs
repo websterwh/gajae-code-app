@@ -44,7 +44,7 @@ async function fixture(t) {
 test('exact replace-once edits reproduce every full post-hash from published source', async () => {
   assert.deepEqual(Object.keys(manifest).sort(), ['files', 'id', 'packages', 'schemaVersion']);
   assert.equal(manifest.schemaVersion, 1); assert.equal(manifest.id, 'gjc-sdk-lifecycle-v1');
-  assert.deepEqual(manifest.packages, { '@gajae-code/coding-agent': '0.17.6', '@gajae-code/agent-core': '0.17.6', '@gajae-code/ai': '0.17.6' });
+  assert.deepEqual(manifest.packages, { '@gajae-code/coding-agent': '0.20.0', '@gajae-code/agent-core': '0.20.0', '@gajae-code/ai': '0.20.0' });
   assert.equal(manifest.files.length, 32, 'exact reviewed producer/leaf/host source closure');
   for (const file of manifest.files) {
     let source = await original(file);
