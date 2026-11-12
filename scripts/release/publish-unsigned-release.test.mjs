@@ -139,6 +139,25 @@ test('a failed upload reports the preserved draft instead of retrying', async t 
   assert.equal(uploads.length, 1, 'no upload retry');
 });
 
+test('the workflow repository is accepted and an unrelated repository is refused', async t => {
+  const data = await fixture(t);
+  const github = fakeGitHub(data);
+  const fork = 'fork-owner/gajae-code-app';
+  const result = await processUnsignedRelease({
+    repo: fork, actionsRepository: fork, tag, commit,
+    assetsDirectory: data.assets, checkoutRoot: data.checkout,
+  }, { run: github.run });
+  assert.equal(result.status, 'verified-draft');
+  await assert.rejects(processUnsignedRelease({
+    repo: 'someone-else/gajae-code-app', actionsRepository: fork, tag, commit,
+    assetsDirectory: data.assets, checkoutRoot: data.checkout,
+  }, { run: github.run }), /restricted to/);
+  await assert.rejects(processUnsignedRelease({
+    repo: 'not a slug', actionsRepository: fork, tag, commit,
+    assetsDirectory: data.assets, checkoutRoot: data.checkout,
+  }, { run: github.run }), /owner\/repo slug/);
+});
+
 test('a publication response that does not prove draft=false is rejected', async t => {
   const data = await fixture(t);
   const github = fakeGitHub({ ...data, publishResponse: { id: 77, draft: true, tag_name: tag,
