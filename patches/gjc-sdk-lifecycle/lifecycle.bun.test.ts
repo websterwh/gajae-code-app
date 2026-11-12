@@ -76,7 +76,7 @@ async function sessionFixture(prewarm?: { entered: ReturnType<typeof deferred>; 
     const value = Reflect.get(target, property, target);
     return typeof value === 'function' ? value.bind(target) : value;
   } }) : rawSettings;
-  settings.override('memory.enabled', false); settings.override('skills.enabled', false);
+  settings.override('memory.backend', 'off'); settings.override('skills.enabled', false);
   settings.override('startup.networkPrewarm', false);
   settings.override('providers.openaiWebsockets', prewarm ? 'on' : 'off');
   class HeldRegistry extends ModelRegistry {
