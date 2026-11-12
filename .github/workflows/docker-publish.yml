@@ -27,6 +27,43 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # The image bundles the GJC runtime SDK (`@gajae-code/*`) from the
+      # lockfile, and the app owns a source patch pinned to those exact
+      # versions (`patches/gjc-sdk-lifecycle`). Report when npm publishes
+      # something newer so the pin is never silently stale. This does not move
+      # the pin: a bump only applies when that patch is re-ported against the
+      # new sources, which is a code change, not a version edit.
+      - name: Report newer bundled GJC packages
+        run: |
+          set -euo pipefail
+          {
+            echo "### Bundled GJC runtime packages"
+            echo ""
+            echo "| Package | Bundled | npm latest |"
+            echo "| --- | --- | --- |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          stale=""
+          for name in @gajae-code/coding-agent @gajae-code/agent-core @gajae-code/ai; do
+            bundled="$(node -p "require('./server/gjc-runtime-manifest.json').sdkLifecycle.packages['$name'] ?? 'unknown'")"
+            latest="$(npm view "$name" version 2>/dev/null || echo unavailable)"
+            echo "| \`$name\` | $bundled | $latest |" >> "$GITHUB_STEP_SUMMARY"
+            if [ "$latest" != "unavailable" ] && [ "$latest" != "$bundled" ]; then
+              stale="$stale $name ($bundled -> $latest)"
+            fi
+          done
+          if [ -n "$stale" ]; then
+            echo "::warning title=Newer GJC runtime packages published::${stale}"
+            {
+              echo ""
+              echo "Newer than the bundled pin:${stale}."
+              echo "Moving the pin needs \`patches/gjc-sdk-lifecycle\` re-ported against the new"
+              echo "sources (its manifest is keyed to exact file digests), then a regenerated"
+              echo "\`server/gjc-runtime-manifest.json\` and refreshed third-party notices."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::notice title=Bundled GJC runtime packages::up to date with npm"
+          fi
+
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
