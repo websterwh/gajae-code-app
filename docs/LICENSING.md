@@ -44,12 +44,17 @@ exclusions stay exactly as they are.
 
 The app bundles `@gajae-code/coding-agent`, a third-party MIT package this
 project does not control. Its dependency tree is a license surface we inherit
-rather than choose, and it currently pulls two packages that cannot ship here.
+rather than choose. Earlier runtime versions pulled two packages that could not
+ship here, `mupdf` (AGPL) through `markit-ai` and `elkjs` (EPL-2.0) through
+`beautiful-mermaid`; the 0.20.0 runtime dropped both, so the exclusion list is
+currently empty.
 
 `scripts/release/distribution-exclusions.mjs` is the single list, consumed by
 both distribution builders and by the check. Nothing upstream is patched: the
 packages install normally and are deleted from the artifact, so a runtime bump
 re-applies the decision with no manual step.
+
+No package is currently excluded. The last two entries were:
 
 | Package | Terms | Reached through | Cost of excluding it |
 | --- | --- | --- | --- |
