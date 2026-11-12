@@ -95,9 +95,11 @@ settled.
 ## Packaging and acceptance
 
 Root Puppeteer dependencies are removed, but the pinned SDK still brings
-`puppeteer-core` and `@puppeteer/browsers`. Keep the extract-zip backport,
-runtime manifest checks and payload security graph until that dependency graph
-changes; this contract does not claim that packaged Puppeteer bytes are gone.
+`puppeteer-core` and `@puppeteer/browsers`. Keep the runtime manifest checks and
+payload security graph until that dependency graph changes; this contract does
+not claim that packaged Puppeteer bytes are gone. The extract-zip backport was
+retired with `@puppeteer/browsers` 3, which unpacks with `modern-tar` and no
+longer installs extract-zip at all.
 
 ## Browser chrome refinement — 2026-09-14
 

@@ -254,14 +254,6 @@ is `.ts`/`.tsx`. Routing is react-router-dom 7.
   reapply it through a clean install and explicitly regenerate tracked runtime
   hashes with `npm run fill:runtime-manifest -- --update` before verification;
   normal dev/build gates only check the manifest and do not bless changed hashes.
-- **Browser archive security backport**: `patches/extract-zip-symlink-leaf/manifest.json`
-  owns the exact extract-zip 2.0.1 upstream PR160 transform. Postinstall applies
-  it; `npm run check:extract-zip-patch` verifies canonical source/package hashes
-  and rejects nested, aliased or modified installations. Server/desktop staging
-  must carry and verify this independent patch. Do not put it in the SDK32
-  lifecycle manifest or hand-edit node_modules. Audit recognition is conditional
-  on the actual patch and a current review, not an unconditional advisory skip.
-  Its archive-only protection is not a sandbox against concurrent local writers.
 - **Browser choice and native surface**: `Settings > Automation >
   Browser backend` (`builtin` default, `aside` and `ego` experimental) writes
   GJC's own `browser.backend` setting on the per-run settings clone and withholds
