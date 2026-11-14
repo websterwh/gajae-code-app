@@ -28,29 +28,14 @@ on:
       - 'docs/SELF-HOST.md'
       - 'docs/INSTALL.md'
       - 'docs/SERVER-LINUX-ACCEPTANCE.md'
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/server-linux.yml'
-      - '.github/workflows/ci.yml'
-      - 'src/**'
-      - 'server/**'
-      - 'shared/**'
-      - 'native/**'
-      - 'scripts/**'
-      - 'public/**'
-      - 'packaging/systemd/**'
-      - 'docker/**'
-      - 'package*.json'
-      - '*config*'
-      - '.npmrc'
-      - 'index.html'
-      - 'LICENSE'
-      - 'NOTICE'
-      - 'docs/SELF-HOST.md'
-      - 'docs/INSTALL.md'
-      - 'docs/SERVER-LINUX-ACCEPTANCE.md'
 
+# No `push` trigger. The archive is `npm run server:bundle`, and that is the
+# exact command the image build runs for every commit (`deploy/docker/Dockerfile`),
+# so a push already proves the bundle builds; what it does not prove is the
+# packaged server booting, which this lane's acceptance job owns. That runs on
+# pull requests, on a tag (`release.yml` builds and publishes the same archive)
+# and on dispatch, instead of spending a queue slot and ~10 runner-minutes on
+# every commit to main.
 permissions:
   contents: read
 
