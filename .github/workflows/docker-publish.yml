@@ -8,7 +8,22 @@ name: Build and Publish Docker Image
 on:
   push:
     branches: [ "main", "feat/remote-cua-companion", "feat/agent-desktop-companion" ]
+    # A doc, website or desktop-lane change cannot alter the image. Nine minutes
+    # of build per README edit is a waste; the lanes that own those files still
+    # run on their own paths.
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'website/**'
+      - '.github/workflows/desktop-macos.yml'
+      - '.github/workflows/desktop-linux.yml'
   workflow_dispatch:
+
+concurrency:
+  # The image is a moving tag, so only the newest commit of a branch matters:
+  # a push during a build cancels it instead of queueing a stale one behind it.
+  group: docker-publish-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   REGISTRY: ghcr.io

@@ -1,16 +1,12 @@
 name: macOS desktop
 
-# The macOS app is the active desktop target (owner decision, 2026-09-09; the
-# Linux desktop lane is dispatch-only). This lane proves the desktop shell on
-# every change: the embedded server payload builds, `src-tauri` is formatted
-# and its tests pass, and an ad-hoc app bundle assembles. Signing, notarization
-# and publication stay in the manual release workflow.
+# No macOS app is published any more: the app is deployed as the Docker image
+# (`deploy/docker`, built by `docker-publish.yml`), so an installer lane on every
+# push only burned a macOS runner per commit. Like the Linux desktop lane, this
+# one is dispatch-only: it still proves that the embedded server payload builds,
+# that `src-tauri` is formatted and that its tests pass, when someone asks for it.
 on:
   workflow_dispatch:
-  pull_request:
-  push:
-    branches:
-      - main
 
 permissions:
   contents: read

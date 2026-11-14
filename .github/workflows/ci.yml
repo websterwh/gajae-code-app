@@ -4,6 +4,12 @@ on:
   push:
     branches:
       - main
+    # Prose-only commits do not need the full verify gate. The website change is
+    # built and tested by website-pages.yml, which owns that path.
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'website/**'
   pull_request:
 
 permissions:
