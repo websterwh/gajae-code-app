@@ -257,6 +257,23 @@ test('file references retry a pending worktree and preserve explicit absolute pa
   assert.equal(attempts, 2);
 });
 
+test('worktree eligibility comes from the server, not from repository status alone', async () => {
+  let worktreeEligible = true;
+  globalThis.fetch = (async () => new Response(JSON.stringify({
+    branch: 'main', hasCommits: true, worktreeEligible, modified: [], untracked: [],
+  }))) as typeof fetch;
+  const view = renderHook(() => useProjectGitSummary('project-one', true));
+  const eligible = () => (view.result.current.state.kind === 'ready'
+    ? view.result.current.state.summary.worktreeEligible
+    : null);
+  await waitFor(() => assert.equal(eligible(), true));
+  // A repository with no commit yet, or a project below the repository root,
+  // answers false and runs in the project checkout.
+  worktreeEligible = false;
+  await act(async () => { await view.result.current.refresh(); });
+  assert.equal(eligible(), false);
+});
+
 test('Git context switches by session identity and treats structured workspace failures as unavailable', async () => {
   const requests: string[] = [];
   globalThis.fetch = (async (input) => {

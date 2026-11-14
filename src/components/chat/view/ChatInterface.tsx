@@ -96,7 +96,11 @@ function ChatInterface({
   // no, the picker stays on the project so the worktree route is never called
   // where it would simply fail.
   const projectGit = useProjectGitSummary(selectedProject?.projectId, Boolean(selectedProject?.projectId), locationSessionId ?? undefined, selectedProject?.fullPath);
-  const projectIsRepository = projectGit.state.kind === 'ready';
+  // A managed worktree needs the project directory itself to be the repository
+  // root with at least one commit. A plain folder, a `git init` with no commit
+  // yet, and a subdirectory of a larger repository all run in the project
+  // directory, where a session starts without one.
+  const worktreeAvailable = projectGit.state.kind === 'ready' && projectGit.state.summary.worktreeEligible;
   const establishSession = useCallback<NonNullable<ChatInterfaceProps['onSessionEstablished']>>((id, context) => {
     setCurrentSessionId(id);
     onSessionEstablished?.(id, context);
@@ -108,7 +112,7 @@ function ChatInterface({
     // An unattended run commits, pushes and switches branches on whatever
     // checkout it was given, so a repository session starts isolated and the
     // user opts back into the shared checkout rather than out of it.
-    defaultUseWorktree: projectIsRepository,
+    defaultUseWorktree: worktreeAvailable,
     selectedProject,
     selectedSession,
     currentSessionId: session.currentSessionId,
@@ -277,7 +281,7 @@ function ChatInterface({
       onBtw={composer.wrapAsBtw}
       isDragActive={composer.isDragActive}
       sessionPinnedModel={sessionPinnedModel}
-      sessionLocationControl={projectIsRepository || locationSessionId
+      sessionLocationControl={worktreeAvailable || locationSessionId
         ? <SessionWorktreePicker value={composer.useWorktree} onChange={composer.setUseWorktree} sessionId={locationSessionId} location={sessionLocation.data} disabled={session.isProcessing} />
         : null}
       queuedDrafts={composer.queuedDrafts}

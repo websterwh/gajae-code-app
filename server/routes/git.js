@@ -742,6 +742,10 @@ router.get('/status', asyncHandler(async (req, res) => {
 
     res.json({
       branch,
+      // Only a repository root with a commit can host a managed worktree. An
+      // empty folder, a `git init` without a commit, and a subdirectory of a
+      // larger repository have to run in the project checkout instead.
+      worktreeEligible: !projectPrefix && hasCommits,
       hasCommits,
       modified,
       added,
@@ -758,6 +762,7 @@ router.get('/status', asyncHandler(async (req, res) => {
       return res.json({
         isRepository: false,
         branch: null,
+        worktreeEligible: false,
         hasCommits: false,
         modified: [],
         added: [],

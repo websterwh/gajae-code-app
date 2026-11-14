@@ -1,4 +1,4 @@
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 use std::io::{BufRead, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
@@ -778,6 +778,35 @@ fn is_managed_worktree_path(root: &Path, path: &Path) -> bool {
             .is_some_and(valid_id)
 }
 
+/// The config every `git` this core runs gets, before its own arguments.
+///
+/// `safe.directory` is this process's trust decision about the directory it was
+/// started for: `validate_workdir` already resolved it to the top of a real
+/// checkout, and a container usually serves a mount owned by another user than
+/// the one it runs as. Git cannot see that decision, so without the entry every
+/// command fails with "dubious ownership": the protocol dies before its `ready`
+/// frame and the caller only learns the client was unavailable. Only the
+/// directory in use is named - never `*` - and it is a command-line override,
+/// not repository config, which this core still does not read (see
+/// `git_environment`). Worktree paths passed to git as their own `dir` are
+/// named the same way, which is what a root-owned checkout of a mount-owned
+/// repository needs.
+///
+/// The rest are the same kind of per-invocation policy: hooks off, fsmonitor
+/// off, no external diff driver.
+fn git_config_overrides(dir: &Path) -> Vec<OsString> {
+    [
+        "core.hooksPath=/dev/null".to_owned(),
+        "core.fsmonitor=false".to_owned(),
+        "core.useBuiltinFSMonitor=false".to_owned(),
+        "diff.external=".to_owned(),
+        format!("safe.directory={}", dir.to_string_lossy()),
+    ]
+    .into_iter()
+    .flat_map(|value| [OsString::from("-c"), OsString::from(value)])
+    .collect()
+}
+
 fn git_output<I, S>(dir: &Path, args: I) -> Result<Output, GitError>
 where
     I: IntoIterator<Item = S>,
@@ -796,16 +825,7 @@ where
         .current_dir(dir)
         .env_clear()
         .envs(git_environment())
-        .args([
-            "-c",
-            "core.hooksPath=/dev/null",
-            "-c",
-            "core.fsmonitor=false",
-            "-c",
-            "core.useBuiltinFSMonitor=false",
-            "-c",
-            "diff.external=",
-        ])
+        .args(git_config_overrides(dir))
         .args(args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -1397,6 +1417,26 @@ mod tests {
         let entries = parse_registered_newline_worktrees(&repo.path, output.into_bytes()).unwrap();
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].path, path);
+    }
+
+    #[test]
+    fn git_config_overrides_name_only_the_directory_git_runs_in() {
+        let overrides: Vec<String> = git_config_overrides(Path::new("/mounted/checkout"))
+            .into_iter()
+            .map(|value| value.to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(
+            overrides
+                .iter()
+                .filter(|value| value.as_str() == "-c")
+                .count(),
+            5
+        );
+        assert!(
+            overrides.contains(&"safe.directory=/mounted/checkout".to_owned()),
+            "a checkout owned by the mount user must still be readable"
+        );
+        assert!(!overrides.iter().any(|value| value == "safe.directory=*"));
     }
 
     #[test]

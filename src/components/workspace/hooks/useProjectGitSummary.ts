@@ -5,6 +5,8 @@ import { api } from '../../../utils/api';
 export type GitSummary = {
   branch: string | null;
   hasCommits: boolean;
+  /** The project directory itself is the repository root, and it has a commit. */
+  worktreeEligible: boolean;
   changed: number;
   staged: number;
   untracked: number;
@@ -24,6 +26,7 @@ function readSummary(body: Record<string, unknown>): GitSummary {
   return {
     branch,
     hasCommits: body.hasCommits !== false,
+    worktreeEligible: body.worktreeEligible === true,
     // Deleted files are changes too; the panel reports one working-tree number
     // rather than the per-file breakdown a manual git UI would show.
     changed: count(body.modified) + count(body.added) + count(body.deleted),
