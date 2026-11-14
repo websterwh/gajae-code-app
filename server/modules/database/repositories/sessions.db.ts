@@ -221,6 +221,17 @@ export const sessionsDb = {
     getConnection().prepare('UPDATE sessions SET isStarred = ? WHERE session_id = ?').run(isStarred ? 1 : 0, sessionId);
   },
 
+  /**
+   * Drops every session row bound to a project path and returns what it removed,
+   * so the caller can delete the transcripts those rows pointed at.
+   */
+  deleteSessionsByProjectPath(projectPath: string): SessionRow[] {
+    const normalized = normalizeProjectPath(projectPath);
+    const rows = selectMany(`SELECT ${rowColumns} FROM sessions WHERE project_path = ?`, normalized);
+    if (rows.length > 0) getConnection().prepare('DELETE FROM sessions WHERE project_path = ?').run(normalized);
+    return rows;
+  },
+
   deleteSessionById(sessionId: string): boolean {
     return getConnection().prepare('DELETE FROM sessions WHERE session_id = ?').run(sessionId).changes > 0;
   },

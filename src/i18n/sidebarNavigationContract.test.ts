@@ -14,14 +14,22 @@ const OBSOLETE_SIDEBAR_KEYS = [
   'search',
 ] as const;
 
-// The project row can only archive a workspace now. This copy offered to remove
-// a project and erase its data, and it must not reappear in any locale.
-const REMOVED_PROJECT_DELETION_KEYS = [
-  'projects.deleteProject',
+// Deleting a workspace is an explicit, confirmed action: the row offers it and
+// every locale carries the copy for it.
+const PROJECT_DELETION_KEYS = [
   'tooltips.deleteProject',
   'messages.deleteProjectFailed',
   'messages.deleteProjectError',
   'deleteConfirmation.deleteProject',
+  'deleteConfirmation.projectDeleteNotice',
+  'deleteConfirmation.removeProjectFromList',
+  'deleteConfirmation.deleteProjectFiles',
+] as const;
+
+// The copy for one bulk "delete everything" action stays gone: removal is a
+// choice between keeping the folder and erasing it, never a single blind wipe.
+const REMOVED_PROJECT_DELETION_KEYS = [
+  'projects.deleteProject',
   'deleteConfirmation.deleteAllData',
   'deleteConfirmation.sessionCount_one',
   'deleteConfirmation.sessionCount_other',
@@ -113,7 +121,22 @@ test('Given simplified sidebar navigation when locale files are parsed then obso
   assert.deepEqual(failures, []);
 });
 
-test('Given archive-only project removal when locale files are parsed then project deletion copy is absent', () => {
+test('Given a deletable workspace when locale files are parsed then the deletion copy is present', () => {
+  const failures: string[] = [];
+
+  for (const locale of localeNames()) {
+    const sidebar = readJson(path.join(LOCALES_DIR, locale, 'sidebar.json'));
+    for (const keyPath of PROJECT_DELETION_KEYS) {
+      if (valueAt(sidebar, keyPath) === undefined) {
+        failures.push(`${locale}/sidebar.json:${keyPath}`);
+      }
+    }
+  }
+
+  assert.deepEqual(failures, []);
+});
+
+test('Given the former bulk delete when locale files are parsed then that copy stays absent', () => {
   const failures: string[] = [];
 
   for (const locale of localeNames()) {

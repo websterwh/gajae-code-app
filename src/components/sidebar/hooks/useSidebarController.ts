@@ -9,12 +9,12 @@ import type { LLMProvider, Project, ProjectSession } from '../../../types/app';
 import { api, authenticatedFetch } from '../../../utils/api';
 import { copyTextToClipboard } from '../../../utils/clipboard';
 import { downloadBlob, filenameFromContentDisposition } from '../../../utils/download';
-import type { ArchivedProjectListItem, ArchivedSessionListItem, ProjectSortOrder, SessionDeleteConfirmation, SessionWithProvider } from '../types/types';
+import type { ArchivedProjectListItem, ArchivedSessionListItem, ProjectDeleteConfirmation, ProjectSortOrder, SessionDeleteConfirmation, SessionWithProvider } from '../types/types';
 import { clearLegacyStarredProjectIds, getAllSessions, readLegacyStarredProjectIds, readProjectSortOrder, sortProjects } from '../utils/utils';
 
 type ArchivedSessionsPayload = { success?: boolean; data?: { sessions?: ArchivedSessionListItem[] } };
 type ArchivedProjectsPayload = { success?: boolean; data?: { projects?: ArchivedProjectListItem[] } };
-type UseSidebarControllerArgs = { projects: Project[]; selectedProject: Project | null; selectedSession: ProjectSession | null; isLoading: boolean; isMobile: boolean; t: TFunction; onRefresh: () => Promise<void> | void; onProjectSelect: (project: Project) => void; onSessionSelect: (session: ProjectSession) => void; onSessionDelete?: (sessionId: string) => void; onLoadMoreSessions?: (projectId: string) => Promise<void> | void; onProjectArchive?: (projectId: string) => void; setSidebarVisible: (visible: boolean) => void; sidebarVisible: boolean };
+type UseSidebarControllerArgs = { projects: Project[]; selectedProject: Project | null; selectedSession: ProjectSession | null; isLoading: boolean; isMobile: boolean; t: TFunction; onRefresh: () => Promise<void> | void; onProjectSelect: (project: Project) => void; onSessionSelect: (session: ProjectSession) => void; onSessionDelete?: (sessionId: string) => void; onLoadMoreSessions?: (projectId: string) => Promise<void> | void; onProjectArchive?: (projectId: string) => void; onProjectDelete?: (projectId: string) => void; setSidebarVisible: (visible: boolean) => void; sidebarVisible: boolean };
 
 const cloneWith = <T,>(previous: Set<T>, value: T, include: boolean) => {
   const next = new Set(previous);
@@ -29,7 +29,7 @@ const errorMessage = (payload: { error?: string | { message?: string } }, fallba
 };
 
 export function useSidebarController(args: UseSidebarControllerArgs) {
-  const { projects, selectedProject, isLoading, isMobile, t, onRefresh, onProjectSelect, onSessionSelect, onSessionDelete, onLoadMoreSessions, onProjectArchive, setSidebarVisible, sidebarVisible } = args;
+  const { projects, selectedProject, isLoading, isMobile, t, onRefresh, onProjectSelect, onSessionSelect, onSessionDelete, onLoadMoreSessions, onProjectArchive, onProjectDelete, setSidebarVisible, sidebarVisible } = args;
   const palette = usePaletteOps();
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
   const [editingProject, setEditingProject] = useState<string | null>(null);
@@ -45,6 +45,7 @@ export function useSidebarController(args: UseSidebarControllerArgs) {
   const [editingSessionName, setEditingSessionName] = useState('');
   const [archivingProjects, setArchivingProjects] = useState<Set<string>>(new Set());
   const [sessionDeleteConfirmation, setSessionDeleteConfirmation] = useState<SessionDeleteConfirmation | null>(null);
+  const [projectDeleteConfirmation, setProjectDeleteConfirmation] = useState<ProjectDeleteConfirmation | null>(null);
   const [isArchiveOpen, setIsArchiveOpen] = useState(false);
   const [archiveLoadError, setArchiveLoadError] = useState<string | null>(null);
   const [archivedProjects, setArchivedProjects] = useState<ArchivedProjectListItem[]>([]);
@@ -254,6 +255,29 @@ export function useSidebarController(args: UseSidebarControllerArgs) {
     finally { setArchivingProjects((previous) => cloneWith(previous, project.projectId, false)); }
   }, [fetchArchivedSessions, onProjectArchive, t]);
 
+  // Deletion is the irreversible removal, so unlike archive it always asks first.
+  // The dialog offers both halves of the request: forget the workspace here, or
+  // erase its folder as well.
+  const showDeleteProjectConfirmation = useCallback((project: Project) => setProjectDeleteConfirmation({
+    projectId: project.projectId,
+    projectName: project.displayName,
+    projectPath: project.fullPath,
+  }), []);
+  const confirmDeleteProject = useCallback(async (deleteFiles = false) => {
+    if (!projectDeleteConfirmation) return;
+    const { projectId } = projectDeleteConfirmation;
+    setProjectDeleteConfirmation(null);
+    try {
+      const response = await api.deleteProject(projectId, deleteFiles);
+      if (!response.ok) {
+        showErrorToast(errorMessage(await response.json() as { error?: string | { message?: string } }, t('messages.deleteProjectFailed')));
+        return;
+      }
+      onProjectDelete?.(projectId);
+      await fetchArchivedSessions();
+    } catch (error) { console.error('[Sidebar] Error deleting project:', error); showErrorToast(t('messages.deleteProjectError')); }
+  }, [fetchArchivedSessions, onProjectDelete, projectDeleteConfirmation, t]);
+
   const handleProjectSelect = useCallback((project: Project) => onProjectSelect(project), [onProjectSelect]);
   const openArchivedSession = useCallback((session: ArchivedSessionListItem) => {
     const project = session.projectId ? projects.find((candidate) => candidate.projectId === session.projectId) ?? archivedProjects.find((candidate) => candidate.projectId === session.projectId) ?? null : null;
@@ -327,5 +351,5 @@ export function useSidebarController(args: UseSidebarControllerArgs) {
   }, [t]); const collapseSidebar = useCallback(() => setSidebarVisible(false), [setSidebarVisible]);
   const expandSidebar = useCallback(() => setSidebarVisible(true), [setSidebarVisible]);
 
-  return { isSidebarCollapsed: !isMobile && !sidebarVisible, expandedProjects, editingProject, showNewProject, editingName, initialSessionsLoaded, currentTime, projectSortOrder, isRefreshing, editingSession, editingSessionName, archivingProjects, loadingMoreProjects, sessionDeleteConfirmation, filteredProjects, isArchiveOpen, archiveLoadError, archivedProjects, archivedSessions, archivedSessionsCount: archivedProjects.length + archivedSessions.length, isArchivedSessionsLoading, toggleProject, handleSessionClick, toggleStarProject, isProjectStarred, getProjectSessions, loadMoreSessionsForProject, startEditing, cancelEditing, saveProjectName, showDeleteSessionConfirmation, confirmDeleteSession, archiveSession, archiveProject, handleProjectSelect, openArchivedSession, restoreArchivedProject, restoreArchivedSession, openArchive, closeArchive, refreshProjects, updateSessionSummary, regenerateSessionTitle, toggleSessionStar, exportSession, copyDebugInfo, collapseSidebar, expandSidebar, setShowNewProject, setEditingName, setEditingSession, setEditingSessionName, setSessionDeleteConfirmation };
+  return { isSidebarCollapsed: !isMobile && !sidebarVisible, expandedProjects, editingProject, showNewProject, editingName, initialSessionsLoaded, currentTime, projectSortOrder, isRefreshing, editingSession, editingSessionName, archivingProjects, loadingMoreProjects, sessionDeleteConfirmation, projectDeleteConfirmation, filteredProjects, isArchiveOpen, archiveLoadError, archivedProjects, archivedSessions, archivedSessionsCount: archivedProjects.length + archivedSessions.length, isArchivedSessionsLoading, toggleProject, handleSessionClick, toggleStarProject, isProjectStarred, getProjectSessions, loadMoreSessionsForProject, startEditing, cancelEditing, saveProjectName, showDeleteSessionConfirmation, confirmDeleteSession, archiveSession, archiveProject, showDeleteProjectConfirmation, confirmDeleteProject, handleProjectSelect, openArchivedSession, restoreArchivedProject, restoreArchivedSession, openArchive, closeArchive, refreshProjects, updateSessionSummary, regenerateSessionTitle, toggleSessionStar, exportSession, copyDebugInfo, collapseSidebar, expandSidebar, setShowNewProject, setEditingName, setEditingSession, setEditingSessionName, setSessionDeleteConfirmation, setProjectDeleteConfirmation };
 }

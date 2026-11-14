@@ -109,6 +109,10 @@ function updateCustomProjectNameById(projectId: string, customProjectName: strin
   getConnection().prepare('UPDATE projects SET custom_project_name = ? WHERE project_id = ?').run(customProjectName, projectId);
 }
 
+function removeProjectById(projectId: string): boolean {
+  return getConnection().prepare('DELETE FROM projects WHERE project_id = ?').run(projectId).changes > 0;
+}
+
 function promoteProjectOriginById(projectId: string): ProjectRepositoryRow | null {
   const row = getConnection().prepare(`
     UPDATE projects SET origin = 'explicit'
@@ -120,6 +124,7 @@ function promoteProjectOriginById(projectId: string): ProjectRepositoryRow | nul
 
 export const projectsDb = {
   createProjectPath,
+  deleteProjectById: removeProjectById,
   ensureProjectPathForSession,
   getProjectPath: rowForPath,
   getProjectById: rowForId,

@@ -45,7 +45,8 @@
     "activeSessionIndicator": "Unterhaltung aktiv innerhalb der letzten 10 Minuten",
     "save": "Änderungen sichern",
     "cancel": "Vorgang abbrechen",
-    "attentionRequiredIndicator": "Unterhaltung braucht Aufmerksamkeit"
+    "attentionRequiredIndicator": "Unterhaltung braucht Aufmerksamkeit",
+    "deleteProject": "Diesen Workspace löschen"
   },
   "filter": {
     "placeholder": "Unterhaltungen filtern",
@@ -94,7 +95,9 @@
     "restoreSessionError": "Beim Wiederherstellen der Unterhaltung ist ein Fehler aufgetreten. Versuchen Sie es erneut.",
     "archiveSessionFailed": "Unterhaltung konnte nicht archiviert werden. Versuchen Sie es erneut.",
     "archiveSessionError": "Beim Archivieren der Unterhaltung ist ein Fehler aufgetreten. Versuchen Sie es erneut.",
-    "debugInfoError": "Die Debug-Infos konnten nicht kopiert werden."
+    "debugInfoError": "Die Debug-Infos konnten nicht kopiert werden.",
+    "deleteProjectFailed": "Der Workspace konnte nicht gelöscht werden. Versuchen Sie es erneut.",
+    "deleteProjectError": "Beim Löschen des Workspace ist ein Fehler aufgetreten. Versuchen Sie es erneut."
   },
   "providerQuota": {
     "title": "Anbieter-Kontingent",
@@ -118,7 +121,11 @@
     "archivedSessionNotice": "Diese Unterhaltung ist bereits archiviert. Behalte sie ausgeblendet oder lösche sie endgültig.",
     "archiveSession": "Unterhaltung archivieren",
     "deleteSessionPermanently": "Endgültig löschen",
-    "deleteAnywayDiscardWorktree": "Änderungen verwerfen und trotzdem löschen"
+    "deleteAnywayDiscardWorktree": "Änderungen verwerfen und trotzdem löschen",
+    "deleteProject": "Workspace löschen",
+    "projectDeleteNotice": "Entfernen blendet diesen Workspace hier aus und behält den Ordner. Löschen entfernt zusätzlich alles unter {{path}}.",
+    "removeProjectFromList": "Aus Liste entfernen (Dateien behalten)",
+    "deleteProjectFiles": "Workspace und Dateien löschen"
   },
   "navigation": {
     "primary": "Hauptnavigation"

@@ -3,6 +3,7 @@ import express from 'express';
 import { archiveProject, restoreArchivedProject } from '@/modules/projects/services/project-archive.service.js';
 import { createCloneProgressStream, readCloneProgress, type CloneProgressEvent } from '@/modules/projects/services/clone-progress-registry.service.js';
 import { startCloneProject } from '@/modules/projects/services/project-clone.service.js';
+import { deleteProject } from '@/modules/projects/services/project-delete.service.js';
 import { createProject, promoteProjectOrigin, updateProjectDisplayName } from '@/modules/projects/services/project-management.service.js';
 import { startScratchWorkspace } from '@/modules/projects/services/scratch-workspace.service.js';
 import { descendIntoChild, resolveWorkspaceTarget } from '@/modules/projects/services/workspace-target.service.js';
@@ -259,6 +260,17 @@ router.post('/:projectId/archive', asyncHandler(async (request, response) => {
   const projectId = routeProjectId(request.params.projectId);
   archiveProject(projectId);
   response.json(createApiSuccessResponse({ projectId, isArchived: true }));
+}));
+
+/**
+ * The one removal that drops the project row. It is a DELETE on the workspace
+ * itself, never a side effect of archiving; `deleteFiles=true` additionally
+ * erases the workspace directory, and without it the folder is left untouched.
+ */
+router.delete('/:projectId', asyncHandler(async (request, response) => {
+  const projectId = routeProjectId(request.params.projectId, true);
+  const deleteFiles = queryText(request.query.deleteFiles).trim() === 'true';
+  response.json(createApiSuccessResponse(await deleteProject(projectId, { deleteFiles })));
 }));
 
 export default router;

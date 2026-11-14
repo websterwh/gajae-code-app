@@ -45,7 +45,8 @@
     "activeSessionIndicator": "對話最近十分鐘內有活動",
     "save": "儲存",
     "cancel": "取消",
-    "attentionRequiredIndicator": "對話需要注意"
+    "attentionRequiredIndicator": "對話需要注意",
+    "deleteProject": "刪除此工作區"
   },
   "filter": {
     "placeholder": "篩選對話",
@@ -94,7 +95,9 @@
     "restoreSessionError": "發生對話恢復錯誤。請再試一次。",
     "archiveSessionFailed": "無法封存對話。請再試一次。",
     "archiveSessionError": "發生對話封存錯誤。請再試一次。",
-    "debugInfoError": "無法複製除錯資訊。"
+    "debugInfoError": "無法複製除錯資訊。",
+    "deleteProjectFailed": "無法刪除工作區，請再試一次。",
+    "deleteProjectError": "刪除工作區時發生錯誤，請再試一次。"
   },
   "providerQuota": {
     "title": "供應方配額",
@@ -118,7 +121,11 @@
     "archivedSessionNotice": "此對話已封存。可以繼續隱藏，也可以永久刪除。",
     "archiveSession": "封存對話",
     "deleteSessionPermanently": "永久刪除",
-    "deleteAnywayDiscardWorktree": "放棄變更並仍要刪除"
+    "deleteAnywayDiscardWorktree": "放棄變更並仍要刪除",
+    "deleteProject": "刪除工作區",
+    "projectDeleteNotice": "從清單移除只會在此隱藏此工作區並保留資料夾；刪除還會清空 {{path}} 中的所有內容。",
+    "removeProjectFromList": "從清單移除（保留檔案）",
+    "deleteProjectFiles": "刪除工作區及檔案"
   },
   "navigation": {
     "primary": "主要導覽"

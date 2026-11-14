@@ -81,15 +81,11 @@ test('an unknown project is a 404 rather than a silent no-op', async () => {
   });
 });
 
-test('no project route, service or repository can delete a project or its files', async () => {
+test('archiving stays a flag: it never reaches the filesystem or drops a row', async () => {
   const routes = await readFile('server/modules/projects/projects.routes.ts', 'utf8');
-  assert.equal(/router\.delete\('\/:projectId'/.test(routes), false, 'the workspace delete route is gone');
-  assert.ok(routes.includes("router.post('/:projectId/archive'"), 'archiving replaced it');
-  assert.equal(routes.includes('force'), false, 'and it carries no force escape hatch');
+  assert.ok(routes.includes("router.post('/:projectId/archive'"), 'the undoable removal is still the archive route');
 
   const service = await readFile('server/modules/projects/services/project-archive.service.ts', 'utf8');
-  assert.equal(/unlink|rm\b|rmdir/.test(service), false, 'archiving never reaches the filesystem');
-
-  const repository = await readFile('server/modules/database/repositories/projects.db.ts', 'utf8');
-  assert.equal(/DELETE FROM projects/.test(repository), false, 'and no repository call drops a project row');
+  assert.equal(/unlink|rm\(|rmdir/.test(service), false, 'archiving never reaches the filesystem');
+  assert.equal(/DELETE FROM projects/.test(service), false, 'and archiving never drops a project row');
 });

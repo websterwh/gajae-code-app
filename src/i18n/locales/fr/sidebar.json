@@ -45,7 +45,8 @@
     "activeSessionIndicator": "Conversation active au cours des 10 dernières minutes",
     "save": "Sauvegarder",
     "cancel": "Abandonner",
-    "attentionRequiredIndicator": "La conversation a besoin d’attention"
+    "attentionRequiredIndicator": "La conversation a besoin d’attention",
+    "deleteProject": "Supprimer cet espace de travail"
   },
   "filter": {
     "placeholder": "Filtrer les conversations",
@@ -94,7 +95,9 @@
     "restoreSessionError": "Une erreur de restauration de conversation s'est produite. Essayer à nouveau.",
     "archiveSessionFailed": "Impossible d'archiver la conversation. Essayer à nouveau.",
     "archiveSessionError": "Une erreur d'archivage de conversation s'est produite. Essayer à nouveau.",
-    "debugInfoError": "Les infos de débogage n’ont pas pu être copiées."
+    "debugInfoError": "Les infos de débogage n’ont pas pu être copiées.",
+    "deleteProjectFailed": "Impossible de supprimer l’espace de travail. Réessayez.",
+    "deleteProjectError": "Une erreur est survenue lors de la suppression de l’espace de travail. Réessayez."
   },
   "providerQuota": {
     "title": "Quota du fournisseur",
@@ -118,7 +121,11 @@
     "archivedSessionNotice": "Cette conversation est déjà archivée. Gardez-la masquée ou supprimez-la définitivement.",
     "archiveSession": "Archiver la conversation",
     "deleteSessionPermanently": "Supprimer définitivement",
-    "deleteAnywayDiscardWorktree": "Annuler les modifications et supprimer quand même"
+    "deleteAnywayDiscardWorktree": "Annuler les modifications et supprimer quand même",
+    "deleteProject": "Supprimer l’espace de travail",
+    "projectDeleteNotice": "Retirer masque cet espace de travail ici et conserve le dossier. Supprimer efface aussi tout le contenu de {{path}}.",
+    "removeProjectFromList": "Retirer de la liste (conserver les fichiers)",
+    "deleteProjectFiles": "Supprimer l’espace de travail et les fichiers"
   },
   "navigation": {
     "primary": "Navigation principale"

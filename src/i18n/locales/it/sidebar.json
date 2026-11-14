@@ -45,7 +45,8 @@
     "activeSessionIndicator": "Conversazione attiva negli ultimi 10 minuti",
     "save": "Registra",
     "cancel": "Interrompi",
-    "attentionRequiredIndicator": "La conversazione richiede attenzione"
+    "attentionRequiredIndicator": "La conversazione richiede attenzione",
+    "deleteProject": "Elimina questo spazio di lavoro"
   },
   "filter": {
     "placeholder": "Filtra le conversazioni",
@@ -94,7 +95,9 @@
     "restoreSessionError": "Si è verificato un errore di ripristino della conversazione. Riprova.",
     "archiveSessionFailed": "Impossibile archiviare la conversazione. Riprova.",
     "archiveSessionError": "Si è verificato un errore di archiviazione della conversazione. Riprova.",
-    "debugInfoError": "Impossibile copiare le informazioni di debug."
+    "debugInfoError": "Impossibile copiare le informazioni di debug.",
+    "deleteProjectFailed": "Impossibile eliminare lo spazio di lavoro. Riprova.",
+    "deleteProjectError": "Si è verificato un errore durante l'eliminazione dello spazio di lavoro. Riprova."
   },
   "providerQuota": {
     "title": "Quota del provider",
@@ -118,7 +121,11 @@
     "archivedSessionNotice": "Questa conversazione è già archiviata. Tienila nascosta o eliminala definitivamente.",
     "archiveSession": "Archivia conversazione",
     "deleteSessionPermanently": "Elimina definitivamente",
-    "deleteAnywayDiscardWorktree": "Scarta le modifiche ed elimina comunque"
+    "deleteAnywayDiscardWorktree": "Scarta le modifiche ed elimina comunque",
+    "deleteProject": "Elimina spazio di lavoro",
+    "projectDeleteNotice": "Rimuovere nasconde questo spazio di lavoro qui e conserva la cartella. Eliminare cancella anche tutto il contenuto di {{path}}.",
+    "removeProjectFromList": "Rimuovi dall'elenco (mantieni i file)",
+    "deleteProjectFiles": "Elimina spazio di lavoro e file"
   },
   "navigation": {
     "primary": "Navigazione principale"

@@ -45,7 +45,8 @@
     "activeSessionIndicator": "최근 10분 이내에 활성화된 대화",
     "save": "저장하기",
     "cancel": "취소하기",
-    "attentionRequiredIndicator": "대화에 주의가 필요합니다"
+    "attentionRequiredIndicator": "대화에 주의가 필요합니다",
+    "deleteProject": "이 워크스페이스 삭제"
   },
   "filter": {
     "placeholder": "대화 필터",
@@ -94,7 +95,9 @@
     "restoreSessionError": "대화 복원 오류가 발생했습니다. 다시 시도해주세요.",
     "archiveSessionFailed": "대화 보관에 실패했습니다. 다시 시도해주세요.",
     "archiveSessionError": "대화 보관 오류가 발생했습니다. 다시 시도해주세요.",
-    "debugInfoError": "디버그 정보를 복사하지 못했습니다."
+    "debugInfoError": "디버그 정보를 복사하지 못했습니다.",
+    "deleteProjectFailed": "워크스페이스를 삭제할 수 없습니다. 다시 시도하세요.",
+    "deleteProjectError": "워크스페이스 삭제 중 오류가 발생했습니다. 다시 시도하세요."
   },
   "providerQuota": {
     "title": "제공자 사용량",
@@ -118,7 +121,11 @@
     "archivedSessionNotice": "이미 보관된 대화입니다. 계속 숨겨 두거나 영구 삭제할 수 있습니다.",
     "archiveSession": "대화 보관",
     "deleteSessionPermanently": "영구 삭제",
-    "deleteAnywayDiscardWorktree": "변경 내용을 버리고 그래도 삭제"
+    "deleteAnywayDiscardWorktree": "변경 내용을 버리고 그래도 삭제",
+    "deleteProject": "워크스페이스 삭제",
+    "projectDeleteNotice": "목록에서 제거하면 폴더는 그대로 두고 여기에서만 숨깁니다. 삭제하면 {{path}} 안의 모든 항목도 지웁니다.",
+    "removeProjectFromList": "목록에서 제거(파일 유지)",
+    "deleteProjectFiles": "워크스페이스와 파일 삭제"
   },
   "navigation": {
     "primary": "기본 탐색"

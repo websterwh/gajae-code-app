@@ -45,7 +45,8 @@
     "activeSessionIndicator": "最近十分钟内活跃的对话",
     "save": "保存更改",
     "cancel": "取消操作",
-    "attentionRequiredIndicator": "对话需要关注"
+    "attentionRequiredIndicator": "对话需要关注",
+    "deleteProject": "删除此工作区"
   },
   "filter": {
     "placeholder": "筛选对话",
@@ -94,7 +95,9 @@
     "restoreSessionError": "发生了对话恢复错误，请重试。",
     "archiveSessionFailed": "无法归档对话，请重试。",
     "archiveSessionError": "发生了对话归档错误，请重试。",
-    "debugInfoError": "无法复制调试信息。"
+    "debugInfoError": "无法复制调试信息。",
+    "deleteProjectFailed": "无法删除工作区，请重试。",
+    "deleteProjectError": "删除工作区时出错，请重试。"
   },
   "providerQuota": {
     "title": "提供方配额",
@@ -118,7 +121,11 @@
     "archivedSessionNotice": "此对话已归档。可以继续隐藏，也可以永久删除。",
     "archiveSession": "归档对话",
     "deleteSessionPermanently": "永久删除",
-    "deleteAnywayDiscardWorktree": "放弃更改并仍要删除"
+    "deleteAnywayDiscardWorktree": "放弃更改并仍要删除",
+    "deleteProject": "删除工作区",
+    "projectDeleteNotice": "从列表移除只会在此隐藏该工作区并保留文件夹；删除还会清空 {{path}} 中的所有内容。",
+    "removeProjectFromList": "从列表移除（保留文件）",
+    "deleteProjectFiles": "删除工作区及文件"
   },
   "navigation": {
     "primary": "主导航"

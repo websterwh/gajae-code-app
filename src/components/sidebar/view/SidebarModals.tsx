@@ -7,7 +7,7 @@ import { Button } from '../../../shared/view/ui';
 import Settings from '../../settings/view/Settings';
 import type { Project } from '../../../types/app';
 import { normalizeProjectForSettings } from '../utils/utils';
-import type { SessionDeleteConfirmation, SettingsProject } from '../types/types';
+import type { ProjectDeleteConfirmation, SessionDeleteConfirmation, SettingsProject } from '../types/types';
 import ProjectCreationWizard from '../../project-creation-wizard';
 
 type SidebarModalsProps = {
@@ -21,6 +21,9 @@ type SidebarModalsProps = {
   sessionDeleteConfirmation: SessionDeleteConfirmation | null;
   onCancelDeleteSession: () => void;
   onConfirmDeleteSession: (hardDelete?: boolean, discardWorktree?: boolean) => void;
+  projectDeleteConfirmation: ProjectDeleteConfirmation | null;
+  onCancelDeleteProject: () => void;
+  onConfirmDeleteProject: (deleteFiles?: boolean) => void;
   t: TFunction;
 };
 
@@ -48,6 +51,9 @@ export default function SidebarModals({
   sessionDeleteConfirmation,
   onCancelDeleteSession,
   onConfirmDeleteSession,
+  projectDeleteConfirmation,
+  onCancelDeleteProject,
+  onConfirmDeleteProject,
   t,
 }: SidebarModalsProps) {
   // Settings expects project identity/path fields to be present for dropdown labels and local-scope MCP config.
@@ -75,6 +81,58 @@ export default function SidebarModals({
             projects={settingsProjects}
             initialTab={settingsInitialTab}
           />,
+          document.body,
+        )}
+
+      {projectDeleteConfirmation &&
+        ReactDOM.createPortal(
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-xs">
+            <div className="w-full max-w-md overflow-hidden rounded-xl border border-border bg-card shadow-2xl">
+              <div className="p-6">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-destructive/10">
+                    <AlertTriangle className="h-6 w-6 text-destructive" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="mb-2 text-lg font-semibold text-foreground">
+                      {t('deleteConfirmation.deleteProject')}
+                    </h3>
+                    <p className="mb-1 text-sm text-muted-foreground">
+                      {t('deleteConfirmation.confirmDelete')}{' '}
+                      <span className="font-medium text-foreground">
+                        {projectDeleteConfirmation.projectName}
+                      </span>
+                      ?
+                    </p>
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      {t('deleteConfirmation.projectDeleteNotice', { path: projectDeleteConfirmation.projectPath })}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="flex flex-col gap-2 border-t border-border bg-muted/30 p-4">
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => onConfirmDeleteProject(false)}
+                >
+                  <EyeOff className="mr-2 h-4 w-4" />
+                  {t('deleteConfirmation.removeProjectFromList')}
+                </Button>
+                <Button
+                  variant="destructive"
+                  className="w-full justify-start"
+                  onClick={() => onConfirmDeleteProject(true)}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  {t('deleteConfirmation.deleteProjectFiles')}
+                </Button>
+                <Button variant="ghost" className="w-full" onClick={onCancelDeleteProject}>
+                  {t('actions.cancel')}
+                </Button>
+              </div>
+            </div>
+          </div>,
           document.body,
         )}
 

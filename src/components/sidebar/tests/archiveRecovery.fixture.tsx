@@ -141,6 +141,7 @@ function ArchiveFixture() {
           onCancelEditingProject: controller.cancelEditing,
           onSaveProjectName: controller.saveProjectName,
           onArchiveProject: (project) => { void controller.archiveProject(project); },
+          onDeleteProject: (project) => { controller.showDeleteProjectConfirmation(project); },
           onSessionSelect: controller.handleSessionClick,
           onDeleteSession: controller.showDeleteSessionConfirmation,
           onNewSession: () => {},

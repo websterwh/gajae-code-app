@@ -45,7 +45,8 @@
     "activeSessionIndicator": "Conversation active within the last 10 minutes",
     "save": "Save",
     "cancel": "Cancel",
-    "attentionRequiredIndicator": "Conversation needs attention"
+    "attentionRequiredIndicator": "Conversation needs attention",
+    "deleteProject": "Delete this workspace"
   },
   "filter": {
     "placeholder": "Filter conversations",
@@ -94,7 +95,9 @@
     "restoreSessionError": "A conversation restore error occurred. Try again.",
     "archiveSessionFailed": "Could not archive the conversation. Try again.",
     "archiveSessionError": "A conversation archive error occurred. Try again.",
-    "debugInfoError": "The debug info could not be copied."
+    "debugInfoError": "The debug info could not be copied.",
+    "deleteProjectFailed": "Could not delete the workspace. Try again.",
+    "deleteProjectError": "A workspace deletion error occurred. Try again."
   },
   "providerQuota": {
     "title": "Provider quota",
@@ -118,7 +121,11 @@
     "archivedSessionNotice": "This conversation is already archived. Keep it hidden or delete it permanently.",
     "archiveSession": "Archive conversation",
     "deleteSessionPermanently": "Delete permanently",
-    "deleteAnywayDiscardWorktree": "Discard changes and delete anyway"
+    "deleteAnywayDiscardWorktree": "Discard changes and delete anyway",
+    "deleteProject": "Delete workspace",
+    "projectDeleteNotice": "Removing hides this workspace here and keeps the folder. Deleting also erases everything in {{path}}.",
+    "removeProjectFromList": "Remove from list (keep files)",
+    "deleteProjectFiles": "Delete workspace and files"
   },
   "navigation": {
     "primary": "Primary navigation"

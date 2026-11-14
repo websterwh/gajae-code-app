@@ -45,7 +45,8 @@
     "activeSessionIndicator": "Sohbet son 10 dakika içinde aktif",
     "save": "Değişiklikleri kaydet",
     "cancel": "İşlemi iptal et",
-    "attentionRequiredIndicator": "Sohbet ilgi bekliyor"
+    "attentionRequiredIndicator": "Sohbet ilgi bekliyor",
+    "deleteProject": "Bu çalışma alanını sil"
   },
   "filter": {
     "placeholder": "Sohbetleri filtrele",
@@ -94,7 +95,9 @@
     "restoreSessionError": "Sohbet geri yükleme hatası oluştu. Tekrar deneyin.",
     "archiveSessionFailed": "Sohbet arşivlenemedi. Tekrar deneyin.",
     "archiveSessionError": "Sohbet arşivleme hatası oluştu. Tekrar deneyin.",
-    "debugInfoError": "Hata ayıklama bilgisi kopyalanamadı."
+    "debugInfoError": "Hata ayıklama bilgisi kopyalanamadı.",
+    "deleteProjectFailed": "Çalışma alanı silinemedi. Tekrar deneyin.",
+    "deleteProjectError": "Çalışma alanı silinirken bir hata oluştu. Tekrar deneyin."
   },
   "providerQuota": {
     "title": "Sağlayıcı kotası",
@@ -118,7 +121,11 @@
     "archivedSessionNotice": "Bu sohbet zaten arşivlendi. Gizli tutabilir veya kalıcı olarak silebilirsiniz.",
     "archiveSession": "Sohbeti arşivle",
     "deleteSessionPermanently": "Kalıcı olarak sil",
-    "deleteAnywayDiscardWorktree": "Değişiklikleri yok say ve yine de sil"
+    "deleteAnywayDiscardWorktree": "Değişiklikleri yok say ve yine de sil",
+    "deleteProject": "Çalışma alanını sil",
+    "projectDeleteNotice": "Listeden kaldırmak bu çalışma alanını burada gizler ve klasörü korur. Silmek {{path}} içindeki her şeyi de siler.",
+    "removeProjectFromList": "Listeden kaldır (dosyaları koru)",
+    "deleteProjectFiles": "Çalışma alanını ve dosyaları sil"
   },
   "navigation": {
     "primary": "Ana gezinme"

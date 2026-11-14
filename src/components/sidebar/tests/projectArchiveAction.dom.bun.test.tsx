@@ -11,11 +11,11 @@ import { useSidebarController } from '../hooks/useSidebarController';
 import SidebarProjectItem from '../view/SidebarProjectItem';
 
 /*
- * The project row's removal action.
+ * The project row's removal actions.
  *
- * A project can only be archived: the request is the archive endpoint, nothing
- * on the row offers deletion, and the app never issues a DELETE for a project -
- * a misclick has to be undoable from the archive screen.
+ * Archiving is the undoable one and hits the archive endpoint. The trash button
+ * on the same row only raises the confirmation dialog: nothing is erased until
+ * the viewer picks a side in it, so a misclick cannot drop a workspace.
  */
 
 const project: Project = {
@@ -88,6 +88,7 @@ function Harness({ onArchived }: { onArchived: (projectId: string) => void }) {
       onCancelEditingProject={() => {}}
       onSaveProjectName={() => {}}
       onArchiveProject={(target) => { void controller.archiveProject(target); }}
+      onDeleteProject={(target) => { controller.showDeleteProjectConfirmation(target); }}
       onSessionSelect={() => {}}
       onDeleteSession={() => {}}
       onLoadMoreSessions={() => {}}
@@ -122,8 +123,8 @@ async function setup(): Promise<{ requests: string[]; archived: string[] }> {
   return { requests, archived };
 }
 
-test('the row offers archiving and nothing that deletes the workspace', async () => {
-  await setup();
+test('the row offers archiving and a trash button that only opens the confirmation', async () => {
+  const { requests } = await setup();
 
   // The unlabelled button is the row itself; the labelled ones are its actions.
   const labels = screen.getAllByRole('button')
@@ -134,9 +135,12 @@ test('the row offers archiving and nothing that deletes the workspace', async ()
     enSidebar.tooltips.addToFavorites,
     enSidebar.tooltips.renameProject,
     enSidebar.tooltips.archiveProject,
+    enSidebar.tooltips.deleteProject,
   ]);
-  // The workspace delete button was the row's only destructive affordance.
-  assert.equal(document.body.innerHTML.includes('text-destructive'), false);
+
+  fireEvent.click(screen.getByLabelText(enSidebar.tooltips.deleteProject));
+  // The click is a dialog, not a request: the workspace survives until a choice is made.
+  assert.deepEqual(requests, []);
 });
 
 test('archiving a project posts the archive request and never a delete', async () => {

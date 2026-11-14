@@ -168,6 +168,7 @@ export function sidebarContentPropsFixture(t: TFunction): ComponentProps<typeof 
       onCancelEditingProject: () => {},
       onSaveProjectName: () => {},
       onArchiveProject: () => {},
+      onDeleteProject: () => {},
       onSessionSelect: () => {},
       onDeleteSession: () => {},
       onNewSession: () => {},

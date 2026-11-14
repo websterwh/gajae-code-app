@@ -384,7 +384,18 @@ export function useProjectsState({ sessionId, navigate, subscribe, isMobile, act
     client.setQueryData<Project[]>(PROJECTS_QUERY_KEY, (cached) => (cached ?? []).filter((project) => project.projectId !== projectId));
   }, [client, leaveSessionRoute, selectedProject?.projectId, setSelectedProject, setSelectedSession]);
 
-  const sidebarSharedProps = useMemo(() => ({ activeSessions, onProjectSelect: handleProjectSelect, onSessionSelect: handleSessionSelect, onNewSession: handleNewSession, onSessionDelete: handleSessionDelete, onLoadMoreSessions: loadMoreProjectSessions, onProjectArchive: handleProjectArchive, onRefresh: handleSidebarRefresh, isMobile }), [activeSessions, handleNewSession, handleProjectArchive, handleProjectSelect, handleSessionDelete, handleSessionSelect, handleSidebarRefresh, isMobile, loadMoreProjectSessions]);
+  // Deletion drops the row server side, so the cached list and every selection
+  // that pointed at it go the same way they do for an archived workspace.
+  const handleProjectDelete = useCallback((projectId: string) => {
+    if (selectedProject?.projectId === projectId) {
+      setSelectedProject(null);
+      setSelectedSession(null);
+      leaveSessionRoute();
+    }
+    client.setQueryData<Project[]>(PROJECTS_QUERY_KEY, (cached) => (cached ?? []).filter((project) => project.projectId !== projectId));
+  }, [client, leaveSessionRoute, selectedProject?.projectId, setSelectedProject, setSelectedSession]);
+
+  const sidebarSharedProps = useMemo(() => ({ activeSessions, onProjectSelect: handleProjectSelect, onSessionSelect: handleSessionSelect, onNewSession: handleNewSession, onSessionDelete: handleSessionDelete, onLoadMoreSessions: loadMoreProjectSessions, onProjectArchive: handleProjectArchive, onProjectDelete: handleProjectDelete, onRefresh: handleSidebarRefresh, isMobile }), [activeSessions, handleNewSession, handleProjectArchive, handleProjectDelete, handleProjectSelect, handleSessionDelete, handleSessionSelect, handleSidebarRefresh, isMobile, loadMoreProjectSessions]);
 
   return { projects, selectedProject, selectedSession, sidebarOpen, isLoadingProjects: query.isLoading, loadingProgress, isInputFocused, showSettings, settingsInitialTab, newSessionTrigger, setSidebarOpen, setIsInputFocused, setShowSettings, openSettings, fetchProjects: refetch, refreshProjectsSilently: refetch, registerOptimisticSession, sidebarSharedProps, handleProjectSelect, handleSessionSelect, handleNewSession, handleSessionDelete, loadMoreProjectSessions, handleProjectArchive, handleSidebarRefresh };
 }

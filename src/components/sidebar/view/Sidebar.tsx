@@ -25,7 +25,7 @@ import type { SidebarProjectListProps } from './SidebarProjectList';
 function Sidebar(props: SidebarProps) {
   // Keep the shared native client alive across expanded/collapsed subscriptions.
   useDesktopUpdate();
-  const { activeSessions, onProjectSelect, onSessionSelect, onNewSession, onSessionDelete, onLoadMoreSessions, onProjectArchive, onRefresh, isMobile } = props;
+  const { activeSessions, onProjectSelect, onSessionSelect, onNewSession, onSessionDelete, onLoadMoreSessions, onProjectArchive, onProjectDelete, onRefresh, isMobile } = props;
   const { t } = useTranslation(['sidebar', 'common']);
   const { isPWA } = useDeviceSettings({ trackMobile: false });
   const { preferences, setPreference } = useUiPreferences();
@@ -53,6 +53,7 @@ function Sidebar(props: SidebarProps) {
     onSessionDelete,
     onLoadMoreSessions,
     onProjectArchive,
+    onProjectDelete,
     setSidebarVisible: (visible) => setPreference('sidebarVisible', visible),
     sidebarVisible: preferences.sidebarVisible,
   });
@@ -115,6 +116,7 @@ function Sidebar(props: SidebarProps) {
     onCancelEditingProject: controller.cancelEditing,
     onSaveProjectName: (projectId) => { void controller.saveProjectName(projectId); },
     onArchiveProject: (project) => { void controller.archiveProject(project); },
+    onDeleteProject: controller.showDeleteProjectConfirmation,
     onSessionSelect: controller.handleSessionClick,
     onDeleteSession: controller.showDeleteSessionConfirmation,
     onLoadMoreSessions: controller.loadMoreSessionsForProject,
@@ -150,6 +152,9 @@ function Sidebar(props: SidebarProps) {
         sessionDeleteConfirmation={controller.sessionDeleteConfirmation}
         onCancelDeleteSession={() => controller.setSessionDeleteConfirmation(null)}
         onConfirmDeleteSession={controller.confirmDeleteSession}
+        projectDeleteConfirmation={controller.projectDeleteConfirmation}
+        onCancelDeleteProject={() => controller.setProjectDeleteConfirmation(null)}
+        onConfirmDeleteProject={controller.confirmDeleteProject}
         t={t}
       />
       {controller.isSidebarCollapsed ? (

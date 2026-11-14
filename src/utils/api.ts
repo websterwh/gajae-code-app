@@ -178,10 +178,16 @@ export const api = {
   exportSession: (sessionId: string) =>
     authenticatedFetch(`/api/providers/sessions/${encodeURIComponent(sessionId)}/export`),
   // Hides the workspace behind the archive screen. Sessions, transcripts and the
-  // project row all survive, and `restoreProject` is the exact inverse - the app
-  // has no way to delete a project or anything on disk under it.
+  // project row all survive, and `restoreProject` is the exact inverse. Removing
+  // it for good is the separate, explicit `deleteProject` below.
   archiveProject: (projectId: string) =>
     authenticatedFetch(`/api/projects/${projectId}/archive`, { method: 'POST' }),
+  // Removes the workspace from the app; `deleteFiles` also erases its directory.
+  // Without it the folder stays and only the lists forget the project.
+  deleteProject: (projectId: string, deleteFiles: boolean = false) =>
+    authenticatedFetch(`/api/projects/${encodeURIComponent(projectId)}${deleteFiles ? '?deleteFiles=true' : ''}`, {
+      method: 'DELETE',
+    }),
   searchConversationsUrl: (query: string, limit: number = 50, projectId?: string) => {
     const params = new URLSearchParams({ q: query, limit: String(limit) });
     if (projectId !== undefined) params.set('projectId', projectId);
