@@ -197,7 +197,7 @@
       "enableLabel": "호스트 제어 사용",
       "enableDescription": "끄면 아래의 모든 권한이 사라집니다.",
       "statusFailed": "호스트 상태를 읽을 수 없어 이 스위치가 동작하지 않습니다. 로그인한 뒤 새로고침하세요.",
-      "unavailable": "GAJAE_HOST_CONTROL=1을 설정하고 Docker 소켓을 마운트한 뒤 컨테이너를 다시 시작하세요.",
+      "unavailable": "GAJAE_HOST_CONTROL=true을 설정하고 Docker 소켓을 마운트한 뒤 컨테이너를 다시 시작하세요.",
       "socketReachable": "{{path}}에서 소켓에 연결할 수 있습니다.",
       "socketUnreachable": "{{path}}에서 소켓에 연결할 수 없습니다. 마운트와 데몬을 확인하세요.",
       "hostInfo": "호스트 및 데몬 정보",

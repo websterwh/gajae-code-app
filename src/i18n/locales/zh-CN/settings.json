@@ -197,7 +197,7 @@
       "enableLabel": "启用主机控制",
       "enableDescription": "关闭后，下方所有权限都会失效。",
       "statusFailed": "无法读取主机状态，因此这些开关无效；请登录后重新加载。",
-      "unavailable": "设置 GAJAE_HOST_CONTROL=1，挂载 Docker 套接字，然后重启容器。",
+      "unavailable": "设置 GAJAE_HOST_CONTROL=true，挂载 Docker 套接字，然后重启容器。",
       "socketReachable": "套接字可在 {{path}} 访问。",
       "socketUnreachable": "套接字无法在 {{path}} 访问；请检查挂载和守护进程。",
       "hostInfo": "主机与守护进程信息",

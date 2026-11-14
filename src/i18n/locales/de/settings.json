@@ -197,7 +197,7 @@
       "enableLabel": "Host-Steuerung aktivieren",
       "enableDescription": "Beim Ausschalten entfallen alle Berechtigungen darunter.",
       "statusFailed": "Der Host-Status konnte nicht gelesen werden, daher sind diese Schalter wirkungslos; melden Sie sich an und laden Sie neu.",
-      "unavailable": "Setzen Sie GAJAE_HOST_CONTROL=1, binden Sie den Docker-Socket ein und starten Sie den Container neu.",
+      "unavailable": "Setzen Sie GAJAE_HOST_CONTROL=true, binden Sie den Docker-Socket ein und starten Sie den Container neu.",
       "socketReachable": "Socket unter {{path}} erreichbar.",
       "socketUnreachable": "Socket unter {{path}} nicht erreichbar; prüfen Sie den Mount und den Daemon.",
       "hostInfo": "Host- und Daemon-Informationen",

@@ -124,7 +124,7 @@ local, `0.0.0.0` exposes it wherever that address routes, and the server only
 warns about the wider bind rather than refusing it. The access boundary is still
 the network — loopback, a tailnet, an SSH tunnel, or a reverse proxy that
 authenticates before it forwards. On top of that, OIDC sign-in can be enabled in
-Settings, and `NO_AUTH=1` turns the requirement off without deleting what was
+Settings, and `NO_AUTH=true` turns the requirement off without deleting what was
 saved. A multi-user deployment with its own login is future scope, not a
 configuration of the current server; do not publish the bound address beyond a
 network you would trust with a shell on that machine.

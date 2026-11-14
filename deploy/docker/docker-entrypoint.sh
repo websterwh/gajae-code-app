@@ -19,6 +19,7 @@ export GAJAE_COMPANION_DOWNLOAD_TEMPLATE="${GAJAE_COMPANION_DOWNLOAD_TEMPLATE:-$
 export APT_PACKAGES="${APT_PACKAGES:-}"
 export UV_TOOLS="${UV_TOOLS:-}"
 export PIP_PACKAGES="${PIP_PACKAGES:-}"
+export NPM_PACKAGES="${NPM_PACKAGES:-}"
 export GITHUB_APPS="${GITHUB_APPS:-}"
 export AUTO_UPDATE_PACKAGES="${AUTO_UPDATE_PACKAGES:-true}"
 export CHECK_PACKAGE_UPDATES="${CHECK_PACKAGE_UPDATES:-true}"
@@ -34,17 +35,18 @@ export SSH_DEFAULT_COMMAND="${SSH_DEFAULT_COMMAND:-}"
 export INSTALL_GJC_CLI="${INSTALL_GJC_CLI:-true}"
 
 # Ensure PATH prioritizes /data/bin, /root/.local/bin, and aqua bin
-export PATH="/data/bin:/root/.local/bin:/root/.local/share/aquaproj-aqua/bin:/usr/local/bin:$PATH"
+export PATH="/data/npm-global/bin:/data/bin:/root/.local/bin:/root/.local/share/aquaproj-aqua/bin:/usr/local/bin:$PATH"
 export UV_CACHE_DIR="/data/cache/uv"
 export PIP_CACHE_DIR="/data/cache/pip"
 export UV_LINK_MODE="copy"
 export AQUA_ROOT_DIR="/data/aqua"
 export NPM_CONFIG_CACHE="/data/cache/npm"
+export NPM_CONFIG_PREFIX="/data/npm-global"
 # ==============================================================================
 # Directory & Cache Preparation
 # ==============================================================================
 mkdir -p "${DATABASE_PATH%/*}" "${WORKSPACES_ROOT}" "${GJC_WORKER_AGENT_DIR}" /data/logs /data/share
-mkdir -p /data/bin /data/cache/apt/archives /data/cache/uv /data/cache/pip /data/cache/aqua /data/cache/npm /data/ssh /data/.installed_hashes
+mkdir -p /data/bin /data/cache/apt/archives /data/cache/uv /data/cache/pip /data/cache/aqua /data/cache/npm /data/npm-global /data/ssh /data/.installed_hashes
 mkdir -p /root/.ssh /var/run/sshd /var/lib/dbus
 
 # Ensure machine-id exists and persists in /data so GJC machine-local identity is valid
@@ -196,6 +198,38 @@ provision_uv_pip() {
 }
 
 # ==============================================================================
+# Provisioning: Node/NPM Global Packages
+# ==============================================================================
+provision_npm() {
+    if [ -z "${NPM_PACKAGES}" ]; then
+        return 0
+    fi
+
+    local current_hash
+    current_hash="$(echo -n "${NPM_PACKAGES}" | md5sum | awk '{print $1}')"
+    local saved_hash_file="/data/.installed_hashes/npm.hash"
+    local previous_hash=""
+    [ -f "$saved_hash_file" ] && previous_hash="$(cat "$saved_hash_file")"
+    local pkg_list=()
+    while IFS= read -r pkg; do
+        pkg_list+=("$pkg")
+    done < <(parse_csv "${NPM_PACKAGES}")
+
+    if [ "$current_hash" != "$previous_hash" ]; then
+        echo "==> [NPM] Installing global packages: ${NPM_PACKAGES}..."
+        # NPM_CONFIG_PREFIX puts them under /data/npm-global, so a recreated
+        # container keeps them like the APT/UV/PIP installs above.
+        npm install -g --no-fund --no-audit "${pkg_list[@]}" || true
+        echo "$current_hash" > "$saved_hash_file"
+        echo "==> [NPM] Finished installing global packages."
+    elif [ "${AUTO_UPDATE_PACKAGES}" = "true" ] || [ "${AUTO_UPDATE_PACKAGES}" = "1" ]; then
+        echo "==> [NPM] Checking for global package updates..."
+        npm update -g --no-fund --no-audit || true
+        echo "==> [NPM] Global packages are up to date."
+    fi
+}
+
+# ==============================================================================
 # Provisioning: GitHub Apps via Aqua
 # ==============================================================================
 provision_aqua() {
@@ -305,7 +339,7 @@ UsePAM no
 X11Forwarding no
 PrintMotd no
 AcceptEnv LANG LC_*
-SetEnv PATH=/data/bin:/root/.local/bin:/root/.local/share/aquaproj-aqua/bin:/usr/local/bin:/usr/bin:/bin
+SetEnv PATH=/data/npm-global/bin:/data/bin:/root/.local/bin:/root/.local/share/aquaproj-aqua/bin:/usr/local/bin:/usr/bin:/bin
 Subsystem sftp /usr/lib/openssh/sftp-server
 EOF
 
@@ -358,7 +392,7 @@ EOF
     # Configure interactive shell landing in WORKSPACES_ROOT and default command
     # Also set /workspace as home or cd on login
     cat > /root/.bash_profile <<EOF
-export PATH="/data/bin:/root/.local/bin:/root/.local/share/aquaproj-aqua/bin:/usr/local/bin:\$PATH"
+export PATH="/data/npm-global/bin:/data/bin:/root/.local/bin:/root/.local/share/aquaproj-aqua/bin:/usr/local/bin:\$PATH"
 export EDITOR="nano"
 export VISUAL="nano"
 if [ -f /root/.bashrc ]; then
@@ -370,7 +404,7 @@ fi
 EOF
 
     cat > /root/.bashrc <<EOF
-export PATH="/data/bin:/root/.local/bin:/root/.local/share/aquaproj-aqua/bin:/usr/local/bin:\$PATH"
+export PATH="/data/npm-global/bin:/data/bin:/root/.local/bin:/root/.local/share/aquaproj-aqua/bin:/usr/local/bin:\$PATH"
 export EDITOR="nano"
 export VISUAL="nano"
 # Set shell working directory to WORKSPACES_ROOT
@@ -400,6 +434,7 @@ if [ "$#" -gt 0 ] && [ "$1" = "start" ]; then
     (
         provision_apt
         provision_uv_pip
+        provision_npm
         provision_aqua
         provision_gjc_cli
         run_post_commands
@@ -407,6 +442,7 @@ if [ "$#" -gt 0 ] && [ "$1" = "start" ]; then
 else
     provision_apt
     provision_uv_pip
+    provision_npm
     provision_aqua
     provision_gjc_cli
     run_post_commands
@@ -421,7 +457,7 @@ echo " Starting Gajae Code App Container"
 echo " Source Revision: $(cat /opt/gajae-app/.image_revision 2>/dev/null || echo 'unknown')"
 echo " Bind Address   : ${HOST}:${SERVER_PORT}"
 echo " Allowed Hosts  : ${ALLOWED_HOSTS}"
-echo " Sign-in Off    : ${NO_AUTH:-unset}"
+echo " Sign-in Off    : ${NO_AUTH:-false}"
 echo " Database Path  : ${DATABASE_PATH}"
 echo " Workspace Root : ${WORKSPACES_ROOT}"
 if [ "${SSH_ENABLE}" = "true" ] || [ "${SSH_ENABLE}" = "1" ]; then

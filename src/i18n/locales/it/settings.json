@@ -197,7 +197,7 @@
       "enableLabel": "Abilita il controllo host",
       "enableDescription": "Disattivandolo cadono tutte le autorizzazioni sottostanti.",
       "statusFailed": "Impossibile leggere lo stato dell’host, quindi questi interruttori sono inerti; accedi e ricarica.",
-      "unavailable": "Imposta GAJAE_HOST_CONTROL=1, monta il socket Docker e riavvia il container.",
+      "unavailable": "Imposta GAJAE_HOST_CONTROL=true, monta il socket Docker e riavvia il container.",
       "socketReachable": "Socket raggiungibile su {{path}}.",
       "socketUnreachable": "Socket non raggiungibile su {{path}}; controlla il mount e il daemon.",
       "hostInfo": "Informazioni su host e daemon",

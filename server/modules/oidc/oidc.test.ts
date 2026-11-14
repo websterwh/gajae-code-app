@@ -182,13 +182,16 @@ test('NO_AUTH is the deliberate break-glass switch, and the bind-guard var is no
     // sign-in off for deployments that never asked for that.
     process.env.GAJAE_ALLOW_UNAUTH_REMOTE = '1';
     assert.equal(noAuthEnabled(), false);
-    process.env.NO_AUTH = '1';
+    process.env.NO_AUTH = 'true';
     assert.equal(noAuthEnabled(), true);
     delete process.env.NO_AUTH;
+    process.env.GAJAE_NO_AUTH = 'true';
+    assert.equal(noAuthEnabled(), true);
+    process.env.GAJAE_NO_AUTH = 'false';
+    assert.equal(noAuthEnabled(), false);
+    // `1` stays accepted for deployments written before true/false.
     process.env.GAJAE_NO_AUTH = '1';
     assert.equal(noAuthEnabled(), true);
-    process.env.GAJAE_NO_AUTH = 'true';
-    assert.equal(noAuthEnabled(), false);
   } finally {
     if (savedNoAuth === undefined) delete process.env.NO_AUTH; else process.env.NO_AUTH = savedNoAuth;
     if (savedPrefixed === undefined) delete process.env.GAJAE_NO_AUTH; else process.env.GAJAE_NO_AUTH = savedPrefixed;
@@ -257,4 +260,6 @@ test('the gate is inert until the config is complete, and exempts automation', (
   assert.equal(coversLocalBypass('/api/host/status', {}), false);
   assert.equal(coversLocalBypass('/api/host/status', { GAJAE_HOST_CONTROL: '0' }), false);
   assert.equal(coversLocalBypass('/api/host/status', { GAJAE_HOST_CONTROL: '1' }), true);
+  assert.equal(coversLocalBypass('/api/host/status', { GAJAE_HOST_CONTROL: 'true' }), true);
+  assert.equal(coversLocalBypass('/api/host/status', { GAJAE_HOST_CONTROL: 'false' }), false);
 });

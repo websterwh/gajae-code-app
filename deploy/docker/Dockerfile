@@ -138,7 +138,7 @@ RUN printf '#!/bin/sh\nexec node /opt/gajae-app/dist-server/server/cli.js "$@"\n
 # Create default mount points for persistent state.
 RUN mkdir -p /data /data/bin /workspace /root/.gjc /var/run/sshd
 # Default environment configuration
-ENV PATH="/data/bin:/root/.local/share/aquaproj-aqua/bin:/usr/local/bin:$PATH" \
+ENV PATH="/data/npm-global/bin:/data/bin:/root/.local/share/aquaproj-aqua/bin:/usr/local/bin:$PATH" \
     EDITOR="nano" \
     VISUAL="nano" \
     UV_CACHE_DIR="/data/cache/uv" \
@@ -146,6 +146,7 @@ ENV PATH="/data/bin:/root/.local/share/aquaproj-aqua/bin:/usr/local/bin:$PATH" \
     UV_LINK_MODE="copy" \
     AQUA_ROOT_DIR="/data/aqua" \
     NPM_CONFIG_CACHE="/data/cache/npm" \
+    NPM_CONFIG_PREFIX="/data/npm-global" \
     HOST=0.0.0.0 \
     SERVER_PORT=3001 \
     ALLOWED_HOSTS=* \

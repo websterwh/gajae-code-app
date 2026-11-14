@@ -197,7 +197,7 @@
       "enableLabel": "Ana makine denetimini etkinleştir",
       "enableDescription": "Kapatmak aşağıdaki tüm izinleri kaldırır.",
       "statusFailed": "Ana makine durumu okunamadı, bu nedenle bu anahtarlar etkisiz; oturum açıp yeniden yükleyin.",
-      "unavailable": "GAJAE_HOST_CONTROL=1 ayarlayın, Docker soketini bağlayın ve kapsayıcıyı yeniden başlatın.",
+      "unavailable": "GAJAE_HOST_CONTROL=true ayarlayın, Docker soketini bağlayın ve kapsayıcıyı yeniden başlatın.",
       "socketReachable": "Sokete {{path}} üzerinden erişilebiliyor.",
       "socketUnreachable": "Sokete {{path}} üzerinden erişilemiyor; bağlamayı ve arka plan hizmetini kontrol edin.",
       "hostInfo": "Ana makine ve arka plan hizmeti bilgileri",

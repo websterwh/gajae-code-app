@@ -184,7 +184,7 @@
       "enableLabel": "Enable host control",
       "enableDescription": "Turning it off drops every permission below.",
       "statusFailed": "Host status could not be read, so these switches are inert; sign in and reload.",
-      "unavailable": "Set GAJAE_HOST_CONTROL=1 and mount the Docker socket, then restart the container.",
+      "unavailable": "Set GAJAE_HOST_CONTROL=true and mount the Docker socket, then restart the container.",
       "socketReachable": "Socket reachable at {{path}}.",
       "socketUnreachable": "Socket not reachable at {{path}}; check the mount and the daemon.",
       "hostInfo": "Host and daemon info",

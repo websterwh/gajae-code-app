@@ -178,7 +178,7 @@ Environment Variables:
   HOST                Set bind address (default: 127.0.0.1; the container uses 0.0.0.0)
   DATABASE_PATH       Set custom database location
   CONTEXT_WINDOW      Set context window size (default: 160000)
-  NO_AUTH             Set to 1 to disable sign-in without deleting the stored settings
+  NO_AUTH             Set to true to disable sign-in without deleting the stored settings
 
 Documentation:
   ${packageJson.homepage || 'https://github.com/devswha/gajae-code-app'}

@@ -1,6 +1,6 @@
 # Gajae Code App Docker
 
-Docker packaging for **Gajae Code App** (`gajae-app`), built from a revision of the [`websterwh/gajae-code-app`](https://github.com/websterwh/gajae-code-app) source fork. It includes universal package provisioning (APT/UV/Pip/Aqua), Android ADB auto-connect, and direct SSH CLI access.
+Docker packaging for **Gajae Code App** (`gajae-app`), built from a revision of the [`websterwh/gajae-code-app`](https://github.com/websterwh/gajae-code-app) source fork. It includes universal package provisioning (APT/UV/Pip/NPM/Aqua), Android ADB auto-connect, and direct SSH CLI access.
 
 This directory *is* the container project: it used to live in its own
 `gajae-app-docker` repository, which meant a source change needed a push to two
@@ -19,6 +19,7 @@ compose files and pulls keep working.
   - `APT_PACKAGES`: Comma-separated Debian packages (e.g. `openjdk-17-jre-headless,ffmpeg`).
   - `UV_TOOLS`: Standalone Python CLI tools / MCP servers (e.g. `serena,canvas-mcp-server`).
   - `PIP_PACKAGES`: Global Python packages via `uv pip install --system`.
+  - `NPM_PACKAGES`: Global Node packages via `npm install -g` (installed under `/data/npm-global`).
   - `GITHUB_APPS`: GitHub release CLI binaries via Aqua (e.g. `skylot/jadx,iBotPeaches/Apktool`).
 - ⚡ **Persistent Disk Caching**: APT archives, UV tools, Pip wheels, Aqua downloads, and NPM caches are rooted in `/data/cache/` for instant, cached boots.
 - 💻 **Direct Container SSH Access**: In-container SSH daemon (`SSH_ENABLE=true`, port `2222`) that opens into the workspace root (`/workspace`) by default, and can drop you straight into an interactive `gjc` coding session. Supports keyless/passwordless (`SSH_NO_AUTH=true`), passwords, or SSH public keys.
@@ -93,7 +94,7 @@ revision is required.
 |---|---|---|
 | `HOST` | `0.0.0.0` | Bind address, and the only knob for it. `0.0.0.0` is required for container port mapping; `127.0.0.1` keeps the app unreachable from outside the container. A non-loopback bind is logged as a warning at startup. |
 | `SERVER_PORT` | `3001` | Port the internal WebUI server listens on. |
-| `NO_AUTH` | unset | Set to `1` to disable sign-in entirely as a break-glass. Saved OIDC settings are kept and apply again once it is unset. |
+| `NO_AUTH` | `false` | Set to `true` to disable sign-in entirely as a break-glass. Saved OIDC settings are kept and apply again once it is unset. |
 | `ALLOWED_HOSTS` | `*` | Admitted hostnames/origins (`*` allows all, or enter comma-separated domains). |
 | `DATABASE_PATH` | `/data/auth.db` | Path to persistent SQLite database. |
 | `WORKSPACES_ROOT` | `/workspace` | Default directory root for GJC agent projects. |
@@ -107,10 +108,13 @@ revision is required.
 | `APT_PACKAGES` | *(empty)* | Comma-separated Debian packages to install via APT (`openjdk-17-jre-headless,ffmpeg`). |
 | `UV_TOOLS` | *(empty)* | Comma-separated isolated Python CLI tools / MCPs via `uv tool install` (`serena`). |
 | `PIP_PACKAGES` | *(empty)* | Comma-separated Python packages installed globally via `uv pip install --system`. |
+| `NPM_PACKAGES` | *(empty)* | Comma-separated Node packages installed globally via `npm install -g` (`typescript,prettier`). Persisted under `/data/npm-global`. |
 | `GITHUB_APPS` | *(empty)* | Comma-separated GitHub release apps installed via Aqua (`skylot/jadx,iBotPeaches/Apktool`). |
 | `AUTO_UPDATE_PACKAGES` | `true` | Automatically upgrade all installed packages on container boot. |
 | `CHECK_PACKAGE_UPDATES` | `true` | Check and log available package updates. |
 | `POST_COMMANDS` | *(empty)* | Custom shell commands executed after provisioning (e.g. `adb connect 192.0.2.79:5555`). |
+
+Boolean variables take `true` or `false` (`1`/`0` is still accepted for older deployments).
 ### Direct SSH & GJC CLI Access
 | Variable | Default | Description |
 |---|---|---|

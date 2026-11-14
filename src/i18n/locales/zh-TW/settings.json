@@ -197,7 +197,7 @@
       "enableLabel": "啟用主機控制",
       "enableDescription": "關閉後，下方所有權限都會失效。",
       "statusFailed": "無法讀取主機狀態，因此這些開關無效；請登入後重新載入。",
-      "unavailable": "設定 GAJAE_HOST_CONTROL=1、掛載 Docker 通訊端，然後重新啟動容器。",
+      "unavailable": "設定 GAJAE_HOST_CONTROL=true、掛載 Docker 通訊端，然後重新啟動容器。",
       "socketReachable": "可在 {{path}} 存取通訊端。",
       "socketUnreachable": "無法在 {{path}} 存取通訊端；請檢查掛載與守護程序。",
       "hostInfo": "主機與守護程序資訊",

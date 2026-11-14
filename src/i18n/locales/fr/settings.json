@@ -197,7 +197,7 @@
       "enableLabel": "Activer le contrôle de l’hôte",
       "enableDescription": "Le désactiver retire toutes les permissions ci-dessous.",
       "statusFailed": "L’état de l’hôte est illisible, ces interrupteurs sont donc sans effet ; connectez-vous et rechargez.",
-      "unavailable": "Définissez GAJAE_HOST_CONTROL=1, montez le socket Docker, puis redémarrez le conteneur.",
+      "unavailable": "Définissez GAJAE_HOST_CONTROL=true, montez le socket Docker, puis redémarrez le conteneur.",
       "socketReachable": "Socket accessible à {{path}}.",
       "socketUnreachable": "Socket inaccessible à {{path}} ; vérifiez le montage et le démon.",
       "hostInfo": "Informations sur l’hôte et le démon",

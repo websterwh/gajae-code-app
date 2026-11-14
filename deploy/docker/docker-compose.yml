@@ -19,15 +19,15 @@ services:
       # 127.0.0.1 keeps the app inside the container network instead.
       - HOST=${HOST:-0.0.0.0}
       - SERVER_PORT=3001
-      # NO_AUTH=1 disables sign-in entirely (break-glass): stored auth settings
+      # NO_AUTH=true disables sign-in entirely (break-glass): stored auth settings
       # are kept, the gate just stops enforcing them.
-      - NO_AUTH=${NO_AUTH:-}
+      - NO_AUTH=${NO_AUTH:-false}
       - ALLOWED_HOSTS=${ALLOWED_HOSTS:-*}
       
-      # Host control (opt-in, default off). Without GAJAE_HOST_CONTROL=1 the
+      # Host control (opt-in, default off). Without GAJAE_HOST_CONTROL=true the
       # /api/host routes answer "not available" whatever the settings say.
       # Capabilities are then switched on one by one in Settings -> Automation.
-      - GAJAE_HOST_CONTROL=${GAJAE_HOST_CONTROL:-}
+      - GAJAE_HOST_CONTROL=${GAJAE_HOST_CONTROL:-false}
       - GAJAE_DOCKER_SOCKET=${GAJAE_DOCKER_SOCKET:-/var/run/docker.sock}
 
       # Storage and Data
@@ -42,6 +42,7 @@ services:
       - APT_PACKAGES=${APT_PACKAGES:-}
       - UV_TOOLS=${UV_TOOLS:-}
       - PIP_PACKAGES=${PIP_PACKAGES:-}
+      - NPM_PACKAGES=${NPM_PACKAGES:-}
       - GITHUB_APPS=${GITHUB_APPS:-}
       - AUTO_UPDATE_PACKAGES=${AUTO_UPDATE_PACKAGES:-true}
       - CHECK_PACKAGE_UPDATES=${CHECK_PACKAGE_UPDATES:-true}
@@ -72,7 +73,7 @@ services:
       - ${HOST_WORKSPACE_DIR:-./workspace}:/workspace
       # Persistent GJC agent configuration and credentials
       - ./gjc-config:/root/.gjc
-      # Host control only. Mount the daemon socket when GAJAE_HOST_CONTROL=1,
+      # Host control only. Mount the daemon socket when GAJAE_HOST_CONTROL=true,
       # and prefer a socket proxy that exposes nothing but /info and
       # /containers over the raw socket: a direct mount is root-equivalent
       # access to the host for anything that can reach this container.

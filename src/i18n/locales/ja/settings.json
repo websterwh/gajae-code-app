@@ -197,7 +197,7 @@
       "enableLabel": "ホスト制御を有効にする",
       "enableDescription": "オフにすると、以下の権限はすべて失われます。",
       "statusFailed": "ホストの状態を読み取れないため、このスイッチは無効です。サインインして再読み込みしてください。",
-      "unavailable": "GAJAE_HOST_CONTROL=1 を設定し、Docker ソケットをマウントしてからコンテナを再起動してください。",
+      "unavailable": "GAJAE_HOST_CONTROL=true を設定し、Docker ソケットをマウントしてからコンテナを再起動してください。",
       "socketReachable": "{{path}} のソケットに接続できます。",
       "socketUnreachable": "{{path}} のソケットに接続できません。マウントとデーモンを確認してください。",
       "hostInfo": "ホストとデーモンの情報",

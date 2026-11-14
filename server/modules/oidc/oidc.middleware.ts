@@ -65,15 +65,21 @@ export function isExemptPath(pathname: string): boolean {
   return STATIC_FILE.test(pathname);
 }
 
+/** `true`/`false` are canonical; `1`/`0` stay accepted for older deployments. */
+function envFlag(value: string | undefined): boolean {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  return normalized === 'true' || normalized === '1';
+}
+
 /**
- * The deliberate break-glass switch: NO_AUTH (or GAJAE_NO_AUTH) turns the gate
- * off without touching the stored settings, so a broken provider cannot lock the
- * operator out. The retired GAJAE_ALLOW_UNAUTH_REMOTE bind flag is never read
- * here: images shipped it as 1, which would have switched sign-in off for every
- * deployment that never asked for that.
+ * The deliberate break-glass switch: NO_AUTH=true (or GAJAE_NO_AUTH=true) turns
+ * the gate off without touching the stored settings, so a broken provider
+ * cannot lock the operator out. The retired GAJAE_ALLOW_UNAUTH_REMOTE bind flag
+ * is never read here: images shipped it as 1, which would have switched sign-in
+ * off for every deployment that never asked for that.
  */
 export function noAuthEnabled(): boolean {
-  return process.env.NO_AUTH === '1' || process.env.GAJAE_NO_AUTH === '1';
+  return envFlag(process.env.NO_AUTH) || envFlag(process.env.GAJAE_NO_AUTH);
 }
 
 function toV4(address: string): number | null {
