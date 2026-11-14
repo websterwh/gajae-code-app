@@ -90,7 +90,9 @@
       "serviceTier": "Niveau de service",
       "refresh": "Recharger l'état Git",
       "notARepository": "Ce dossier n'est pas un dépôt Git",
-      "gitUnavailable": "Impossible de lire l'état Git"
+      "gitUnavailable": "Impossible de lire l'état Git",
+      "staged": "Indexé",
+      "untracked": "Non suivi"
     },
     "work": {
       "title": "Travail",

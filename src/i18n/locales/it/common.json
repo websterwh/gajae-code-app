@@ -90,7 +90,9 @@
       "serviceTier": "Livello di servizio",
       "refresh": "Ricarica lo stato Git",
       "notARepository": "Questa cartella non è un repository Git",
-      "gitUnavailable": "Impossibile leggere lo stato Git"
+      "gitUnavailable": "Impossibile leggere lo stato Git",
+      "staged": "In stage",
+      "untracked": "Non tracciati"
     },
     "work": {
       "title": "Lavoro",

@@ -90,7 +90,9 @@
       "serviceTier": "服务层级",
       "refresh": "刷新 Git 状态",
       "notARepository": "此文件夹不是 Git 仓库",
-      "gitUnavailable": "无法读取 Git 状态"
+      "gitUnavailable": "无法读取 Git 状态",
+      "staged": "已暂存",
+      "untracked": "未跟踪"
     },
     "work": {
       "title": "工作",

@@ -1,8 +1,9 @@
-import { FileDiff, Folder, GitBranch, Gauge, RefreshCw, type LucideIcon } from 'lucide-react';
+import { FileDiff, FilePlus, Folder, GitBranch, Gauge, GitCommitHorizontal, PieChart, RefreshCw, type LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useSessionStatus } from '../../../contexts/SessionStatusContext';
+import { formatTokens } from '../../../contexts/sessionStatusSnapshot';
 import { useProjectGitSummary } from '../../workspace/hooks/useProjectGitSummary';
 import { displayBranch, leafName, sessionWorktreeOf } from '../utils/environmentLabels';
 
@@ -29,6 +30,12 @@ export type AgentSidebarEnvironmentProps = {
  * Nothing is stored here and nothing is derived by guessing: a directory that
  * is not a repository says so, and a row whose fact is unknown is omitted
  * rather than filled with a zero or a default branch name.
+ *
+ * Staged and untracked counts split the same summary the Changes row totals,
+ * and the context row is the runtime's own `/context` figure: the tokens it
+ * reported against the window it reported. A session that has not reported a
+ * window gets no row, because a window the app guessed would draw a confident
+ * fraction of nothing.
  *
  * The rows are reports, not controls. The one action is the summary's
  * existing refresh, since a rail that stays open has no other way to notice
@@ -68,6 +75,16 @@ export default function AgentSidebarEnvironment({ projectId, projectPath, sessio
           {t('agentSidebar.environment.changes')}
         </Row>
       )}
+      {git.kind === 'ready' && git.summary.staged > 0 && (
+        <Row icon={GitCommitHorizontal} value={git.summary.staged}>
+          {t('agentSidebar.environment.staged')}
+        </Row>
+      )}
+      {git.kind === 'ready' && git.summary.untracked > 0 && (
+        <Row icon={FilePlus} value={git.summary.untracked}>
+          {t('agentSidebar.environment.untracked')}
+        </Row>
+      )}
       {directory && (
         <Row icon={Folder} title={directory}>
           <span className="sr-only">{t('agentSidebar.environment.directory')}: </span>
@@ -84,6 +101,18 @@ export default function AgentSidebarEnvironment({ projectId, projectPath, sessio
         <Row icon={GitBranch} title={git.summary.branch}>
           <span className="sr-only">{t('agentSidebar.environment.branch')}: </span>
           {displayBranch(git.summary.branch)}
+        </Row>
+      )}
+      {status.contextWindow !== undefined && status.contextPercent !== undefined && (
+        <Row
+          icon={PieChart}
+          title={status.contextTokens !== undefined
+            ? `${formatTokens(status.contextTokens)} / ${formatTokens(status.contextWindow)} ${t('workspace.statusTab.tokens')} · ${Math.round(status.contextPercent)}%`
+            : `${formatTokens(status.contextWindow)} ${t('workspace.statusTab.tokens')} · ${Math.round(status.contextPercent)}%`}
+        >
+          <span className="sr-only">{t('workspace.statusTab.context')}: </span>
+          {status.contextTokens !== undefined && `${formatTokens(status.contextTokens)} / `}
+          {formatTokens(status.contextWindow)} · {Math.round(status.contextPercent)}%
         </Row>
       )}
       {git.kind === 'not-a-repository' && (

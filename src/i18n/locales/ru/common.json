@@ -90,7 +90,9 @@
       "serviceTier": "Уровень обслуживания",
       "refresh": "Обновить статус Git",
       "notARepository": "Эта папка не является репозиторием Git",
-      "gitUnavailable": "Не удалось прочитать статус Git"
+      "gitUnavailable": "Не удалось прочитать статус Git",
+      "staged": "В индексе",
+      "untracked": "Неотслеживаемые"
     },
     "work": {
       "title": "Работа",

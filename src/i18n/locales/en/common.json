@@ -90,7 +90,9 @@
       "serviceTier": "Service tier",
       "refresh": "Reload Git status",
       "notARepository": "This folder is not a Git repository",
-      "gitUnavailable": "Could not read Git status"
+      "gitUnavailable": "Could not read Git status",
+      "staged": "Staged",
+      "untracked": "Untracked"
     },
     "work": {
       "title": "Work",

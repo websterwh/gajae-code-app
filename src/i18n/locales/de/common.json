@@ -90,7 +90,9 @@
       "serviceTier": "Service-Stufe",
       "refresh": "Git-Status neu laden",
       "notARepository": "Dieser Ordner ist kein Git-Repository",
-      "gitUnavailable": "Git-Status konnte nicht gelesen werden"
+      "gitUnavailable": "Git-Status konnte nicht gelesen werden",
+      "staged": "Gestaged",
+      "untracked": "Nicht verfolgt"
     },
     "work": {
       "title": "Arbeit",

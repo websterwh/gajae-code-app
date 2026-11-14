@@ -90,7 +90,9 @@
       "serviceTier": "サービスティア",
       "refresh": "Git ステータスを再読み込み",
       "notARepository": "このフォルダーは Git リポジトリではありません",
-      "gitUnavailable": "Git ステータスを読み取れません"
+      "gitUnavailable": "Git ステータスを読み取れません",
+      "staged": "ステージ済み",
+      "untracked": "未追跡"
     },
     "work": {
       "title": "作業",
