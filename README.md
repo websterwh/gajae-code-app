@@ -29,7 +29,7 @@
 <p align="center"><em>A real session: the turn's reads, search and edits folded into one work block, paused on a permission card before it runs the tests.</em></p>
 
 
-Gajae Code App is a self-hosted web interface for [Gajae Code](https://github.com/devswha/gajae-code), distributed as a Docker image. It drives the agent through the runtime's own SDK in an isolated worker, shows every turn as it happens, and puts a review loop between the agent's edits and your next message — on a machine you control, with credentials that never leave it.
+Gajae Code App is a self-hosted web interface for [Gajae Code](https://github.com/devswha/gajae-code), run as a Docker container. It drives the agent through the runtime's own SDK in an isolated worker, shows every turn as it happens, and puts a review loop between the agent's edits and your next message — on a machine you control, with credentials that never leave it.
 
 - **The same agent as the terminal**: the app uses the runtime's own account selection (`gjc accounts pin`, usage-limit rotation), the user's models, presets, skills, user- and project-scope MCP servers, extensions and tool settings from `~/.gjc`, and slash commands such as `/fast`, `/effort`, `/context` and `/compact`, which run as soon as you send them. Sessions open in any directory, as `gjc` does. Reasoning streams live while the model thinks.
 - **Sessions with a state** — running, waiting for your answer, finished unread, or failed; a Work section lists what needs a look across every project, and the model titles each session from its first message.
@@ -57,7 +57,7 @@ Set `SSH_ENABLE=true` to get a shell in the same workspace — `ssh -p 2222 root
 
 Every variable, volume and provisioning option: [deploy/docker/README.md](deploy/docker/README.md).
 
-**From source — Node.js 22.x (22.22.2+), Rust, Bun 1.4.0.** The image is the supported way to run this; a checkout is for working on it.
+**From source — Node.js 22.x (22.22.2+), Rust, Bun 1.4.0.** A checkout is for working on the app.
 
 ```bash
 git clone https://github.com/websterwh/gajae-code-app.git
@@ -66,8 +66,6 @@ npm ci
 node scripts/fetch-bun.mjs          # the pinned Bun the GJC worker runs on
 npm run dev                         # server :3001, client :5173
 ```
-
-The checkout still carries the Tauri desktop shell in `src-tauri`, but no desktop installer is built or published: the deployment target is the container, and the macOS and Linux desktop lanes (`.github/workflows/desktop-macos.yml`, `desktop-linux.yml`) run only when dispatched by hand.
 
 ## Permission Modes
 
