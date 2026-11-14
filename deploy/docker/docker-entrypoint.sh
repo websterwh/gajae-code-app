@@ -224,6 +224,10 @@ provision_npm() {
         echo "==> [NPM] Finished installing global packages."
     elif [ "${AUTO_UPDATE_PACKAGES}" = "true" ] || [ "${AUTO_UPDATE_PACKAGES}" = "1" ]; then
         echo "==> [NPM] Checking for global package updates..."
+        # `npm update -g` only touches installed packages, not npm itself, so
+        # the CLI is upgraded separately. NPM_CONFIG_PREFIX lands it in
+        # /data/npm-global/bin, which comes first in PATH and survives recreation.
+        npm install -g npm@latest --no-fund --no-audit || true
         npm update -g --no-fund --no-audit || true
         echo "==> [NPM] Global packages are up to date."
     fi
