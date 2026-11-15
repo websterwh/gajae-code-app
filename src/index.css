@@ -203,6 +203,11 @@
 
   body.pwa-mode .fixed.inset-0 { inset: var(--header-total-padding) var(--safe-area-inset-right) 0 var(--safe-area-inset-left); }
 
+  /* The agent drawer is the one panel anchored `inset-y-0` rather than `inset-0`,
+     so it takes the same top offset explicitly; otherwise its title row and
+     close button draw under a translucent status bar in a home-screen install. */
+  body.pwa-mode .fixed.inset-y-0 { top: var(--header-total-padding); }
+
   /* Controls ease their colours; nothing else transitions by default. A
      200ms fade on every div and list item made selection, hover and theme
      changes lag behind the click, where a native app repaints at once. */
@@ -491,8 +496,17 @@
   /* One placeholder colour in both themes, at the muted-text contrast. */
   textarea::placeholder { opacity: 1 !important; color: hsl(var(--muted-foreground)) !important; }
 
+  /* iOS magnifies the page when a field under 16px takes focus, and the shell
+     is fixed, so the zoom leaves the app panned with no way back but a manual
+     pinch-out. `select` was already pinned; the composer textarea and its
+     transparent highlight overlay are 14px and are pinned together, since
+     resizing only one would draw the text off the caret. */
   @supports (-webkit-touch-callout: none) {
     select { -webkit-appearance: none; font-size: 16px !important; }
+
+    textarea,
+    input:not([type='checkbox']):not([type='radio']),
+    .chat-input-placeholder { font-size: max(16px, 0.875rem * var(--interface-font-scale, 1)) !important; }
   }
 
   select { appearance: none; -moz-appearance: none; -webkit-appearance: none; padding-right: 2.5rem; background-size: 1.5em 1.5em; background-position: right 0.5rem center; background-repeat: no-repeat; background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e"); }
