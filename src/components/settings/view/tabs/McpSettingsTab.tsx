@@ -374,6 +374,11 @@ export default function McpSettingsTab() {
   const beginEdit = (server: McpServer) => {
     const known = catalogFor(server);
     setEditing(server.name);
+    // The form renders in the installed list, which may be off screen when the
+    // action came from a catalog card further down the page.
+    window.setTimeout(() => {
+      document.getElementById(`mcp-edit-${server.name}`)?.scrollIntoView?.({ block: 'center' });
+    }, 0);
     setEditDraft({
       command: server.command ?? known?.command ?? '',
       args: (server.args ?? known?.args ?? []).join('\n'),
@@ -410,6 +415,12 @@ export default function McpSettingsTab() {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(patch),
+      });
+      // The handshake result belonged to the config that was just replaced.
+      setVerifyResults((current) => {
+        const next = { ...current };
+        delete next[server.name];
+        return next;
       });
       setEditing(null);
       await reload();
@@ -770,7 +781,7 @@ export default function McpSettingsTab() {
                   </p>
                 )}
                 {editing === server.name && (
-                  <div className="mt-3 grid gap-2 rounded-lg border border-border p-3">
+                  <div id={`mcp-edit-${server.name}`} className="mt-3 grid gap-2 rounded-lg border border-border p-3">
                     {server.transport === 'stdio' ? (
                       <>
                         <label className="text-xs text-muted-foreground">

@@ -69,6 +69,9 @@ function fakeApi(seed: Array<Record<string, unknown>> = [], statusSeed: { inFlig
         data: installed.find((server) => server.name === name),
       }));
     }
+    if (path.startsWith('/api/mcp/servers/') && path.includes('/verify') && method === 'POST') {
+      return new Response(JSON.stringify({ success: true, data: { ok: true, toolCount: 3, tools: ['a', 'b', 'c'] } }));
+    }
     if (path.startsWith('/api/mcp/servers/') && path.includes('/pin') && method === 'POST') {
       const name = decodeURIComponent(path.split('/')[4] ?? '');
       installed = installed.map((server) => (server.name === name ? { ...server, pin: body?.version ?? null } : server));
@@ -209,6 +212,22 @@ test('arming remove in one place does not arm the same server twice', async () =
 
   fireEvent.click(removeButtons[0]);
   assert.equal(screen.getAllByRole('button', { name: english.mcp.confirmRemove }).length, 1);
+});
+
+test('saving a configuration drops the handshake result from the old one', async () => {
+  fakeApi([installedServer()]);
+  await mount();
+
+  fireEvent.click(await screen.findByRole('button', { name: english.mcp.verify }));
+  await screen.findByText(new RegExp(english.mcp.verifiedTools.replace('{{count}}', '3').replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')));
+
+  fireEvent.click(screen.getByRole('button', { name: english.mcp.configure }));
+  fireEvent.change(screen.getByLabelText(english.mcp.command), { target: { value: 'node' } });
+  fireEvent.click(screen.getByRole('button', { name: english.mcp.save }));
+
+  await waitFor(() => {
+    assert.equal(screen.queryByText(/3 tools/u), null, 'the old result no longer describes this server');
+  });
 });
 
 test('the status chip stops saying running once provisioning finishes', async () => {
