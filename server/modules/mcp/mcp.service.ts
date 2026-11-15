@@ -35,7 +35,7 @@ import {
 } from './mcp.config.js';
 import { isDowngrade, normalizePin } from './pins.js';
 import { tailLines } from './provision.js';
-import { provisionStatePath, readProvisionState } from './provision-state.js';
+import { provisionStateIsLive, provisionStatePath, readProvisionState } from './provision-state.js';
 import { createRegistryClient, type RegistryClient } from './registry-client.js';
 
 export type McpCliRunner = (
@@ -517,7 +517,7 @@ export class McpService {
     }
     return {
       provisioning,
-      inFlight: provisioning?.running === true,
+      inFlight: provisionStateIsLive(provisioning),
       failed: failedEntries(ledger),
       ledger: ledger.packages,
       missingMounts,

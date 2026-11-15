@@ -71,6 +71,7 @@ async function main(): Promise<void> {
 
   const state: ProvisionState = {
     running: true,
+    pid: process.pid,
     startedAt: new Date().toISOString(),
     completed: 0,
     failed: 0,

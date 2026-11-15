@@ -52,7 +52,7 @@ function installedServer(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function fakeApi(seed: Array<Record<string, unknown>> = []) {
+function fakeApi(seed: Array<Record<string, unknown>> = [], statusSeed: { inFlight: boolean } = { inFlight: false }) {
   const calls: Call[] = [];
   let installed = seed;
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -83,7 +83,7 @@ function fakeApi(seed: Array<Record<string, unknown>> = []) {
     if (path === '/api/mcp/status') {
       return new Response(JSON.stringify({
         success: true,
-        data: { provisioning: null, inFlight: false, failed: [], ledger: {}, missingMounts: [] },
+        data: { provisioning: null, inFlight: statusSeed.inFlight, failed: [], ledger: {}, missingMounts: [] },
       }));
     }
     if (path.startsWith('/api/mcp/catalog')) {
@@ -175,6 +175,16 @@ test('configure fills the fields the catalog knows and only asks for what that s
     const patch = calls.find((call) => call.method === 'PATCH');
     assert.deepEqual(patch?.body?.env, { GITHUB_PERSONAL_ACCESS_TOKEN: 'ghp_new' });
   });
+});
+
+test('the status chip stops saying running once provisioning finishes', async () => {
+  const statusSeed = { inFlight: true };
+  fakeApi([installedServer()], statusSeed);
+  await mount();
+
+  await screen.findByText(english.mcp.statusRunning);
+  statusSeed.inFlight = false;
+  await waitFor(() => assert.ok(screen.getByText(english.mcp.statusIdle)), { timeout: 9000 });
 });
 
 test('the sort control stays put while the search box is used', async () => {

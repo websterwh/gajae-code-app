@@ -216,6 +216,16 @@ export default function McpSettingsTab() {
 
   useEffect(() => { void reload(); }, [reload]);
 
+  // Boot provisioning runs in another process, so a snapshot that said
+  // "running" when the page loaded has to be asked about again.
+  useEffect(() => {
+    if (!status?.inFlight) return;
+    const timer = window.setInterval(() => {
+      void request<StatusData>(statusPath).then((next) => setStatus(next)).catch(() => undefined);
+    }, 4000);
+    return () => window.clearInterval(timer);
+  }, [status?.inFlight, statusPath]);
+
   useEffect(() => {
     if (scope !== 'project' || projects.length > 0) return;
     setProjectsLoading(true);

@@ -14,6 +14,8 @@ import type { InstallManager } from './ledger.js';
  */
 export type ProvisionState = {
   running: boolean;
+  /** Who wrote it, so a state left behind by a dead writer is not believed. */
+  pid?: number;
   startedAt?: string;
   finishedAt?: string;
   updatedAt?: string;
@@ -35,6 +37,7 @@ export async function readProvisionState(file: string): Promise<ProvisionState |
     if (typeof parsed !== 'object' || parsed === null) return null;
     return {
       running: parsed.running === true,
+      pid: Number.isFinite(parsed.pid) ? Number(parsed.pid) : undefined,
       startedAt: typeof parsed.startedAt === 'string' ? parsed.startedAt : undefined,
       finishedAt: typeof parsed.finishedAt === 'string' ? parsed.finishedAt : undefined,
       updatedAt: typeof parsed.updatedAt === 'string' ? parsed.updatedAt : undefined,
@@ -45,6 +48,30 @@ export async function readProvisionState(file: string): Promise<ProvisionState |
     };
   } catch {
     return null;
+  }
+}
+
+/** How long a running state may go without a heartbeat before it is stale. */
+const STALE_AFTER_MS = 15 * 60_000;
+
+/**
+ * A container restart during boot provisioning leaves `running: true` behind,
+ * and nothing else ever clears it: the page then spins until the next rebuild.
+ * The writer's pid and its last heartbeat are what separate real work from that
+ * leftover.
+ */
+export function provisionStateIsLive(state: ProvisionState | null, now = Date.now()): boolean {
+  if (!state?.running) return false;
+  const seen = Date.parse(state.updatedAt ?? state.startedAt ?? '');
+  if (!Number.isFinite(seen) || now - seen > STALE_AFTER_MS) return false;
+  // Writers from before the pid was recorded can only be judged by heartbeat.
+  if (state.pid === undefined) return true;
+  try {
+    process.kill(state.pid, 0);
+    return true;
+  } catch (error) {
+    // EPERM means the process exists under another user.
+    return (error as NodeJS.ErrnoException).code === 'EPERM';
   }
 }
 

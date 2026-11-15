@@ -13,6 +13,7 @@ import {
   writeLedger,
 } from './ledger.js';
 import { autoUpdatePackages, provisionPackages, uvToolVersion, type CommandRunner } from './provision.js';
+import { provisionStateIsLive } from './provision-state.js';
 
 type Reply = { code: number; stdout?: string; stderr?: string };
 
@@ -249,6 +250,28 @@ test('a rate-limited update check leaves an installed package installed', async 
   assert.equal(ledger.packages.aqua['skylot/jadx'].status, 'installed');
   assert.equal(ledger.packages.aqua['skylot/jadx'].lastAttempt, undefined, 'a failed release lookup is not a failed install');
   assert.ok(lines.some((line) => /update check failed/u.test(line)));
+});
+
+test('a provisioning state left behind by a dead writer is not reported as running', () => {
+  const fresh = new Date().toISOString();
+  assert.equal(provisionStateIsLive({ running: true, startedAt: fresh, completed: 0, failed: 0, pid: process.pid }), true);
+  assert.equal(
+    provisionStateIsLive({ running: true, startedAt: fresh, completed: 0, failed: 0, pid: 999999 }),
+    false,
+    'a restarted container leaves a pid that no longer exists',
+  );
+  assert.equal(
+    provisionStateIsLive({
+      running: true,
+      startedAt: fresh,
+      updatedAt: new Date(Date.now() - 60 * 60_000).toISOString(),
+      completed: 0,
+      failed: 0,
+    }),
+    false,
+    'no heartbeat for an hour is stale even without a pid',
+  );
+  assert.equal(provisionStateIsLive({ running: false, completed: 0, failed: 0 }), false);
 });
 
 test('the ledger lives under the config mount, not the data volume', () => {
