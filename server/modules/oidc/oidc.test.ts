@@ -3,8 +3,16 @@ import { createSign, generateKeyPairSync } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 import test from 'node:test';
 
-import { normalizeIssuer, oidcEnforcing, validateOidcConfig, type OidcConfig } from './oidc.config.js';
-import { clientAddress, clientAddressAllowed, coversLocalBypass, isExemptPath, noAuthEnabled, requiresSession } from './oidc.middleware.js';
+import { normalizeIssuer, oidcEnforcing, resolvedAllowedIps, validateOidcConfig, type OidcConfig } from './oidc.config.js';
+import {
+  OIDC_EXEMPT_PREFIXES,
+  clientAddress,
+  clientAddressAllowed,
+  coversLocalBypass,
+  isExemptPath,
+  noAuthEnabled,
+  requiresSession,
+} from './oidc.middleware.js';
 import {
   buildAuthorizeUrl,
   completeSignIn,
@@ -230,20 +238,41 @@ test('local access is granted per address, and defaults to private ranges', () =
 
   assert.match(String(validateOidcConfig({ ...configFor('https://a.example'), allowedIps: ['999.1.1.1'] })), /not an IP/u);
   assert.equal(validateOidcConfig({ ...configFor('https://a.example'), allowedIps: ['192.168.1.0/24'] }), null);
+  assert.equal(validateOidcConfig({ ...configFor('https://a.example'), allowedIps: ['fc00::/7'] }), null);
 });
 
-test('the gate is inert until the config is complete, and exempts automation', () => {
+test('the local bypass reports the ranges it actually grants', () => {
+  const base = configFor('https://a.example');
+  // Empty allowedIps is the default set, not "nothing". These are the values
+  // the settings tab shows and the boot log prints.
+  assert.deepEqual(resolvedAllowedIps(base), [
+    '127.0.0.0/8', '::1/128', '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', 'fc00::/7',
+  ]);
+  for (const address of ['127.0.0.1', '::1', '10.0.0.5', '172.20.0.3', '192.168.1.40', 'fc00::1']) {
+    assert.equal(clientAddressAllowed(address, resolvedAllowedIps(base)), true, address);
+  }
+  assert.equal(clientAddressAllowed('8.8.8.8', resolvedAllowedIps(base)), false);
+  assert.deepEqual(resolvedAllowedIps({ ...base, allowedIps: ['192.168.1.0/24'] }), ['192.168.1.0/24']);
+});
+
+test('the gate is inert until the config is complete, and the exemption list is exactly the intended set', () => {
   assert.equal(oidcEnforcing({ ...configFor('https://a.example'), clientSecret: '' }), false);
   assert.equal(oidcEnforcing(configFor('https://a.example')), true);
   assert.equal(validateOidcConfig({ ...configFor('http://insecure.example') }), 'The issuer must use https.');
   assert.equal(validateOidcConfig(configFor('http://localhost:8080')), null);
 
-  for (const path of ['/health', '/api/auth/oidc/start', '/api/gjc/jobs', '/api/automation/computer', '/api/browser/cdp', '/ws', '/assets/index-abc.js']) {
+  for (const path of ['/health', '/api/auth/oidc/start', '/api/gjc/jobs', '/ws', '/.well-known/openid-configuration', '/assets/index-abc.js']) {
     assert.equal(isExemptPath(path), true, `${path} must stay reachable`);
   }
-  for (const path of ['/', '/api/providers/sessions', '/api/settings', '/api/host/containers']) {
+  // Every new surface is authenticated by default: automation dispatches into a
+  // paired companion, browser drives CDP, and MCP mutates the agent's config.
+  // A future feature cannot quietly join this list.
+  for (const path of ['/', '/api/providers/sessions', '/api/settings', '/api/host/containers', '/api/automation/computer', '/api/browser/cdp', '/api/mcp/servers']) {
     assert.equal(isExemptPath(path), false, `${path} must require a session`);
   }
+  assert.deepEqual([...OIDC_EXEMPT_PREFIXES], [
+    '/health', '/api/auth', '/api/gjc', '/api/desktop', '/ws', '/.well-known',
+  ]);
   // A trusted LAN address may read the app without signing in, but it never
   // reaches host control that way.
   for (const path of ['/api/host', '/api/host/containers', '/api/host/containers/app/restart']) {

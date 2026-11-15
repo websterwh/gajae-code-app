@@ -94,7 +94,6 @@
     "sttApiKey": "Speech recognition API key",
     "ttsApiKey": "Speech synthesis API key",
     "sttModel": "Speech recognition model",
-
     "voice": "Voice",
     "format": "Sound file format",
     "note": "The app server stores endpoint URLs under its persistent data volume and proxies audio requests, so local services do not need browser CORS support."
@@ -342,6 +341,7 @@
     "localAccessHint": "Requests from the addresses below skip the sign-in gate. With the list empty, loopback and private ranges (10/8, 172.16/12, 192.168/16, fc00::/7) are allowed.",
     "allowedIps": "Allowed IP addresses",
     "allowedIpsHint": "Comma separated addresses or IPv4 CIDR ranges, e.g. 192.168.1.0/24, 10.0.0.5.",
+    "localAccessEffect": "A client on {{ranges}} can use the app without signing in — including shell commands, terminals and file edits. Host control (/api/host) still needs a session unless the deployment enables GAJAE_HOST_CONTROL.",
     "discover": "Test discovery",
     "save": "Save",
     "saved": "Saved",

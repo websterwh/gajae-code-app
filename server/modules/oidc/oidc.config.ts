@@ -25,6 +25,20 @@ export type OidcConfig = {
 
 const CONFIG_KEY = 'oidc.config.v1';
 
+/**
+ * What an empty `allowedIps` actually grants (see `clientAddressAllowed`).
+ * Shown in Settings and logged at boot so the bypass never reads as narrower
+ * than it is: every one of these ranges is a full-owner connection.
+ */
+export const DEFAULT_LOCAL_RANGES = [
+  '127.0.0.0/8',
+  '::1/128',
+  '10.0.0.0/8',
+  '172.16.0.0/12',
+  '192.168.0.0/16',
+  'fc00::/7',
+] as const;
+
 const EMPTY_CONFIG: OidcConfig = {
   enabled: false,
   issuer: '',
@@ -91,6 +105,12 @@ export function writeOidcConfig(patch: Partial<OidcConfig>): OidcConfig {
 }
 
 /** What the settings tab may see: everything except the secret itself. */
+/** The ranges the local bypass actually matches: the stored list, or the default set. */
+export function resolvedAllowedIps(config: OidcConfig): string[] {
+  return config.allowedIps.length ? [...config.allowedIps] : [...DEFAULT_LOCAL_RANGES];
+}
+
+/** What the settings tab may see: everything except the secret itself. */
 export function publicOidcConfig(config: OidcConfig) {
   return {
     enabled: config.enabled,
@@ -102,6 +122,7 @@ export function publicOidcConfig(config: OidcConfig) {
     allowedGroups: config.allowedGroups,
     allowLocal: config.allowLocal,
     allowedIps: config.allowedIps,
+    resolvedAllowedIps: resolvedAllowedIps(config),
   };
 }
 
@@ -128,11 +149,13 @@ export function validateOidcConfig(config: OidcConfig): string | null {
   if (!config.clientSecret) return 'A client secret is required.';
   for (const entry of config.allowedIps) {
     const [address, prefix] = entry.split('/');
-    if (isIP(address) === 0) return `"${entry}" is not an IP address.`;
+    const family = isIP(address ?? '');
+    if (family === 0) return `"${entry}" is not an IP address.`;
     if (prefix !== undefined) {
       const bits = Number(prefix);
-      if (isIP(address) !== 4 || !Number.isInteger(bits) || bits < 0 || bits > 32) {
-        return `"${entry}" is not an IPv4 CIDR range.`;
+      const maximum = family === 6 ? 128 : 32;
+      if (!Number.isInteger(bits) || bits < 0 || bits > maximum) {
+        return `"${entry}" is not a valid CIDR range.`;
       }
     }
   }

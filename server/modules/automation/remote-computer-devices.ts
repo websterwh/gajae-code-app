@@ -40,6 +40,18 @@ function publicDevice(device: RemoteComputerDevice): Omit<RemoteComputerDevice, 
   return result;
 }
 
+/**
+ * The one definition of "this credential is live": the stored record matches
+ * and the device has been trusted. Both the hub handshake and the HTTP
+ * automation gate call this, so they cannot disagree about a credential.
+ */
+function matchesCredential(device: RemoteComputerDevice, credential: string): boolean {
+  if (!credential) return false;
+  const stored = Buffer.from(device.credentialHash);
+  const candidate = Buffer.from(hash(credential));
+  return stored.length === candidate.length && timingSafeEqual(stored, candidate);
+}
+
 /** Durable pairing and device state. Plain credentials are never persisted. */
 export class RemoteComputerDeviceRegistry {
   constructor(private readonly storage: Storage = appConfigDb, private readonly now = () => Date.now()) {}
@@ -96,11 +108,17 @@ export class RemoteComputerDeviceRegistry {
    */
   authenticate(id: string, credential: string): RemoteComputerDevice {
     const device = read(this.storage).devices.find(candidate => candidate.id === id);
-    if (!device || !credential || !timingSafeEqual(Buffer.from(device.credentialHash), Buffer.from(hash(credential)))) {
+    if (!device || !matchesCredential(device, credential)) {
       throw new Error('device-not-registered');
     }
     if (!device.enabled) throw new Error('not-yet-approved');
     return device;
+  }
+
+  /** True only for a stored, trusted device credential - the HTTP gate's check. */
+  verifyLiveCredential(id: string, credential: string): boolean {
+    const device = read(this.storage).devices.find(candidate => candidate.id === id);
+    return Boolean(device && device.enabled && !device.revoked && matchesCredential(device, credential));
   }
   /**
    * Registers a brand-new device without a pairing token, for a companion

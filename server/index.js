@@ -82,7 +82,14 @@ import {
 } from './utils/url-detection.js';
 import gitRoutes from './routes/git.js';
 import authRoutes from './routes/auth.js';
-import { createOidcGate, createOidcRouter } from './modules/oidc/index.js';
+import {
+    createOidcGate,
+    createOidcRouter,
+    noAuthEnabled,
+    oidcEnforcing,
+    readOidcConfig,
+    resolvedAllowedIps,
+} from './modules/oidc/index.js';
 import settingsRoutes from './routes/settings.js';
 import { createGjcAppFactory } from './app-factory.js';
 import { DesktopUpdateRelay } from './services/desktop-update-relay.js';
@@ -106,6 +113,8 @@ import voiceRoutes from './voice-proxy.js';
 import { assetsRoutes } from './modules/assets/index.js';
 import { initializeDatabase, projectsDb, sessionsDb } from './modules/database/index.js';
 import {
+    authenticateAutomation,
+    authenticateAutomationDeviceRequest,
     automationRoutes,
     automationService,
     configureDesktopRestartAdmission as configureAutomationDesktopAdmission,
@@ -288,9 +297,19 @@ app.use('/api/auth', authRoutes);
 
 // Sign-in gate. Inert until an issuer, client id and secret are all configured,
 // so an unconfigured server keeps the implicit-owner behaviour it always had.
-// Automation, the worker API and the sockets authenticate themselves and are
-// exempt by path, not by port.
-app.use(createOidcGate());
+// The worker API and the sockets authenticate themselves and are exempt by
+// path, not by port. Automation and browser are protected routers: the gate
+// admits a paired device credential through the hook, and the routers require
+// a session or that same credential again.
+app.use(createOidcGate({ authenticateRequest: authenticateAutomationDeviceRequest }));
+
+const bootOidcConfig = readOidcConfig();
+if (!oidcEnforcing(bootOidcConfig)) {
+    console.warn('[auth] Sign-in is not configured or NO_AUTH is set: every route, including /ws, /api/automation, /api/browser and /api/mcp, accepts callers who can reach the port.');
+}
+if (oidcEnforcing(bootOidcConfig) && bootOidcConfig.allowLocal) {
+    console.warn(`[auth] Local access without sign-in is enabled for ${noAuthEnabled() ? 'all callers (NO_AUTH)' : resolvedAllowedIps(bootOidcConfig).join(', ')}; clients on those ranges can use the app, including shell commands, terminals and file edits.`);
+}
 
 // Projects API Routes (protected)
 app.use('/api/projects', authenticateToken, projectModuleRoutes);
@@ -315,10 +334,11 @@ app.use('/api/system', authenticateToken, systemRoutes);
 // Unified provider MCP routes (protected)
 app.use('/api/providers', authenticateToken, providerRoutes);
 
-// Chromium/CDP and CUA Driver automation. The app factory's desktop guard and
-// the normal owner authentication both run before these routes.
-app.use('/api/automation', authenticateToken, automationRoutes);
-app.use('/api/browser', authenticateToken, createBrowserAutomationRouter());
+// Chromium/CDP and remote-companion automation. Beyond the sign-in gate these
+// routes require a session or a live paired-device credential, because they
+// can dispatch shell commands into an approved companion.
+app.use('/api/automation', authenticateAutomation, authenticateToken, automationRoutes);
+app.use('/api/browser', authenticateAutomation, authenticateToken, createBrowserAutomationRouter());
 
 // Host control (protected). Inert unless GAJAE_HOST_CONTROL is set, and then
 // only the capabilities switched on in Settings: the module owns the Docker

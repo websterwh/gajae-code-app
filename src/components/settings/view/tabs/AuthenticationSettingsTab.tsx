@@ -18,6 +18,8 @@ type OidcConfig = {
   allowedGroups: string[];
   allowLocal: boolean;
   allowedIps: string[];
+  /** What an empty allowedIps list actually grants; the API resolves it. */
+  resolvedAllowedIps: string[];
 };
 
 type Discovery = {
@@ -50,6 +52,7 @@ const emptyConfig: OidcConfig = {
   allowedGroups: [],
   allowLocal: false,
   allowedIps: [],
+  resolvedAllowedIps: [],
 };
 
 export default function AuthenticationSettingsTab() {
@@ -236,6 +239,13 @@ export default function AuthenticationSettingsTab() {
             <input className={inputClass} value={config.allowedIps.join(', ')} placeholder="192.168.1.0/24, 10.0.0.5"
               onChange={(event) => patch({ allowedIps: event.target.value.split(',').map((value) => value.trim()).filter(Boolean) })} />
           </SettingsRow>
+          {config.allowLocal && (
+            <p className="border-t border-border px-4 py-3 text-xs text-muted-foreground">
+              {t('authentication.localAccessEffect', {
+                ranges: (config.resolvedAllowedIps.length ? config.resolvedAllowedIps : config.allowedIps).join(', '),
+              })}
+            </p>
+          )}
         </SettingsCard>
       </SettingsSection>
 

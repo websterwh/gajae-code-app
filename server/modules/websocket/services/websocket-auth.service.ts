@@ -19,6 +19,10 @@ type WebSocketAuthDependencies = Readonly<{
   /** Raw `ALLOWED_HOSTS`; defaults to the process environment. */
   allowedHosts?: string | undefined;
   desktopRestartAdmission?: DesktopWorkAdmission;
+  /** The HTTP gate's own cookie reader, so upgrade auth never re-implements it. */
+  hasSession?: (cookieHeader: string | undefined) => boolean;
+  /** True while sign-in is enforced; false keeps an unset API_KEY open as before. */
+  sessionRequired?: () => boolean;
 }>;
 
 function acceptsOrigin(request: AuthenticatedWebSocketRequest, configuredHosts?: string): boolean {
@@ -54,9 +58,18 @@ export function verifyWebSocketClient(info: Parameters<VerifyClientCallbackSync<
 
   // Desktop credentials are checked before the owner is attached to an upgrade request.
   if (dependencies.desktopAuth && !dependencies.desktopAuth.authenticateWebSocket(upgradeRequest)) return false;
-  // HTTP middleware does not run during an upgrade. Apply the deployment key
-  // here too, before any chat, terminal, or browser socket gains owner access.
-  if (!hasValidApiKey(upgradeRequest)) return false;
+  // HTTP middleware does not run during an upgrade. Accept either a signed-in
+  // session or the deployment key here too, before any chat, terminal, or
+  // browser socket gains owner access. An unset API_KEY is not a credential
+  // while sign-in is enforced - that was the hole this closes - but a
+  // configured key stays valid so the desktop shell keeps connecting.
+  if (dependencies.sessionRequired?.() === true) {
+    const hasDeploymentKey = Boolean(process.env.API_KEY) && hasValidApiKey(upgradeRequest);
+    const hasSession = dependencies.hasSession?.(upgradeRequest.headers.cookie) === true;
+    if (!hasDeploymentKey && !hasSession) return false;
+  } else if (!hasValidApiKey(upgradeRequest)) {
+    return false;
+  }
 
   let release: (() => void) | undefined;
   let owner: AuthenticatedOwner | null;

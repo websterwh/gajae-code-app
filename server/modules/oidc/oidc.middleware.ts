@@ -9,9 +9,18 @@ import { oidcEnforcing, readOidcConfig } from './oidc.config.js';
 import { readSession } from './oidc.sessions.js';
 
 /**
- * Paths that keep working without a browser sign-in. Every entry here is a
- * surface that authenticates itself, or that has to be reachable before a
- * sign-in (the login flow and the assets its page needs).
+ * Paths that keep working without a browser sign-in. Every entry is a surface
+ * that authenticates itself, or that has to be reachable before a sign-in (the
+ * login flow and the assets its page needs).
+ *
+ * `/api/automation` and `/api/browser` are deliberately absent: they dispatch
+ * commands into a paired companion and drive CDP, so they are protected like
+ * every other router. Their device-credential path is admitted by the gate's
+ * `authenticateRequest` hook, not by an exemption.
+ *
+ * `/ws` is exempt from the cookie gate only because the upgrade handshake
+ * checks a session or deployment key itself; HTTP middleware does not run on
+ * an upgrade. Anything added here must be authenticated by other means.
  */
 export const OIDC_EXEMPT_PREFIXES = [
   '/health',
@@ -19,9 +28,6 @@ export const OIDC_EXEMPT_PREFIXES = [
   '/api/auth',
   // The GJC worker/jobs surface authenticates with its own API key.
   '/api/gjc',
-  // Remote CUA companion, browser and CDP automation carry their own tokens.
-  '/api/automation',
-  '/api/browser',
   // Desktop updater relay is validated against the desktop key.
   '/api/desktop',
   // Chat and terminal sockets run their own handshake authentication.
@@ -94,16 +100,47 @@ function toV4(address: string): number | null {
   return value >>> 0;
 }
 
+function toV6(address: string): bigint | null {
+  const value = stripMappedV4(String(address ?? '').trim()).toLowerCase();
+  if (!value.includes(':')) return null;
+  const halves = value.split('::');
+  if (halves.length > 2) return null;
+  const head = halves[0] ? halves[0].split(':') : [];
+  const tail = halves.length === 2 && halves[1] ? halves[1].split(':') : [];
+  if (halves.length === 1 && head.length !== 8) return null;
+  const missing = 8 - head.length - tail.length;
+  if (missing < 0 || (halves.length === 2 && missing < 1)) return null;
+  const parts = [...head, ...Array<string>(missing).fill('0'), ...tail];
+  let result = 0n;
+  for (const part of parts) {
+    if (!/^[0-9a-f]{1,4}$/u.test(part)) return null;
+    result = (result << 16n) | BigInt(parseInt(part, 16));
+  }
+  return result;
+}
+
 function matchesEntry(address: string, entry: string): boolean {
   const rule = entry.trim();
   if (!rule) return false;
   const [network, prefix] = rule.split('/');
   const base = stripMappedV4(network ?? '');
-  if (prefix === undefined) return stripMappedV4(address) === base;
+  const addressV6 = toV6(address);
+  const networkV6 = toV6(network ?? '');
+  if (prefix === undefined) {
+    if (addressV6 !== null && networkV6 !== null) return addressV6 === networkV6;
+    return stripMappedV4(address) === base;
+  }
+
+  const bits = Number(prefix);
+  if (addressV6 !== null && networkV6 !== null) {
+    if (!Number.isInteger(bits) || bits < 0 || bits > 128) return false;
+    if (bits === 0) return true;
+    const shift = BigInt(128 - bits);
+    return (networkV6 >> shift) === (addressV6 >> shift);
+  }
 
   const networkValue = toV4(base);
   const addressValue = toV4(stripMappedV4(address));
-  const bits = Number(prefix);
   if (networkValue === null || addressValue === null) return false;
   if (!Number.isInteger(bits) || bits < 0 || bits > 32) return false;
   if (bits === 0) return true;
@@ -150,7 +187,16 @@ export function clientAddress(request: {
  * arrives through a connection the app opened for itself (the worker socket, the
  * companion relay) authenticates on its own.
  */
-export function createOidcGate() {
+export type OidcGateOptions = {
+  /**
+   * A request that authenticates itself outside the cookie (a paired device
+   * credential on the automation and browser surfaces). It runs after the
+   * session check, so a signed-in caller never depends on it.
+   */
+  authenticateRequest?: (request: Request) => boolean;
+};
+
+export function createOidcGate(options: OidcGateOptions = {}) {
   return (request: Request, response: Response, next: NextFunction) => {
     const config = readOidcConfig();
     if (isDesktopMode() || !oidcEnforcing(config) || isExemptPath(request.path)) return next();
@@ -160,6 +206,7 @@ export function createOidcGate() {
 
     const session = readSession(request.headers.cookie);
     if (session) return next();
+    if (options.authenticateRequest?.(request)) return next();
 
     const acceptsHtml = String(request.headers.accept ?? '').includes('text/html');
     if (acceptsHtml && request.method === 'GET') {

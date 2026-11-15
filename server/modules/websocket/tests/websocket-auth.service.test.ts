@@ -153,6 +153,49 @@ test('the optional deployment API key protects WebSocket upgrades before owner l
   }
 });
 
+test('with sign-in enforced an upgrade needs a session or a configured deployment key', (t) => {
+  const previous = process.env.API_KEY;
+  const desktop = process.env.GJC_DESKTOP;
+  delete process.env.API_KEY;
+  delete process.env.GJC_DESKTOP;
+  t.after(() => {
+    if (previous === undefined) delete process.env.API_KEY;
+    else process.env.API_KEY = previous;
+    if (desktop === undefined) delete process.env.GJC_DESKTOP;
+    else process.env.GJC_DESKTOP = desktop;
+  });
+
+  const dependencies = (hasSession: boolean, sessionRequired = true) => ({
+    authenticateWebSocket: owner,
+    hasSession: () => hasSession,
+    sessionRequired: () => sessionRequired,
+  });
+
+  // An unset API_KEY is not a credential while sign-in is enforced.
+  assert.equal(verifyWebSocketClient(upgrade({ host: '127.0.0.1:3001' }), dependencies(false)), false);
+  // A valid sign-in cookie is.
+  assert.equal(verifyWebSocketClient(
+    upgrade({ host: '127.0.0.1:3001', cookie: 'gajae_oidc_session=fixture' }),
+    dependencies(true),
+  ), true);
+
+  // The desktop path keeps working with only the deployment key.
+  process.env.API_KEY = 'fixture-desktop-key';
+  assert.equal(verifyWebSocketClient(
+    upgrade({ host: '127.0.0.1:3001', 'x-api-key': 'fixture-desktop-key' }),
+    dependencies(false),
+  ), true);
+  assert.equal(verifyWebSocketClient(
+    upgrade({ host: '127.0.0.1:3001', 'x-api-key': 'wrong' }),
+    dependencies(false),
+  ), false);
+
+  // With sign-in unconfigured, the previous open behaviour is preserved: an
+  // unset API_KEY still admits the implicit owner.
+  delete process.env.API_KEY;
+  assert.equal(verifyWebSocketClient(upgrade({ host: '127.0.0.1:3001' }), dependencies(false, false)), true);
+});
+
 test('the live gateway rejects unauthorized, malformed, and removed routes while retaining authenticated chat', async (t) => {
   const previous = process.env.API_KEY;
   const desktop = process.env.GJC_DESKTOP;

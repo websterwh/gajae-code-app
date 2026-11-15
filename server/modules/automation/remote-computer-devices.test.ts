@@ -48,6 +48,21 @@ test('registerUnattended creates a disabled device without a pairing token', () 
   assert.equal(registry.authenticate(registered.device.id, registered.credential).id, registered.device.id);
 });
 
+test('the live-credential check is the same definition the hub authenticates with', () => {
+  const registry = new RemoteComputerDeviceRegistry(storage());
+  const paired = registry.consumePairing(registry.issuePairing().token, 'Laptop', 'linux');
+  assert.equal(registry.verifyLiveCredential(paired.device.id, paired.credential), true);
+  assert.equal(registry.verifyLiveCredential(paired.device.id, 'wrong'), false);
+  assert.equal(registry.verifyLiveCredential('missing', paired.credential), false);
+  // A pending device authenticates as not-yet-approved, but its credential is
+  // not live enough to open the HTTP automation gate.
+  registry.update(paired.device.id, { enabled: false });
+  assert.equal(registry.verifyLiveCredential(paired.device.id, paired.credential), false);
+  registry.update(paired.device.id, { enabled: true });
+  registry.revoke(paired.device.id);
+  assert.equal(registry.verifyLiveCredential(paired.device.id, paired.credential), false);
+});
+
 test('removing a device actually drops it from the list, not just marks it revoked', () => {
   const registry = new RemoteComputerDeviceRegistry(storage());
   const paired = registry.consumePairing(registry.issuePairing().token, 'Laptop', 'linux');

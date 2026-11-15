@@ -341,6 +341,7 @@
     "localAccessHint": "Le richieste dagli indirizzi sottostanti saltano il controllo di accesso. Con l’elenco vuoto sono consentiti loopback e intervalli privati (10/8, 172.16/12, 192.168/16, fc00::/7).",
     "allowedIps": "Indirizzi IP consentiti",
     "allowedIpsHint": "Indirizzi o intervalli CIDR IPv4 separati da virgole, ad es. 192.168.1.0/24, 10.0.0.5.",
+    "localAccessEffect": "Un client su {{ranges}} può usare l’app senza accedere, incluse le comandi shell, i terminali e la modifica dei file. Il controllo host (/api/host) richiede comunque una sessione, a meno che il deployment non abiliti GAJAE_HOST_CONTROL.",
     "discover": "Prova la discovery",
     "save": "Salva",
     "saved": "Salvato",

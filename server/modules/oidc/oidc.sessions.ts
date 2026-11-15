@@ -70,6 +70,11 @@ export function readSession(cookieHeader: string | undefined): OidcSession | nul
   return open<OidcSession>(cookieValue(cookieHeader, SESSION_COOKIE));
 }
 
+/** Whether the request carries a valid sign-in cookie, without exposing the claims. */
+export function hasSessionCookie(cookieHeader: string | undefined): boolean {
+  return readSession(cookieHeader) !== null;
+}
+
 export function readTransaction(cookieHeader: string | undefined): OidcTransaction | null {
   return open<OidcTransaction>(cookieValue(cookieHeader, TRANSACTION_COOKIE));
 }

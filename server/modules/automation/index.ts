@@ -1,4 +1,11 @@
 export {
+  authenticateAutomation,
+  authenticateAutomationDeviceRequest,
+  createAutomationAuth,
+  deviceCredentialFrom,
+  isAutomationPath,
+} from './automation-auth.js';
+export {
   default as automationRoutes,
   createAutomationRouter,
   createBrowserAutomationRouter,
