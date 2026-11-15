@@ -445,10 +445,6 @@
     "missingCount": "{{count}} eksik bağlama",
     "ledgerCount": "{{count}} paket kaydedildi",
     "statusDetails": "Ayrıntılar",
-    "sourceBundledDesc": "İmajla birlikte gelir, seçilmiş ve test edilmiştir.",
-    "sourceOverlayDesc": "Bu projenin deposundan alınan seçilmiş liste, yeni bir imaj olmadan büyüyebilir.",
-    "sourceRegistryDesc": "MCP kayıt defteri: üçüncü tarafların yayımladığı her şey, doğrulanmamış.",
-    "registryNote": "Kayıt defteri sonuçları üçüncü taraflara aittir ve doğrulanmamıştır.",
     "installedBadge": "Kurulu",
     "newBadge": "New"
   },

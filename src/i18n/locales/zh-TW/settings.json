@@ -445,10 +445,6 @@
     "missingCount": "{{count}} 個缺少掛載",
     "ledgerCount": "已記錄 {{count}} 個套件",
     "statusDetails": "詳細資料",
-    "sourceBundledDesc": "隨映像提供，經過精選與測試。",
-    "sourceOverlayDesc": "從本專案儲存庫取得的精選清單，無需新映像即可擴充。",
-    "sourceRegistryDesc": "MCP 登錄表：第三方發布的所有內容，未經審核。",
-    "registryNote": "登錄表結果來自第三方，未經審核。",
     "installedBadge": "已安裝",
     "newBadge": "New"
   },

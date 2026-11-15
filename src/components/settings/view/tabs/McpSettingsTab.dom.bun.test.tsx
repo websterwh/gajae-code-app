@@ -108,6 +108,21 @@ test('install does not require env first, then the new row asks for configuratio
   assert.ok(screen.getByText(/GITHUB_PERSONAL_ACCESS_TOKEN/u));
 });
 
+test('the sort control stays put while the search box is used', async () => {
+  const calls = fakeApi();
+  await mount();
+  assert.ok(screen.getByLabelText(english.mcp.sort));
+
+  const search = screen.getByPlaceholderText(english.mcp.searchPlaceholder);
+  await act(async () => { fireEvent.change(search, { target: { value: 'git' } }); });
+
+  assert.ok(screen.getByLabelText(english.mcp.sort), 'typing must not unmount the sort control');
+  await waitFor(() => assert.ok(
+    calls.some((call) => call.path.includes('q=git') && call.path.includes('sort=name')),
+    'the search request carries the chosen sort',
+  ));
+});
+
 test('project scope refuses to install until a project is selected', async () => {
   const calls = fakeApi();
   await mount();

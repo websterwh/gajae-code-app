@@ -445,10 +445,6 @@
     "missingCount": "{{count}} 个缺失挂载",
     "ledgerCount": "已记录 {{count}} 个包",
     "statusDetails": "详情",
-    "sourceBundledDesc": "随镜像提供，经过精选和测试。",
-    "sourceOverlayDesc": "从本项目仓库获取的精选列表，无需新镜像即可扩充。",
-    "sourceRegistryDesc": "MCP 注册表：第三方发布的所有内容，未经审核。",
-    "registryNote": "注册表结果来自第三方，未经审核。",
     "installedBadge": "已安装",
     "newBadge": "New"
   },

@@ -157,6 +157,7 @@ test('browse sorting exposes name, provenance-first relevance, and provenance-bl
     { name: 'zeta', description: 'server curated', transport: 'stdio', command: 'npx', origin: 'curated', stars: 1 },
     { name: 'alpha', description: 'server marketplace', transport: 'stdio', command: 'npx', origin: 'marketplace', stars: 9_000 },
     { name: 'beta', description: 'server marketplace', transport: 'stdio', command: 'npx', origin: 'marketplace', stars: 100 },
+    { name: 'aardvark', description: 'server marketplace', transport: 'stdio', command: 'npx', origin: 'marketplace', stars: 50 },
   ];
   const service = new McpService({
     agentDir: root,
@@ -172,9 +173,9 @@ test('browse sorting exposes name, provenance-first relevance, and provenance-bl
     await service.catalog(query)
   ).entries.map((entry) => entry.name);
 
-  assert.deepEqual(await names({ source: 'overlay', sort: 'name' }), ['alpha', 'beta', 'zeta']);
-  assert.deepEqual(await names({ source: 'overlay', sort: 'relevance' }), ['zeta', 'alpha', 'beta']);
-  assert.deepEqual(await names({ source: 'overlay', sort: 'popularity' }), ['alpha', 'beta', 'zeta']);
+  assert.deepEqual(await names({ source: 'overlay', sort: 'name' }), ['aardvark', 'alpha', 'beta', 'zeta']);
+  assert.deepEqual(await names({ source: 'overlay', sort: 'relevance' }), ['zeta', 'alpha', 'beta', 'aardvark']);
+  assert.deepEqual(await names({ source: 'overlay', sort: 'popularity' }), ['alpha', 'beta', 'aardvark', 'zeta']);
 
   const popular = await service.catalog({ source: 'overlay', sort: 'popularity' });
   assert.equal(popular.entries[0]?.origin, 'marketplace');
@@ -182,8 +183,9 @@ test('browse sorting exposes name, provenance-first relevance, and provenance-bl
   const relevant = await service.catalog({ source: 'overlay', sort: 'relevance' });
   assert.equal(relevant.entries[0]?.origin, 'curated');
 
-  // A query keeps its match ranking regardless of the browse sort control.
-  const absent = await names({ q: 'server', source: 'overlay' });
-  assert.deepEqual(await names({ q: 'server', source: 'overlay', sort: 'name' }), absent);
-  assert.deepEqual(await names({ q: 'server', source: 'overlay', sort: 'popularity' }), absent);
+  // A query narrows the list, and the chosen order still applies to the rest.
+  assert.deepEqual(await names({ q: 'server', source: 'overlay' }), ['zeta', 'alpha', 'beta', 'aardvark']);
+  assert.deepEqual(await names({ q: 'server', source: 'overlay', sort: 'relevance' }), ['zeta', 'alpha', 'beta', 'aardvark']);
+  assert.deepEqual(await names({ q: 'server', source: 'overlay', sort: 'name' }), ['aardvark', 'alpha', 'beta', 'zeta']);
+  assert.deepEqual(await names({ q: 'server', source: 'overlay', sort: 'popularity' }), ['alpha', 'beta', 'aardvark', 'zeta']);
 });

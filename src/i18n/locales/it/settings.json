@@ -445,10 +445,6 @@
     "missingCount": "{{count}} montaggi mancanti",
     "ledgerCount": "{{count}} pacchetti registrati",
     "statusDetails": "Dettagli",
-    "sourceBundledDesc": "Incluso nell'immagine, curato e testato.",
-    "sourceOverlayDesc": "Un elenco curato recuperato dal repository di questo progetto, così può crescere senza una nuova immagine.",
-    "sourceRegistryDesc": "Il registro MCP: tutto ciò che pubblicano terze parti, non verificato.",
-    "registryNote": "I risultati del registro provengono da terze parti e non sono verificati.",
     "installedBadge": "Installato",
     "newBadge": "New"
   },

@@ -445,10 +445,6 @@
     "missingCount": "{{count}} montages manquants",
     "ledgerCount": "{{count}} paquets enregistrés",
     "statusDetails": "Détails",
-    "sourceBundledDesc": "Fourni avec l'image, sélectionné et testé.",
-    "sourceOverlayDesc": "Une liste sélectionnée récupérée depuis le dépôt de ce projet, pour qu'elle puisse s'enrichir sans nouvelle image.",
-    "sourceRegistryDesc": "Le registre MCP : tout ce que publient des tiers, sans vérification.",
-    "registryNote": "Les résultats du registre proviennent de tiers et ne sont pas vérifiés.",
     "installedBadge": "Installé",
     "newBadge": "New"
   },

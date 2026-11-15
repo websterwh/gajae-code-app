@@ -445,10 +445,6 @@
     "missingCount": "{{count}} fehlende Einbindungen",
     "ledgerCount": "{{count}} Pakete erfasst",
     "statusDetails": "Details",
-    "sourceBundledDesc": "Im Image enthalten, kuratiert und getestet.",
-    "sourceOverlayDesc": "Eine kuratierte Liste aus dem Repository dieses Projekts, damit sie ohne neues Image wachsen kann.",
-    "sourceRegistryDesc": "Die MCP-Registry: alles, was Dritte veröffentlichen, ungeprüft.",
-    "registryNote": "Registry-Ergebnisse stammen von Dritten und sind ungeprüft.",
     "installedBadge": "Installiert",
     "newBadge": "New"
   },

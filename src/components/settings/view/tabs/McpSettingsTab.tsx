@@ -215,7 +215,8 @@ export default function McpSettingsTab() {
       const params = new URLSearchParams();
       if (search.trim()) params.set('q', search.trim());
       if (source) params.set('source', source);
-      if (!search.trim()) params.set('sort', sort);
+      // The sort stays in force while a query narrows the list.
+      params.set('sort', sort);
       void request<{ entries: CatalogEntry[]; warning?: string; registryError?: string; counts: CatalogCounts }>(`/api/mcp/catalog?${params.toString()}`)
         .then((result) => {
           setCatalog(result.entries);
@@ -436,11 +437,6 @@ export default function McpSettingsTab() {
     .sort()
     .at(-1);
   const selectedProject = projects.find((project) => project.path === projectPath);
-
-  const sourceDescription = source === 'bundled' ? t('mcp.sourceBundledDesc')
-    : source === 'overlay' ? t('mcp.sourceOverlayDesc')
-      : source === 'registry' ? t('mcp.sourceRegistryDesc')
-        : null;
 
   return (
     <div className="space-y-6">
@@ -748,23 +744,18 @@ export default function McpSettingsTab() {
                 onChange={(event) => setSource(event.target.value)}>
                 <option value="">{t('mcp.sourceAll')} ({catalogCounts.bundled + catalogCounts.overlay + catalogCounts.registry})</option>
                 <option value="bundled">{t('mcp.sourceBundled')} ({catalogCounts.bundled})</option>
-                <option value="overlay">{t('mcp.sourceOverlay')} ({catalogCounts.overlay})</option>
                 <option value="registry">{t('mcp.sourceRegistry')} ({catalogCounts.registry})</option>
               </select>
-              {sourceDescription && <span className="mt-1 block font-normal">{sourceDescription}</span>}
-              {source === 'registry' && <span className="mt-1 block font-normal">{t('mcp.registryNote')}</span>}
             </label>
-            {!search.trim() && (
-              <label className="text-xs font-medium text-muted-foreground">
-                {t('mcp.sort')}
-                <select aria-label={t('mcp.sort')} className={`mt-1 ${inputClass}`} value={sort}
-                  onChange={(event) => setSort(event.target.value as CatalogSort)}>
-                  <option value="name">{t('mcp.sortName')}</option>
-                  <option value="relevance">{t('mcp.sortRelevance')}</option>
-                  <option value="popularity">{t('mcp.sortPopularity')}</option>
-                </select>
-              </label>
-            )}
+            <label className="text-xs font-medium text-muted-foreground">
+              {t('mcp.sort')}
+              <select aria-label={t('mcp.sort')} className={`mt-1 ${inputClass}`} value={sort}
+                onChange={(event) => setSort(event.target.value as CatalogSort)}>
+                <option value="name">{t('mcp.sortName')}</option>
+                <option value="relevance">{t('mcp.sortRelevance')}</option>
+                <option value="popularity">{t('mcp.sortPopularity')}</option>
+              </select>
+            </label>
           </div>
           {(catalogWarning || registryError) && (
             <div className="flex flex-wrap items-center gap-2 border-t border-border px-4 py-2">

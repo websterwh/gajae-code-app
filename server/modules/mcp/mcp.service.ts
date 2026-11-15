@@ -449,13 +449,12 @@ export class McpService {
       ...(this.options.now ? { now: this.options.now } : {}),
       ...(this.env.GITHUB_TOKEN ? { token: this.env.GITHUB_TOKEN } : {}),
     });
-    if (q) {
-      entries = searchCatalog(entries, q);
-    } else if (query.sort === 'relevance') {
-      // Browse has no match tiers: every entry ties, so provenance and quality
-      // decide. Reuse the search comparator rather than growing a second one.
-      entries = rankCatalog(entries.map((entry) => ({ entry, tier: 0 })));
-    } else if (query.sort === 'popularity') {
+    // A query narrows the list; the requested order still decides what is left,
+    // so typing never silently overrides the sort the user picked. With no sort
+    // and no query the browse default is alphabetical, and with a query it is
+    // the match ranking.
+    if (q) entries = searchCatalog(entries, q);
+    if (query.sort === 'popularity') {
       // Deliberately ignores provenance: a starred marketplace server can
       // outrank a curated one, which is the point of this option.
       entries = [...entries].sort((a, b) => (
@@ -463,7 +462,11 @@ export class McpService {
         || (b.popularity ?? 0) - (a.popularity ?? 0)
         || a.name.localeCompare(b.name)
       ));
-    } else {
+    } else if (query.sort === 'relevance') {
+      // Browse has no match tiers: every entry ties, so provenance and quality
+      // decide. Reuse the search comparator rather than growing a second one.
+      if (!q) entries = rankCatalog(entries.map((entry) => ({ entry, tier: 0 })));
+    } else if (query.sort === 'name' || !q) {
       entries = [...entries].sort((a, b) => a.name.localeCompare(b.name));
     }
     return {
