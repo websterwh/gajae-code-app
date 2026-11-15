@@ -172,18 +172,10 @@
         "failed": "内蔵ブラウザを開けませんでした。もう一度お試しください。"
       }
     },
-    "title": "ブラウザとネイティブアプリケーション",
-    "description": "別途インストールされた CUA Driver を確認します。",
-    "computerUse": {
-      "label": "コンピュータ操作",
-      "description": "エージェントが CUA Driver を通じてこの Mac のネイティブアプリを操作できるようにします。既定ではオフです。オンにするまで、どのセッションにも computer ツールは提供されず、すべてのコンピュータ呼び出しは拒否されます。再びオフにすると、以降の新しいセッションにはツールが提供されません。"
-    },
+    "title": "リモートコンピューター",
+    "description": "agent-desktop コンパニオンを実行するコンピューターをペアリングします。信頼され接続中のデバイスだけが実行できます。",
     "notInstalled": "利用不可",
     "installGuide": "セットアップ手順",
-    "accessibility": "アクセシビリティ",
-    "screenRecording": "画面を録画",
-    "granted": "許可済み",
-    "missing": "未許可",
     "unknown": "不明",
     "refresh": "診断を再読み込み",
     "grants": "常に許可された対象",

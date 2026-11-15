@@ -172,12 +172,8 @@
         "failed": "The built-in browser could not be opened. Try again."
       }
     },
-    "title": "Browser and native applications",
-    "description": "Review the separately installed CUA Driver.",
-    "computerUse": {
-      "label": "Computer use",
-      "description": "Let the agent drive native applications on this Mac through CUA Driver. Off by default: until you turn this on, no session is offered the computer tool and every computer call is refused. Turning it off again withholds the tool from every new session."
-    },
+    "title": "Remote computers",
+    "description": "Pair a computer running the agent-desktop companion. Only a trusted, connected device can run anything.",
     "hostControl": {
       "label": "Host control",
       "description": "Act on the machine this container runs on, through the Docker socket mounted beside it.",
@@ -211,10 +207,6 @@
     },
     "notInstalled": "Unavailable",
     "installGuide": "Setup instructions",
-    "accessibility": "Accessibility",
-    "screenRecording": "Record the screen",
-    "granted": "Granted",
-    "missing": "Missing",
     "unknown": "Unknown",
     "refresh": "Reload diagnostics",
     "grants": "Persistently allowed targets",

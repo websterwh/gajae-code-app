@@ -172,18 +172,10 @@
         "failed": "無法開啟內建瀏覽器。請再試一次。"
       }
     },
-    "title": "瀏覽器和原生應用程式",
-    "description": "檢視單獨安裝的 CUA 驅動程式。",
-    "computerUse": {
-      "label": "電腦操作",
-      "description": "允許代理程式透過 CUA Driver 操作這台 Mac 上的原生應用程式。預設為關閉：在你開啟之前，任何工作階段都不會取得 computer 工具，所有電腦呼叫都會被拒絕。再次關閉後，新的工作階段將不再取得該工具。"
-    },
+    "title": "遠端電腦",
+    "description": "配對執行 agent-desktop 夥伴的電腦。只有受信任且已連線的裝置才能執行操作。",
     "notInstalled": "未提供",
     "installGuide": "安裝說明",
-    "accessibility": "可訪問性",
-    "screenRecording": "錄製螢幕",
-    "granted": "已授權",
-    "missing": "缺失",
     "unknown": "未知",
     "refresh": "重新載入診斷",
     "grants": "始終允許目標",

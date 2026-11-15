@@ -15,12 +15,11 @@ export {
   createAutomationDesktopRestartReader, createBrowserDesktopRestartReader, createComputerDesktopRestartReader,
 } from './automation.service.js';
 export { BrowserBackendStore, browserBackendStore, resolveGjcBrowserBackend } from './browser-backend.js';
-export { ComputerUseStore, computerUseStore, resolveGjcComputerUse } from './computer-use.js';
 export {
   EgoActivityReader, EgoActivityStore, egoActivityReader, egoActivityStore,
   type EgoActivityResponse,
 } from './ego-activity.js';
-export { AGENT_DESKTOP_SAFE_TOOLS, type AgentDesktopSafeTool } from './agent-desktop-client.js';
-export { LocalComputerTransport, RemoteComputerTransport, type ComputerTransport } from './computer-transport.js';
+export { AGENT_DESKTOP_SAFE_TOOLS, type AgentDesktopSafeTool } from './agent-desktop-tools.js';
+export { RemoteComputerTransport, type ComputerTransport } from './computer-transport.js';
 export { RemoteComputerDeviceRegistry } from './remote-computer-devices.js';
 export type { BrowserCommand, BrowserSessionState } from './browser-protocol.js';

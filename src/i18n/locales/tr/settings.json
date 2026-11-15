@@ -172,18 +172,10 @@
         "failed": "Yerleşik tarayıcı açılamadı. Tekrar deneyin."
       }
     },
-    "title": "Tarayıcı ve yerel uygulamalar",
-    "description": "Ayrı olarak yüklenen CUA Sürücüsünü inceleyin.",
-    "computerUse": {
-      "label": "Bilgisayar kullanımı",
-      "description": "Aracının bu Mac’teki yerel uygulamaları CUA Driver üzerinden yönetmesine izin verir. Varsayılan olarak kapalıdır: siz açana kadar hiçbir oturuma bilgisayar aracı sunulmaz ve her bilgisayar çağrısı reddedilir. Yeniden kapattığınızda araç yeni oturumlara sunulmaz."
-    },
+    "title": "Uzak bilgisayarlar",
+    "description": "agent-desktop yardımcı uygulamasını çalıştıran bir bilgisayarı eşleştirin. Yalnızca güvenilen ve bağlı bir cihaz işlem yapabilir.",
     "notInstalled": "Kullanılamıyor",
     "installGuide": "Kurulum talimatları",
-    "accessibility": "Erişilebilirlik",
-    "screenRecording": "Ekranı kaydedin",
-    "granted": "İzin verildi",
-    "missing": "Eksik",
     "unknown": "Bilinmiyor",
     "refresh": "Tanılamayı yeniden yükle",
     "grants": "Kalıcı olarak izin verilen hedefler",

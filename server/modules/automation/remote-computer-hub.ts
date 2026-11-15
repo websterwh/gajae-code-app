@@ -11,7 +11,7 @@ import {
 } from '../../../shared/remote-cua-protocol.js';
 
 import { guardAgentDesktopCall } from './agent-desktop-capability.js';
-import { isAgentDesktopSafeTool } from './agent-desktop-client.js';
+import { isAgentDesktopSafeTool } from './agent-desktop-tools.js';
 import { guardLocalMachineCall, isLocalMachineTool, type ComputerTool } from './local-machine-capability.js';
 import { RemoteComputerDeviceRegistry } from './remote-computer-devices.js';
 

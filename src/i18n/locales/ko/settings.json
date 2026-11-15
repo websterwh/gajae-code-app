@@ -172,18 +172,10 @@
         "failed": "내장 브라우저를 열 수 없습니다. 다시 시도하세요."
       }
     },
-    "title": "브라우저와 네이티브 애플리케이션",
-    "description": "별도로 설치된 CUA Driver를 검토하세요.",
-    "computerUse": {
-      "label": "컴퓨터 사용",
-      "description": "에이전트가 CUA Driver를 통해 이 Mac의 네이티브 앱을 조작하도록 허용합니다. 기본은 꺼짐입니다. 켜기 전에는 어떤 세션에도 컴퓨터 도구가 제공되지 않고 모든 컴퓨터 호출이 거부됩니다. 다시 끄면 이후 새 세션부터 도구가 제공되지 않습니다."
-    },
+    "title": "원격 컴퓨터",
+    "description": "agent-desktop 컴패니언이 실행되는 컴퓨터를 페어링합니다. 신뢰되고 연결된 기기만 실행할 수 있습니다.",
     "notInstalled": "사용 불가",
     "installGuide": "설치 지침",
-    "accessibility": "접근성",
-    "screenRecording": "화면 녹화",
-    "granted": "허용됨",
-    "missing": "결측",
     "unknown": "확인할 수 없음",
     "refresh": "다이어그램 새로 고침",
     "grants": "영구적으로 허용된 대상",

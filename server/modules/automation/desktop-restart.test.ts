@@ -1,14 +1,10 @@
 import assert from 'node:assert/strict';
-import childProcess from 'node:child_process';
-import { EventEmitter, once } from 'node:events';
+import { once } from 'node:events';
 import { mkdtemp, rm } from 'node:fs/promises';
-import { syncBuiltinESMExports } from 'node:module';
 import net from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { PassThrough } from 'node:stream';
 import test, { type TestContext } from 'node:test';
-
 
 import type { DesktopWorkAdmission } from '@/shared/interfaces.js';
 
@@ -18,15 +14,34 @@ import {
   AutomationService, configureDesktopRestartAdmission, createAutomationDesktopRestartReader,
   createBrowserDesktopRestartReader, createComputerDesktopRestartReader,
 } from './automation.service.js';
-import { AgentDesktopClient } from './agent-desktop-client.js';
-import { ComputerUseStore } from './computer-use.js';
+import { RemoteComputerDeviceRegistry } from './remote-computer-devices.js';
 
-/** Computer use is off by default (#131); these tests exercise live computer work, so it is on. */
-function withComputerUse(service: AutomationService): AutomationService {
+const READINESS = {
+  schemaSupported: true,
+  daemon: 'running' as const,
+  safeTools: ['desktop_list_apps', 'local_exec'],
+  deviceName: 'test-host',
+  os: 'linux x86_64',
+};
+
+function withComputer(service: AutomationService, call: (signal?: AbortSignal) => Promise<unknown> = async () => ({ ok: true })) {
   const values = new Map<string, string>();
-  const store = new ComputerUseStore({ get: (key) => values.get(key) ?? null, set: (key, value) => { values.set(key, value); } });
-  store.set(true);
-  Object.defineProperty(service, 'computerUse', { value: store });
+  const devices = new RemoteComputerDeviceRegistry({
+    get: (key) => values.get(key) ?? null,
+    set: (key, value) => { values.set(key, value); },
+  });
+  const registered = devices.registerUnattended('test-host', 'linux x86_64');
+  devices.update(registered.device.id, { enabled: true, readiness: READINESS });
+  devices.select(registered.device.id);
+  Object.defineProperty(service, 'remoteDevices', { value: devices });
+  Object.defineProperty(service, 'remoteComputerHub', {
+    value: {
+      call: (_deviceId: string, _sessionId: string, _tool: string, _args: Record<string, unknown>, signal?: AbortSignal) =>
+        call(signal),
+      readiness: () => READINESS,
+      isConnected: () => true,
+    },
+  });
   return service;
 }
 
@@ -48,59 +63,11 @@ class Admission implements DesktopWorkAdmission {
   enterCompletion(): () => void { throw new Error('new automation must not claim completion admission'); }
 }
 
-type WireRequest = {
-  id: string;
-  method: string;
-  params?: { name?: string; arguments?: Record<string, unknown> };
-};
-
-class FakeChild extends EventEmitter {
-  stdin = new PassThrough();
-  stdout = new PassThrough();
-  stderr = new PassThrough();
-  exitCode: number | null = null;
-  signalCode = null;
-  kills = 0;
-  calls: WireRequest[] = [];
-  constructor() {
-    super();
-    this.stdin.on('data', (bytes: Buffer) => {
-      for (const line of bytes.toString().trim().split('\n')) this.calls.push(JSON.parse(line) as WireRequest);
-    });
-  }
-  kill(): boolean { this.kills++; return true; }
-  close(): void {
-    this.exitCode = 0;
-    this.stdout.end();
-    this.stderr.end();
-    this.emit('close', 0);
-  }
-  reply(request: WireRequest, result: unknown = { ok: true }): void {
-    this.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', id: request.id, result })}\n`);
-  }
-}
-
-function children(t: TestContext) {
-  const processes: FakeChild[] = [];
-  const spawn = t.mock.method(childProcess, 'spawn', () => {
-    const child = new FakeChild();
-    processes.push(child);
-    return child;
-  });
-  syncBuiltinESMExports();
-  t.after(() => {
-    for (const child of processes) if (child.exitCode === null) child.close();
-    spawn.mock.restore();
-    syncBuiltinESMExports();
-  });
-  return { processes, spawn };
-}
-
 function environment(t: TestContext, values: Record<string, string>) {
   for (const [name, value] of Object.entries(values)) {
     const previous = process.env[name];
     process.env[name] = value;
-    t.after(() => { if (previous === undefined) delete process.env[name]; else process.env[name] = previous; });
+    t.after(() => { if (previous === undefined) delete process.env[name]; else process.env[name] = value; });
   }
 }
 
@@ -120,35 +87,9 @@ function idle(activity: DesktopOwnerActivity): void {
   }
 }
 
-async function initializeAgentDesktop(fixture: ReturnType<typeof children>) {
-  await until(() => Boolean(fixture.processes.at(-1)?.calls.length));
-  const child = fixture.processes.at(-1)!;
-  assert.equal(child.calls[0]!.method, 'initialize');
-  child.reply(child.calls[0]!, {
-    capabilities: { tools: {} },
-    serverInfo: { name: 'agent-desktop', version: '1.2.0' },
-  });
-  await until(() => child.calls.some((call) => call.method === 'tools/call'));
-  return child;
-}
-
-test('agent-desktop client rejects an unknown schema before tool dispatch', async (t) => {
-  environment(t, { AGENT_DESKTOP_PATH: process.execPath });
-  const fixture = children(t);
-  const client = new AgentDesktopClient();
-  const call = client.call('desktop_list_apps', {});
-  await until(() => Boolean(fixture.processes.at(-1)?.calls.length));
-  const child = fixture.processes.at(-1)!;
-  assert.equal(child.calls[0]!.method, 'initialize');
-  child.reply(child.calls[0]!, { capabilities: { tools: {} } });
-  await assert.rejects(call, { message: /Unsupported agent-desktop schema unknown/u });
-  assert.equal(child.calls.some((request) => request.method === 'tools/call'), false);
-});
-
 test('all three readers are pure, complete for healthy unused owners, and independent snapshots', async (t) => {
-  const fixture = children(t);
   const admission = new Admission();
-  const service = withComputerUse(new AutomationService());
+  const service = withComputer(new AutomationService());
   configureDesktopRestartAdmission(admission, service);
   const readers = [createAutomationDesktopRestartReader(service), createBrowserDesktopRestartReader(service.browser), createComputerDesktopRestartReader(service)];
   for (const reader of readers) {
@@ -160,15 +101,13 @@ test('all three readers are pure, complete for healthy unused owners, and indepe
     idle(await reader.read());
     assert.equal(reader.getGeneration(), generation);
   }
-  assert.equal(fixture.spawn.mock.callCount(), 0);
   assert.deepEqual(admission.sources, []);
 });
 
-test('fenced direct service and client producers reject before startup or dispatch', async (t) => {
-  environment(t, { GAJAE_AUTOMATION: '1', AGENT_DESKTOP_PATH: process.execPath });
-  const fixture = children(t);
+test('fenced direct service producers reject before startup or dispatch', async (t) => {
+  environment(t, { GAJAE_AUTOMATION: '1' });
   const admission = new Admission();
-  const service = withComputerUse(new AutomationService(admission));
+  const service = withComputer(new AutomationService(admission));
   admission.fenced = true;
   const generation = service.getGeneration();
   const operations = [
@@ -180,63 +119,43 @@ test('fenced direct service and client producers reject before startup or dispat
     () => service.stopSession('session'),
     () => service.startBridge(),
     () => service.status(),
-    () => service.cua.call('desktop_list_apps', {}),
-    () => service.cua.status(),
   ];
   for (const operation of operations) await assert.rejects(operation(), /fenced/);
-  assert.equal(fixture.spawn.mock.callCount(), 0);
   assert.equal(service.getGeneration(), generation);
   idle(service.snapshotActivity());
   idle(await service.browser.snapshotActivity());
-  idle(service.cua.snapshotActivity());
   assert.equal(admission.active, 0);
 });
 
-test('a cancelled computer call is reported uncertain and transport exit is treated as unconfirmed, not success', async (t) => {
-  environment(t, { GAJAE_AUTOMATION: '1', AGENT_DESKTOP_PATH: process.execPath });
-  const fixture = children(t);
+test('a cancelled computer call is reported uncertain instead of success', async (t) => {
   const admission = new Admission();
-  const service = withComputerUse(new AutomationService(admission));
+  let markStarted!: () => void;
+  const started = new Promise<void>((resolve) => { markStarted = resolve; });
+  const service = withComputer(new AutomationService(admission), (signal) => {
+    markStarted();
+    return new Promise((_resolve, reject) => {
+      signal?.addEventListener('abort', () => reject(new Error('cancelled')), { once: true });
+    });
+  });
   const controller = new AbortController();
   const call = service.callComputer('session', 'desktop_list_apps', {}, controller.signal);
-  assert.ok(service.cua.snapshotActivity().starting > 0 || service.cua.snapshotActivity().running > 0);
-  const child = await initializeAgentDesktop(fixture);
-  const rejected = assert.rejects(call, /cancelled/);
+  await started;
   controller.abort();
-  await rejected;
-  assert.ok(child.calls.some((request) => request.method === 'notifications/cancelled'));
+  await assert.rejects(call, /cancelled/);
   assert.equal(admission.active, 0);
 });
 
-test('agent-desktop requests that time out survive transport exit and a replacement process', async (t) => {
-  environment(t, { AGENT_DESKTOP_PATH: process.execPath });
-  const fixture = children(t);
-  const client = new AgentDesktopClient();
-  const first = client.call('desktop_list_apps', {});
-  const oldChild = await initializeAgentDesktop(fixture);
-  oldChild.reply(oldChild.calls.at(-1)!);
-  await first;
-  const request = client as unknown as {
-    request(method: string, params: Record<string, unknown>, timeout: number): Promise<unknown>;
-  };
-  await assert.rejects(request.request('tools/call', { name: 'desktop_list_apps', arguments: {} }, 5), /timed out/);
-  assert.equal(client.snapshotActivity().complete, false);
-  oldChild.close();
-  const next = client.call('desktop_list_apps', {});
-  await until(() => fixture.processes.length === 2);
-  const child = await initializeAgentDesktop(fixture);
-  child.reply(child.calls.at(-1)!);
-  await next;
-  assert.equal(client.snapshotActivity().running, 0);
-  assert.deepEqual(client.snapshotActivity().unknown, ['agent_desktop_request_unconfirmed']);
-});
-
-test('a failing computer call surfaces the driver error and does not leave admission stuck', async (t) => {
-  environment(t, { GAJAE_AUTOMATION: '1' });
-  const service = withComputerUse(new AutomationService());
+test('a failing computer call surfaces the error and does not leave admission stuck', async () => {
+  const service = withComputer(new AutomationService());
   let fail = true;
-  service.cua.call = async () => fail
-    ? { isError: true, content: [{ text: 'tool failed' }] } : { structuredContent: { data: { apps: [] } } };
+  Object.defineProperty(service, 'remoteComputerHub', {
+    value: {
+      call: async () => fail
+        ? { isError: true, content: [{ text: 'tool failed' }] }
+        : { structuredContent: { data: { apps: [] } } },
+      readiness: () => READINESS,
+    },
+  });
   await assert.rejects(service.callComputer('session', 'desktop_list_apps', {}), /tool failed/);
   fail = false;
   await service.callComputer('session', 'desktop_list_apps', {});
@@ -245,9 +164,9 @@ test('a failing computer call surfaces the driver error and does not leave admis
 
 async function bridge(t: TestContext) {
   const directory = await mkdtemp(join(tmpdir(), 'automation-admission-'));
-  environment(t, { GAJAE_AUTOMATION: '1', GAJAE_AUTOMATION_SOCKET: join(directory, 'bridge.sock') });
+  environment(t, { GAJAE_AUTOMATION_SOCKET: join(directory, 'bridge.sock') });
   const admission = new Admission();
-  const service = withComputerUse(new AutomationService(admission));
+  const service = withComputer(new AutomationService(admission));
   await service.startBridge();
   const socket = net.createConnection(process.env.GJC_AUTOMATION_SOCKET!);
   await once(socket, 'connect');

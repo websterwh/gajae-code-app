@@ -281,7 +281,7 @@ is `.ts`/`.tsx`. Routing is react-router-dom 7.
   runtime on `native` with `browser.enabled=false`, and pins the probe-resolved
   absolute CLI path. If Ego is not ready, the run keeps ordinary chat/coding
   available while browser work is disabled; it never substitutes Built-in,
-  Aside, an OS browser, Playwright/Puppeteer/MCP or computer/CUA. The app may
+  Aside, an OS browser, Playwright/Puppeteer/MCP or a paired companion. The app may
   execute the ego CLI from exactly two places: the explicit Settings Test
   connection action (`--version` plus the documented non-mutating `nodejs`
   check) and the opt-in browser activity reader (`server/gjc-ego-activity.ts`,
@@ -301,12 +301,10 @@ is `.ts`/`.tsx`. Routing is react-router-dom 7.
   selectable only on macOS; Built-in remains macOS desktop-only; see
   `docs/BUILTIN-BROWSER.md`. See `docs/BROWSER-ASIDE-POC.md`,
   `docs/BROWSER-EGO-POC.md` and the "Browser backend" section of
-  `server/GJC-LIVE-SPEC.md`. **Computer use (CUA Driver) is off by default**
-  (owner decision 2026-09-18, #131): `Settings > Automation > Computer use`
-  is a server-owned opt-in (`automation.computerUse.v1`); while it is off the
-  worker never offers the `computer` tool and the automation service refuses
-  every computer call. Do not add a path that offers or calls `computer`
-  without going through that setting.
+  `server/GJC-LIVE-SPEC.md`. **There is no local computer driver.** The server
+  never offers a run a `computer` tool and never drives a desktop of its own;
+  computer work reaches only a paired companion over `/remote-cua`, whose
+  `local_*` tools exist only while that companion runs with `--shell`.
 - **Chat tool cards follow the runtime, not Claude**: `src/components/chat/tools/configs/toolConfigs.ts`
   is keyed by the tool's own lowercase name (`bash`, `read`, `edit`, `todo_write`), and
   its accessors read the runtime's parameter schema. `server/gjc-tool-configs.bun.test.ts`

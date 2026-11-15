@@ -172,18 +172,10 @@
         "failed": "无法打开内置浏览器。请重试。"
       }
     },
-    "title": "浏览器和原生应用",
-    "description": "查看单独安装的 CUA 驱动程序。",
-    "computerUse": {
-      "label": "计算机操作",
-      "description": "允许代理通过 CUA Driver 操作这台 Mac 上的原生应用。默认关闭：在你打开之前，任何会话都不会获得 computer 工具，所有计算机调用都会被拒绝。再次关闭后，新的会话将不再获得该工具。"
-    },
+    "title": "远程计算机",
+    "description": "配对运行 agent-desktop 伴侣的计算机。只有受信任且已连接的设备才能执行操作。",
     "notInstalled": "不可用",
     "installGuide": "设置说明",
-    "accessibility": "无障碍",
-    "screenRecording": "录制屏幕",
-    "granted": "已授予",
-    "missing": "缺失",
     "unknown": "未知",
     "refresh": "重新加载诊断",
     "grants": "持久允许的目标",

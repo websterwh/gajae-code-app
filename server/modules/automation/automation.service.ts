@@ -22,17 +22,14 @@ import { isBuiltinBrowserBinding, type BuiltinBrowserBinding, type BuiltinBrowse
 
 import { AutomationGrantStore, type AutomationGrant } from './automation-grants.js';
 import { browserBackendStore } from './browser-backend.js';
-import { computerUseStore } from './computer-use.js';
 import { egoActivityReader, egoActivityStore, type EgoActivityResponse } from './ego-activity.js';
 import { TauriBrowserClient } from './tauri-browser-client.js';
 import { automationOrigin } from './automation-url.js';
 import {
-  AgentDesktopClient,
   isAgentDesktopSafeTool,
   type AgentDesktopSafeTool,
-  type AgentDesktopStatus,
-} from './agent-desktop-client.js';
-import { LocalComputerTransport, RemoteComputerTransport, type ComputerTransport } from './computer-transport.js';
+} from './agent-desktop-tools.js';
+import { RemoteComputerTransport, type ComputerTransport } from './computer-transport.js';
 import { RemoteComputerDeviceRegistry } from './remote-computer-devices.js';
 import { RemoteComputerHub } from './remote-computer-hub.js';
 import {
@@ -180,7 +177,6 @@ export class AutomationService {
   // Native status is synchronized when the supervisor binding arrives and by
   // the ordinary status route. Restart readers consume only that cache.
   readonly browser = new TauriBrowserClient({ refreshOnBinding: true });
-  readonly cua = new AgentDesktopClient();
   readonly grants = new AutomationGrantStore();
   /**
    * `${sessionId}\u0000${snapshotId}` -> the application that produced the
@@ -204,43 +200,32 @@ export class AutomationService {
   readonly browserBackend = browserBackendStore;
   /** Opt-in rendering of the agent's ego browser state; off by default. */
   readonly egoActivity = egoActivityStore;
-  /** Opt-in native application control through agent-desktop; off by default. */
-  readonly computerUse = computerUseStore;
   /** Pairing state for outbound-only agent-desktop companions. */
   readonly remoteDevices = new RemoteComputerDeviceRegistry();
   readonly remoteComputerHub = new RemoteComputerHub(this.remoteDevices);
-  private readonly localTransport = new LocalComputerTransport(this.cua);
 
   /**
-   * The transport computer calls route through: the paired remote companion
-   * selected in Settings when one is selected and enabled, otherwise this
-   * server's own local CUA Driver. Re-read on every call rather than cached,
-   * so disabling or switching the selected device in Settings takes effect
-   * on the very next call with no restart.
+   * Computer calls route only to the paired companion selected in Settings.
+   * This server never drives a desktop of its own, so a machine without a
+   * paired companion has no computer transport at all. Re-read on every call
+   * rather than cached, so switching the selected device takes effect on the
+   * very next call with no restart.
    */
   private transport(): ComputerTransport {
     const deviceId = this.remoteDevices.selectedDeviceId();
-    if (!deviceId) return this.localTransport;
-    try {
-      this.remoteDevices.dispatchable(deviceId);
-    } catch {
-      return this.localTransport;
-    }
+    if (!deviceId) throw new Error('No paired computer is selected.');
+    this.remoteDevices.dispatchable(deviceId);
     return new RemoteComputerTransport(deviceId, this.remoteComputerHub);
   }
   private readonly egoActivityReader = egoActivityReader;
   private readonly capabilities = automationSupport(process.platform, process.arch, process.env);
   /**
-   * Computer automation is usable either because this machine is itself a
-   * native macOS desktop that can run agent-desktop locally, or because the
-   * user paired and selected a remote companion to drive instead. Those are
-   * independent paths: a server with no local desktop session (a Docker
-   * container, a Linux box) still has a usable computer transport once a
-   * remote device is selected, and must not need any environment override to
-   * reach it.
+   * Computer automation exists only through a paired, enabled companion. A
+   * server with no local desktop session (a Docker container, a Linux box)
+   * still has a usable transport once a remote device is selected, and needs
+   * no environment override to reach it.
    */
   private computerCapable(): boolean {
-    if (this.capabilities.computer) return true;
     const deviceId = this.remoteDevices.selectedDeviceId();
     if (!deviceId) return false;
     try {
@@ -274,7 +259,6 @@ export class AutomationService {
   configureDesktopRestartAdmission(admission?: DesktopWorkAdmission): void {
     this.admission = admission;
     this.browser.configureDesktopRestartAdmission(admission);
-    this.cua.configureDesktopRestartAdmission(admission);
     this.activityRevision++;
   }
 
@@ -305,11 +289,11 @@ export class AutomationService {
     const release = this.enter('status');
     try {
       const computerCapable = this.computerCapable();
-      const [browser, cua] = await Promise.all([
+      const [browser, companion] = await Promise.all([
         this.browser.status().catch(() => ({ state: 'unavailable' as const, ready: false, engine: 'webview' as const })),
         computerCapable
-          ? this.transport().status()
-          : Promise.resolve({ installed: false, daemon: 'unknown' as const } as AgentDesktopStatus),
+          ? this.transport().status().catch(() => ({ installed: false, daemon: 'unknown' as const }))
+          : Promise.resolve({ installed: false, daemon: 'unknown' as const }),
       ]);
       return {
         supported: browser.ready,
@@ -318,7 +302,7 @@ export class AutomationService {
         platform: process.platform,
         architecture: process.arch,
         browser,
-        cua,
+        companion,
       };
     } finally { release(); }
   }
@@ -682,7 +666,6 @@ export class AutomationService {
     args: Record<string, unknown>,
     signal?: AbortSignal,
   ): Promise<unknown> {
-    if (!this.computerUse.get()) throw new Error('Computer use is off. Turn it on in Settings > Automation.');
     const { arguments: scopedArgs } = guardLocalMachineCall(tool, args);
     const deviceId = this.remoteDevices.selectedDeviceId();
     if (!deviceId) {
@@ -742,7 +725,6 @@ export class AutomationService {
       await Promise.allSettled([
         this.browser.shutdown(),
       ]);
-      await this.cua.shutdown();
       const bridge = this.bridge;
       for (const socket of this.bridgeConnections) socket.destroy();
       // Node removes the Unix socket it bound when close completes. A service
@@ -767,11 +749,6 @@ export class AutomationService {
 
   private requireComputerSupported(): void {
     if (!this.computerCapable()) throw new Error('No computer automation transport is available: this machine has no local agent-desktop install and no remote companion is paired and selected.');
-    // The user's opt-in is checked at the same choke point as the platform
-    // capability, so every caller - the worker bridge, the HTTP route, a
-    // future one - fails closed while it is off, whether or not the session
-    // was ever offered the tool.
-    if (!this.computerUse.get()) throw new Error('Computer use is off. Turn it on in Settings > Automation.');
   }
 
   private handleBridgeSocket(socket: Socket): void {
@@ -864,16 +841,7 @@ export function createBrowserDesktopRestartReader(browser = automationService.br
 
 export function createComputerDesktopRestartReader(service = automationService) {
   return Object.freeze({
-    getGeneration: () => `${service.cua.getGeneration()}:${service.getGeneration()}`,
-    read: (): DesktopOwnerActivity => {
-      const activity = service.cua.snapshotActivity();
-      const automation = service.snapshotActivity();
-      const unknown = [...new Set([...activity.unknown, ...automation.unknown])];
-      return {
-        ...activity, generation: `${activity.generation}:${automation.generation}`,
-        retained: activity.retained + automation.retained,
-        complete: activity.complete && automation.complete, unknown,
-      };
-    },
+    getGeneration: () => service.getGeneration(),
+    read: (): DesktopOwnerActivity => service.snapshotActivity(),
   });
 }

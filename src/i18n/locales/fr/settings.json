@@ -172,18 +172,10 @@
         "failed": "Impossible d’ouvrir le navigateur intégré. Réessayez."
       }
     },
-    "title": "Navigateur et applications natives",
-    "description": "Vérifiez le CUA Driver installé séparément.",
-    "computerUse": {
-      "label": "Contrôle de l’ordinateur",
-      "description": "Autorise l’agent à piloter les applications natives de ce Mac via CUA Driver. Désactivé par défaut : tant que vous ne l’activez pas, aucune session ne reçoit l’outil computer et chaque appel est refusé. Le désactiver retire l’outil à toute nouvelle session."
-    },
+    "title": "Ordinateurs distants",
+    "description": "Associez un ordinateur exécutant le compagnon agent-desktop. Seul un appareil approuvé et connecté peut exécuter quoi que ce soit.",
     "notInstalled": "Indisponible",
     "installGuide": "Instructions de configuration",
-    "accessibility": "Accessibilité",
-    "screenRecording": "Enregistrer l'écran",
-    "granted": "Accordé",
-    "missing": "Manquant",
     "unknown": "Inconnu",
     "refresh": "Recharger les diagnostics",
     "grants": "Cibles autorisées en permanence",

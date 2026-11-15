@@ -103,9 +103,6 @@ async function appRun(
         createGjcAutomationTools('app-session', { select: async () => undefined }, undefined, 'ask'),
         backend,
         true,
-        // Computer use is off by default (#131); on here so the CUA transport
-        // stays a visible control for the browser-routing assertions below.
-        true,
       );
       const { session } = await createAgentSession({
         // The adapter appends the app-owned block (ego only) after the runtime defaults.
@@ -151,7 +148,7 @@ test('an app session with Aside selected receives the runtime\u2019s own browser
     // What the runtime reads is its own setting, written through Settings.override.
     assert.equal(run.settings.get('browser.backend'), 'aside');
     assert.equal(s.automationTools.browser, undefined);
-    assert.ok(s.automationTools.computer, 'the CUA transport is unaffected');
+    assert.equal(s.automationTools.computer, undefined, 'no computer transport is offered');
     assert.equal(s.session.getActiveToolNames().includes('browser'), false);
     assert.equal((s.session.getDiscoverableTools({ source: 'builtin' }) as Array<{ name: string }>).some((tool) => tool.name === 'browser'), false);
     // The routing block is the runtime's fragment, not app text: it names the
@@ -193,7 +190,7 @@ test('an app session with ego selected keeps the runtime on native, loses every 
     assert.equal(run.settings.get('browser.backend'), 'native');
     assert.equal(run.settings.get('browser.enabled'), false);
     assert.equal(s.automationTools.browser, undefined);
-    assert.ok(s.automationTools.computer, 'the CUA transport is unaffected');
+    assert.equal(s.automationTools.computer, undefined, 'no computer transport is offered');
     assert.equal(s.session.getActiveToolNames().includes('browser'), false);
     assert.equal((s.session.getDiscoverableTools({ source: 'builtin' }) as Array<{ name: string }>).some((tool) => tool.name === 'browser'), false);
     // Exactly one <browser-backend> block, and it is the app's ego block, not the runtime's Aside fragment.
@@ -220,7 +217,7 @@ test('ego selected without an ego-browser CLI keeps ordinary chat alive while di
     assert.equal(run.settings.get('browser.backend'), 'native');
     assert.equal(run.settings.get('browser.enabled'), false);
     assert.equal(s.automationTools.browser, undefined);
-    assert.ok(s.automationTools.computer);
+    assert.equal(s.automationTools.computer, undefined);
     assert.ok(s.prompt.includes(GJC_EGO_BROWSER_UNAVAILABLE_INSTRUCTIONS));
     assert.match(s.prompt, /ordinary chat.*continue/iu);
   } finally { await s.close(); }
@@ -237,7 +234,7 @@ test('ego selected on a non-macOS run never probes or executes a CLI and keeps c
     assert.equal(run.settings.get('browser.backend'), 'native');
     assert.equal(run.settings.get('browser.enabled'), false);
     assert.ok(s.prompt.includes(GJC_EGO_BROWSER_UNAVAILABLE_INSTRUCTIONS));
-    assert.ok(s.automationTools.computer);
+    assert.equal(s.automationTools.computer, undefined);
   } finally { await s.close(); }
 });
 

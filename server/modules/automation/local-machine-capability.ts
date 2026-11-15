@@ -10,12 +10,11 @@
  * stops serving these tools on the very next call.
  *
  * There is deliberately no application identity or per-application grant for a
- * shell command: it is not scoped to a window, and the companion's opt-in plus
- * Settings' computer-use switch are the two gates.
+ * shell command: it is not scoped to a window, and the companion's `--shell`
+ * launch flag is the only gate.
  */
 
-import { AgentDesktopPolicyError, guardAgentDesktopCall } from './agent-desktop-capability.js';
-import { isAgentDesktopSafeTool, type AgentDesktopSafeTool } from './agent-desktop-client.js';
+import type { AgentDesktopSafeTool } from './agent-desktop-tools.js';
 
 export const LOCAL_MACHINE_TOOLS = [
   'local_exec',
@@ -138,16 +137,6 @@ export function guardLocalMachineCall(
     }
   }
   return { tool, arguments: guarded };
-}
-
-/** One policy entry point for every computer tool, desktop or local. */
-export function guardComputerCall(
-  tool: string,
-  args: Record<string, unknown>,
-): { tool: string; arguments: Record<string, unknown> } {
-  if (isLocalMachineTool(tool)) return guardLocalMachineCall(tool, args);
-  if (!isAgentDesktopSafeTool(tool)) throw new AgentDesktopPolicyError(`agent_desktop_policy_denied: unknown tool "${tool}".`);
-  return guardAgentDesktopCall(tool, args);
 }
 
 /**

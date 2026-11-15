@@ -172,18 +172,10 @@
         "failed": "Impossibile aprire il browser integrato. Riprova."
       }
     },
-    "title": "Browser e applicazioni native",
-    "description": "Controlla il CUA Driver installato separatamente.",
-    "computerUse": {
-      "label": "Controllo del computer",
-      "description": "Consente all’agente di controllare le applicazioni native di questo Mac tramite CUA Driver. Disattivato per impostazione predefinita: finché non lo attivi, nessuna sessione riceve lo strumento computer e ogni chiamata viene rifiutata. Disattivandolo, lo strumento non viene più offerto alle nuove sessioni."
-    },
+    "title": "Computer remoti",
+    "description": "Associa un computer che esegue il companion agent-desktop. Solo un dispositivo attendibile e connesso può eseguire qualcosa.",
     "notInstalled": "Non disponibile",
     "installGuide": "Istruzioni per l'installazione",
-    "accessibility": "Accessibilità",
-    "screenRecording": "Registra lo schermo",
-    "granted": "Concesso",
-    "missing": "Mancante",
     "unknown": "Sconosciuto",
     "refresh": "Ricaricare la diagnostica",
     "grants": "Obiettivi consentiti in modo persistente",

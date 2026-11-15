@@ -5,7 +5,6 @@ import type { RemoteCuaReadiness } from '../../../shared/remote-cua-protocol.js'
 
 import { AutomationGrantStore } from './automation-grants.js';
 import { AutomationService } from './automation.service.js';
-import { ComputerUseStore } from './computer-use.js';
 import { guardLocalMachineCall } from './local-machine-capability.js';
 import { RemoteComputerDeviceRegistry } from './remote-computer-devices.js';
 
@@ -28,9 +27,6 @@ function readiness(safeTools: string[]): RemoteCuaReadiness {
  */
 function service(options: { paired: boolean; safeTools: string[] }) {
   const instance = new AutomationService();
-  const computerUse = new ComputerUseStore(memoryStorage());
-  computerUse.set(true);
-  Object.defineProperty(instance, 'computerUse', { value: computerUse });
   Object.defineProperty(instance, 'grants', { value: new AutomationGrantStore(memoryStorage()) });
 
   const devices = new RemoteComputerDeviceRegistry(memoryStorage());
@@ -113,17 +109,4 @@ test('an opted-in companion receives the validated local call', async () => {
   assert.equal(dispatched.length, 1);
   const [first] = dispatched;
   assert.deepEqual(first?.args, { path: '/home/person/repo', pattern: 'TODO' });
-});
-
-test('local tools stay unavailable when computer use is off', async () => {
-  const { instance } = service({ paired: true, safeTools: ['local_exec'] });
-  Object.defineProperty(instance, 'computerUse', { value: (() => {
-    const store = new ComputerUseStore(memoryStorage());
-    store.set(false);
-    return store;
-  })() });
-  await assert.rejects(
-    instance.callComputer('session-a', 'local_exec', { command: 'ls' }),
-    /Computer use is off/u,
-  );
 });

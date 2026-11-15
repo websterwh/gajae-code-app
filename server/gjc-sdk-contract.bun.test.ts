@@ -394,10 +394,6 @@ async function fixture(
     toolNames: [],
     spawns: 'deny',
     bashPolicy: { allowedPrefixes: [] },
-    // The product default is off (#131); the browser-routing tests below are
-    // about the browser transport and turn computer use on so `computer` stays
-    // a visible control. The default has its own tests.
-    computerUse: true,
   };
   return { root, adapter, authStorage, modelRegistry, settings, trace, factoryOptions, sessions, frames, host, options, toolPolicyOverrides: overrides, close: () => rm(root, { recursive: true, force: true }) };
 }
@@ -2397,64 +2393,27 @@ test('app automation is injected through the SDK built-in automationTools contra
     const factoryInput = f.factoryOptions[0]!;
     const automationTools = factoryInput.automationTools as Record<string, { name: string }>;
     assert.equal(factoryInput.customTools, undefined);
-    assert.deepEqual(Object.keys(automationTools).sort(), ['browser', 'computer']);
+    assert.deepEqual(Object.keys(automationTools).sort(), ['browser']);
     assert.equal(automationTools.browser?.name, 'browser');
-    assert.equal(automationTools.computer?.name, 'computer');
     session.complete();
     await run;
   } finally { await f.close(); }
 });
-test('computer use is withheld by default: no app transport and no SDK builtin name', async () => {
+test('the app transport never includes computer control', async () => {
   const f = await fixture();
   try {
-    const { computerUse: _on, ...defaults } = f.options;
-    for (const [id, options] of [
-      ['computer-absent', defaults],
-      ['computer-false', { ...defaults, computerUse: false }],
-    ] as const) {
-      const index = f.sessions.length;
-      const run = f.host.handle(request('session.start', id, {
-        message: 'hello',
-        options: { ...options, builtinBrowserAvailable: true, toolNames: ['bash', 'browser', 'computer'] },
-      }, `app-session-${id}`));
-      const session = await waitFor(() => f.sessions[index]);
-      await session.promptStarted.promise;
-      const factoryInput = f.factoryOptions.at(-1)!;
-      assert.deepEqual(Object.keys(factoryInput.automationTools as Record<string, unknown>), ['browser'], id);
-      assert.equal((factoryInput.toolNames as string[]).includes('computer'), false, `${id}: the SDK builtin must not be requestable either`);
-      assert.equal((factoryInput.toolNames as string[]).includes('browser'), true, id);
-      session.complete();
-      await run;
-    }
-  } finally { await f.close(); }
-});
-
-test('computer use turned on offers the app transport on every backend, and a non-boolean is refused', async () => {
-  // A fake Aside probe: the real one walks PATH, which on a slow CI runner
-  // outlasts the session wait below.
-  const f = await fixture(undefined, undefined, undefined, undefined, undefined, undefined, {
-    probeAsideCli: () => ({ ok: true, path: '/fake/.local/bin/aside' }),
-  });
-  try {
-    for (const backend of ['builtin', 'aside'] as const) {
-      const index = f.sessions.length;
-      const run = f.host.handle(request('session.start', `computer-on-${backend}`, {
-        message: 'hello',
-        options: { ...f.options, browserBackend: backend, builtinBrowserAvailable: true, toolNames: ['bash', 'computer'] },
-      }, `app-session-computer-on-${backend}`));
-      const session = await waitFor(() => f.sessions[index]);
-      await session.promptStarted.promise;
-      const factoryInput = f.factoryOptions.at(-1)!;
-      assert.equal((factoryInput.automationTools as Record<string, { name: string }>).computer?.name, 'computer', backend);
-      assert.equal((factoryInput.toolNames as string[]).includes('computer'), true, backend);
-      session.complete();
-      await run;
-    }
-    await f.host.handle(request('session.start', 'computer-malformed', {
-      message: 'hello', options: { ...f.options, computerUse: 'yes' },
-    }, 'app-session-computer-malformed'));
-    const response = [...f.frames].reverse().find((frame) => frame.kind === 'response' && frame.id === 'computer-malformed') as { payload: { ok: boolean } } | undefined;
-    assert.equal(response?.payload.ok, false, 'a run option that is not a boolean fails the start');
+    const run = f.host.handle(request('session.start', 'computer-never', {
+      message: 'hello',
+      options: { ...f.options, builtinBrowserAvailable: true, toolNames: ['bash', 'browser', 'computer'] },
+    }, 'app-session-computer-never'));
+    const session = await waitFor(() => f.sessions[0]);
+    await session.promptStarted.promise;
+    const factoryInput = f.factoryOptions.at(-1)!;
+    assert.deepEqual(Object.keys(factoryInput.automationTools as Record<string, unknown>), ['browser']);
+    assert.equal((factoryInput.toolNames as string[]).includes('computer'), false, 'the SDK builtin must not be requestable either');
+    assert.equal((factoryInput.toolNames as string[]).includes('browser'), true);
+    session.complete();
+    await run;
   } finally { await f.close(); }
 });
 
@@ -2470,9 +2429,9 @@ test('an unavailable app browser leaves the runtime browser tool in place, as in
     await session.promptStarted.promise;
     const factoryInput = f.factoryOptions[0]!;
     // No app WebView transport: the runtime builds its own browser tool.
-    assert.deepEqual(Object.keys(factoryInput.automationTools as Record<string, unknown>), ['computer']);
+    assert.deepEqual(Object.keys(factoryInput.automationTools as Record<string, unknown>), []);
     assert.equal((factoryInput.toolNames as string[]).includes('browser'), true);
-    assert.equal((factoryInput.toolNames as string[]).includes('computer'), true);
+    assert.equal((factoryInput.toolNames as string[]).includes('computer'), false);
     assert.equal(f.toolPolicyOverrides.has('browser.enabled'), false, 'the runtime browser stays enabled');
     session.complete();
     await run;
@@ -2491,7 +2450,7 @@ test('Built-in explicitly selects runtime native mode, keeps the app browser too
     await session.promptStarted.promise;
     assert.equal(f.toolPolicyOverrides.get('browser.backend'), 'native');
     const automationTools = f.factoryOptions[0]!.automationTools as Record<string, { name: string }>;
-    assert.deepEqual(Object.keys(automationTools).sort(), ['browser', 'computer']);
+    assert.deepEqual(Object.keys(automationTools).sort(), ['browser']);
     assert.equal(probes, 0);
     session.complete();
     await run;
@@ -2514,7 +2473,7 @@ test('selecting Aside hands browser.backend=aside to the runtime and withholds t
     const automationTools = factoryInput.automationTools as Record<string, { name: string }>;
     // The runtime decides the browser tool from its own setting; the app only
     // stops substituting its WebView transport for a tool the runtime hides.
-    assert.deepEqual(Object.keys(automationTools), ['computer']);
+    assert.deepEqual(Object.keys(automationTools), []);
     // No app-side Aside tool, prompt, or MCP server is introduced.
     assert.equal(factoryInput.customTools, undefined);
     const appended = (factoryInput.systemPrompt as (defaults: string[]) => string[])([]);
@@ -2564,7 +2523,7 @@ test('selecting ego keeps the runtime on native, disables its browser tool, with
     assert.equal(f.toolPolicyOverrides.get('browser.enabled'), false);
     const factoryInput = f.factoryOptions[0]!;
     const automationTools = factoryInput.automationTools as Record<string, { name: string }>;
-    assert.deepEqual(Object.keys(automationTools), ['computer']);
+    assert.deepEqual(Object.keys(automationTools), []);
     // The route to ego lite is Bash plus the user-installed skill; the built-in browser tool is gone.
     assert.equal((factoryInput.toolNames as string[]).includes('browser'), false);
     assert.equal((factoryInput.toolNames as string[]).includes('bash'), true);
@@ -2601,7 +2560,7 @@ test('selecting ego without an ego-browser CLI keeps ordinary chat alive and nev
     const factoryInput = f.factoryOptions[0]!;
     assert.equal(f.toolPolicyOverrides.get('browser.backend'), 'native');
     assert.equal(f.toolPolicyOverrides.get('browser.enabled'), false);
-    assert.deepEqual(Object.keys(factoryInput.automationTools as Record<string, unknown>), ['computer']);
+    assert.deepEqual(Object.keys(factoryInput.automationTools as Record<string, unknown>), []);
     assert.ok((factoryInput.systemPrompt as (defaults: string[]) => string[])([]).includes(GJC_EGO_BROWSER_UNAVAILABLE_INSTRUCTIONS));
     assert.equal(JSON.stringify(f.frames).includes('/fake/.local/bin'), false, 'probe paths stay out of the wire');
     session.complete();
@@ -2680,11 +2639,10 @@ test('the production adapter passes bypass to automation without answering real 
     await session.promptStarted.promise;
     const tools = f.factoryOptions[0]!.automationTools as AutomationTools;
     await tools.browser!.execute('browser-bypass', { action: 'open', url: 'https://example.com' }, AbortSignal.timeout(5_000));
-    await tools.computer!.execute('computer-bypass', { action: 'desktop_click', arguments: { pid: 42, x: 1, y: 1 } }, AbortSignal.timeout(5_000));
+    assert.equal(tools.computer, undefined, 'no computer tool is handed to a run');
     assert.equal(methods(f.frames).filter(method => method === 'ask.presented').length, 0);
-    assert.deepEqual(requests.map(item => item.operation), ['authorize', 'open', 'authorize', 'authorize', undefined]);
+    assert.deepEqual(requests.map(item => item.operation), ['authorize', 'open']);
     assert.ok(requests.every(item => item.sessionId === 'automation-app-session'));
-    assert.deepEqual(requests[3]?.payload, { application: 'com.apple.TextEdit', scope: 'session' });
     assert.ok(requests.every(item => (item.payload as Record<string, unknown> | undefined)?.scope !== 'always'));
 
     const question = session.uiContext!.select('Choose a plan', ['A', 'B']);
