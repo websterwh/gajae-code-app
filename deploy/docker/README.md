@@ -125,6 +125,22 @@ a failed package is recorded as failed and retried on the next boot. With no
 config volume mounted, the ledger and tool directories resolve inside the
 container layer and are lost on recreate - the standard compose file mounts
 `./gjc-config` at `/root/.gjc`, so nothing special is needed there.
+
+### Packages in Settings
+
+Settings -> **Packages** manages the same packages without editing compose, and
+persists to `<config root>/app/packages.json` on the same mount, so a package
+added there is still wanted after the container is recreated. On boot every
+package named in `UV_TOOLS`, `PIP_PACKAGES`, `NPM_PACKAGES` or `GITHUB_APPS` is
+copied into `packages.json` if it is not there yet. That makes the env lists
+seeds: once Settings lists the packages, the variables can be deleted from
+`.env` without losing anything, and a recreate on a host without them keeps
+installing the same set.
+
+Removing a package in Settings only deletes its entry from that file - nothing
+is uninstalled, because the binaries are shared with whatever else on the
+machine uses them. `APT_PACKAGES` is not part of this: apt installs stay
+declared in the compose file.
 ### Direct SSH & GJC CLI Access
 | Variable | Default | Description |
 |---|---|---|

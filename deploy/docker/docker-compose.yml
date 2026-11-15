@@ -39,6 +39,9 @@ services:
       # per-fork. Set it explicitly only to override that default.
 
       # Universal Addon Package Provisioning
+      # UV_TOOLS/PIP_PACKAGES/NPM_PACKAGES/GITHUB_APPS are seeds: boot copies
+      # them into the Settings-managed packages.json on the config mount, so
+      # they can be deleted once Settings -> Packages lists the packages.
       - APT_PACKAGES=${APT_PACKAGES:-}
       - UV_TOOLS=${UV_TOOLS:-}
       - PIP_PACKAGES=${PIP_PACKAGES:-}

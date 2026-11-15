@@ -2,6 +2,7 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { INSTALL_MANAGERS, ledgerFilePath, type InstallManager } from './ledger.js';
+import { parsePackageSpec } from './pins.js';
 
 /**
  * Packages the user asked for, as opposed to packages the ledger observed.
@@ -99,4 +100,21 @@ export function upsertDesired(
 
 export function removeDesired(state: DesiredState, manager: InstallManager, name: string): void {
   delete state.packages[manager][name];
+}
+
+/**
+ * Boot-time migration from env seed to owned state: every package the
+ * container asks for is copied into the desired file if it is not there yet.
+ * After one boot the env lists are redundant, so deleting them (or moving to a
+ * host without them) cannot drop a package. Returns whether the state changed.
+ */
+export function adoptSeeds(state: DesiredState, seeds: readonly EnvSeed[], at: string): boolean {
+  let changed = false;
+  for (const seed of seeds) {
+    const name = parsePackageSpec(seed.spec).name;
+    if (!name || state.packages[seed.manager][name]) continue;
+    upsertDesired(state, { manager: seed.manager, name, spec: seed.spec, pin: null, addedAt: at });
+    changed = true;
+  }
+  return changed;
 }

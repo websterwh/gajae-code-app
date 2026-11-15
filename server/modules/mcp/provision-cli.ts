@@ -7,7 +7,7 @@
  * path, keeps the boot non-blocking (the caller backgrounds it), and writes a
  * small progress file so `GET /api/mcp/status` can report in-flight work.
  */
-import { desiredPackagesPath, envSeeds, readDesired } from './desired.js';
+import { adoptSeeds, desiredPackagesPath, envSeeds, readDesired, writeDesired } from './desired.js';
 import { ledgerFilePath, readLedger, writeLedger, type InstallManager } from './ledger.js';
 import { packageNameFromEntry, readMcpConfig } from './mcp.config.js';
 import { parsePackageSpec } from './pins.js';
@@ -42,15 +42,26 @@ async function main(): Promise<void> {
   const autoUpdate = env.AUTO_UPDATE_PACKAGES === 'true' || env.AUTO_UPDATE_PACKAGES === '1';
   const runner = spawnCommandRunner();
 
+  const seeds = envSeeds(env);
   const groups: Array<{ manager: InstallManager; packages: string[] }> = (['uv', 'pip', 'npm', 'aqua'] as const)
     .map((manager) => ({
       manager,
-      packages: envSeeds(env).filter((seed) => seed.manager === manager).map((seed) => seed.spec),
+      packages: seeds.filter((seed) => seed.manager === manager).map((seed) => seed.spec),
     }));
 
   // Packages added from Settings live beside the ledger; boot treats them the
   // same as the env seeds, so there is one install path, not two.
-  const desired = await readDesired(desiredPackagesPath(env));
+  const desiredFile = desiredPackagesPath(env);
+  const desired = await readDesired(desiredFile);
+  if (adoptSeeds(desired, seeds, new Date().toISOString())) {
+    try {
+      await writeDesired(desiredFile, desired);
+    } catch (error) {
+      // A read-only config mount must not stop provisioning: the env seeds
+      // still install this boot, they just are not persisted.
+      console.error(`[provision] could not persist ${desiredFile}: ${error instanceof Error ? error.message : error}`);
+    }
+  }
   for (const group of groups) {
     for (const [name, entry] of Object.entries(desired.packages[group.manager])) {
       if (!group.packages.some((spec) => parsePackageSpec(spec).name === name)) group.packages.push(entry.spec);
