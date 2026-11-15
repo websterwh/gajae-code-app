@@ -7,8 +7,8 @@ import { packagesService, type PackagesService } from './packages.service.js';
 function fail(response: Response, error: unknown): Response {
   const message = error instanceof Error ? error.message : 'Package request failed.';
   const status = /not found/iu.test(message) ? 404
-    : /already running|pinned/iu.test(message) ? 409
-      : /required|must be|has no name|invalid/iu.test(message) ? 400
+    : /already running|is pinned/iu.test(message) ? 409
+      : /required|must be|has no name|invalid|cannot be pinned/iu.test(message) ? 400
         : 500;
   return response.status(status).json({ success: false, error: { message } });
 }
