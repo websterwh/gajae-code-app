@@ -352,7 +352,7 @@
     "title": "Серверы MCP",
     "description": "Серверы, которые может загрузить агент. Эта вкладка читает и записывает тот же mcp.json, что и CLI с агентом.",
     "scope": "Область",
-    "scopeGlobal": "Пользователь",
+    "scopeGlobal": "Global",
     "scopeProject": "Проект",
     "projectPath": "Путь проекта",
     "projectPathHint": "Абсолютный путь проекта, чей .gjc/mcp.json управляется.",

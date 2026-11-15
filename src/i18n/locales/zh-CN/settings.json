@@ -352,7 +352,7 @@
     "title": "MCP 服务器",
     "description": "代理可以加载的服务器。此标签页读写与 CLI 和代理相同的 mcp.json。",
     "scope": "范围",
-    "scopeGlobal": "用户",
+    "scopeGlobal": "Global",
     "scopeProject": "项目",
     "projectPath": "项目路径",
     "projectPathHint": "要管理其 .gjc/mcp.json 的项目的绝对路径。",

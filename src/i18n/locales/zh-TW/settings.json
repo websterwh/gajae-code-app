@@ -352,7 +352,7 @@
     "title": "MCP 伺服器",
     "description": "代理可以載入的伺服器。此索引標籤讀寫與 CLI 和代理相同的 mcp.json。",
     "scope": "範圍",
-    "scopeGlobal": "使用者",
+    "scopeGlobal": "Global",
     "scopeProject": "專案",
     "projectPath": "專案路徑",
     "projectPathHint": "要管理其 .gjc/mcp.json 的專案絕對路徑。",

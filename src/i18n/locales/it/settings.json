@@ -352,7 +352,7 @@
     "title": "Server MCP",
     "description": "Server che l’agente può caricare. Questa scheda legge e scrive lo stesso mcp.json usato dalla CLI e dall’agente.",
     "scope": "Ambito",
-    "scopeGlobal": "Utente",
+    "scopeGlobal": "Global",
     "scopeProject": "Progetto",
     "projectPath": "Percorso del progetto",
     "projectPathHint": "Percorso assoluto del progetto il cui .gjc/mcp.json viene gestito.",

@@ -352,7 +352,7 @@
     "title": "MCP sunucuları",
     "description": "Aracın yükleyebileceği sunucular. Bu sekme, CLI ve aracın kullandığı aynı mcp.json dosyasını okur ve yazar.",
     "scope": "Kapsam",
-    "scopeGlobal": "Kullanıcı",
+    "scopeGlobal": "Global",
     "scopeProject": "Proje",
     "projectPath": "Proje yolu",
     "projectPathHint": ".gjc/mcp.json dosyası yönetilecek projenin mutlak yolu.",

@@ -352,7 +352,7 @@
     "title": "MCP 서버",
     "description": "에이전트가 불러올 수 있는 서버입니다. 이 탭은 CLI와 에이전트가 사용하는 동일한 mcp.json을 읽고 씁니다.",
     "scope": "범위",
-    "scopeGlobal": "사용자",
+    "scopeGlobal": "Global",
     "scopeProject": "프로젝트",
     "projectPath": "프로젝트 경로",
     "projectPathHint": "관리할 .gjc/mcp.json이 있는 프로젝트의 절대 경로입니다.",

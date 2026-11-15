@@ -147,6 +147,19 @@ export async function getProjectsWithSessions(options: GetProjectsWithSessionsOp
   return result;
 }
 
+/** Names and paths only; this must not load or synchronize session data. */
+export function listProjectSummaries(): Array<{ projectId: string; path: string; displayName: string }> {
+  const projects = projectsDb.getProjectPaths() as Array<{ project_id: string; project_path: string; custom_project_name?: string | null }>;
+  return projects
+    .filter((project) => typeof project.project_path === 'string' && project.project_path.trim().length > 0)
+    .map((project) => ({
+      projectId: project.project_id,
+      path: project.project_path,
+      displayName: configuredProjectName(project.custom_project_name) ?? (path.basename(project.project_path) || project.project_path),
+    }))
+    .sort((a, b) => a.displayName.localeCompare(b.displayName));
+}
+
 export async function getArchivedProjectsWithSessions(options: Pick<GetProjectsWithSessionsOptions, 'skipSynchronization' | 'sessionsLimit' | 'sessionsOffset'> = {}): Promise<ArchivedProjectListItem[]> {
   if (options.skipSynchronization) {
     pruneSessionsWithMissingTranscripts();

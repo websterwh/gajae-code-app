@@ -352,7 +352,7 @@
     "title": "Serveurs MCP",
     "description": "Serveurs que l’agent peut charger. Cet onglet lit et écrit le même mcp.json que la CLI et l’agent.",
     "scope": "Portée",
-    "scopeGlobal": "Utilisateur",
+    "scopeGlobal": "Global",
     "scopeProject": "Projet",
     "projectPath": "Chemin du projet",
     "projectPathHint": "Chemin absolu du projet dont le .gjc/mcp.json est géré.",

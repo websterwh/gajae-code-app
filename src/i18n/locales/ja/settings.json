@@ -352,7 +352,7 @@
     "title": "MCP サーバー",
     "description": "エージェントが読み込めるサーバーです。このタブは CLI とエージェントが使うのと同じ mcp.json を読み書きします。",
     "scope": "スコープ",
-    "scopeGlobal": "ユーザー",
+    "scopeGlobal": "Global",
     "scopeProject": "プロジェクト",
     "projectPath": "プロジェクトのパス",
     "projectPathHint": "管理する .gjc/mcp.json があるプロジェクトの絶対パス。",

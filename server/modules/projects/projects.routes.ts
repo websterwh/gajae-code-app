@@ -15,7 +15,7 @@ import {
   updateProjectPermissionMode,
 } from '@/modules/projects/services/project-permissions.service.js';
 import { applyLegacyStarredProjectIds, toggleProjectStar } from '@/modules/projects/services/project-star.service.js';
-import { getArchivedProjectsWithSessions, getProjectSessionsPage, getProjectsWithSessions } from '@/modules/projects/services/projects-with-sessions-fetch.service.js';
+import { getArchivedProjectsWithSessions, getProjectSessionsPage, getProjectsWithSessions, listProjectSummaries } from '@/modules/projects/services/projects-with-sessions-fetch.service.js';
 import { AppError, asyncHandler, createApiSuccessResponse } from '@/shared/utils.js';
 
 const router = express.Router();
@@ -65,6 +65,12 @@ function isHttpsCloneUrl(value: string): boolean {
 }
 
 router.get('/', asyncHandler(async (request, response) => {
+  // A picker needs names and paths, not sessions. This stays a narrow query on
+  // the existing route so current consumers keep the raw array they expect.
+  if (queryText(request.query.summary).trim() === '1') {
+    response.json(createApiSuccessResponse({ projects: listProjectSummaries() }));
+    return;
+  }
   const skipSynchronization = ['skipSynchronization', 'skipSync'].some((key) => queryText(request.query[key]).trim() === '1');
   const sessionsLimit = queryNumber(request.query.sessionsLimit) ?? undefined;
   const sessionsOffset = queryNumber(request.query.sessionsOffset) ?? undefined;

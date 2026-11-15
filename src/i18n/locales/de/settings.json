@@ -352,7 +352,7 @@
     "title": "MCP-Server",
     "description": "Server, die der Agent laden kann. Dieser Tab liest und schreibt dieselbe mcp.json, die CLI und Agent verwenden.",
     "scope": "Bereich",
-    "scopeGlobal": "Benutzer",
+    "scopeGlobal": "Global",
     "scopeProject": "Projekt",
     "projectPath": "Projektpfad",
     "projectPathHint": "Absoluter Pfad des Projekts, dessen .gjc/mcp.json verwaltet wird.",
