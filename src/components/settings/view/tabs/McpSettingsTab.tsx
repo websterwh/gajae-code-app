@@ -133,7 +133,10 @@ export default function McpSettingsTab() {
   const [projectsLoading, setProjectsLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [source, setSource] = useState('');
-  const [sort, setSort] = useState<CatalogSort>('name');
+  // Relevance is the default because it is the only order that means something
+  // for a query: curated and well-known servers lead, instead of whatever
+  // vendor namespace happens to start with the letter a.
+  const [sort, setSort] = useState<CatalogSort>('relevance');
   const [busy, setBusy] = useState<string | null>(null);
   const [verifying, setVerifying] = useState<string | null>(null);
   const [verifyResults, setVerifyResults] = useState<Record<string, VerifyResult>>({});

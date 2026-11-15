@@ -118,7 +118,7 @@ test('the sort control stays put while the search box is used', async () => {
 
   assert.ok(screen.getByLabelText(english.mcp.sort), 'typing must not unmount the sort control');
   await waitFor(() => assert.ok(
-    calls.some((call) => call.path.includes('q=git') && call.path.includes('sort=name')),
+    calls.some((call) => call.path.includes('q=git') && call.path.includes('sort=relevance')),
     'the search request carries the chosen sort',
   ));
 });
