@@ -12,7 +12,7 @@ import {
   recordInstalled,
   writeLedger,
 } from './ledger.js';
-import { autoUpdatePackages, provisionPackages, type CommandRunner } from './provision.js';
+import { autoUpdatePackages, provisionPackages, uvToolVersion, type CommandRunner } from './provision.js';
 
 type Reply = { code: number; stdout?: string; stderr?: string };
 
@@ -77,6 +77,31 @@ test('a successful install and verification records the concrete version', async
   assert.equal(outcomes[0]?.version, '1.2.3');
   assert.equal(ledger.packages.uv.serena.status, 'installed');
   assert.equal(ledger.packages.uv.serena.version, '1.2.3');
+});
+
+test('a uv version is read from the distribution a spec name resolves to', async () => {
+  const inventory = 'serena-agent v2.1.1.dev0\n- serena\n- serena-agent\n- serena-hooks\n';
+  assert.equal(uvToolVersion(inventory, 'serena'), '2.1.1.dev0');
+  assert.equal(uvToolVersion(inventory, 'serena-agent'), '2.1.1.dev0');
+  assert.equal(uvToolVersion(inventory, 'serena-hooks'), '2.1.1.dev0');
+  assert.equal(uvToolVersion(inventory, 'missing'), null);
+  // Without a version on the header there is nothing to report.
+  assert.equal(uvToolVersion('serena-agent\n- serena\n', 'serena'), null);
+
+  // A spec that installs under another distribution name still records the
+  // version the packages page needs to pin.
+  const ledger = emptyLedger();
+  const runner = scripted({ 'uv tool list': { code: 0, stdout: inventory } }, []);
+  const outcomes = await provisionPackages({
+    manager: 'uv',
+    packages: ['git+https://github.com/oraios/serena'],
+    ledger,
+    runner,
+  });
+  assert.equal(outcomes[0]?.status, 'installed');
+  assert.equal(outcomes[0]?.action, 'verified');
+  assert.equal(outcomes[0]?.version, '2.1.1.dev0');
+  assert.equal(ledger.packages.uv.serena.version, '2.1.1.dev0');
 });
 
 test('a pin is applied in the manager syntax', async () => {

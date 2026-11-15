@@ -115,6 +115,35 @@ export function parseUvToolInventory(output: string): Array<{ name: string; exec
 }
 
 /**
+ * The version of the distribution a name resolves to. `uv tool list` reports
+ * `serena-agent v2.1.1.dev0` while the spec asks for `serena`, so matching the
+ * spec name alone finds nothing and the ledger kept a null version - which left
+ * the packages page with no version to pin.
+ */
+export function uvToolVersion(output: string, name: string): string | null {
+  let distribution: string | null = null;
+  let version: string | null = null;
+  for (const line of String(output ?? '').split(/\r?\n/u)) {
+    const header = /^(\S+)\s+v(\S+)\s*$/u.exec(line);
+    if (header?.[1]) {
+      if (distribution === name) return version;
+      distribution = header[1];
+      version = header[2] ?? null;
+      continue;
+    }
+    const executable = /^\s*-\s+(\S+)\s*$/u.exec(line);
+    if (executable?.[1] === name && distribution) return version;
+  }
+  return distribution === name ? version : null;
+}
+
+/** uv needs the inventory, not a bare name match, to answer with a version. */
+function detectedVersion(manager: InstallManager, name: string, output: string): string | null {
+  if (manager === 'uv') return uvToolVersion(output, name) ?? parseInstalledVersion(manager, name, output);
+  return parseInstalledVersion(manager, name, output);
+}
+
+/**
  * The name a spec asks for is not always the name uv registered: installing
  * `git+https://github.com/oraios/serena` registers `serena-agent` and exposes a
  * `serena` command. Upgrading by the spec name failed with "not installed",
@@ -194,7 +223,7 @@ export async function provisionPackages(options: {
     const preflight = verifyCommand(options.manager, parsed.name);
     const preflightResult = await options.runner(preflight.command, preflight.args);
     const preflightVersion = preflightResult.code === 0
-      ? parseInstalledVersion(options.manager, parsed.name, preflightResult.stdout)
+      ? detectedVersion(options.manager, parsed.name, preflightResult.stdout)
       : null;
     const preflightHealthy = preflightResult.code === 0
       && verificationConfirms(options.manager, parsed.name, preflightResult.stdout, preflightVersion)
@@ -232,7 +261,7 @@ export async function provisionPackages(options: {
 
     // `latest` is resolved here, at install time, and the concrete version is
     // what the ledger (and the UI) records as actually running.
-    const detected = parseInstalledVersion(options.manager, parsed.name, verified.stdout);
+    const detected = detectedVersion(options.manager, parsed.name, verified.stdout);
     if (!verificationConfirms(options.manager, parsed.name, verified.stdout, detected)) {
       const error = 'install exited 0 but the package is not present in the tool inventory';
       recordFailure(options.ledger, options.manager, parsed.name, spec, error, now());
@@ -292,7 +321,7 @@ export async function upgradePackage(options: {
   }
   const verify = verifyCommand(manager, name);
   const verified = await runner(verify.command, verify.args);
-  const detected = verified.code === 0 ? parseInstalledVersion(manager, name, verified.stdout) : null;
+  const detected = verified.code === 0 ? detectedVersion(manager, name, verified.stdout) : null;
   if (verified.code !== 0 || !verificationConfirms(manager, name, verified.stdout, detected)) {
     const error = 'update verification failed';
     recordFailure(ledger, manager, name, entry.spec, error, now());
