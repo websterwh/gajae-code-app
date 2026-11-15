@@ -42,6 +42,16 @@ export UV_LINK_MODE="copy"
 export AQUA_ROOT_DIR="/data/aqua"
 export NPM_CONFIG_CACHE="/data/cache/npm"
 export NPM_CONFIG_PREFIX="/data/npm-global"
+# Tool locations belong to the mounted config, not the image layer. Both stay
+# overridable; when the config dir is not mounted they still resolve, inside the
+# container layer, and are lost on recreate like any other unpersisted path.
+gjc_config_root="$(dirname "${GJC_WORKER_AGENT_DIR}")"
+export UV_TOOL_DIR="${UV_TOOL_DIR:-${gjc_config_root}/app/uv}"
+export UV_TOOL_BIN_DIR="${UV_TOOL_BIN_DIR:-${gjc_config_root}/app/bin}"
+mkdir -p "${UV_TOOL_DIR}" "${UV_TOOL_BIN_DIR}"
+# The app and every gjc child inherit this PATH, so `serena` and friends are
+# found without a second launcher.
+case ":${PATH}:" in *":${UV_TOOL_BIN_DIR}:"*) ;; *) export PATH="${UV_TOOL_BIN_DIR}:${PATH}" ;; esac
 # ==============================================================================
 # Directory & Cache Preparation
 # ==============================================================================
@@ -156,96 +166,13 @@ provision_apt() {
 }
 
 # ==============================================================================
-# Provisioning: Python UV Tools & Pip Packages
+# Provisioning: Python, Node and GitHub packages
 # ==============================================================================
-provision_uv_pip() {
-    # UV Tools (Isolated CLI tools / MCP servers)
-    if [ -n "${UV_TOOLS}" ]; then
-        local current_uv_hash
-        current_uv_hash="$(echo -n "${UV_TOOLS}" | md5sum | awk '{print $1}')"
-        local saved_uv_hash_file="/data/.installed_hashes/uv.hash"
-        local prev_uv_hash=""
-        [ -f "$saved_uv_hash_file" ] && prev_uv_hash="$(cat "$saved_uv_hash_file")"
-
-        if [ "$current_uv_hash" != "$prev_uv_hash" ]; then
-            while IFS= read -r tool; do
-                echo "==> [UV Tool] Installing tool: ${tool}..."
-                uv tool install -q "${tool}" || true
-            done < <(parse_csv "${UV_TOOLS}")
-            echo "$current_uv_hash" > "$saved_uv_hash_file"
-        elif [ "${AUTO_UPDATE_PACKAGES}" = "true" ] || [ "${AUTO_UPDATE_PACKAGES}" = "1" ]; then
-            echo "==> [UV Tool] Checking for tool updates..."
-            uv tool upgrade --all -q 2>/dev/null || true
-            echo "==> [UV Tool] Tools are up to date."
-        fi
-    fi
-    # Global Pip Packages
-    if [ -n "${PIP_PACKAGES}" ]; then
-        local pip_list=()
-        while IFS= read -r pkg; do
-            pip_list+=("$pkg")
-        done < <(parse_csv "${PIP_PACKAGES}")
-
-        if [ ${#pip_list[@]} -gt 0 ]; then
-            echo "==> [PIP] Installing packages: ${PIP_PACKAGES}..."
-            local pip_upgrade_flag=""
-            if [ "${AUTO_UPDATE_PACKAGES}" = "true" ] || [ "${AUTO_UPDATE_PACKAGES}" = "1" ]; then
-                pip_upgrade_flag="--upgrade"
-            fi
-            uv pip install -q --system ${pip_upgrade_flag} "${pip_list[@]}" || true
-        fi
-    fi
-}
-
-# ==============================================================================
-# Provisioning: Node/NPM Global Packages
-# ==============================================================================
-provision_npm() {
-    if [ -z "${NPM_PACKAGES}" ]; then
-        return 0
-    fi
-
-    local current_hash
-    current_hash="$(echo -n "${NPM_PACKAGES}" | md5sum | awk '{print $1}')"
-    local saved_hash_file="/data/.installed_hashes/npm.hash"
-    local previous_hash=""
-    [ -f "$saved_hash_file" ] && previous_hash="$(cat "$saved_hash_file")"
-    local pkg_list=()
-    while IFS= read -r pkg; do
-        pkg_list+=("$pkg")
-    done < <(parse_csv "${NPM_PACKAGES}")
-
-    if [ "$current_hash" != "$previous_hash" ]; then
-        echo "==> [NPM] Installing global packages: ${NPM_PACKAGES}..."
-        # NPM_CONFIG_PREFIX puts them under /data/npm-global, so a recreated
-        # container keeps them like the APT/UV/PIP installs above.
-        npm install -g --no-fund --no-audit "${pkg_list[@]}" || true
-        echo "$current_hash" > "$saved_hash_file"
-        echo "==> [NPM] Finished installing global packages."
-    elif [ "${AUTO_UPDATE_PACKAGES}" = "true" ] || [ "${AUTO_UPDATE_PACKAGES}" = "1" ]; then
-        echo "==> [NPM] Checking for global package updates..."
-        # `npm update -g` only touches installed packages, not npm itself, so
-        # the CLI is upgraded separately. NPM_CONFIG_PREFIX lands it in
-        # /data/npm-global/bin, which comes first in PATH and survives recreation.
-        npm install -g npm@latest --no-fund --no-audit || true
-        npm update -g --no-fund --no-audit || true
-        echo "==> [NPM] Global packages are up to date."
-    fi
-}
-
-# ==============================================================================
-# Provisioning: GitHub Apps via Aqua
-# ==============================================================================
-provision_aqua() {
-    if [ -z "${GITHUB_APPS}" ]; then
-        return 0
-    fi
-
-    mkdir -p /data/aqua /data/bin /data/share
-    while IFS= read -r app; do
-        [ -z "$app" ] && continue
-        /usr/local/bin/install-github-app "${app}" || true
-    done < <(parse_csv "${GITHUB_APPS}")
+# Install/verify/ledger rules live in server/modules/mcp/provision.ts and run
+# through this CLI, so the entrypoint keeps no second copy. A failed package is
+# recorded as failed and retried on the next boot, never marked installed.
+provision_packages() {
+    node /opt/gajae-app/dist-server/server/modules/mcp/provision-cli.js || true
 }
 
 # ==============================================================================
@@ -437,17 +364,13 @@ if [ "$#" -gt 0 ] && [ "$1" = "start" ]; then
     echo "==> [Provisioning] Optional packages continue in the background."
     (
         provision_apt
-        provision_uv_pip
-        provision_npm
-        provision_aqua
+        provision_packages
         provision_gjc_cli
         run_post_commands
     ) &
 else
     provision_apt
-    provision_uv_pip
-    provision_npm
-    provision_aqua
+    provision_packages
     provision_gjc_cli
     run_post_commands
 fi

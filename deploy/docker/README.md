@@ -110,11 +110,21 @@ revision is required.
 | `PIP_PACKAGES` | *(empty)* | Comma-separated Python packages installed globally via `uv pip install --system`. |
 | `NPM_PACKAGES` | *(empty)* | Comma-separated Node packages installed globally via `npm install -g` (`typescript,prettier`). Persisted under `/data/npm-global`. |
 | `GITHUB_APPS` | *(empty)* | Comma-separated GitHub release apps installed via Aqua (`skylot/jadx,iBotPeaches/Apktool`). |
-| `AUTO_UPDATE_PACKAGES` | `true` | Automatically upgrade all installed packages on container boot. |
+| `UV_TOOL_DIR` | `<config root>/app/uv` | Where `uv tool install` puts its environments. Defaults beside `GJC_WORKER_AGENT_DIR`, so it survives with the mounted config; overridable. |
+| `UV_TOOL_BIN_DIR` | `<config root>/app/bin` | Where uv tool executables appear. Prepended to `PATH` for the app and for `gjc`'s child processes; overridable. |
+| `AUTO_UPDATE_PACKAGES` | `true` | Upgrade installed packages on boot. Packages pinned to a version are skipped. |
 | `CHECK_PACKAGE_UPDATES` | `true` | Check and log available package updates. |
 | `POST_COMMANDS` | *(empty)* | Custom shell commands executed after provisioning (e.g. `adb connect 192.0.2.79:5555`). |
 
 Boolean variables take `true` or `false` (`1`/`0` is still accepted for older deployments).
+
+Provisioning keeps a per-package ledger at `<config root>/app/provision-ledger.json`
+(`/root/.gjc/app/provision-ledger.json` with the compose file). A package is
+recorded as installed only after the install and its verification both succeed;
+a failed package is recorded as failed and retried on the next boot. With no
+config volume mounted, the ledger and tool directories resolve inside the
+container layer and are lost on recreate - the standard compose file mounts
+`./gjc-config` at `/root/.gjc`, so nothing special is needed there.
 ### Direct SSH & GJC CLI Access
 | Variable | Default | Description |
 |---|---|---|
