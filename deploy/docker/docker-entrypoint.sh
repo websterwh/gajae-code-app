@@ -52,6 +52,11 @@ mkdir -p "${UV_TOOL_DIR}" "${UV_TOOL_BIN_DIR}"
 # The app and every gjc child inherit this PATH, so `serena` and friends are
 # found without a second launcher.
 case ":${PATH}:" in *":${UV_TOOL_BIN_DIR}:"*) ;; *) export PATH="${UV_TOOL_BIN_DIR}:${PATH}" ;; esac
+# mempalace stores its palace on the mount but looks for it under $HOME, so the
+# link has to be recreated on every fresh container.
+mempalace_root="${gjc_config_root}/mempalace"
+mkdir -p "${mempalace_root}"
+ln -sfn "${mempalace_root}" /root/.mempalace
 # ==============================================================================
 # Directory & Cache Preparation
 # ==============================================================================
