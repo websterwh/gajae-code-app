@@ -165,7 +165,7 @@ test('an inline filter sits beneath New conversation and stays out of the archiv
   assert.ok(filter, 'the filter input renders');
   assert.match(filter, /type="search"/);
   assert.match(filter, /aria-label="Filter conversations"/);
-  assert.match(filter, /title="Filter conversations \(\/\)"/);
+  assert.match(filter, /title="Filter conversations"/);
   assert.ok(html.indexOf('aria-label="New conversation"') < html.indexOf('data-sidebar-filter'), 'it follows the primary action');
   assert.ok(html.indexOf('data-sidebar-filter') < html.indexOf('id="sidebar-projects-heading"'), 'and precedes the sections');
   assert.doesNotMatch(html, /aria-label="Clear filter"/, 'no clear control while empty');

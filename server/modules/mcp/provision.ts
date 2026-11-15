@@ -1,4 +1,6 @@
 import { spawn } from 'node:child_process';
+import { homedir } from 'node:os';
+import path from 'node:path';
 
 import { recordFailure, recordInstalled, type InstallManager, type Ledger, type LedgerEntry } from './ledger.js';
 import { normalizePin, parsePackageSpec, pinnedSpec } from './pins.js';
@@ -67,14 +69,34 @@ const AQUA_VERIFY = [
   '[ -f "$cfg" ] && aqua list -c "$cfg" 2>/dev/null | grep -F -- "$2"',
 ].join('; ');
 
+/**
+ * Tool state belongs on the mounted agent config, not in the container's
+ * writable layer: without these two variables `uv tool install` writes to
+ * ~/.local/share/uv and its binaries to ~/.local/bin, both inside the image,
+ * and every package the user added was gone after a recreate. The image's
+ * entrypoint exports the same values; deriving them here as well keeps the
+ * Settings page installing onto the mount even when the app was started by
+ * something that did not read the entrypoint.
+ */
+export function provisionEnv(base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const agentDir = base.GJC_WORKER_AGENT_DIR || path.join(homedir(), '.gjc', 'agent');
+  const configRoot = path.dirname(agentDir);
+  const toolDir = base.UV_TOOL_DIR || path.join(configRoot, 'app', 'uv');
+  const binDir = base.UV_TOOL_BIN_DIR || path.join(configRoot, 'app', 'bin');
+  const pathEntries = (base.PATH ?? '').split(':').filter(Boolean);
+  const searchPath = pathEntries.includes(binDir) ? pathEntries.join(':') : [binDir, ...pathEntries].join(':');
+  return { ...base, UV_TOOL_DIR: toolDir, UV_TOOL_BIN_DIR: binDir, PATH: searchPath };
+}
+
 /** The one process runner both boot provisioning and the HTTP API use. */
 export function spawnCommandRunner(): CommandRunner {
+  const env = provisionEnv();
   return (command, args, options) => new Promise((resolve) => {
     const child = spawn(command, args, {
       cwd: options?.cwd,
       shell: false,
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: process.env,
+      env,
     });
     let stdout = '';
     let stderr = '';

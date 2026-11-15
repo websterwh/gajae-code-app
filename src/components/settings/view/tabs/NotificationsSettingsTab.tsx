@@ -1,10 +1,16 @@
-import { Bell, BellOff, BellRing, Play, Smartphone, Volume2 } from 'lucide-react';
+import { Bell, BellOff, BellRing, Loader2, Play } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { WebPushState } from '../../../../hooks/useWebPush';
 import { Button } from '../../../../shared/view/ui';
+import { authenticatedFetch } from '../../../../utils/api';
 import { playChatCompletionSound } from '../../../../utils/notificationSound';
 import type { NotificationPreferencesState } from '../../types/types';
+import SettingsCard from '../SettingsCard';
+import SettingsRow from '../SettingsRow';
+import SettingsSection from '../SettingsSection';
+import SettingsToggle from '../SettingsToggle';
 
 type NotificationsSettingsTabProps = {
   notificationPreferences: NotificationPreferencesState;
@@ -20,6 +26,44 @@ type NotificationsSettingsTabProps = {
 };
 type EventName = keyof NotificationPreferencesState['events'];
 
+type TelegramSettings = {
+  enabled: boolean;
+  hasBotToken: boolean;
+  chatId: string;
+  sound: 'all' | 'important' | 'none';
+  rich: boolean;
+  richDraft: boolean;
+  streaming: boolean;
+  toolActivity: boolean;
+};
+type GjcSettings = {
+  enabled: boolean;
+  telegram: TelegramSettings;
+  redact: boolean;
+  verbosity: 'lean' | 'verbose';
+  sessionScope: 'all' | 'primary';
+};
+
+const inputClass = 'w-full touch-manipulation rounded-lg border border-input bg-card p-2.5 text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary';
+const selectClass = `${inputClass} py-2`;
+
+const emptyGjcSettings: GjcSettings = {
+  enabled: false,
+  telegram: {
+    enabled: false,
+    hasBotToken: false,
+    chatId: '',
+    sound: 'all',
+    rich: true,
+    richDraft: false,
+    streaming: true,
+    toolActivity: false,
+  },
+  redact: false,
+  verbosity: 'lean',
+  sessionScope: 'all',
+};
+
 function EventCheckbox({ event, label, preferences, onChange }: {
   event: EventName;
   label: string;
@@ -27,7 +71,7 @@ function EventCheckbox({ event, label, preferences, onChange }: {
   onChange: (value: NotificationPreferencesState) => void;
 }) {
   return (
-    <label className="flex items-center gap-2 text-sm text-foreground">
+    <label className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground">
       <input
         type="checkbox"
         checked={preferences.events[event]}
@@ -52,42 +96,226 @@ function WebPushCard({ webPush, onSubscribe, onUnsubscribe, onTest }: {
   if (!webPush.supported && !webPush.requiresHomeScreenInstall && !webPush.requiresSecureContext) return null;
   const denied = webPush.permission === 'denied';
   return (
-    <div className="space-y-4 rounded-lg border border-border bg-card p-4">
-      <div className="space-y-1">
-        <div className="flex items-center gap-2">
-          <Smartphone className="h-4 w-4 text-primary" />
-          <h4 className="font-medium text-foreground">{t('notifications.webPush.title')}</h4>
-        </div>
-        <p className="text-sm text-muted-foreground">{t('notifications.webPush.description')}</p>
-      </div>
-      {webPush.requiresSecureContext ? (
-        <p className="text-sm text-muted-foreground">{t('notifications.webPush.httpsRequired')}</p>
-      ) : webPush.requiresHomeScreenInstall ? (
-        <p className="text-sm text-muted-foreground">{t('notifications.webPush.installFirst')}</p>
-      ) : denied ? (
-        <p className="text-sm text-destructive">{t('notifications.webPush.denied')}</p>
-      ) : (
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            disabled={webPush.busy}
-            onClick={webPush.subscribed ? onUnsubscribe : onSubscribe}
-            className={webPush.subscribed
-              ? 'inline-flex items-center gap-2 rounded-md bg-destructive/10 px-4 py-2 text-sm font-medium text-destructive transition-colors hover:bg-destructive/20 disabled:opacity-60'
-              : 'inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60'}
-          >
-            {webPush.subscribed ? <BellOff className="h-4 w-4" /> : <BellRing className="h-4 w-4" />}
-            {webPush.subscribed ? t('notifications.webPush.disable') : t('notifications.webPush.enable')}
-          </button>
-          {webPush.subscribed && (
-            <Button type="button" variant="outline" size="sm" onClick={onTest}>
-              {t('notifications.webPush.test')}
-            </Button>
-          )}
-        </div>
-      )}
-      {webPush.error && <p className="text-sm text-destructive">{t('notifications.webPush.failed', { reason: webPush.error })}</p>}
-    </div>
+    <SettingsSection title={t('notifications.webPush.title')} description={t('notifications.webPush.description')}>
+      <SettingsCard>
+        {webPush.requiresSecureContext ? (
+          <p className="px-4 py-4 text-sm text-muted-foreground">{t('notifications.webPush.httpsRequired')}</p>
+        ) : webPush.requiresHomeScreenInstall ? (
+          <p className="px-4 py-4 text-sm text-muted-foreground">{t('notifications.webPush.installFirst')}</p>
+        ) : denied ? (
+          <p className="px-4 py-4 text-sm text-destructive">{t('notifications.webPush.denied')}</p>
+        ) : (
+          <div className="flex flex-wrap items-center gap-3 px-4 py-4">
+            <button
+              type="button"
+              disabled={webPush.busy}
+              onClick={webPush.subscribed ? onUnsubscribe : onSubscribe}
+              className={webPush.subscribed
+                ? 'inline-flex items-center gap-2 rounded-lg bg-destructive/10 px-4 py-2 text-sm font-medium text-destructive transition-colors hover:bg-destructive/20 disabled:opacity-60'
+                : 'inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60'}
+            >
+              {webPush.subscribed ? <BellOff className="h-4 w-4" /> : <BellRing className="h-4 w-4" />}
+              {webPush.subscribed ? t('notifications.webPush.disable') : t('notifications.webPush.enable')}
+            </button>
+            {webPush.subscribed && (
+              <Button type="button" variant="outline" size="sm" onClick={onTest}>
+                {t('notifications.webPush.test')}
+              </Button>
+            )}
+          </div>
+        )}
+        {webPush.error && <p className="px-4 pb-4 text-sm text-destructive">{t('notifications.webPush.failed', { reason: webPush.error })}</p>}
+      </SettingsCard>
+    </SettingsSection>
+  );
+}
+
+/**
+ * The CLI's own notification channels. These live in the agent's config.yml,
+ * not in the app database, so the same numbers and switches apply whether a run
+ * was started here or from a terminal.
+ */
+function GjcNotificationsCard() {
+  const { t } = useTranslation('settings');
+  const [settings, setSettings] = useState<GjcSettings>(emptyGjcSettings);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
+  const [botToken, setBotToken] = useState('');
+
+  const load = useCallback(async () => {
+    try {
+      const response = await authenticatedFetch('/api/notifications/gjc');
+      const body = await response.json() as { data?: GjcSettings; error?: { message?: string } };
+      if (!response.ok || !body.data) throw new Error(body.error?.message ?? t('notifications.gjc.loadFailed'));
+      setSettings(body.data);
+      setError('');
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : t('notifications.gjc.loadFailed'));
+    } finally {
+      setLoading(false);
+    }
+  }, [t]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const patchTelegram = (changes: Partial<TelegramSettings>) => {
+    setSaved(false);
+    setSettings((current) => ({ ...current, telegram: { ...current.telegram, ...changes } }));
+  };
+  const patch = (changes: Partial<GjcSettings>) => {
+    setSaved(false);
+    setSettings((current) => ({ ...current, ...changes }));
+  };
+
+  const save = async () => {
+    setSaving(true);
+    setError('');
+    try {
+      const response = await authenticatedFetch('/api/notifications/gjc', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...settings, telegram: { ...settings.telegram, botToken: botToken.trim() } }),
+      });
+      const body = await response.json() as { data?: GjcSettings; error?: { message?: string } };
+      if (!response.ok || !body.data) throw new Error(body.error?.message ?? t('notifications.gjc.saveFailed'));
+      setSettings(body.data);
+      setBotToken('');
+      setSaved(true);
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : t('notifications.gjc.saveFailed'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const telegram = settings.telegram;
+
+  return (
+    <SettingsSection title={t('notifications.gjc.title')} description={t('notifications.gjc.description')}>
+      <SettingsCard divided>
+        {loading ? (
+          <p role="status" className="flex items-center gap-2 px-4 py-4 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            {t('common.loading', { defaultValue: 'Loading…' })}
+          </p>
+        ) : (
+          <>
+            <SettingsRow label={t('notifications.gjc.enabled')} description={t('notifications.gjc.enabledHint')}>
+              <SettingsToggle
+                checked={settings.enabled}
+                onChange={(enabled) => patch({ enabled })}
+                ariaLabel={t('notifications.gjc.enabled')}
+              />
+            </SettingsRow>
+
+            <SettingsRow label={t('notifications.gjc.telegramEnabled')} description={t('notifications.gjc.telegramTitle')}>
+              <SettingsToggle
+                checked={telegram.enabled}
+                onChange={(enabled) => patchTelegram({ enabled })}
+                ariaLabel={t('notifications.gjc.telegramEnabled')}
+              />
+            </SettingsRow>
+            <SettingsRow
+              label={t('notifications.gjc.botToken')}
+              description={telegram.hasBotToken ? t('notifications.gjc.botTokenSet') : undefined}
+              className="flex-col items-stretch gap-2"
+            >
+              <input
+                type="password"
+                autoComplete="off"
+                value={botToken}
+                placeholder={t('notifications.gjc.botTokenPlaceholder')}
+                aria-label={t('notifications.gjc.botToken')}
+                onChange={(event) => { setSaved(false); setBotToken(event.target.value); }}
+                className={inputClass}
+              />
+            </SettingsRow>
+            <SettingsRow label={t('notifications.gjc.chatId')} className="flex-col items-stretch gap-2">
+              <input
+                value={telegram.chatId}
+                placeholder={t('notifications.gjc.chatIdPlaceholder')}
+                aria-label={t('notifications.gjc.chatId')}
+                onChange={(event) => patchTelegram({ chatId: event.target.value })}
+                className={inputClass}
+              />
+            </SettingsRow>
+            <SettingsRow label={t('notifications.gjc.sound')} className="flex-col items-stretch gap-2">
+              <select
+                value={telegram.sound}
+                aria-label={t('notifications.gjc.sound')}
+                onChange={(event) => patchTelegram({ sound: event.target.value as TelegramSettings['sound'] })}
+                className={selectClass}
+              >
+                <option value="all">{t('notifications.gjc.soundAll')}</option>
+                <option value="important">{t('notifications.gjc.soundImportant')}</option>
+                <option value="none">{t('notifications.gjc.soundNone')}</option>
+              </select>
+            </SettingsRow>
+            {([
+              ['rich', t('notifications.gjc.rich')],
+              ['richDraft', t('notifications.gjc.richDraft')],
+              ['streaming', t('notifications.gjc.streaming')],
+              ['toolActivity', t('notifications.gjc.toolActivity')],
+            ] as const).map(([key, label]) => (
+              <SettingsRow key={key} label={label}>
+                <SettingsToggle
+                  checked={telegram[key]}
+                  onChange={(value) => patchTelegram({ [key]: value })}
+                  ariaLabel={label}
+                />
+              </SettingsRow>
+            ))}
+
+            <SettingsRow label={t('notifications.gjc.redact')} description={t('notifications.gjc.redactHint')}>
+              <SettingsToggle
+                checked={settings.redact}
+                onChange={(redact) => patch({ redact })}
+                ariaLabel={t('notifications.gjc.redact')}
+              />
+            </SettingsRow>
+            <SettingsRow label={t('notifications.gjc.verbosity')} className="flex-col items-stretch gap-2">
+              <select
+                value={settings.verbosity}
+                aria-label={t('notifications.gjc.verbosity')}
+                onChange={(event) => patch({ verbosity: event.target.value as GjcSettings['verbosity'] })}
+                className={selectClass}
+              >
+                <option value="lean">{t('notifications.gjc.verbosityLean')}</option>
+                <option value="verbose">{t('notifications.gjc.verbosityVerbose')}</option>
+              </select>
+            </SettingsRow>
+            <SettingsRow label={t('notifications.gjc.sessionScope')} className="flex-col items-stretch gap-2">
+              <select
+                value={settings.sessionScope}
+                aria-label={t('notifications.gjc.sessionScope')}
+                onChange={(event) => patch({ sessionScope: event.target.value as GjcSettings['sessionScope'] })}
+                className={selectClass}
+              >
+                <option value="all">{t('notifications.gjc.scopeAll')}</option>
+                <option value="primary">{t('notifications.gjc.scopePrimary')}</option>
+              </select>
+            </SettingsRow>
+
+            <div className="flex flex-wrap items-center gap-3 px-4 py-3">
+              <button
+                type="button"
+                onClick={() => void save()}
+                disabled={saving}
+                className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+              >
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Bell className="h-4 w-4" aria-hidden />}
+                {saving ? t('notifications.gjc.saving') : t('notifications.gjc.save')}
+              </button>
+              {saved && <span className="text-xs text-muted-foreground">{t('notifications.gjc.saved')}</span>}
+              {error && <span className="text-xs text-destructive">{error}</span>}
+            </div>
+          </>
+        )}
+        {error && loading ? <p className="px-4 pb-4 text-sm text-destructive">{error}</p> : null}
+      </SettingsCard>
+    </SettingsSection>
   );
 }
 
@@ -105,50 +333,37 @@ export default function NotificationsSettingsTab(props: NotificationsSettingsTab
 
   return (
     <div className="space-y-6 md:space-y-8">
-      <div className="space-y-4">
+      <div className="space-y-2">
         <div className="flex items-center gap-3">
-          <Bell className="h-5 w-5 text-primary" />
+          <Bell className="h-5 w-5 text-primary" aria-hidden />
           <h3 className="text-lg font-medium text-foreground">{t('notifications.title')}</h3>
         </div>
         <p className="text-sm text-muted-foreground">{t('notifications.description')}</p>
       </div>
 
       {props.isDesktop ? (
-        <div className="space-y-4 rounded-lg border border-border bg-card p-4">
-          <h4 className="font-medium text-foreground">
-            {t('notifications.desktop.title', { defaultValue: 'Notify this desktop app' })}
-          </h4>
-          {props.desktopNotifications?.supported === false ? (
-            <p className="text-sm text-muted-foreground">
-              {t('notifications.desktop.unsupported', { defaultValue: 'Desktop notifications are not supported on this system.' })}
-            </p>
-          ) : (
-            <div className="space-y-2">
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={toggleDesktop}
-                  className={desktopEnabled
-                    ? 'inline-flex items-center gap-2 rounded-md bg-destructive/10 px-4 py-2 text-sm font-medium text-destructive transition-colors hover:bg-destructive/20'
-                    : 'inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90'}
-                >
-                  {desktopEnabled ? <BellOff className="h-4 w-4" /> : <BellRing className="h-4 w-4" />}
-                  {desktopEnabled
-                    ? t('notifications.desktop.disable', { defaultValue: 'Disable desktop notifications' })
-                    : t('notifications.desktop.enable', { defaultValue: 'Enable desktop notifications' })}
-                </button>
-                {desktopEnabled && (
-                  <span className="text-sm text-muted-foreground">
-                    {t('notifications.desktop.enabled', { defaultValue: 'Desktop notifications are enabled' })}
-                  </span>
-                )}
-              </div>
-              {props.desktopNotifications?.lastError && (
-                <p className="text-sm text-destructive">{props.desktopNotifications.lastError}</p>
-              )}
-            </div>
-          )}
-        </div>
+        <SettingsSection title={t('notifications.desktop.title', { defaultValue: 'Notify this desktop app' })}>
+          <SettingsCard>
+            {props.desktopNotifications?.supported === false ? (
+              <p className="px-4 py-4 text-sm text-muted-foreground">
+                {t('notifications.desktop.unsupported', { defaultValue: 'Desktop notifications are not supported on this system.' })}
+              </p>
+            ) : (
+              <SettingsRow
+                label={desktopEnabled
+                  ? t('notifications.desktop.enabled', { defaultValue: 'Desktop notifications are enabled' })
+                  : t('notifications.desktop.enable', { defaultValue: 'Enable desktop notifications' })}
+                description={props.desktopNotifications?.lastError ?? undefined}
+              >
+                <SettingsToggle
+                  checked={Boolean(desktopEnabled)}
+                  onChange={toggleDesktop}
+                  ariaLabel={t('notifications.desktop.title', { defaultValue: 'Notify this desktop app' })}
+                />
+              </SettingsRow>
+            )}
+          </SettingsCard>
+        </SettingsSection>
       ) : null}
 
       {props.webPush && (
@@ -160,44 +375,35 @@ export default function NotificationsSettingsTab(props: NotificationsSettingsTab
         />
       )}
 
-      <div className="space-y-4 rounded-lg border border-border bg-card p-4">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <Volume2 className="h-4 w-4 text-primary" />
-              <h4 className="font-medium text-foreground">{t('notifications.sound.title', { defaultValue: 'Sound' })}</h4>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              {t('notifications.sound.description', { defaultValue: 'Play a short tone when a chat run finishes.' })}
-            </p>
-          </div>
-          <label className="flex shrink-0 items-center gap-2 text-sm text-foreground">
-            <input
-              type="checkbox"
-              checked={preferences.channels.sound}
-              onChange={(input) => changePreferences({
-                ...preferences,
-                channels: { ...preferences.channels, sound: input.target.checked },
-              })}
-              className="h-4 w-4"
-            />
-            {t('notifications.sound.enabled', { defaultValue: 'Enabled' })}
-          </label>
-        </div>
-        <Button type="button" variant="outline" size="sm" onClick={() => { void playChatCompletionSound({ force: true }); }}>
-          <Play className="h-4 w-4" />
-          {t('notifications.sound.test', { defaultValue: 'Test sound' })}
-        </Button>
-      </div>
+      <GjcNotificationsCard />
 
-      <div className="space-y-4 rounded-lg border border-border bg-card p-4">
-        <h4 className="font-medium text-foreground">{t('notifications.events.title')}</h4>
-        <div className="space-y-3">
+      <SettingsSection title={t('notifications.sound.title', { defaultValue: 'Sound' })} description={t('notifications.sound.description', { defaultValue: 'Play a short tone when a chat run finishes.' })}>
+        <SettingsCard>
+          <SettingsRow
+            label={t('notifications.sound.enabled', { defaultValue: 'Enabled' })}
+          >
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => { void playChatCompletionSound({ force: true }); }}>
+                <Play className="h-4 w-4" aria-hidden />
+                {t('notifications.sound.test', { defaultValue: 'Test sound' })}
+              </Button>
+              <SettingsToggle
+                checked={preferences.channels.sound}
+                onChange={(sound) => changePreferences({ ...preferences, channels: { ...preferences.channels, sound } })}
+                ariaLabel={t('notifications.sound.title', { defaultValue: 'Sound' })}
+              />
+            </div>
+          </SettingsRow>
+        </SettingsCard>
+      </SettingsSection>
+
+      <SettingsSection title={t('notifications.events.title')}>
+        <div className="grid gap-2 sm:grid-cols-3">
           <EventCheckbox event="actionRequired" label={t('notifications.events.actionRequired')} preferences={preferences} onChange={changePreferences} />
           <EventCheckbox event="stop" label={t('notifications.events.stop')} preferences={preferences} onChange={changePreferences} />
           <EventCheckbox event="error" label={t('notifications.events.error')} preferences={preferences} onChange={changePreferences} />
         </div>
-      </div>
+      </SettingsSection>
     </div>
   );
 }

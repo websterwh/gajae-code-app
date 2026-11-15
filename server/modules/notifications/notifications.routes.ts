@@ -10,7 +10,13 @@ import {
 } from '@/modules/notifications/services/web-push.service.js';
 import { asyncHandler, routeParam } from '@/shared/utils.js';
 
+import gjcNotificationsRoutes from './gjc-notifications.routes.js';
+
 const router = express.Router();
+
+// Native GJC notification channels (Telegram and the message policy) live in
+// the agent's own config.yml; these routes read and write that file.
+router.use('/gjc', gjcNotificationsRoutes);
 
 type AuthenticatedRequest = express.Request & { user?: { id?: unknown } };
 type NotificationEndpoint = {

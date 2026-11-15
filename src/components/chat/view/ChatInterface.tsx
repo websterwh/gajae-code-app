@@ -18,6 +18,7 @@ import { useChatSessionState } from '../hooks/useChatSessionState';
 import { useEscapeToAbort } from '../hooks/useEscapeToAbort';
 import { useOAuthLogin } from '../hooks/useOAuthLogin';
 import type { ChatInterfaceProps } from '../types/types';
+import { hasOpenDialog, shouldFocusComposer } from '../utils/composerAutoFocus';
 import { deriveLiveActivity } from '../utils/toolActivity';
 import OAuthLoginDialog from '../OAuthLoginDialog';
 import { useGoalControls } from '../hooks/useGoalControls';
@@ -133,6 +134,19 @@ function ChatInterface({
     setIsUserScrolledUp: session.setIsUserScrolledUp,
     setPendingPermissionRequests,
   });
+
+  // Typing with nothing focused is meant for the conversation. Without this the
+  // keystroke went to whichever field held focus last - in practice the sidebar
+  // conversation filter - so the message was never written.
+  useEffect(() => {
+    const focusComposer = (event: KeyboardEvent) => {
+      if (!composer.textareaRef.current) return;
+      if (!shouldFocusComposer(event, hasOpenDialog())) return;
+      composer.textareaRef.current.focus();
+    };
+    document.addEventListener('keydown', focusComposer);
+    return () => document.removeEventListener('keydown', focusComposer);
+  }, [composer.textareaRef]);
 
 
   // "New work item" while a fresh conversation is already on screen changes

@@ -15,8 +15,9 @@ type SidebarFilterInputProps = {
  * The inline filter beneath the primary action. It narrows the tree in place;
  * the command palette (Ctrl+K) remains the place to search everything else.
  *
- * Escape clears the query, and with nothing to clear it returns focus to the
- * page so `/` can bring it back.
+ * Escape clears the query, and with nothing left to clear it hands focus back
+ * to the page. Only a click or a tab stop enters this field: typing while
+ * nothing is focused belongs in the conversation, not here.
  */
 export default function SidebarFilterInput({ value, onChange, inputRef, t }: SidebarFilterInputProps) {
   const placeholder = t('filter.placeholder');
@@ -42,7 +43,7 @@ export default function SidebarFilterInput({ value, onChange, inputRef, t }: Sid
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           aria-label={placeholder}
-          title={`${placeholder} (/)`}
+          title={placeholder}
           autoComplete="off"
           spellCheck={false}
           enterKeyHint="search"

@@ -196,9 +196,6 @@ export default function PackagesSettingsTab() {
             const statusLabel = row.status === 'installed' ? t('packages.statusInstalled')
               : row.status === 'failed' ? t('packages.statusFailed')
                 : t('packages.statusMissing');
-            const sourceLabel = row.source === 'env' ? t('packages.sourceEnv')
-              : row.source === 'ui' ? t('packages.sourceUi')
-                : t('packages.sourceInstalled');
             // Rows that can be pinned carry the version on the control itself;
             // the rest keep it in the status line.
             const versionControl = row.desired && row.manager !== 'aqua';
@@ -209,7 +206,6 @@ export default function PackagesSettingsTab() {
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="truncate text-sm font-medium text-foreground">{row.name}</span>
                     <span className={chipClass}>{row.manager}</span>
-                    <span className={chipClass}>{sourceLabel}</span>
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                     <span className="inline-flex items-center gap-1">

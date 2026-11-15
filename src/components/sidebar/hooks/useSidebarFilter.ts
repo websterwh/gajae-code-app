@@ -7,13 +7,6 @@ import type { SidebarProjectListProps } from '../view/SidebarProjectList';
 /** Typing pauses this long before the tree re-filters, matching the palette. */
 export const FILTER_DEBOUNCE_MS = 150;
 
-const isEditable = (target: EventTarget | null): boolean => {
-  if (!(target instanceof HTMLElement)) return false;
-  if (target.isContentEditable) return true;
-  const tag = target.tagName;
-  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
-};
-
 type SidebarFilter = {
   query: string;
   setQuery: (value: string) => void;
@@ -27,9 +20,10 @@ type SidebarFilter = {
 };
 
 /**
- * Owns the sidebar filter: the raw query, its debounced copy, the message-body
- * search behind it, and the `/` shortcut that focuses the field from anywhere
- * that is not already a text field.
+ * Owns the sidebar filter: the raw query, its debounced copy and the
+ * message-body search behind it. Nothing here listens for keystrokes: a
+ * document-wide shortcut that pulled focus into this field sent whatever the
+ * user typed next into the conversation filter instead of their conversation.
  *
  * While a query is active every matching project is force-expanded so hits in
  * a collapsed project are visible; the user's own expansion state is untouched
@@ -51,20 +45,6 @@ export function useSidebarFilter(source: SidebarProjectListProps): SidebarFilter
 
   const active = normalizeFilterQuery(debouncedQuery).length > 0;
   const messageMatches = useConversationMessageSearch(debouncedQuery, active);
-
-  useEffect(() => {
-    const focusFilter = (event: KeyboardEvent) => {
-      if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey || event.defaultPrevented) return;
-      if (isEditable(event.target)) return;
-      const input = inputRef.current;
-      if (!input) return;
-      event.preventDefault();
-      input.focus();
-      input.select();
-    };
-    document.addEventListener('keydown', focusFilter);
-    return () => document.removeEventListener('keydown', focusFilter);
-  }, []);
 
   const filtered = filterSessions({
     query: debouncedQuery,

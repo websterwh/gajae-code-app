@@ -77,7 +77,7 @@ test('an active query shows hits inside a collapsed project and hands the state 
   assert.equal(projects().queryAllByText('Review pending decision').length, 0, 'collapsed again once the query is gone');
 });
 
-test('a slash from the page focuses the filter, but not from another text field', async () => {
+test('typing on the page never pulls focus into the filter', async () => {
   const input = await mountSidebar();
   const other = document.createElement('textarea');
   document.body.append(other);
@@ -87,10 +87,14 @@ test('a slash from the page focuses the filter, but not from another text field'
   assert.notEqual(document.activeElement, input, 'typing a slash into the composer is left alone');
 
   other.blur();
+  // A document-wide `/` shortcut here used to send everything typed next into
+  // this field, so a message meant for the conversation was never written. The
+  // composer owns unclaimed keystrokes now; the filter is entered by click or
+  // by tabbing to it.
   const slash = new KeyboardEvent('keydown', { key: '/', bubbles: true, cancelable: true });
   act(() => { document.body.dispatchEvent(slash); });
-  assert.equal(document.activeElement, input);
-  assert.equal(slash.defaultPrevented, true, 'the slash itself is not typed');
+  assert.notEqual(document.activeElement, input, 'a slash with nothing focused is not a sidebar shortcut');
+  assert.equal(slash.defaultPrevented, false, 'and is left for the composer');
 
   fireEvent.keyDown(input, { key: 'Escape' });
   assert.notEqual(document.activeElement, input, 'Escape on an empty field returns focus to the page');
