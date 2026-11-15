@@ -41,6 +41,8 @@ type McpServer = {
 };
 
 type CatalogEnv = { name: string; required?: boolean; secret?: boolean; description?: string };
+/** What a catalog entry says a server needs, used to prefill its configure form. */
+type CatalogDefaults = { env: CatalogEnv[]; command?: string; args?: string[]; url?: string };
 type CatalogEntry = {
   name: string;
   title?: string;
@@ -132,7 +134,7 @@ export default function McpSettingsTab() {
   const [registryError, setRegistryError] = useState<string | null>(null);
   const [catalogCounts, setCatalogCounts] = useState<CatalogCounts>({ bundled: 0, overlay: 0, registry: 0 });
   const [openNotice, setOpenNotice] = useState<'warning' | 'registry' | null>(null);
-  const [requirements, setRequirements] = useState<Record<string, CatalogEnv[]>>({});
+  const [catalogDefaults, setCatalogDefaults] = useState<Record<string, CatalogDefaults>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [scope, setScope] = useState<McpScope>('global');
@@ -154,7 +156,7 @@ export default function McpSettingsTab() {
   const skipPinCommit = useRef(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState({
-    command: '', args: '', url: '', env: '', headers: '', requiredEnv: {} as Record<string, string>,
+    command: '', args: '', url: '', env: '', headers: '', knownEnv: {} as Record<string, string>,
   });
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
   const [copyNote, setCopyNote] = useState<string | null>(null);
@@ -170,21 +172,28 @@ export default function McpSettingsTab() {
   const statusPath = `/api/mcp/status${projectQuery ? `?${projectQuery.slice(1)}` : ''}`;
   const projectReady = scope !== 'project' || Boolean(projectPath);
 
-  const rememberRequirements = useCallback((entries: CatalogEntry[]) => {
-    setRequirements((current) => {
+  const rememberCatalog = useCallback((entries: CatalogEntry[]) => {
+    setCatalogDefaults((current) => {
       const next = { ...current };
       for (const entry of entries) {
-        if (!entry.env?.length) continue;
-        next[entry.name] = entry.env;
-        if (entry.package?.name) next[`pkg:${entry.package.name}`] = entry.env;
+        const defaults: CatalogDefaults = {
+          env: entry.env ?? [],
+          ...(entry.command ? { command: entry.command } : {}),
+          ...(entry.args ? { args: entry.args } : {}),
+          ...(entry.url ? { url: entry.url } : {}),
+        };
+        next[entry.name] = defaults;
+        if (entry.package?.name) next[`pkg:${entry.package.name}`] = defaults;
       }
       return next;
     });
   }, []);
 
-  const requirementsFor = useCallback((server: McpServer): CatalogEnv[] => (
-    requirements[server.name] ?? (server.packageName ? requirements[`pkg:${server.packageName}`] ?? [] : [])
-  ), [requirements]);
+  // A server installed from the catalog is looked up by name first, then by the
+  // package it runs, so renamed entries still bring their fields along.
+  const catalogFor = useCallback((server: McpServer): CatalogDefaults | undefined => (
+    catalogDefaults[server.name] ?? (server.packageName ? catalogDefaults[`pkg:${server.packageName}`] : undefined)
+  ), [catalogDefaults]);
 
   const reload = useCallback(async (): Promise<McpServer[]> => {
     setLoading(true);
@@ -220,9 +229,9 @@ export default function McpSettingsTab() {
   // row can still say what it needs without a registry request.
   useEffect(() => {
     void request<{ entries: CatalogEntry[] }>('/api/mcp/catalog?source=bundled')
-      .then((result) => rememberRequirements(result.entries))
+      .then((result) => rememberCatalog(result.entries))
       .catch(() => undefined);
-  }, [rememberRequirements]);
+  }, [rememberCatalog]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -237,12 +246,12 @@ export default function McpSettingsTab() {
           setCatalogWarning(result.warning ?? null);
           setRegistryError(result.registryError ?? null);
           if (result.counts) setCatalogCounts(result.counts);
-          rememberRequirements(result.entries);
+          rememberCatalog(result.entries);
         })
         .catch((catalogError) => setError(messageOf(catalogError)));
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [rememberRequirements, search, sort, source]);
+  }, [rememberCatalog, search, sort, source]);
 
   const serverPath = (server: McpServer, suffix = ''): string => {
     const params = new URLSearchParams({ scope: server.scope });
@@ -336,15 +345,18 @@ export default function McpSettingsTab() {
     }
   };
 
+  // Open on what the server already runs, falling back to the catalog entry so
+  // the form starts filled instead of asking for the same values again.
   const beginEdit = (server: McpServer) => {
+    const known = catalogFor(server);
     setEditing(server.name);
     setEditDraft({
-      command: server.command ?? '',
-      args: (server.args ?? []).join('\n'),
-      url: server.url ?? '',
+      command: server.command ?? known?.command ?? '',
+      args: (server.args ?? known?.args ?? []).join('\n'),
+      url: server.url ?? known?.url ?? '',
       env: '',
       headers: '',
-      requiredEnv: {},
+      knownEnv: {},
     });
   };
 
@@ -359,7 +371,7 @@ export default function McpSettingsTab() {
       } else {
         patch.url = editDraft.url.trim();
       }
-      const configured = Object.fromEntries(Object.entries(editDraft.requiredEnv).filter(([, value]) => value.trim()));
+      const configured = Object.fromEntries(Object.entries(editDraft.knownEnv).filter(([, value]) => value.trim()));
       const env = { ...parsePairs(editDraft.env, '='), ...configured };
       if (Object.keys(env).length) patch.env = env;
       const headers = parsePairs(editDraft.headers, ':');
@@ -396,7 +408,7 @@ export default function McpSettingsTab() {
           ...(scope === 'project' ? { projectPath } : {}),
         }),
       });
-      rememberRequirements([entry]);
+      rememberCatalog([entry]);
       const next = await reload();
       setRecentlyAdded(entry.name);
       const installed = next.find((server) => server.name === entry.name);
@@ -602,8 +614,10 @@ export default function McpSettingsTab() {
             const result = verifyResults[server.name];
             const install = server.install;
             const version = server.pin ?? install?.version ?? null;
-            const requiredVars = requirementsFor(server);
-            const missingRequired = requiredVars.filter((variable) => variable.required && !server.envIsSet[variable.name]);
+            const knownVars = catalogFor(server)?.env ?? [];
+            const missingRequired = knownVars.filter((variable) => variable.required && !server.envIsSet[variable.name]);
+            // The first variable the row still needs is the one the form focuses.
+            const firstMissing = knownVars.findIndex((variable) => variable.required && !server.envIsSet[variable.name]);
             return (
               <div key={`${server.scope}:${server.name}`} className={`p-4 ${recentlyAdded === server.name ? 'bg-primary/5' : ''}`}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -726,29 +740,6 @@ export default function McpSettingsTab() {
                 )}
                 {editing === server.name && (
                   <div className="mt-3 grid gap-2 rounded-lg border border-border p-3">
-                    {missingRequired.length > 0 && (
-                      <div className="grid gap-2">
-                        <p className="text-xs font-medium text-foreground">{t('mcp.requiredEnv')}</p>
-                        {missingRequired.map((variable, index) => (
-                          <label key={variable.name} className="text-xs text-muted-foreground">
-                            {variable.name} *
-                            <input
-                              className={`mt-1 ${inputClass}`}
-                              type={variable.secret ? 'password' : 'text'}
-                              autoComplete="off"
-                              autoFocus={index === 0}
-                              placeholder={t('mcp.requiredEnvPlaceholder')}
-                              value={editDraft.requiredEnv[variable.name] ?? ''}
-                              onChange={(event) => setEditDraft((current) => ({
-                                ...current,
-                                requiredEnv: { ...current.requiredEnv, [variable.name]: event.target.value },
-                              }))}
-                            />
-                            {variable.description && <span className="mt-1 block font-normal">{variable.description}</span>}
-                          </label>
-                        ))}
-                      </div>
-                    )}
                     {server.transport === 'stdio' ? (
                       <>
                         <label className="text-xs text-muted-foreground">
@@ -769,18 +760,44 @@ export default function McpSettingsTab() {
                           onChange={(event) => setEditDraft((current) => ({ ...current, url: event.target.value }))} />
                       </label>
                     )}
-                    <label className="text-xs text-muted-foreground">
-                      {t('mcp.env')} · {t('mcp.envKeep')}
-                      <textarea className={`mt-1 ${inputClass}`} rows={2} placeholder="KEY=value"
-                        value={editDraft.env}
-                        onChange={(event) => setEditDraft((current) => ({ ...current, env: event.target.value }))} />
-                    </label>
-                    <label className="text-xs text-muted-foreground">
-                      {t('mcp.headers')}
-                      <textarea className={`mt-1 ${inputClass}`} rows={2} placeholder="Authorization: Bearer …"
-                        value={editDraft.headers}
-                        onChange={(event) => setEditDraft((current) => ({ ...current, headers: event.target.value }))} />
-                    </label>
+                    <div className="grid gap-2 border-t border-border pt-2">
+                      {/* The catalog already knows which variables this server
+                          takes, so each gets its own field instead of a blank box. */}
+                      {knownVars.map((variable, index) => (
+                        <label key={variable.name} className="text-xs text-muted-foreground">
+                          <span className="font-mono">{variable.name}</span>{variable.required ? ' *' : ''}
+                          <input
+                            className={`mt-1 ${inputClass}`}
+                            type={variable.secret ? 'password' : 'text'}
+                            autoComplete="off"
+                            autoFocus={index === firstMissing}
+                            placeholder={server.envIsSet[variable.name] ? t('mcp.requiredEnvPlaceholder') : (variable.description ?? t('mcp.requiredEnvPlaceholder'))}
+                            value={editDraft.knownEnv[variable.name] ?? ''}
+                            onChange={(event) => setEditDraft((current) => ({
+                              ...current,
+                              knownEnv: { ...current.knownEnv, [variable.name]: event.target.value },
+                            }))}
+                          />
+                          {variable.description && <span className="mt-1 block font-normal">{variable.description}</span>}
+                        </label>
+                      ))}
+                      <label className="text-xs text-muted-foreground">
+                        {t('mcp.env')}
+                        <textarea className={`mt-1 ${inputClass}`} rows={2} placeholder="KEY=value"
+                          value={editDraft.env}
+                          onChange={(event) => setEditDraft((current) => ({ ...current, env: event.target.value }))} />
+                        <span className="mt-1 block font-normal">{t('mcp.envKeep')}</span>
+                      </label>
+                    </div>
+                    {/* Headers only apply to remote transports. */}
+                    {server.transport !== 'stdio' && (
+                      <label className="text-xs text-muted-foreground">
+                        {t('mcp.headers')}
+                        <textarea className={`mt-1 ${inputClass}`} rows={2} placeholder="Authorization: Bearer …"
+                          value={editDraft.headers}
+                          onChange={(event) => setEditDraft((current) => ({ ...current, headers: event.target.value }))} />
+                      </label>
+                    )}
                     <div className="flex justify-end gap-2">
                       <button type="button" className={buttonClass} onClick={() => setEditing(null)}>{t('mcp.cancel')}</button>
                       <button type="button" className={primaryButtonClass} disabled={busy === `edit:${server.name}`}

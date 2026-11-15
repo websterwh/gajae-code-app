@@ -61,6 +61,14 @@ function fakeApi(seed: Array<Record<string, unknown>> = []) {
     const body = typeof init?.body === 'string' ? JSON.parse(init.body) as Record<string, unknown> : undefined;
     calls.push({ path, method, ...(body ? { body } : {}) });
 
+    if (path.startsWith('/api/mcp/servers/') && !path.includes('/pin') && method === 'PATCH') {
+      const name = decodeURIComponent(path.split('/')[4] ?? '');
+      installed = installed.map((server) => (server.name === name ? { ...server, ...(body ?? {}) } : server));
+      return new Response(JSON.stringify({
+        success: true,
+        data: installed.find((server) => server.name === name),
+      }));
+    }
     if (path.startsWith('/api/mcp/servers/') && path.includes('/pin') && method === 'POST') {
       const name = decodeURIComponent(path.split('/')[4] ?? '');
       installed = installed.map((server) => (server.name === name ? { ...server, pin: body?.version ?? null } : server));
@@ -134,6 +142,39 @@ test('install does not require env first, then the new row asks for configuratio
   assert.ok(secret, 'configure opens with the required secret field');
   await waitFor(() => assert.equal(document.activeElement, secret, 'the required field is focused'));
   assert.ok(screen.getByText(/GITHUB_PERSONAL_ACCESS_TOKEN/u));
+});
+
+test('configure fills the fields the catalog knows and only asks for what that server uses', async () => {
+  const calls = fakeApi([installedServer({
+    args: ['-y', '@modelcontextprotocol/server-github'],
+    packageName: '@modelcontextprotocol/server-github',
+    env: { GITHUB_PERSONAL_ACCESS_TOKEN: '***' },
+    envIsSet: { GITHUB_PERSONAL_ACCESS_TOKEN: true },
+  })]);
+  await mount();
+  // The catalog request has to land before the form can be prefilled from it.
+  await screen.findByText('GitHub');
+
+  fireEvent.click(await screen.findByRole('button', { name: english.mcp.configure }));
+
+  const command = screen.getByLabelText(english.mcp.command) as HTMLInputElement;
+  assert.equal(command.value, 'npx');
+  const args = screen.getByLabelText(/Arguments/u) as HTMLTextAreaElement;
+  assert.equal(args.value, '-y\n@modelcontextprotocol/server-github');
+  assert.equal(screen.queryByText(english.mcp.headers), null, 'a stdio server has no headers field');
+
+  const token = screen.getByLabelText(/GITHUB_PERSONAL_ACCESS_TOKEN/u) as HTMLInputElement;
+  assert.equal(token.type, 'password');
+  assert.equal(token.value, '', 'a stored secret is never put back into the field');
+  assert.equal(token.placeholder, english.mcp.requiredEnvPlaceholder, 'an existing value is marked as set');
+
+  fireEvent.change(token, { target: { value: 'ghp_new' } });
+  fireEvent.click(screen.getByRole('button', { name: english.mcp.save }));
+
+  await waitFor(() => {
+    const patch = calls.find((call) => call.method === 'PATCH');
+    assert.deepEqual(patch?.body?.env, { GITHUB_PERSONAL_ACCESS_TOKEN: 'ghp_new' });
+  });
 });
 
 test('the sort control stays put while the search box is used', async () => {
