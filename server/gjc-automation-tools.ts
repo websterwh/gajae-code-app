@@ -210,7 +210,7 @@ function cuaResult(value: unknown) {
   if (details) {
     content.push({
       type: 'text',
-      text: `CUA structured metadata:\n${JSON.stringify(details, null, 2)}`,
+      text: `Computer structured metadata:\n${JSON.stringify(details, null, 2)}`,
     });
   }
   return { content, details };

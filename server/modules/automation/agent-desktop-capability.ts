@@ -2,10 +2,11 @@
  * Trusted server-side capability boundary for agent-desktop (vercel-labs)
  * 1.2.0, the MCP-exposed `desktop_*` tool surface.
  *
- * Port of `cua-capability.ts`'s role, retargeted to agent-desktop's actual
- * addressing model, which is fundamentally different from CUA Driver's:
+ * This is the capability boundary for agent-desktop's actual addressing model,
+ * which is fundamentally different from the retired local driver's:
  *
- *  - CUA addresses elements by `element_token` bound to a `pid`/`window_id`.
+ *  - The retired local driver addressed elements by `element_token` bound to
+ *    a `pid`/`window_id`.
  *  - agent-desktop addresses elements by a snapshot-qualified `ref_id`
  *    (`@<snapshot_id>:e<N>`) returned by a prior `desktop_snapshot` or
  *    `desktop_find` call. A ref is only valid within the snapshot namespace
@@ -343,7 +344,7 @@ export function isAgentDesktopDiscoveryTool(tool: string): boolean {
 
 /**
  * Whether this exact call must be bound to an approved application before it
- * executes. Unlike CUA's pid-bound model, most agent-desktop interaction
+ * executes. Unlike the retired local driver's pid-bound model, most agent-desktop interaction
  * tools carry only a `ref_id` with no `app`/`window_id` field in their own
  * schema (verified live - `desktop_click` etc. take only `ref_id` and
  * `timeout_ms`); the caller (`AutomationService.resolveComputerApplication`)

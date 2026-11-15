@@ -157,7 +157,7 @@ function agentDesktopToolError(value: unknown): string | null {
 
 /**
  * agent-desktop's `desktop_*` tools are stateless per call (no session label
- * is threaded through every request, unlike CUA Driver's `start_session`/
+ * is threaded through every request, unlike the retired local driver's `start_session`/
  * `end_session` wrapping); `desktop_session_start`/`desktop_session_end` are
  * just two more tools in the enum, dispatched directly like any other.
  */
@@ -824,7 +824,7 @@ export const automationService = new AutomationService();
 
 /**
  * Parent composition injects the SAME server-owned admission into all owners.
- * Producer/owner map: docs/DESKTOP-UPDATE-ADMISSION.md (automation, browser, CUA).
+ * Producer/owner map: docs/DESKTOP-UPDATE-ADMISSION.md (automation, browser, computer).
  * Readers below never call status(), spawn, drain, cancel, or shutdown.
  */
 export function configureDesktopRestartAdmission(admission?: DesktopWorkAdmission, service = automationService): void {

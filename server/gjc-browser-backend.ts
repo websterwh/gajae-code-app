@@ -675,7 +675,7 @@ Procedure:
 Safety:
 - ego lite controls the user's live, logged-in browser profile. Never print cookies, authorization headers, passwords, OTPs, card values, recovery material, or broad inbox/contact/history collections.
 - Never invoke \`ego-browser import\`, \`ego-browser upgrade\` or \`ego-browser onboarding\`; profile/cookie import, app upgrades and onboarding are user actions, not agent actions.
-- Never substitute the built-in browser, Aside, an OS browser, Playwright, Puppeteer, an MCP browser server, or the \`computer\`/CUA tool for browser work. The \`computer\` tool is available only for legitimate non-browser app automation.
+- Never substitute the built-in browser, Aside, an OS browser, Playwright, Puppeteer, an MCP browser server, or the \`computer\` tool for browser work. The \`computer\` tool is available only for legitimate non-browser app automation.
 - Read, inspect, draft and preview by default. Sending/posting, payments, credential saves, account/settings changes, deletions and downloads to an external destination require explicit user intent for the exact target; stop before the final side effect when authorization is ambiguous.
 - Stop when the user takes control of the space (\`handOff\`, inactive or unassigned space); do not retry or route around it.
 - Never claim browser work ran without the ego-browser CLI result and verified state.
@@ -689,7 +689,7 @@ export const GJC_EGO_BROWSER_INSTRUCTIONS = buildGjcEgoBrowserInstructions(join(
 export const GJC_EGO_BROWSER_UNAVAILABLE_INSTRUCTIONS = `<browser-backend>
 Browser backend: ego lite is not ready, so browser work is unavailable for this run. Ordinary chat, coding and other non-browser work may continue.
 
-Do not substitute any browser path: never use the built-in browser, Aside, an OS browser, Playwright, Puppeteer, an MCP browser server, or the \`computer\`/CUA tool for browser work. The \`computer\` tool remains available only for legitimate non-browser app automation; never open, inspect or control a browser with it.
+Do not substitute any browser path: never use the built-in browser, Aside, an OS browser, Playwright, Puppeteer, an MCP browser server, or the \`computer\` tool for browser work. The \`computer\` tool remains available only for legitimate non-browser app automation; never open, inspect or control a browser with it.
 
 If the user asks for browser work, stop that part and clearly explain that ego lite is unavailable. Do not invoke \`ego-browser import\`, \`ego-browser upgrade\` or \`ego-browser onboarding\`; do not install, repair, migrate profiles or route around the missing backend.
 </browser-backend>`;

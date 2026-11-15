@@ -89,7 +89,7 @@ export type SdkRunConfig = {
   /** Trusted server-side readiness for the desktop built-in WebView. */
   builtinBrowserAvailable?: boolean;
   /**
-   * The user's Settings opt-in for native application control (CUA Driver).
+   * The user's Settings opt-in for the paired remote computer.
    * Server-resolved like the backend; absent or false withholds `computer`.
    */
   appSessionId?: string;

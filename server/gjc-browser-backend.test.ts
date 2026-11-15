@@ -85,7 +85,7 @@ test('the Ego routing block pins and POSIX-quotes the probe-resolved executable'
   assert.match(block, /ego-browser import/);
   assert.match(block, /ego-browser upgrade/);
   assert.match(block, /ego-browser onboarding/);
-  assert.match(block, /computer.*CUA.*browser/iu);
+  assert.match(block, /computer.*non-browser/iu);
 });
 
 test('the space naming rule carries only an app-minted token, and an unrecognized one is dropped', () => {
