@@ -447,7 +447,6 @@
     "sourceBundledDesc": "Fourni avec l'image, sélectionné et testé.",
     "sourceOverlayDesc": "Une liste sélectionnée récupérée depuis le dépôt de ce projet, pour qu'elle puisse s'enrichir sans nouvelle image.",
     "sourceRegistryDesc": "Le registre MCP : tout ce que publient des tiers, sans vérification.",
-    "sourceAllDesc": "D'abord les entrées intégrées et sélectionnées, puis le registre non vérifié.",
     "registryNote": "Les résultats du registre proviennent de tiers et ne sont pas vérifiés.",
     "installedBadge": "Installé",
     "newBadge": "New"

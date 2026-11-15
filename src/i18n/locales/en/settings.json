@@ -447,7 +447,6 @@
     "sourceBundledDesc": "Shipped in the image, curated and tested.",
     "sourceOverlayDesc": "A curated list fetched from this project’s repository, so it can grow without a new image.",
     "sourceRegistryDesc": "The MCP registry: everything third parties publish, unvetted.",
-    "sourceAllDesc": "Bundled and curated entries first, then the unvetted registry.",
     "registryNote": "Registry results are third-party and uncurated.",
     "installedBadge": "Installed",
     "newBadge": "New"

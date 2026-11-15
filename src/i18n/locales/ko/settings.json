@@ -447,7 +447,6 @@
     "sourceBundledDesc": "이미지에 포함되어 선별 및 테스트되었습니다.",
     "sourceOverlayDesc": "이 프로젝트의 저장소에서 가져오는 선별 목록으로, 새 이미지 없이 확장할 수 있습니다.",
     "sourceRegistryDesc": "MCP 레지스트리: 제3자가 게시한 모든 항목(검증 안 됨).",
-    "sourceAllDesc": "내장 및 선별 항목을 먼저, 그다음 검증되지 않은 레지스트리.",
     "registryNote": "레지스트리 결과는 제3자 제공이며 검증되지 않았습니다.",
     "installedBadge": "설치됨",
     "newBadge": "New"

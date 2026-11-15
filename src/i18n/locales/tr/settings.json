@@ -447,7 +447,6 @@
     "sourceBundledDesc": "İmajla birlikte gelir, seçilmiş ve test edilmiştir.",
     "sourceOverlayDesc": "Bu projenin deposundan alınan seçilmiş liste, yeni bir imaj olmadan büyüyebilir.",
     "sourceRegistryDesc": "MCP kayıt defteri: üçüncü tarafların yayımladığı her şey, doğrulanmamış.",
-    "sourceAllDesc": "Önce paket ve seçilmiş girdiler, sonra doğrulanmamış kayıt defteri.",
     "registryNote": "Kayıt defteri sonuçları üçüncü taraflara aittir ve doğrulanmamıştır.",
     "installedBadge": "Kurulu",
     "newBadge": "New"

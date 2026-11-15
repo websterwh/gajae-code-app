@@ -447,7 +447,6 @@
     "sourceBundledDesc": "イメージに同梱され、厳選・検証済みです。",
     "sourceOverlayDesc": "このプロジェクトのリポジトリから取得する厳選リストで、新しいイメージなしで拡張できます。",
     "sourceRegistryDesc": "MCPレジストリ：第三者が公開するすべてのもの（未検証）。",
-    "sourceAllDesc": "同梱・厳選エントリを先に、次に未検証のレジストリ。",
     "registryNote": "レジストリの結果は第三者によるもので、未検証です。",
     "installedBadge": "インストール済み",
     "newBadge": "New"

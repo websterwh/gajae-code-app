@@ -440,7 +440,7 @@ export default function McpSettingsTab() {
   const sourceDescription = source === 'bundled' ? t('mcp.sourceBundledDesc')
     : source === 'overlay' ? t('mcp.sourceOverlayDesc')
       : source === 'registry' ? t('mcp.sourceRegistryDesc')
-        : t('mcp.sourceAllDesc');
+        : null;
 
   return (
     <div className="space-y-6">
@@ -733,7 +733,7 @@ export default function McpSettingsTab() {
 
       <SettingsSection title={t('mcp.findTitle')} description={t('mcp.findDescription')}>
         <SettingsCard divided>
-          <div className="grid gap-2 p-4 sm:grid-cols-3">
+          <div className="grid gap-2 p-4 sm:grid-cols-[minmax(0,1fr)_9rem_9rem]">
             <label className="text-xs font-medium text-muted-foreground">
               {t('mcp.findTitle')}
               <span className="relative mt-1 block">
@@ -751,7 +751,7 @@ export default function McpSettingsTab() {
                 <option value="overlay">{t('mcp.sourceOverlay')} ({catalogCounts.overlay})</option>
                 <option value="registry">{t('mcp.sourceRegistry')} ({catalogCounts.registry})</option>
               </select>
-              <span className="mt-1 block font-normal">{sourceDescription}</span>
+              {sourceDescription && <span className="mt-1 block font-normal">{sourceDescription}</span>}
               {source === 'registry' && <span className="mt-1 block font-normal">{t('mcp.registryNote')}</span>}
             </label>
             {!search.trim() && (
@@ -803,7 +803,7 @@ export default function McpSettingsTab() {
               <div key={`${entry.source}:${entry.name}`}
                 className={`border-t border-border p-4 ${recentlyAdded === entry.name ? 'bg-primary/5' : ''}`}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">
                       {entry.title ?? entry.name}
                       {entry.stars !== undefined && (
@@ -816,7 +816,7 @@ export default function McpSettingsTab() {
                       {entry.package?.manager ? ` · ${entry.package.manager}` : ''}
                     </p>
                   </div>
-                  <div className="flex flex-wrap items-center justify-end gap-2">
+                  <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
                     {installed ? (
                       <>
                         <span className="rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] tracking-wide text-muted-foreground uppercase">
