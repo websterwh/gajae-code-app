@@ -37,12 +37,17 @@ RUN curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal
 ENV PATH="/root/.cargo/bin:${PATH}"
 
 WORKDIR /src
-RUN git clone "${APP_REPOSITORY}" . && \
+# The @vscode/ripgrep postinstall asks the GitHub API for a release binary, and an
+# unauthenticated request is rate limited per build IP: once the hour's allowance
+# was spent, every image build failed at npm ci. The token is mounted as a build
+# secret, so it stays out of the image layers and its history.
+RUN --mount=type=secret,id=github_token \
+    git clone "${APP_REPOSITORY}" . && \
     git fetch --depth=1 origin "${APP_REF}" && \
     git checkout --detach FETCH_HEAD && \
     test -n "${APP_SOURCE_REFRESH}" && \
     APP_COMMIT="$(git rev-parse HEAD)" && \
-    npm ci && \
+    GITHUB_TOKEN="$(cat /run/secrets/github_token 2>/dev/null || true)" npm ci && \
     node scripts/fetch-bun.mjs && \
     npm run server:bundle && \
     mkdir /opt/gajae-app && \

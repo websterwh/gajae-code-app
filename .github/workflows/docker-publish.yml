@@ -122,5 +122,11 @@ jobs:
             APP_SOURCE_REFRESH=${{ github.run_id }}-${{ github.run_attempt }}
             APP_REPOSITORY=${{ github.server_url }}/${{ github.repository }}.git
             APP_REF=${{ github.ref_name }}
+          # `npm ci` runs @vscode/ripgrep's postinstall, which downloads its
+          # release binary through the GitHub API. Unauthenticated calls are rate
+          # limited per build IP, so the token authenticates that request without
+          # being baked into the image.
+          secrets: |
+            github_token=${{ secrets.GITHUB_TOKEN }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
