@@ -228,6 +228,29 @@ test('aqua verification checks the installed binary, not a config-less aqua list
   assert.ok(calls.some((line) => line.startsWith('sh -c')));
 });
 
+test('a rate-limited update check leaves an installed package installed', async () => {
+  const ledger = emptyLedger();
+  recordInstalled(ledger, 'aqua', 'skylot/jadx', { spec: 'skylot/jadx', version: null });
+  const lines: string[] = [];
+  const runner: CommandRunner = async (command, args) => {
+    if (command === 'install-github-app') {
+      // What GitHub answers for an anonymous release lookup once the quota is spent.
+      return { code: 1, stdout: '', stderr: '==> [ERROR] Could not fetch release info for skylot/jadx: HTTP Error 403: rate limit exceeded' };
+    }
+    if (command === 'sh') {
+      assert.deepEqual(args.slice(2), ['sh', 'jadx', 'skylot/jadx']);
+      return { code: 0, stdout: '/data/bin/jadx\n', stderr: '' };
+    }
+    return { code: 1, stdout: '', stderr: `unexpected command: ${command}` };
+  };
+
+  const outcomes = await autoUpdatePackages({ manager: 'aqua', ledger, runner, log: (line) => lines.push(line) });
+  assert.equal(outcomes[0]?.status, 'installed');
+  assert.equal(ledger.packages.aqua['skylot/jadx'].status, 'installed');
+  assert.equal(ledger.packages.aqua['skylot/jadx'].lastAttempt, undefined, 'a failed release lookup is not a failed install');
+  assert.ok(lines.some((line) => /update check failed/u.test(line)));
+});
+
 test('the ledger lives under the config mount, not the data volume', () => {
   assert.equal(
     ledgerFilePath({ GJC_WORKER_AGENT_DIR: '/root/.gjc/agent' }),

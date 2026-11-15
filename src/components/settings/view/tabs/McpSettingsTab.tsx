@@ -641,7 +641,7 @@ export default function McpSettingsTab() {
                       </p>
                     )}
                   </div>
-                  <div className="flex flex-wrap items-center justify-end gap-2">
+                  <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto sm:shrink-0">
                     <SettingsToggle
                       checked={server.enabled}
                       onChange={() => void toggle(server)}

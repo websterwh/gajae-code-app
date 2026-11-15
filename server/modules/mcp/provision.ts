@@ -313,6 +313,18 @@ export async function upgradePackage(options: {
         return { manager, name, spec: entry.spec, status: 'failed', version: null, error };
       }
     } else {
+      // An update is opportunistic, so a release lookup that fails (a GitHub
+      // rate limit, an offline box) must not turn a working binary into a
+      // failed row: verify the package and keep it installed when it is there.
+      const verify = verifyCommand(manager, name);
+      const present = await runner(verify.command, verify.args);
+      const presentVersion = present.code === 0 ? detectedVersion(manager, name, present.stdout) : null;
+      if (present.code === 0 && verificationConfirms(manager, name, present.stdout, presentVersion)) {
+        const version = presentVersion ?? entry.version;
+        recordInstalled(ledger, manager, name, { spec: entry.spec, version, pin: null, at: now() });
+        log(`[${manager}] ${name} is installed; the update check failed (exit ${result.code}).`);
+        return { manager, name, spec: entry.spec, status: 'installed', version, action: 'verified' };
+      }
       const error = `update exit ${result.code}: ${detail}`;
       recordFailure(ledger, manager, name, entry.spec, error, now());
       log(`[${manager}] ${name} update failed (exit ${result.code}).`);
