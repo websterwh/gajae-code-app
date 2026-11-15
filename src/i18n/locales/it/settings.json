@@ -475,6 +475,7 @@
     "sourceInstalled": "Installato, non gestito",
     "empty": "Nessun pacchetto.",
     "loadFailed": "Impossibile caricare i pacchetti.",
+    "loading": "Caricamento dei pacchetti…",
     "actionFailed": "Operazione non riuscita",
     "refresh": "Aggiorna",
     "pinnedNote": "I pacchetti bloccati non vengono aggiornati automaticamente.",

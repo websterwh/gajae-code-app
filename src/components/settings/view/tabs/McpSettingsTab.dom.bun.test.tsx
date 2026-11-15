@@ -177,6 +177,40 @@ test('configure fills the fields the catalog knows and only asks for what that s
   });
 });
 
+test('the manual add dialog asks for headers only when the transport uses them', async () => {
+  fakeApi();
+  await mount();
+
+  fireEvent.click(await screen.findByRole('button', { name: english.mcp.manuallyAdd }));
+  assert.equal(screen.queryByText(english.mcp.headers), null, 'a stdio server has no headers field');
+
+  fireEvent.change(screen.getByLabelText(english.mcp.transport), { target: { value: 'http' } });
+  await screen.findByText(english.mcp.headers);
+});
+
+test('save stays disabled while the server has nothing to run', async () => {
+  fakeApi([installedServer()]);
+  await mount();
+
+  fireEvent.click(await screen.findByRole('button', { name: english.mcp.configure }));
+  assert.equal((screen.getByRole('button', { name: english.mcp.save }) as HTMLButtonElement).disabled, false);
+
+  fireEvent.change(screen.getByLabelText(english.mcp.command), { target: { value: '   ' } });
+  assert.equal((screen.getByRole('button', { name: english.mcp.save }) as HTMLButtonElement).disabled, true);
+});
+
+test('arming remove in one place does not arm the same server twice', async () => {
+  fakeApi([installedServer({ name: 'github', packageName: '@modelcontextprotocol/server-github' })]);
+  await mount();
+
+  await screen.findByText('GitHub');
+  const removeButtons = screen.getAllByRole('button', { name: english.mcp.remove });
+  assert.equal(removeButtons.length, 2, 'the server is listed both as installed and in the catalog');
+
+  fireEvent.click(removeButtons[0]);
+  assert.equal(screen.getAllByRole('button', { name: english.mcp.confirmRemove }).length, 1);
+});
+
 test('the status chip stops saying running once provisioning finishes', async () => {
   const statusSeed = { inFlight: true };
   fakeApi([installedServer()], statusSeed);

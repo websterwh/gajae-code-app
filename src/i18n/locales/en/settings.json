@@ -475,6 +475,7 @@
     "sourceInstalled": "Installed, not managed",
     "empty": "No packages yet.",
     "loadFailed": "Could not load packages.",
+    "loading": "Loading packages…",
     "actionFailed": "Action failed",
     "refresh": "Refresh",
     "pinnedNote": "Pinned packages are not upgraded automatically.",

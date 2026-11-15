@@ -475,6 +475,7 @@
     "sourceInstalled": "已安装，未管理",
     "empty": "暂无软件包。",
     "loadFailed": "无法加载软件包。",
+    "loading": "正在加载软件包…",
     "actionFailed": "操作失败",
     "refresh": "刷新",
     "pinnedNote": "已锁定的软件包不会自动升级。",

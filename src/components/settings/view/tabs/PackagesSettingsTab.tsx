@@ -184,9 +184,9 @@ export default function PackagesSettingsTab() {
           </form>
 
           {loading ? (
-            <p className="flex items-center gap-2 p-4 text-xs text-muted-foreground">
+            <p role="status" className="flex items-center gap-2 p-4 text-xs text-muted-foreground">
               <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-              {t('packages.refresh')}
+              {t('packages.loading')}
             </p>
           ) : null}
           {!loading && rows.length === 0 ? <p className="p-4 text-sm text-muted-foreground">{t('packages.empty')}</p> : null}

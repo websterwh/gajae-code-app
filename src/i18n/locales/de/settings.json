@@ -475,6 +475,7 @@
     "sourceInstalled": "Installiert, nicht verwaltet",
     "empty": "Noch keine Pakete.",
     "loadFailed": "Pakete konnten nicht geladen werden.",
+    "loading": "Pakete werden geladen…",
     "actionFailed": "Aktion fehlgeschlagen",
     "refresh": "Aktualisieren",
     "pinnedNote": "Gepinnte Pakete werden nicht automatisch aktualisiert.",

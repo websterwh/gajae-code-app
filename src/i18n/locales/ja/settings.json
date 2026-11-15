@@ -475,6 +475,7 @@
     "sourceInstalled": "インストール済み（未管理）",
     "empty": "パッケージはまだありません。",
     "loadFailed": "パッケージを読み込めませんでした。",
+    "loading": "パッケージを読み込み中…",
     "actionFailed": "操作に失敗しました",
     "refresh": "更新",
     "pinnedNote": "固定したパッケージは自動更新されません。",

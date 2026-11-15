@@ -226,6 +226,20 @@ export default function McpSettingsTab() {
     return () => window.clearInterval(timer);
   }, [status?.inFlight, statusPath]);
 
+  // The highlight and the New badge mark the moment of an install, not a
+  // permanent property of the row.
+  useEffect(() => {
+    if (!recentlyAdded) return;
+    const timer = window.setTimeout(() => setRecentlyAdded(null), 12000);
+    return () => window.clearTimeout(timer);
+  }, [recentlyAdded]);
+
+  useEffect(() => {
+    if (!copyNote) return;
+    const timer = window.setTimeout(() => setCopyNote(null), 4000);
+    return () => window.clearTimeout(timer);
+  }, [copyNote]);
+
   useEffect(() => {
     if (scope !== 'project' || projects.length > 0) return;
     setProjectsLoading(true);
@@ -369,6 +383,12 @@ export default function McpSettingsTab() {
       knownEnv: {},
     });
   };
+
+  // A stdio server without a command, or a remote one without a URL, has
+  // nothing to save; the server would only reject it.
+  const editReady = (server: McpServer): boolean => (
+    server.transport === 'stdio' ? Boolean(editDraft.command.trim()) : Boolean(editDraft.url.trim())
+  );
 
   const saveEdit = async (server: McpServer) => {
     setBusy(`edit:${server.name}`);
@@ -624,6 +644,7 @@ export default function McpSettingsTab() {
             const result = verifyResults[server.name];
             const install = server.install;
             const version = server.pin ?? install?.version ?? null;
+            const removeKey = `row:${server.scope}:${server.name}`;
             const knownVars = catalogFor(server)?.env ?? [];
             const missingRequired = knownVars.filter((variable) => variable.required && !server.envIsSet[variable.name]);
             // The first variable the row still needs is the one the form focuses.
@@ -656,13 +677,10 @@ export default function McpSettingsTab() {
                       {server.packageName ?? server.url ?? server.command ?? ''}
                     </p>
                     {/* A pinnable row carries its version on the control, the
-                        same as the packages tab; the rest state it here. */}
-                    {(!server.pinnable || install?.status === 'failed') && (
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {server.pinnable
-                          ? t('mcp.failed')
-                          : `${t('mcp.version')}: ${install?.version ?? t('mcp.notInstalled')}`}
-                      </p>
+                        same as the packages tab. A remote server has no
+                        package version to report, so it gets no line at all. */}
+                    {server.pinnable && install?.status === 'failed' && (
+                      <p className="mt-1 text-xs text-muted-foreground">{t('mcp.failed')}</p>
                     )}
                   </div>
                   <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto sm:shrink-0">
@@ -671,10 +689,13 @@ export default function McpSettingsTab() {
                       onChange={() => void toggle(server)}
                       ariaLabel={`${server.enabled ? t('mcp.enabled') : t('mcp.disabled')}: ${server.name}`}
                     />
+                    {/* The label stays put while the handshake runs: swapping it
+                        for the longer text made the whole bar jump. */}
                     <button type="button" className={verifyButtonClass} aria-busy={verifying === server.name}
-                      disabled={verifying === server.name} onClick={() => void verify(server)}>
+                      disabled={verifying === server.name} onClick={() => void verify(server)}
+                      title={verifying === server.name ? t('mcp.verifying') : t('mcp.verify')}>
                       {verifying === server.name ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />}
-                      {verifying === server.name ? t('mcp.verifying') : t('mcp.verify')}
+                      {t('mcp.verify')}
                     </button>
                     <button type="button" className={buttonClass} onClick={() => beginEdit(server)}>
                       <Pencil className="h-3.5 w-3.5" aria-hidden />{t('mcp.configure')}
@@ -729,13 +750,13 @@ export default function McpSettingsTab() {
                         </button>
                       </div>
                     )}
-                    {confirmRemove === server.name ? (
+                    {confirmRemove === removeKey ? (
                       <button type="button" className={`${buttonClass} border-destructive text-destructive`}
                         disabled={busy === `remove:${server.name}`} onClick={() => void remove(server)}>
                         <Trash2 className="h-3.5 w-3.5" aria-hidden />{t('mcp.confirmRemove')}
                       </button>
                     ) : (
-                      <button type="button" className={buttonClass} onClick={() => setConfirmRemove(server.name)}>
+                      <button type="button" className={buttonClass} onClick={() => setConfirmRemove(removeKey)}>
                         <Trash2 className="h-3.5 w-3.5" aria-hidden />{t('mcp.remove')}
                       </button>
                     )}
@@ -809,8 +830,7 @@ export default function McpSettingsTab() {
                       </label>
                     )}
                     <div className="flex justify-end gap-2">
-                      <button type="button" className={buttonClass} onClick={() => setEditing(null)}>{t('mcp.cancel')}</button>
-                      <button type="button" className={primaryButtonClass} disabled={busy === `edit:${server.name}`}
+                      <button type="button" className={buttonClass} onClick={() => setEditing(null)}>{t('mcp.cancel')}</button>                        <button type="button" className={primaryButtonClass} disabled={busy === `edit:${server.name}` || !editReady(server)}
                         onClick={() => void saveEdit(server)}>{t('mcp.save')}</button>
                     </div>
                   </div>
@@ -910,18 +930,18 @@ export default function McpSettingsTab() {
                         <button type="button" className={buttonClass} onClick={() => beginEdit(installed)}>
                           <Pencil className="h-3.5 w-3.5" aria-hidden />{t('mcp.configure')}
                         </button>
-                        <button type="button" className={buttonClass} disabled={verifying === installed.name}
-                          onClick={() => void verify(installed)}>
+                        <button type="button" className={verifyButtonClass} aria-busy={verifying === installed.name}
+                          disabled={verifying === installed.name} onClick={() => void verify(installed)}>
                           {verifying === installed.name ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />}
                           {t('mcp.verify')}
                         </button>
-                        {confirmRemove === installed.name ? (
+                        {confirmRemove === `catalog:${installed.scope}:${installed.name}` ? (
                           <button type="button" className={`${buttonClass} border-destructive text-destructive`}
                             disabled={busy === `remove:${installed.name}`} onClick={() => void remove(installed)}>
                             <Trash2 className="h-3.5 w-3.5" aria-hidden />{t('mcp.confirmRemove')}
                           </button>
                         ) : (
-                          <button type="button" className={buttonClass} onClick={() => setConfirmRemove(installed.name)}>
+                          <button type="button" className={buttonClass} onClick={() => setConfirmRemove(`catalog:${installed.scope}:${installed.name}`)}>
                             <Trash2 className="h-3.5 w-3.5" aria-hidden />{t('mcp.remove')}
                           </button>
                         )}
@@ -1008,11 +1028,14 @@ export default function McpSettingsTab() {
                 <textarea className={`mt-1 ${inputClass}`} rows={2} value={manual.env} placeholder="TOKEN=…"
                   onChange={(event) => setManual((current) => ({ ...current, env: event.target.value }))} />
               </label>
-              <label className="text-xs font-medium text-muted-foreground">
-                {t('mcp.headers')}
-                <textarea className={`mt-1 ${inputClass}`} rows={2} value={manual.headers} placeholder="Authorization: Bearer …"
-                  onChange={(event) => setManual((current) => ({ ...current, headers: event.target.value }))} />
-              </label>
+              {/* Headers only apply to remote transports, the same as Configure. */}
+              {manual.transport !== 'stdio' && (
+                <label className="text-xs font-medium text-muted-foreground">
+                  {t('mcp.headers')}
+                  <textarea className={`mt-1 ${inputClass}`} rows={2} value={manual.headers} placeholder="Authorization: Bearer …"
+                    onChange={(event) => setManual((current) => ({ ...current, headers: event.target.value }))} />
+                </label>
+              )}
             </div>
           </div>
           <div className="flex shrink-0 justify-end gap-2 border-t border-border px-4 py-3">

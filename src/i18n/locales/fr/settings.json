@@ -475,6 +475,7 @@
     "sourceInstalled": "Installé, non géré",
     "empty": "Aucun paquet pour le moment.",
     "loadFailed": "Impossible de charger les paquets.",
+    "loading": "Chargement des paquets…",
     "actionFailed": "Échec de l’action",
     "refresh": "Actualiser",
     "pinnedNote": "Les paquets épinglés ne sont pas mis à jour automatiquement.",

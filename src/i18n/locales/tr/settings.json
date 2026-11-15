@@ -475,6 +475,7 @@
     "sourceInstalled": "Kurulu, yönetilmiyor",
     "empty": "Henüz paket yok.",
     "loadFailed": "Paketler yüklenemedi.",
+    "loading": "Paketler yükleniyor…",
     "actionFailed": "İşlem başarısız",
     "refresh": "Yenile",
     "pinnedNote": "Sabitlenmiş paketler otomatik yükseltilmez.",

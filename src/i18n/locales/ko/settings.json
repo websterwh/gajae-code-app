@@ -475,6 +475,7 @@
     "sourceInstalled": "설치됨, 관리되지 않음",
     "empty": "아직 패키지가 없습니다.",
     "loadFailed": "패키지를 불러오지 못했습니다.",
+    "loading": "패키지를 불러오는 중…",
     "actionFailed": "작업 실패",
     "refresh": "새로 고침",
     "pinnedNote": "고정된 패키지는 자동으로 업그레이드되지 않습니다.",

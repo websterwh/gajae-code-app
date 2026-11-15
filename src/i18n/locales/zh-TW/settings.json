@@ -475,6 +475,7 @@
     "sourceInstalled": "已安裝，未管理",
     "empty": "尚無套件。",
     "loadFailed": "無法載入套件。",
+    "loading": "正在載入套件…",
     "actionFailed": "操作失敗",
     "refresh": "重新整理",
     "pinnedNote": "已鎖定的套件不會自動升級。",
