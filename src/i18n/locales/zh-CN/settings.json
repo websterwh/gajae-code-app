@@ -411,7 +411,7 @@
     "installing": "正在安装…",
     "requiresSecret": "安装前需要 {{name}}。",
     "noResults": "没有服务器匹配此搜索。",
-    "statusTitle": "预配状态",
+    "statusTitle": "服务器依赖状态",
     "statusDescription": "软件包预配实际做了什么，以及缺少哪些挂载。",
     "inFlight": "预配正在后台运行。",
     "idle": "预配处于空闲状态。",
@@ -421,8 +421,8 @@
     "noMissingMounts": "没有目录服务器缺少挂载。",
     "copy": "复制",
     "copied": "已复制",
-    "ledger": "已安装的软件包",
-    "noLedger": "尚未记录任何软件包。",
+    "ledger": "已安装的依赖",
+    "noLedger": "尚未记录任何依赖。",
     "toggleFailed": "更改未保存；开关已恢复。",
     "removeFailed": "无法移除服务器。",
     "saveFailed": "无法保存服务器。",
@@ -443,7 +443,7 @@
     "statusIdle": "空闲",
     "failedCount": "{{count}} 次安装失败",
     "missingCount": "{{count}} 个缺失挂载",
-    "ledgerCount": "已记录 {{count}} 个包",
+    "ledgerCount": "已安装 {{count}} 个依赖",
     "statusDetails": "详情",
     "installedBadge": "已安装",
     "newBadge": "New"
@@ -475,6 +475,9 @@
     "loadFailed": "无法加载软件包。",
     "actionFailed": "操作失败",
     "refresh": "刷新",
-    "pinnedNote": "已锁定的软件包不会自动升级。"
+    "pinnedNote": "已锁定的软件包不会自动升级。",
+    "version": "版本",
+    "versionHint": "点击版本号可手动输入，保存后会锁定该版本。",
+    "noVersion": "无版本"
   }
 }

@@ -411,7 +411,7 @@
     "installing": "Installazione…",
     "requiresSecret": "{{name}} è obbligatorio prima dell’installazione.",
     "noResults": "Nessun server corrisponde a questa ricerca.",
-    "statusTitle": "Stato del provisioning",
+    "statusTitle": "Stato delle dipendenze dei server",
     "statusDescription": "Cosa ha fatto davvero il provisioning dei pacchetti e quali mount mancano.",
     "inFlight": "Il provisioning è in esecuzione in background.",
     "idle": "Il provisioning è inattivo.",
@@ -421,8 +421,8 @@
     "noMissingMounts": "Nessun server del catalogo ha un mount mancante.",
     "copy": "Copia",
     "copied": "Copiato",
-    "ledger": "Pacchetti installati",
-    "noLedger": "Nessun pacchetto registrato finora.",
+    "ledger": "Dipendenze installate",
+    "noLedger": "Nessuna dipendenza registrata finora.",
     "toggleFailed": "La modifica non è stata salvata; l’interruttore è stato ripristinato.",
     "removeFailed": "Impossibile rimuovere il server.",
     "saveFailed": "Impossibile salvare il server.",
@@ -443,7 +443,7 @@
     "statusIdle": "Inattivo",
     "failedCount": "{{count}} installazioni non riuscite",
     "missingCount": "{{count}} montaggi mancanti",
-    "ledgerCount": "{{count}} pacchetti registrati",
+    "ledgerCount": "{{count}} dipendenze installate",
     "statusDetails": "Dettagli",
     "installedBadge": "Installato",
     "newBadge": "New"
@@ -475,6 +475,9 @@
     "loadFailed": "Impossibile caricare i pacchetti.",
     "actionFailed": "Operazione non riuscita",
     "refresh": "Aggiorna",
-    "pinnedNote": "I pacchetti bloccati non vengono aggiornati automaticamente."
+    "pinnedNote": "I pacchetti bloccati non vengono aggiornati automaticamente.",
+    "version": "Versione",
+    "versionHint": "Clicca la versione per scriverne un’altra; salvandola la blocchi.",
+    "noVersion": "Nessuna versione"
   }
 }

@@ -411,7 +411,7 @@
     "installing": "正在安裝…",
     "requiresSecret": "安裝前需要 {{name}}。",
     "noResults": "沒有伺服器符合此搜尋。",
-    "statusTitle": "佈建狀態",
+    "statusTitle": "伺服器相依性狀態",
     "statusDescription": "套件佈建實際做了什麼，以及缺少哪些掛載。",
     "inFlight": "佈建正在背景執行。",
     "idle": "佈建處於閒置狀態。",
@@ -421,8 +421,8 @@
     "noMissingMounts": "沒有目錄伺服器缺少掛載。",
     "copy": "複製",
     "copied": "已複製",
-    "ledger": "已安裝的套件",
-    "noLedger": "尚未記錄任何套件。",
+    "ledger": "已安裝的相依性",
+    "noLedger": "尚未記錄任何相依性。",
     "toggleFailed": "變更未儲存；開關已還原。",
     "removeFailed": "無法移除伺服器。",
     "saveFailed": "無法儲存伺服器。",
@@ -443,7 +443,7 @@
     "statusIdle": "閒置",
     "failedCount": "{{count}} 次安裝失敗",
     "missingCount": "{{count}} 個缺少掛載",
-    "ledgerCount": "已記錄 {{count}} 個套件",
+    "ledgerCount": "已安裝 {{count}} 個相依性",
     "statusDetails": "詳細資料",
     "installedBadge": "已安裝",
     "newBadge": "New"
@@ -475,6 +475,9 @@
     "loadFailed": "無法載入套件。",
     "actionFailed": "操作失敗",
     "refresh": "重新整理",
-    "pinnedNote": "已鎖定的套件不會自動升級。"
+    "pinnedNote": "已鎖定的套件不會自動升級。",
+    "version": "版本",
+    "versionHint": "點擊版本號可手動輸入，儲存後會鎖定該版本。",
+    "noVersion": "無版本"
   }
 }

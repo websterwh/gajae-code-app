@@ -411,7 +411,7 @@
     "installing": "Installation…",
     "requiresSecret": "{{name}} est requis avant l’installation.",
     "noResults": "Aucun serveur ne correspond à cette recherche.",
-    "statusTitle": "État du provisionnement",
+    "statusTitle": "État des dépendances des serveurs",
     "statusDescription": "Ce que le provisionnement a réellement fait, et quels montages manquent.",
     "inFlight": "Le provisionnement s’exécute en arrière-plan.",
     "idle": "Le provisionnement est au repos.",
@@ -421,8 +421,8 @@
     "noMissingMounts": "Aucun serveur du catalogue ne manque de montage.",
     "copy": "Copier",
     "copied": "Copié",
-    "ledger": "Paquets installés",
-    "noLedger": "Aucun paquet enregistré pour l’instant.",
+    "ledger": "Dépendances installées",
+    "noLedger": "Aucune dépendance enregistrée pour l’instant.",
     "toggleFailed": "La modification n’a pas été enregistrée ; l’interrupteur a été réinitialisé.",
     "removeFailed": "Le serveur n’a pas pu être supprimé.",
     "saveFailed": "Le serveur n’a pas pu être enregistré.",
@@ -443,7 +443,7 @@
     "statusIdle": "Inactif",
     "failedCount": "{{count}} installations échouées",
     "missingCount": "{{count}} montages manquants",
-    "ledgerCount": "{{count}} paquets enregistrés",
+    "ledgerCount": "{{count}} dépendances installées",
     "statusDetails": "Détails",
     "installedBadge": "Installé",
     "newBadge": "New"
@@ -475,6 +475,9 @@
     "loadFailed": "Impossible de charger les paquets.",
     "actionFailed": "Échec de l’action",
     "refresh": "Actualiser",
-    "pinnedNote": "Les paquets épinglés ne sont pas mis à jour automatiquement."
+    "pinnedNote": "Les paquets épinglés ne sont pas mis à jour automatiquement.",
+    "version": "Version",
+    "versionHint": "Cliquez sur la version pour en saisir une autre ; l’enregistrer l’épingle.",
+    "noVersion": "Aucune version"
   }
 }

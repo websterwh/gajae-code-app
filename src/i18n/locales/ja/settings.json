@@ -411,7 +411,7 @@
     "installing": "インストール中…",
     "requiresSecret": "インストール前に {{name}} が必要です。",
     "noResults": "この検索に一致するサーバーはありません。",
-    "statusTitle": "プロビジョニング状態",
+    "statusTitle": "サーバー依存関係の状態",
     "statusDescription": "パッケージのプロビジョニングが実際に行ったことと、不足しているマウント。",
     "inFlight": "プロビジョニングがバックグラウンドで実行中です。",
     "idle": "プロビジョニングは待機中です。",
@@ -421,8 +421,8 @@
     "noMissingMounts": "マウントが不足しているカタログサーバーはありません。",
     "copy": "コピー",
     "copied": "コピーしました",
-    "ledger": "インストール済みパッケージ",
-    "noLedger": "まだ記録されたパッケージはありません。",
+    "ledger": "インストール済みの依存関係",
+    "noLedger": "まだ記録された依存関係はありません。",
     "toggleFailed": "変更は保存されず、スイッチは元に戻りました。",
     "removeFailed": "サーバーを削除できませんでした。",
     "saveFailed": "サーバーを保存できませんでした。",
@@ -443,7 +443,7 @@
     "statusIdle": "待機中",
     "failedCount": "インストール失敗 {{count}} 件",
     "missingCount": "未設定のマウント {{count}} 件",
-    "ledgerCount": "記録済みパッケージ {{count}} 件",
+    "ledgerCount": "依存パッケージ {{count}} 件をインストール済み",
     "statusDetails": "詳細",
     "installedBadge": "インストール済み",
     "newBadge": "New"
@@ -475,6 +475,9 @@
     "loadFailed": "パッケージを読み込めませんでした。",
     "actionFailed": "操作に失敗しました",
     "refresh": "更新",
-    "pinnedNote": "固定したパッケージは自動更新されません。"
+    "pinnedNote": "固定したパッケージは自動更新されません。",
+    "version": "バージョン",
+    "versionHint": "バージョンをクリックすると入力できます。保存すると固定されます。",
+    "noVersion": "バージョンなし"
   }
 }

@@ -411,7 +411,7 @@
     "installing": "Wird installiert…",
     "requiresSecret": "{{name}} ist vor der Installation erforderlich.",
     "noResults": "Keine Server passen zu dieser Suche.",
-    "statusTitle": "Bereitstellungsstatus",
+    "statusTitle": "Abhängigkeitsstatus der Server",
     "statusDescription": "Was die Paketbereitstellung tatsächlich getan hat und welche Mounts fehlen.",
     "inFlight": "Die Bereitstellung läuft im Hintergrund.",
     "idle": "Die Bereitstellung ist untätig.",
@@ -421,8 +421,8 @@
     "noMissingMounts": "Bei keinem Katalogserver fehlt ein Mount.",
     "copy": "Kopieren",
     "copied": "Kopiert",
-    "ledger": "Installierte Pakete",
-    "noLedger": "Noch keine Pakete erfasst.",
+    "ledger": "Installierte Abhängigkeiten",
+    "noLedger": "Noch keine Abhängigkeiten erfasst.",
     "toggleFailed": "Die Änderung wurde nicht gespeichert; der Schalter wurde zurückgesetzt.",
     "removeFailed": "Der Server konnte nicht entfernt werden.",
     "saveFailed": "Der Server konnte nicht gespeichert werden.",
@@ -443,7 +443,7 @@
     "statusIdle": "Bereit",
     "failedCount": "{{count}} fehlgeschlagene Installationen",
     "missingCount": "{{count}} fehlende Einbindungen",
-    "ledgerCount": "{{count}} Pakete erfasst",
+    "ledgerCount": "{{count}} Abhängigkeiten installiert",
     "statusDetails": "Details",
     "installedBadge": "Installiert",
     "newBadge": "New"
@@ -475,6 +475,9 @@
     "loadFailed": "Pakete konnten nicht geladen werden.",
     "actionFailed": "Aktion fehlgeschlagen",
     "refresh": "Aktualisieren",
-    "pinnedNote": "Gepinnte Pakete werden nicht automatisch aktualisiert."
+    "pinnedNote": "Gepinnte Pakete werden nicht automatisch aktualisiert.",
+    "version": "Version",
+    "versionHint": "Auf die Version klicken, um eine andere einzugeben; beim Speichern wird sie gepinnt.",
+    "noVersion": "Keine Version"
   }
 }

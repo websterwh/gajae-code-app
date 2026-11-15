@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import {
-  AlertTriangle, CheckCircle2, Loader2, Package as PackageIcon, Pin, RefreshCw, Trash2,
+  AlertTriangle, CheckCircle2, Loader2, Package as PackageIcon, Pencil, Pin, RefreshCw, Trash2,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -58,13 +58,14 @@ export default function PackagesSettingsTab() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [form, setForm] = useState<{ manager: Manager; spec: string; pin: string }>({ manager: 'uv', spec: '', pin: '' });
-  const [pins, setPins] = useState<Record<string, string>>({});
+  const [editingVersion, setEditingVersion] = useState<string | null>(null);
+  const [versionDraft, setVersionDraft] = useState('');
+  const skipPinCommit = useRef(false);
 
   const load = useCallback(async () => {
     try {
       const next = await request<PackageRow[]>('/api/packages');
       setRows(next);
-      setPins(Object.fromEntries(next.map((row) => [`${row.manager}:${row.name}`, row.pin ?? ''])));
       setError('');
     } catch (loadError) {
       setError(`${t('packages.loadFailed')} ${messageOf(loadError)}`);
@@ -110,12 +111,28 @@ export default function PackagesSettingsTab() {
 
   const upgrade = (row: PackageRow) => void run(`upgrade:${row.manager}:${row.name}`, () => request(`${packagePath(row)}/upgrade`, { method: 'POST' }));
 
-  const savePin = (row: PackageRow) => {
+  const pinVersion = (row: PackageRow, pin: string | null) => {
     const key = `${row.manager}:${row.name}`;
-    const draft = (pins[key] ?? '').trim();
-    // Clicking the button on an unchanged pin clears it; typing a new version sets it.
-    const nextPin = row.pin && draft === row.pin ? null : draft || null;
-    void run(`pin:${key}`, () => request(packagePath(row), { method: 'PATCH', body: JSON.stringify({ pin: nextPin }) }));
+    void run(`pin:${key}`, () => request(packagePath(row), { method: 'PATCH', body: JSON.stringify({ pin }) }));
+  };
+
+  const beginVersionEdit = (row: PackageRow) => {
+    skipPinCommit.current = false;
+    setVersionDraft(row.pin ?? row.version ?? '');
+    setEditingVersion(`${row.manager}:${row.name}`);
+  };
+
+  // Confirming an edited version pins the package to it, so the version chip is
+  // the pin control instead of a standing input in every row.
+  const commitVersionEdit = (row: PackageRow) => {
+    if (skipPinCommit.current) {
+      skipPinCommit.current = false;
+      return;
+    }
+    const next = versionDraft.trim();
+    setEditingVersion(null);
+    if (next === (row.pin ?? '')) return;
+    pinVersion(row, next || null);
   };
 
   const remove = (row: PackageRow) => {
@@ -178,6 +195,10 @@ export default function PackagesSettingsTab() {
             const sourceLabel = row.source === 'env' ? t('packages.sourceEnv')
               : row.source === 'ui' ? t('packages.sourceUi')
                 : t('packages.sourceInstalled');
+            // Rows that can be pinned carry the version on the control itself;
+            // the rest keep it in the status line.
+            const versionControl = row.desired && row.manager !== 'aqua';
+            const version = row.pin ?? row.version;
             return (
               <div key={key} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
                 <div className="min-w-0 flex-1">
@@ -192,9 +213,8 @@ export default function PackagesSettingsTab() {
                         ? <CheckCircle2 className="h-3 w-3" aria-hidden />
                         : <AlertTriangle className="h-3 w-3" aria-hidden />}
                       {statusLabel}
-                      {row.version ? ` · ${row.version}` : ''}
+                      {row.version && !versionControl ? ` · ${row.version}` : ''}
                     </span>
-                    {row.pin ? <span className="inline-flex items-center gap-1"><Pin className="h-3 w-3" aria-hidden />{row.pin}</span> : null}
                     {row.updatedAt ? <span>{new Date(row.updatedAt).toLocaleDateString()}</span> : null}
                   </div>
                   {row.error ? <p className="mt-1 text-xs break-words text-destructive">{row.error}</p> : null}
@@ -212,17 +232,48 @@ export default function PackagesSettingsTab() {
                       {t('packages.upgrade')}
                     </button>
                   ) : null}
-                  {row.desired && row.manager !== 'aqua' ? (
+                  {versionControl ? (
                     <div className="flex items-center gap-1">
-                      <input
-                        value={pins[key] ?? ''}
-                        onChange={(event) => setPins({ ...pins, [key]: event.target.value })}
-                        placeholder={t('packages.pinPlaceholder')}
-                        aria-label={`${t('packages.pin')} ${row.name}`}
-                        className={`${inputClass} w-24 px-2 py-1`}
-                      />
-                      <button type="button" disabled={busy !== null} onClick={() => savePin(row)} className={buttonClass}>
-                        {busy === `pin:${key}` ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : <Pin className="h-3 w-3" aria-hidden />}
+                      {editingVersion === key ? (
+                        <input
+                          autoFocus
+                          value={versionDraft}
+                          onChange={(event) => setVersionDraft(event.target.value)}
+                          onBlur={() => commitVersionEdit(row)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault();
+                              event.currentTarget.blur();
+                            } else if (event.key === 'Escape') {
+                              skipPinCommit.current = true;
+                              setEditingVersion(null);
+                            }
+                          }}
+                          placeholder={t('packages.pinPlaceholder')}
+                          aria-label={`${t('packages.version')} ${row.name}`}
+                          className={`${inputClass} w-28 px-2 py-1 font-mono`}
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => beginVersionEdit(row)}
+                          title={t('packages.versionHint')}
+                          aria-label={`${t('packages.version')} ${row.name}: ${version ?? t('packages.noVersion')}`}
+                          className={`${buttonClass} font-mono`}
+                        >
+                          <Pencil className="h-3 w-3 opacity-60" aria-hidden />
+                          {version ?? t('packages.noVersion')}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        disabled={busy !== null || (!row.pin && !row.version)}
+                        onClick={() => pinVersion(row, row.pin ? null : row.version)}
+                        aria-label={`${row.pin ? t('packages.unpin') : t('packages.pinAction')} ${row.name}`}
+                        title={row.pin ? t('packages.unpin') : t('packages.pinAction')}
+                        className={buttonClass}
+                      >
+                        {busy === `pin:${key}` ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : <Pin className={`h-3 w-3 ${row.pin ? 'fill-current' : ''}`} aria-hidden />}
                         {row.pin ? t('packages.unpin') : t('packages.pinAction')}
                       </button>
                     </div>

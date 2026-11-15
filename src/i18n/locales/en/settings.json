@@ -411,7 +411,7 @@
     "installing": "Installing…",
     "requiresSecret": "{{name}} is required before installing.",
     "noResults": "No servers match this search.",
-    "statusTitle": "Package installation",
+    "statusTitle": "Server dependency status",
     "statusDescription": "Package installation for stdio servers: installed versions, failures, and container mounts that are still missing.",
     "inFlight": "Provisioning is running in the background.",
     "idle": "Provisioning is idle.",
@@ -421,8 +421,8 @@
     "noMissingMounts": "No catalog server is missing a mount.",
     "copy": "Copy",
     "copied": "Copied",
-    "ledger": "Installed packages",
-    "noLedger": "No packages recorded yet.",
+    "ledger": "Installed dependencies",
+    "noLedger": "No dependencies recorded yet.",
     "toggleFailed": "The change was not saved; the switch was reset.",
     "removeFailed": "The server could not be removed.",
     "saveFailed": "The server could not be saved.",
@@ -443,7 +443,7 @@
     "statusIdle": "Idle",
     "failedCount": "{{count}} failed installs",
     "missingCount": "{{count}} missing mounts",
-    "ledgerCount": "{{count}} packages recorded",
+    "ledgerCount": "{{count}} dependencies installed",
     "statusDetails": "Details",
     "installedBadge": "Installed",
     "newBadge": "New"
@@ -475,6 +475,9 @@
     "loadFailed": "Could not load packages.",
     "actionFailed": "Action failed",
     "refresh": "Refresh",
-    "pinnedNote": "Pinned packages are not upgraded automatically."
+    "pinnedNote": "Pinned packages are not upgraded automatically.",
+    "version": "Version",
+    "versionHint": "Click the version to type another one; saving pins it.",
+    "noVersion": "No version"
   }
 }

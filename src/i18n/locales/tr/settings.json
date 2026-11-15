@@ -411,7 +411,7 @@
     "installing": "Kuruluyor…",
     "requiresSecret": "Kurmadan önce {{name}} gerekli.",
     "noResults": "Bu aramayla eşleşen sunucu yok.",
-    "statusTitle": "Hazırlama durumu",
+    "statusTitle": "Sunucu bağımlılık durumu",
     "statusDescription": "Paket hazırlamanın gerçekte ne yaptığı ve hangi bağlamaların eksik olduğu.",
     "inFlight": "Hazırlama arka planda çalışıyor.",
     "idle": "Hazırlama boşta.",
@@ -421,8 +421,8 @@
     "noMissingMounts": "Hiçbir katalog sunucusunun bağlaması eksik değil.",
     "copy": "Kopyala",
     "copied": "Kopyalandı",
-    "ledger": "Kurulu paketler",
-    "noLedger": "Henüz kaydedilmiş paket yok.",
+    "ledger": "Kurulu bağımlılıklar",
+    "noLedger": "Henüz kaydedilmiş bağımlılık yok.",
     "toggleFailed": "Değişiklik kaydedilmedi; anahtar geri alındı.",
     "removeFailed": "Sunucu kaldırılamadı.",
     "saveFailed": "Sunucu kaydedilemedi.",
@@ -443,7 +443,7 @@
     "statusIdle": "Boşta",
     "failedCount": "{{count}} başarısız kurulum",
     "missingCount": "{{count}} eksik bağlama",
-    "ledgerCount": "{{count}} paket kaydedildi",
+    "ledgerCount": "{{count}} bağımlılık kuruldu",
     "statusDetails": "Ayrıntılar",
     "installedBadge": "Kurulu",
     "newBadge": "New"
@@ -475,6 +475,9 @@
     "loadFailed": "Paketler yüklenemedi.",
     "actionFailed": "İşlem başarısız",
     "refresh": "Yenile",
-    "pinnedNote": "Sabitlenmiş paketler otomatik yükseltilmez."
+    "pinnedNote": "Sabitlenmiş paketler otomatik yükseltilmez.",
+    "version": "Sürüm",
+    "versionHint": "Başka bir sürüm yazmak için sürüme tıklayın; kaydedince sabitlenir.",
+    "noVersion": "Sürüm yok"
   }
 }

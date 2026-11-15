@@ -411,7 +411,7 @@
     "installing": "설치 중…",
     "requiresSecret": "설치 전에 {{name}}이(가) 필요합니다.",
     "noResults": "이 검색과 일치하는 서버가 없습니다.",
-    "statusTitle": "프로비저닝 상태",
+    "statusTitle": "서버 종속성 상태",
     "statusDescription": "패키지 프로비저닝이 실제로 수행한 작업과 누락된 마운트입니다.",
     "inFlight": "프로비저닝이 백그라운드에서 실행 중입니다.",
     "idle": "프로비저닝이 유휴 상태입니다.",
@@ -421,8 +421,8 @@
     "noMissingMounts": "마운트가 누락된 카탈로그 서버가 없습니다.",
     "copy": "복사",
     "copied": "복사됨",
-    "ledger": "설치된 패키지",
-    "noLedger": "아직 기록된 패키지가 없습니다.",
+    "ledger": "설치된 종속성",
+    "noLedger": "아직 기록된 종속성이 없습니다.",
     "toggleFailed": "변경이 저장되지 않아 스위치가 되돌려졌습니다.",
     "removeFailed": "서버를 제거하지 못했습니다.",
     "saveFailed": "서버를 저장하지 못했습니다.",
@@ -443,7 +443,7 @@
     "statusIdle": "대기 중",
     "failedCount": "설치 실패 {{count}}건",
     "missingCount": "누락된 마운트 {{count}}개",
-    "ledgerCount": "기록된 패키지 {{count}}개",
+    "ledgerCount": "설치된 종속성 {{count}}개",
     "statusDetails": "세부 정보",
     "installedBadge": "설치됨",
     "newBadge": "New"
@@ -475,6 +475,9 @@
     "loadFailed": "패키지를 불러오지 못했습니다.",
     "actionFailed": "작업 실패",
     "refresh": "새로 고침",
-    "pinnedNote": "고정된 패키지는 자동으로 업그레이드되지 않습니다."
+    "pinnedNote": "고정된 패키지는 자동으로 업그레이드되지 않습니다.",
+    "version": "버전",
+    "versionHint": "버전을 클릭해 다른 버전을 입력할 수 있으며, 저장하면 고정됩니다.",
+    "noVersion": "버전 없음"
   }
 }
