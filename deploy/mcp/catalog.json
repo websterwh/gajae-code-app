@@ -1,3798 +1,34 @@
 [
   {
-    "name": "agency.extremely-agency",
-    "title": "EXTREMELY agency",
-    "description": "Your agency of AI agents in your AI app: what agents did, approvals, requests, jobs and reports.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@extremely-agency/mcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@extremely-agency/mcp",
-      "version": "0.1.1"
-    },
-    "repository": {
-      "url": "https://github.com/maxkxd/extremely-autonomous-agents",
-      "source": "registry"
-    },
-    "stars": 1
-  },
-  {
-    "name": "agency.kesey-pretrip",
-    "title": "Pre-Trip compliance scanner",
-    "description": "Screen regulated-health marketing copy against source-cited rulesets, all 50 states.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "pretrip-mcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "pretrip-mcp",
-      "version": "1.0.1"
-    }
-  },
-  {
-    "name": "ai.2kw-mcp-server",
-    "title": "2kw.ai",
-    "description": "EU-hosted AI platform: OpenAI-compatible LLM gateway, document extraction, transcription, agents.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@2kw/ai-mcp-server"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@2kw/ai-mcp-server",
-      "version": "8.0.3"
-    },
-    "env": [
-      {
-        "name": "AI_2KW_API_KEY",
-        "required": true,
-        "secret": true
-      },
-      {
-        "name": "AI_2KW_BASE_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "AI_2KW_MEMORY",
-        "required": false,
-        "secret": false
-      }
-    ]
-  },
-  {
-    "name": "ai.achromat-mcp-server",
-    "title": "Achromat Machine Operational Memory",
-    "description": "Recall and calibrate policy-compliant tool-call arguments before execution. Does not run the tool.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@achromat-ai/mcp-server"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@achromat-ai/mcp-server",
-      "version": "0.1.4"
-    },
-    "env": [
-      {
-        "name": "ACHROMAT_AGENT_KEY_FILE",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "ACHROMAT_BASE_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "ACHROMAT_REF",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/achromat-ai/achromat-mcp-server",
-      "source": "registry"
-    },
-    "stars": 1
-  },
-  {
-    "name": "ai.adeu-adeu",
-    "description": "Automated DOCX Redlining Engine",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@adeu/mcp-server"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@adeu/mcp-server",
-      "version": "1.7.1"
-    },
-    "repository": {
-      "url": "https://github.com/dealfluence/adeu",
-      "source": "registry"
-    },
-    "stars": 170
-  },
-  {
-    "name": "ai.adtest-adtest-mcp",
-    "description": "AI-only ad scoring for Claude: score image, video or text ads on 13 dimensions before you spend.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "adtest-mcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "adtest-mcp",
-      "version": "1.1.0"
-    },
-    "env": [
-      {
-        "name": "ADTEST_API_KEY",
-        "required": true,
-        "secret": true
-      },
-      {
-        "name": "ADTEST_API_BASE",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "ADTEST_POLL_TIMEOUT_MS",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/menaker/adtest-mcp",
-      "source": "registry"
-    },
-    "stars": 0
-  },
-  {
-    "name": "ai.aetherwealth-mcp",
-    "title": "Aether Wealth",
-    "description": "Aether Wealth MCP for AI assistants: trades, alerts, market data, macro calendar & indicators.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@aetherwealth/mcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@aetherwealth/mcp",
-      "version": "0.2.17"
-    }
-  },
-  {
-    "name": "ai.aetherya-mcp",
-    "title": "Aetherya",
-    "description": "Test decisions on a synthetic audience: studies, site audits, copy tests and post simulations.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@aetherya/mcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@aetherya/mcp",
-      "version": "1.0.5"
-    },
-    "env": [
-      {
-        "name": "AETHERYA_API_KEY",
-        "required": true,
-        "secret": true
-      }
-    ]
-  },
-  {
-    "name": "ai.agent-bev-bev-door",
-    "title": "agent-bev",
-    "description": "The world's largest agentic B2B hub for beer, wine and spirits. Powered by CUVEE. Trade only.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@agent-bev/mcp-server"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@agent-bev/mcp-server",
-      "version": "0.2.6"
-    },
-    "repository": {
-      "url": "https://github.com/agent-bev/bev-door",
-      "source": "registry"
-    },
-    "stars": 0
-  },
-  {
-    "name": "ai.agenticaffiliate-affiliate-networks-mcp",
-    "title": "Affiliate Networks MCP",
-    "description": "Affiliate network reporting in your AI client. Bring your own keys. Most adapters experimental.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "affiliate-networks-mcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "affiliate-networks-mcp",
-      "version": "0.19.0"
-    },
-    "repository": {
-      "url": "https://github.com/bobberrisford/affiliatemcp",
-      "source": "registry"
-    },
-    "stars": 8
-  },
-  {
-    "name": "ai.agenttrust-mcp-server",
-    "title": "AgentTrust — Identity & Trust for A2A Agents",
-    "description": "Identity, trust, and A2A orchestration for autonomous AI agents. Official A2A partner.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@agenttrust/mcp-server"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@agenttrust/mcp-server",
-      "version": "1.1.1"
-    },
-    "env": [
-      {
-        "name": "AGENTTRUST_API_KEY",
-        "required": true,
-        "secret": true
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/agenttrust/mcp-server",
-      "source": "registry"
-    },
-    "stars": 1
-  },
-  {
-    "name": "ai.agentutility-mcp-agentops",
-    "title": "AgentUtility Agentops",
-    "description": "MCP server for the @agentutility agentops cluster — pay-per-call x402 tools, no API keys, USDC on…",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@agentutility/mcp-agentops"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@agentutility/mcp-agentops",
-      "version": "0.1.1"
-    },
-    "repository": {
-      "url": "https://github.com/rooz21/x402",
-      "source": "registry"
-    }
-  },
-  {
-    "name": "ai.agentutility-mcp-bestiary",
-    "title": "AgentUtility Bestiary",
-    "description": "MCP server for the @agentutility bestiary cluster — pay-per-call x402 tools, no API keys, USDC on…",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@agentutility/mcp-bestiary"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@agentutility/mcp-bestiary",
-      "version": "0.1.3"
-    },
-    "repository": {
-      "url": "https://github.com/rooz21/x402",
-      "source": "registry"
-    }
-  },
-  {
-    "name": "ai.agentutility-mcp-browser-workflow",
-    "title": "AgentUtility Browser Workflow",
-    "description": "MCP server for the @agentutility browser-workflow cluster — pay-per-call x402 tools, no API keys…",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@agentutility/mcp-browser-workflow"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@agentutility/mcp-browser-workflow",
-      "version": "0.1.1"
-    },
-    "repository": {
-      "url": "https://github.com/rooz21/x402",
-      "source": "registry"
-    }
-  },
-  {
-    "name": "ai.agentutility-mcp-compose",
-    "title": "AgentUtility Compose",
-    "description": "MCP server for the @agentutility compose cluster — pay-per-call x402 tools, no API keys, USDC on…",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@agentutility/mcp-compose"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@agentutility/mcp-compose",
-      "version": "0.13.0"
-    },
-    "repository": {
-      "url": "https://github.com/rooz21/x402",
-      "source": "registry"
-    }
-  },
-  {
-    "name": "ai.agentutility-mcp-edge-finance",
-    "title": "AgentUtility Edge Finance",
-    "description": "MCP server for the @agentutility edge-finance cluster — pay-per-call x402 tools, no API keys, USDC…",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@agentutility/mcp-edge-finance"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@agentutility/mcp-edge-finance",
-      "version": "0.18.8"
-    },
-    "repository": {
-      "url": "https://github.com/rooz21/x402",
-      "source": "registry"
-    }
-  },
-  {
-    "name": "ai.agentutility-mcp-edge-market",
-    "title": "AgentUtility Edge Market",
-    "description": "MCP server for the @agentutility edge-market cluster — pay-per-call x402 tools, no API keys, USDC…",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@agentutility/mcp-edge-market"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@agentutility/mcp-edge-market",
-      "version": "0.15.6"
-    },
-    "repository": {
-      "url": "https://github.com/rooz21/x402",
-      "source": "registry"
-    }
-  },
-  {
-    "name": "ai.agentutility-mcp-locale",
-    "title": "AgentUtility Locale",
-    "description": "MCP server for the @agentutility locale cluster — pay-per-call x402 tools, no API keys, USDC on…",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@agentutility/mcp-locale"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@agentutility/mcp-locale",
-      "version": "0.8.7"
-    },
-    "repository": {
-      "url": "https://github.com/rooz21/x402",
-      "source": "registry"
-    }
-  },
-  {
-    "name": "ai.agentutility-mcp-matchpoint",
-    "title": "AgentUtility Matchpoint",
-    "description": "MCP server for the @agentutility matchpoint cluster — pay-per-call x402 tools, no API keys, USDC…",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@agentutility/mcp-matchpoint"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@agentutility/mcp-matchpoint",
-      "version": "0.1.4"
-    },
-    "repository": {
-      "url": "https://github.com/rooz21/x402",
-      "source": "registry"
-    }
-  },
-  {
-    "name": "ai.agentutility-mcp-mediakit",
-    "title": "AgentUtility Mediakit",
-    "description": "MCP server for the @agentutility mediakit cluster — pay-per-call x402 tools, no API keys, USDC on…",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@agentutility/mcp-mediakit"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@agentutility/mcp-mediakit",
-      "version": "0.11.9"
-    },
-    "repository": {
-      "url": "https://github.com/rooz21/x402",
-      "source": "registry"
-    }
-  },
-  {
-    "name": "ai.agentutility-mcp-model-router",
-    "title": "AgentUtility Model Router",
-    "description": "MCP server for the @agentutility model-router cluster — pay-per-call x402 tools, no API keys, USDC…",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@agentutility/mcp-model-router"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@agentutility/mcp-model-router",
-      "version": "0.1.1"
-    },
-    "repository": {
-      "url": "https://github.com/rooz21/x402",
-      "source": "registry"
-    }
-  },
-  {
-    "name": "ai.agentutility-mcp-prooflayer",
-    "title": "AgentUtility Prooflayer",
-    "description": "MCP server for the @agentutility prooflayer cluster — pay-per-call x402 tools, no API keys, USDC…",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@agentutility/mcp-prooflayer"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@agentutility/mcp-prooflayer",
-      "version": "0.2.4"
-    },
-    "repository": {
-      "url": "https://github.com/rooz21/x402",
-      "source": "registry"
-    }
-  },
-  {
-    "name": "ai.agentutility-mcp-retail",
-    "title": "AgentUtility Retail",
-    "description": "MCP server for the @agentutility retail cluster — pay-per-call x402 tools, no API keys, USDC on…",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@agentutility/mcp-retail"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@agentutility/mcp-retail",
-      "version": "0.2.1"
-    },
-    "repository": {
-      "url": "https://github.com/rooz21/x402",
-      "source": "registry"
-    }
-  },
-  {
-    "name": "ai.agentutility-mcp-rollforge",
-    "title": "AgentUtility Rollforge",
-    "description": "MCP server for the @agentutility rollforge cluster — pay-per-call x402 tools, no API keys, USDC on…",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@agentutility/mcp-rollforge"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@agentutility/mcp-rollforge",
-      "version": "0.1.5"
-    },
-    "repository": {
-      "url": "https://github.com/rooz21/x402",
-      "source": "registry"
-    }
-  },
-  {
-    "name": "ai.agentutility-mcp-statline",
-    "title": "AgentUtility Statline",
-    "description": "MCP server for the @agentutility statline cluster — pay-per-call x402 tools, no API keys, USDC on…",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@agentutility/mcp-statline"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@agentutility/mcp-statline",
-      "version": "0.1.3"
-    },
-    "repository": {
-      "url": "https://github.com/rooz21/x402",
-      "source": "registry"
-    }
-  },
-  {
-    "name": "ai.agentutility-mcp-synthforge",
-    "title": "AgentUtility Synthforge",
-    "description": "MCP server for the @agentutility synthforge cluster — pay-per-call x402 tools, no API keys, USDC…",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@agentutility/mcp-synthforge"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@agentutility/mcp-synthforge",
-      "version": "0.8.2"
-    },
-    "repository": {
-      "url": "https://github.com/rooz21/x402",
-      "source": "registry"
-    }
-  },
-  {
-    "name": "ai.agentutility-mcp-web-probe",
-    "title": "AgentUtility Web Probe",
-    "description": "MCP server for the @agentutility web-probe cluster — pay-per-call x402 tools, no API keys, USDC on…",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@agentutility/mcp-web-probe"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@agentutility/mcp-web-probe",
-      "version": "0.32.1"
-    },
-    "repository": {
-      "url": "https://github.com/rooz21/x402",
-      "source": "registry"
-    }
-  },
-  {
-    "name": "ai.agentutility-mcp-wordmint",
-    "title": "AgentUtility Wordmint",
-    "description": "MCP server for the @agentutility wordmint cluster — pay-per-call x402 tools, no API keys, USDC on…",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@agentutility/mcp-wordmint"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@agentutility/mcp-wordmint",
-      "version": "0.16.1"
-    },
-    "repository": {
-      "url": "https://github.com/rooz21/x402",
-      "source": "registry"
-    }
-  },
-  {
-    "name": "ai.aimentiontracker-mcp",
-    "title": "AIMentionTracker",
-    "description": "How often ChatGPT, Claude, Gemini and Perplexity name and cite your brand, with the evidence.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@aimentiontracker/mcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@aimentiontracker/mcp",
-      "version": "0.1.3"
-    },
-    "env": [
-      {
-        "name": "AMT_API_KEY",
-        "required": true,
-        "secret": true
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/aimentiontracker/mcp",
-      "source": "registry"
-    },
-    "stars": 0
-  },
-  {
-    "name": "ai.aliengiraffe-spotdb",
-    "description": "Ephemeral data sandbox for AI workflows with guardrails and security",
+    "name": "atlas-docs",
+    "title": "Atlas Docs",
+    "description": "Provide LLMs hosted, clean markdown documentation of libraries and frameworks",
     "transport": "stdio",
     "command": "docker",
     "args": [
       "run",
       "-i",
       "--rm",
-      "docker.io/aliengiraffe/spotdb:0.1.0"
+      "mcp/atlas-docs"
     ],
     "package": {
       "manager": "other",
-      "name": "docker.io/aliengiraffe/spotdb:0.1.0"
-    },
-    "env": [
-      {
-        "name": "X-API-Key",
-        "required": false,
-        "secret": true
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/aliengiraffe/spotdb",
-      "source": "registry"
-    },
-    "stars": 21
-  },
-  {
-    "name": "ai.ankimcp-anki-mcp-server",
-    "title": "Anki MCP Server",
-    "description": "MCP server for Anki flashcards: adaptive review, notes, media, and deck management via AnkiConnect.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@ankimcp/anki-mcp-server"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@ankimcp/anki-mcp-server",
-      "version": "0.27.0"
-    },
-    "repository": {
-      "url": "https://github.com/ankimcp/anki-mcp-server",
-      "source": "registry"
-    },
-    "stars": 558
-  },
-  {
-    "name": "ai.annsa-annsa",
-    "title": "Annsa",
-    "description": "The plan your AI agents work from. Project management and customer feedback for agent teams.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "annsa"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "annsa",
-      "version": "1.0.8"
-    }
-  },
-  {
-    "name": "ai.anomalyarmor-armor-mcp",
-    "title": "AnomalyArmor",
-    "description": "Data observability tools for engineering teams: alerts, freshness, schema drift, lineage, quality.",
-    "transport": "stdio",
-    "command": "uvx",
-    "args": [
-      "armor-mcp"
-    ],
-    "package": {
-      "manager": "pypi",
-      "name": "armor-mcp",
-      "version": "0.6.1"
-    },
-    "env": [
-      {
-        "name": "ARMOR_API_KEY",
-        "required": true,
-        "secret": true
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/anomalyarmor/agents",
-      "source": "registry"
-    },
-    "stars": 1
-  },
-  {
-    "name": "ai.anyforge-anyforge",
-    "title": "AnyForge",
-    "description": "Approve plans, track initiatives and work items, and steer AI engineering crews in AnyForge.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@anyforge/mcp-server"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@anyforge/mcp-server",
-      "version": "3.18.0"
-    },
-    "env": [
-      {
-        "name": "ANYFORGE_API_TOKEN",
-        "required": false,
-        "secret": true
-      },
-      {
-        "name": "ANYFORGE_API_URL",
-        "required": false,
-        "secret": false
-      }
-    ]
-  },
-  {
-    "name": "ai.apithreshold-apithreshold",
-    "title": "APIThreshold",
-    "description": "Quality scoring and progressive gates for AI-generated API tests. Stripe/Twilio profiles. Free tier.",
-    "transport": "stdio",
-    "command": "docker",
-    "args": [
-      "run",
-      "-i",
-      "--rm",
-      "ghcr.io/apithreshold/apithreshold:0.1.0"
-    ],
-    "package": {
-      "manager": "other",
-      "name": "ghcr.io/apithreshold/apithreshold:0.1.0"
-    },
-    "env": [
-      {
-        "name": "APITHRESHOLD_LLM_PROVIDER",
-        "required": true,
-        "secret": false
-      },
-      {
-        "name": "OPENAI_API_KEY",
-        "required": false,
-        "secret": true
-      },
-      {
-        "name": "ANTHROPIC_API_KEY",
-        "required": false,
-        "secret": true
-      },
-      {
-        "name": "APITHRESHOLD_LICENSE",
-        "required": false,
-        "secret": true
-      }
-    ]
-  },
-  {
-    "name": "ai.aquex-reasonbook",
-    "title": "Reasonbook",
-    "description": "Reasonbook: decisions that survive the session, in a local record AI agents keep.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@aquex/reasonbook"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@aquex/reasonbook",
-      "version": "4.12.0"
-    },
-    "repository": {
-      "url": "https://github.com/kneelinghorse/reasonbook",
-      "source": "registry"
-    },
-    "stars": 0
-  },
-  {
-    "name": "ai.aquex-stage1",
-    "description": "Stage1 Inspector — local website capture, evidence views and design comparison",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@aquex/stage1"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@aquex/stage1",
-      "version": "0.7.0"
-    }
-  },
-  {
-    "name": "ai.arcangel-arcangel",
-    "title": "Arcangel AI",
-    "description": "Read and draft your Arcangel patent and trademark filings from any AI assistant.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@arcangel.ai/mcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@arcangel.ai/mcp",
-      "version": "0.2.0"
-    },
-    "env": [
-      {
-        "name": "ARCANGEL_BOT_TOKEN",
-        "required": true,
-        "secret": true
-      }
-    ]
-  },
-  {
-    "name": "ai.arsentev-contextburn",
-    "title": "contextburn",
-    "description": "Run efficiency for coding agents: share of paid tokens that became output, not context re-reading.",
-    "transport": "stdio",
-    "command": "uvx",
-    "args": [
-      "contextburn"
-    ],
-    "package": {
-      "manager": "pypi",
-      "name": "contextburn",
-      "version": "0.2.1"
-    },
-    "repository": {
-      "url": "https://github.com/arsentev-ai/contextburn",
-      "source": "registry"
-    },
-    "stars": 0
-  },
-  {
-    "name": "ai.atmy-air-quality",
-    "title": "Atmy air quality",
-    "description": "PM2.5 of 300+ cities: now, history, forecast, rankings; 12 000 sensors with a quality rating.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "atmy-mcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "atmy-mcp",
-      "version": "1.1.0"
-    }
-  },
-  {
-    "name": "ai.attestari-attestari",
-    "title": "Attestari",
-    "description": "Attestari's verdict on an npm or PyPI package version, asked before an agent installs it.",
-    "transport": "stdio",
-    "command": "uvx",
-    "args": [
-      "attestari-mcp"
-    ],
-    "package": {
-      "manager": "pypi",
-      "name": "attestari-mcp",
-      "version": "2.10.0"
-    },
-    "env": [
-      {
-        "name": "ATTESTARI_API_KEY",
-        "required": true,
-        "secret": true
-      }
-    ]
-  },
-  {
-    "name": "ai.augmentev-fabric-verify",
-    "title": "Fabric Verify",
-    "description": "Signed, publicly logged records of what your AI agent did, with proofs anyone can check offline.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@augmentev/fabric-verify-mcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@augmentev/fabric-verify-mcp",
-      "version": "0.2.2"
-    },
-    "env": [
-      {
-        "name": "FABRIC_CREDIT_KEY",
-        "required": true,
-        "secret": true
-      },
-      {
-        "name": "FABRIC_AGENT",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "FABRIC_MAX_SPEND_USD",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/AugmentEVzero/fabric-verify-mcp",
-      "source": "registry"
-    },
-    "stars": 0
-  },
-  {
-    "name": "ai.auten-mcp",
-    "title": "Auten",
-    "description": "Computer use for Claude Code, Codex, Cursor or any MCP client: your computer + Android phone (beta)",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@autenai/mcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@autenai/mcp",
-      "version": "0.1.5"
-    },
-    "repository": {
-      "url": "https://github.com/auten-ai/auten-mcp",
-      "source": "registry"
-    },
-    "stars": 0
-  },
-  {
-    "name": "ai.autoblocks-contextlayer-mcp",
-    "description": "Personal context management for AI assistants",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@contextlayer/mcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@contextlayer/mcp",
-      "version": "0.0.3"
-    },
-    "repository": {
-      "url": "https://github.com/autoblocksai/ctxl",
-      "source": "registry"
-    }
-  },
-  {
-    "name": "ai.autoblocks-ctxl",
-    "description": "Personal context management for AI assistants",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "ctxl"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "ctxl",
-      "version": "0.0.2"
-    },
-    "repository": {
-      "url": "https://github.com/autoblocksai/ctxl",
-      "source": "registry"
-    }
-  },
-  {
-    "name": "ai.autoblocks-ctxl-mcp",
-    "description": "Personal context management for AI assistants",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "ctxl-mcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "ctxl-mcp",
-      "version": "0.0.2"
-    },
-    "repository": {
-      "url": "https://github.com/autoblocksai/ctxl",
-      "source": "registry"
-    }
-  },
-  {
-    "name": "ai.autonomad-computeback",
-    "description": "Agent Rewards Marketplace: earn $NOMD on B2B work, spend on agent capabilities.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@autonomad1/computeback-mcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@autonomad1/computeback-mcp",
-      "version": "1.1.4"
-    },
-    "env": [
-      {
-        "name": "COMPUTEBACK_API_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "BASE_RPC_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "AGENT_DID",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "AGENT_HMAC_SECRET",
-        "required": false,
-        "secret": true
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/Autonomad1/computeback-mcp",
-      "source": "registry"
-    },
-    "stars": 0
-  },
-  {
-    "name": "ai.autonomad-travel",
-    "description": "Flights and hotels booked in one checkout; tours, events and dining to plan; group trips.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "autonomad-travel"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "autonomad-travel",
-      "version": "1.6.6"
-    },
-    "env": [
-      {
-        "name": "AUTONOMAD_API_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "AUTONOMAD_AGENT_MODE",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/autonomad-ai/autonomad",
-      "source": "registry"
-    }
-  },
-  {
-    "name": "ai.autonomous.harness-harness",
-    "title": "Harness",
-    "description": "Start Claude Code and Codex agents the person can watch, wait for them and read their answers.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@autonomous-ai/harness-mcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@autonomous-ai/harness-mcp",
-      "version": "0.2.0"
-    },
-    "repository": {
-      "url": "https://github.com/autonomous-ai/openharness",
-      "source": "registry"
-    },
-    "stars": 1489
-  },
-  {
-    "name": "ai.bizmuse-bizmuse",
-    "title": "BizMuse AI Music Video",
-    "description": "Official BizMuse MCP for complete AI music videos from audio and 1-7 reference images.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "bizmuse-mcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "bizmuse-mcp",
-      "version": "0.1.6"
-    },
-    "env": [
-      {
-        "name": "BIZMUSE_API_KEY",
-        "required": true,
-        "secret": true
-      },
-      {
-        "name": "BIZMUSE_API_URL",
-        "required": false,
-        "secret": false
-      }
-    ]
-  },
-  {
-    "name": "ai.bolthub-mcp",
-    "title": "bolthub",
-    "description": "The bolthub API marketplace, L402 gateways, and your other MCP servers, on one Lightning budget.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@bolthub/mcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@bolthub/mcp",
-      "version": "0.7.2"
-    },
-    "env": [
-      {
-        "name": "LND_REST_HOST",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "LND_MACAROON",
-        "required": false,
-        "secret": true
-      },
-      {
-        "name": "NWC_URI",
-        "required": false,
-        "secret": true
-      },
-      {
-        "name": "LNBITS_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "LNBITS_ADMIN_KEY",
-        "required": false,
-        "secret": true
-      },
-      {
-        "name": "PHOENIXD_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "PHOENIXD_PASSWORD",
-        "required": false,
-        "secret": true
-      },
-      {
-        "name": "BUDGET_SATS",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "BOLTHUB_ACCOUNT_TOKEN",
-        "required": false,
-        "secret": true
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/signaltech-org/bolthub-sdk",
-      "source": "registry"
-    },
-    "stars": 0
-  },
-  {
-    "name": "ai.bolthub-registry",
-    "title": "bolthub Marketplace",
-    "description": "Discover and call every paid API on the bolthub marketplace with automatic L402 Lightning payments.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@bolthub/mcp-registry"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@bolthub/mcp-registry",
-      "version": "0.1.6"
-    },
-    "env": [
-      {
-        "name": "LND_REST_HOST",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "LND_MACAROON",
-        "required": false,
-        "secret": true
-      },
-      {
-        "name": "NWC_URI",
-        "required": false,
-        "secret": true
-      },
-      {
-        "name": "LNBITS_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "LNBITS_ADMIN_KEY",
-        "required": false,
-        "secret": true
-      },
-      {
-        "name": "PHOENIXD_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "PHOENIXD_PASSWORD",
-        "required": false,
-        "secret": true
-      },
-      {
-        "name": "BUDGET_SATS",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "BOLTHUB_AUTH_TOKEN",
-        "required": false,
-        "secret": true
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/signaltech-org/bolthub-sdk",
-      "source": "registry"
-    },
-    "stars": 0
-  },
-  {
-    "name": "ai.borealhost-mcp",
-    "title": "BorealHost",
-    "description": "Agent-native web hosting — deploy sites, manage DNS, register domains, scale infrastructure",
-    "transport": "stdio",
-    "command": "uvx",
-    "args": [
-      "borealhost-mcp"
-    ],
-    "package": {
-      "manager": "pypi",
-      "name": "borealhost-mcp",
-      "version": "0.4.2"
-    },
-    "env": [
-      {
-        "name": "BOREALHOST_API_KEY",
-        "required": false,
-        "secret": true
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/alainsvrd/borealhost-mcp",
-      "source": "registry"
-    },
-    "stars": 0
-  },
-  {
-    "name": "ai.bourdon-bourdon",
-    "title": "Bourdon",
-    "description": "Recognition-first cross-agent memory federation. One shared memory across all your agents.",
-    "transport": "stdio",
-    "command": "uvx",
-    "args": [
-      "bourdon"
-    ],
-    "package": {
-      "manager": "pypi",
-      "name": "bourdon",
-      "version": "0.32.3"
-    }
-  },
-  {
-    "name": "ai.bowmark-bowmark",
-    "title": "Bowmark web data: LinkedIn, Amazon, YouTube, Reddit, Airbnb, Instagram",
-    "description": "Web scraping and automation for AI agents: live prices, quotes, bookings, anything behind a login.",
-    "transport": "stdio",
-    "command": "uvx",
-    "args": [
-      "bowmark-mcp"
-    ],
-    "package": {
-      "manager": "pypi",
-      "name": "bowmark-mcp",
-      "version": "2.1.2"
-    },
-    "env": [
-      {
-        "name": "BOWMARK_API_KEY",
-        "required": true,
-        "secret": true
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/bowmark-ai/skill",
-      "source": "registry"
-    },
-    "stars": 1
-  },
-  {
-    "name": "ai.buywhere-buywhere-mcp",
-    "title": "BuyWhere MCP",
-    "description": "Product search, price comparison, and affiliate-ready shopping across Singapore and US retailers.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@buywhere/mcp-server"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@buywhere/mcp-server",
-      "version": "0.3.1"
-    },
-    "env": [
-      {
-        "name": "BUYWHERE_API_KEY",
-        "required": true,
-        "secret": true
-      },
-      {
-        "name": "BUYWHERE_API_URL",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/BuyWhere/buywhere-mcp",
-      "source": "registry"
-    },
-    "stars": 15
-  },
-  {
-    "name": "ai.callmcp-server",
-    "title": "CallMCP — Phone Call MCP Server",
-    "description": "Phone call MCP server: AI agents place and answer real calls, text, email and WhatsApp via KaiCalls.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@callmcp/server"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@callmcp/server",
-      "version": "0.1.5"
-    },
-    "env": [
-      {
-        "name": "CALLMCP_CONFIG",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "CALLMCP_DEFAULT_DRIVER",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/CallMCP/callmcp",
-      "source": "registry"
-    },
-    "stars": 1
-  },
-  {
-    "name": "ai.candlefeed-candlefeed-mcp",
-    "title": "CandleFeed",
-    "description": "Rebuild Binance USD-M order book days for spread and depth; candles, funding, OI and liquidations",
-    "transport": "stdio",
-    "command": "uvx",
-    "args": [
-      "candlefeed-mcp"
-    ],
-    "package": {
-      "manager": "pypi",
-      "name": "candlefeed-mcp",
-      "version": "0.1.5"
-    },
-    "env": [
-      {
-        "name": "CANDLEFEED_API_KEY",
-        "required": true,
-        "secret": true
-      }
-    ]
-  },
-  {
-    "name": "ai.certscore-mcp",
-    "title": "CertScore.ai",
-    "description": "MCP server for CertScore.ai public website risk-signal workflows.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@certscore/mcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@certscore/mcp",
-      "version": "0.2.32"
-    },
-    "repository": {
-      "url": "https://github.com/ergoveritas1-alt/certscore.ai",
-      "source": "registry"
-    },
-    "stars": 0
-  },
-  {
-    "name": "ai.chainhilt-wallet",
-    "title": "ChainHilt Wallet",
-    "description": "Local wallet that signs and sends ChainHilt-verified actions",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "chainhilt"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "chainhilt",
-      "version": "0.0.4"
-    },
-    "repository": {
-      "url": "https://github.com/bancorprotocol/chainhilt-wallet",
-      "source": "registry"
-    },
-    "stars": 0
-  },
-  {
-    "name": "ai.chronary-mcp",
-    "title": "Chronary",
-    "description": "Calendar API for AI agents: events, availability, Google/Microsoft setup, scheduling, and iCal.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@chronary/mcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@chronary/mcp",
-      "version": "1.6.2"
-    },
-    "env": [
-      {
-        "name": "CHRONARY_API_KEY",
-        "required": true,
-        "secret": true
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/Chronary/chronary-mcp",
-      "source": "registry"
-    },
-    "stars": 0
-  },
-  {
-    "name": "ai.circulara-plugin",
-    "description": "Circulara Observe MCP plugin - meters your AI agents' token spend and carbon, free tier.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@circulara/plugin"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@circulara/plugin",
-      "version": "0.1.2"
-    },
-    "env": [
-      {
-        "name": "CIRCULARA_BACKEND_URL",
-        "required": true,
-        "secret": false
-      },
-      {
-        "name": "CIRCULARA_TENANT_ID",
-        "required": true,
-        "secret": false
-      },
-      {
-        "name": "CIRCULARA_TOKEN",
-        "required": true,
-        "secret": true
-      },
-      {
-        "name": "CIRCULARA_SEAT_ID",
-        "required": true,
-        "secret": false
-      },
-      {
-        "name": "CIRCULARA_USER_ID",
-        "required": true,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/CircularRoute/circulara-core",
-      "source": "registry"
-    }
-  },
-  {
-    "name": "ai.clarx-mcp",
-    "description": "Score agent manifests, generate CI workflows, and pull Clarx scan findings into your IDE.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@clarxai/mcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@clarxai/mcp",
-      "version": "0.2.2"
-    },
-    "env": [
-      {
-        "name": "ANTHROPIC_API_KEY",
-        "required": false,
-        "secret": true
-      },
-      {
-        "name": "CLARX_MCP_TOKEN",
-        "required": false,
-        "secret": true
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/Gernika-Labs/clarx-cloud",
-      "source": "registry"
-    }
-  },
-  {
-    "name": "ai.clawfetch-mcp",
-    "description": "Web intelligence for AI agents: fetch, render, extract, research. x402 micropayments, no API keys.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@clawfetch/mcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@clawfetch/mcp",
-      "version": "0.4.0"
-    },
-    "env": [
-      {
-        "name": "CLAWFETCH_PRIVATE_KEY",
-        "required": true,
-        "secret": true
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/clawfetch/clawfetch-mcp",
-      "source": "registry"
-    },
-    "stars": 0
-  },
-  {
-    "name": "ai.clelp-clelp",
-    "title": "Clelp",
-    "description": "Search and rate AI tools, MCP servers, and agent skills, safety-checked and rated by AI agents.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "clelp-mcp-server"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "clelp-mcp-server",
-      "version": "1.1.9"
-    },
-    "env": [
-      {
-        "name": "CLELP_API_KEY",
-        "required": false,
-        "secret": true
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/oscarsterling/clelp-skills",
-      "source": "registry"
-    },
-    "stars": 0
-  },
-  {
-    "name": "ai.clize-clize",
-    "title": "Clize",
-    "description": "Real-world actions for AI coding agents: an inbox with approval outbox, deploys, domains, payments.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@clize/clize"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@clize/clize",
-      "version": "0.52.0"
-    },
-    "repository": {
-      "url": "https://github.com/cooldk/clize-cli",
-      "source": "registry"
-    },
-    "stars": 0
-  },
-  {
-    "name": "ai.clize-domains",
-    "title": "Agent Domains",
-    "description": "Domains your AI agent can buy, point and monitor, with four-layer health checks and alerts.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@clize/domains"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@clize/domains",
-      "version": "0.35.5"
-    },
-    "repository": {
-      "url": "https://github.com/cooldk/clize-cli",
-      "source": "registry"
-    },
-    "stars": 0
-  },
-  {
-    "name": "ai.clize-inbox",
-    "title": "Agent Inbox",
-    "description": "A real email inbox for AI agents: human-approved sends, untrusted-by-default inbound.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@clize/inbox"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@clize/inbox",
-      "version": "0.35.5"
-    },
-    "repository": {
-      "url": "https://github.com/cooldk/clize-cli",
-      "source": "registry"
-    },
-    "stars": 0
-  },
-  {
-    "name": "ai.clize-sites",
-    "title": "Sites by Clize",
-    "description": "Ship a real marketing site from your coding agent: domain, HTTPS and a working inbox.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@clize/sites"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@clize/sites",
-      "version": "0.35.5"
-    },
-    "repository": {
-      "url": "https://github.com/cooldk/clize-cli",
-      "source": "registry"
-    },
-    "stars": 0
-  },
-  {
-    "name": "ai.clize-storefront",
-    "title": "Agent Storefront",
-    "description": "Let your AI agent run a real store: checkout, orders, refunds, shipping and support.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@clize/storefront"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@clize/storefront",
-      "version": "0.35.5"
-    },
-    "repository": {
-      "url": "https://github.com/cooldk/clize-cli",
-      "source": "registry"
-    },
-    "stars": 0
-  },
-  {
-    "name": "ai.codenib-codenib",
-    "title": "CodeNib",
-    "description": "Source-linked CodeGraph exploration, ranked search, and static navigation for coding agents.",
-    "transport": "stdio",
-    "command": "uvx",
-    "args": [
-      "codenib"
-    ],
-    "package": {
-      "manager": "pypi",
-      "name": "codenib",
-      "version": "0.2.5"
-    },
-    "repository": {
-      "url": "https://github.com/sysevol-ai/CodeNib",
-      "source": "registry"
-    },
-    "stars": 95
-  },
-  {
-    "name": "ai.com.mcp-hapi-mcp",
-    "title": "HAPI MCP Server",
-    "description": "HAPI MCP server: Dynamically exposes OpenAPI REST APIs as MCP tools for AI assistants",
-    "transport": "stdio",
-    "command": "docker",
-    "args": [
-      "run",
-      "-i",
-      "--rm",
-      "docker.io/hapimcp/hapi-cli:0.6.0"
-    ],
-    "package": {
-      "manager": "other",
-      "name": "docker.io/hapimcp/hapi-cli:0.6.0"
-    },
-    "env": [
-      {
-        "name": "HAPI_FQDN",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "HAPI_HOME",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "PROJECT_NAME",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "HAPI_OPENAPI",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "HAPI_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "HAPI_PORT",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "HAPI_HEADLESS",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "HAPI_MCP",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "HAPI_DEV",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "HAPI_CORS",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "HAPI_CONFIG_FILES",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "NODE_ENV",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/larebelion/hapimcp",
-      "source": "registry"
-    }
-  },
-  {
-    "name": "ai.cookwala-cookwala",
-    "title": "Cookwala",
-    "description": "Search Cookwala recipes by diet, allergen, method and language; dry-run them safely. Read-only.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@cookwala/mcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@cookwala/mcp",
-      "version": "0.3.3"
-    },
-    "env": [
-      {
-        "name": "COOKWALA_BASE_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "COOKWALA_CACHE_DIR",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "COOKWALA_OFFLINE",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "COOKWALA_LANG",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/amado2k5/cookwala",
-      "source": "registry"
-    },
-    "stars": 0
-  },
-  {
-    "name": "ai.counterparts-memory",
-    "title": "Counterparts",
-    "description": "Local-first memory for AI: it interprets, forgets on purpose, and keeps a self across sessions.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "counterparts"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "counterparts",
-      "version": "0.3.47"
-    },
-    "env": [
-      {
-        "name": "COUNTERPARTS_DATA_DIR",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "COUNTERPARTS_CONFIG",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "COUNTERPARTS_UPDATE_CHECK",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/mlapeter/counterparts",
-      "source": "registry"
-    },
-    "stars": 15
-  },
-  {
-    "name": "ai.cueapi-mcp",
-    "description": "Schedule agent work and report write-once outcomes via CueAPI from any MCP host.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@cueapi/mcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@cueapi/mcp",
-      "version": "0.1.3"
-    },
-    "env": [
-      {
-        "name": "CUEAPI_API_KEY",
-        "required": true,
-        "secret": true
-      },
-      {
-        "name": "CUEAPI_BASE_URL",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/cueapi/cueapi-mcp",
-      "source": "registry"
-    },
-    "stars": 2
-  },
-  {
-    "name": "ai.cybernative-breakage-calendar",
-    "title": "Breakage Calendar",
-    "description": "Which dated upstream breaks hit your repository or dependency list, and the tested fix.",
-    "transport": "stdio",
-    "command": "docker",
-    "args": [
-      "run",
-      "-i",
-      "--rm",
-      "https://github.com/CyberNative-AI/breakage-calendar-mcp/releases/download/v0.1.0/breakage-calendar-mcp-0.1.0.mcpb"
-    ],
-    "package": {
-      "manager": "other",
-      "name": "https://github.com/CyberNative-AI/breakage-calendar-mcp/releases/download/v0.1.0/breakage-calendar-mcp-0.1.0.mcpb"
-    },
-    "repository": {
-      "url": "https://github.com/CyberNative-AI/breakage-calendar-mcp",
-      "source": "registry"
-    },
-    "stars": 0
-  },
-  {
-    "name": "ai.datavidence-datavidence-financials",
-    "title": "Datavidence Financials",
-    "description": "Normalized US-GAAP financial statements & fundamentals from SEC EDGAR, as MCP tools for LLM agents.",
-    "transport": "stdio",
-    "command": "uvx",
-    "args": [
-      "datavidence-financials"
-    ],
-    "package": {
-      "manager": "pypi",
-      "name": "datavidence-financials",
-      "version": "0.1.5"
-    },
-    "env": [
-      {
-        "name": "FL_API_KEY",
-        "required": false,
-        "secret": true
-      },
-      {
-        "name": "FL_API_BASE_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "FL_API_KEY_HEADER",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "FL_API_TIMEOUT",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/datavidence/datavidence-financials-mcp",
-      "source": "registry"
-    },
-    "stars": 0
-  },
-  {
-    "name": "ai.decimal-registry",
-    "title": "DecimalAI Skills Registry",
-    "description": "Search agent skills ranked by measured lift vs a no-skill baseline, with safety and rankings.",
-    "transport": "stdio",
-    "command": "uvx",
-    "args": [
-      "decimalai-mcp"
-    ],
-    "package": {
-      "manager": "pypi",
-      "name": "decimalai-mcp",
-      "version": "0.1.5"
-    },
-    "env": [
-      {
-        "name": "DECIMAL_API_KEY",
-        "required": false,
-        "secret": true
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/decimal-labs/decimalai-mcp",
-      "source": "registry"
-    },
-    "stars": 1
-  },
-  {
-    "name": "ai.deepdna-local",
-    "title": "DeepDNA local",
-    "description": "Reads a raw DNA file on your computer and reports the variants DeepDNA curates, with sources.",
-    "transport": "stdio",
-    "command": "uvx",
-    "args": [
-      "deepdna-mcp"
-    ],
-    "package": {
-      "manager": "pypi",
-      "name": "deepdna-mcp",
-      "version": "0.1.4"
-    },
-    "repository": {
-      "url": "https://github.com/alfonsoguv/deepdna-mcp",
-      "source": "registry"
-    },
-    "stars": 0
-  },
-  {
-    "name": "ai.deinai-creator-skill",
-    "title": "Creator SKILL — Influencer Discovery",
-    "description": "AI influencer search on TikTok, Instagram, YouTube. Deinai MCP token required; credits per result.",
-    "transport": "stdio",
-    "command": "uvx",
-    "args": [
-      "deinai-mcp"
-    ],
-    "package": {
-      "manager": "pypi",
-      "name": "deinai-mcp",
-      "version": "1.0.2"
-    },
-    "env": [
-      {
-        "name": "DEINAI_MCP_TOKEN",
-        "required": true,
-        "secret": true
-      },
-      {
-        "name": "DEINAI_MCP_URL",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/deinai/deinai_backend",
-      "source": "registry"
-    }
-  },
-  {
-    "name": "ai.deinai-creator-skill-v2",
-    "title": "Creator SKILL v2 — Influencer Discovery",
-    "description": "SKILL-02 (not SKILL-01): AI influencer search on TikTok, Instagram & YouTube. sk_live_ token.",
-    "transport": "stdio",
-    "command": "uvx",
-    "args": [
-      "creator-skill-v2"
-    ],
-    "package": {
-      "manager": "pypi",
-      "name": "creator-skill-v2",
-      "version": "0.2.1"
-    },
-    "env": [
-      {
-        "name": "SKILL_TOKEN",
-        "required": true,
-        "secret": true
-      },
-      {
-        "name": "SKILL_MCP_URL",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/deinai/skill-service",
-      "source": "registry"
-    }
-  },
-  {
-    "name": "ai.demomagic-interactive-video-guide",
-    "title": "DemoMagic",
-    "description": "Guides for making interactive videos & AI product demos that answer viewers' questions.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@demomagic/mcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@demomagic/mcp",
-      "version": "0.1.0"
-    }
-  },
-  {
-    "name": "ai.dimensions-analytics-mcp",
-    "title": "Dimensions Analytics",
-    "description": "Search and analyze Dimensions research data: publications, grants, researchers, patents, trials",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@digital-science-dsl/dimensions-analytics-mcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@digital-science-dsl/dimensions-analytics-mcp",
-      "version": "1.4.2"
-    },
-    "env": [
-      {
-        "name": "DIMENSIONS_API_KEY",
-        "required": true,
-        "secret": true
-      },
-      {
-        "name": "DIMENSIONS_BASE_URL",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/digital-science/dimensions-analytics-mcp",
-      "source": "registry"
-    },
-    "stars": 6
-  },
-  {
-    "name": "ai.dinglebear-apprise-rmcp",
-    "title": "Apprise RMCP",
-    "description": "Rust MCP server and CLI for Apprise notification fan-out across dozens of delivery backends.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "apprise-rmcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "apprise-rmcp",
-      "version": "0.1.3"
-    },
-    "env": [
-      {
-        "name": "APPRISE_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "APPRISE_TOKEN",
-        "required": false,
-        "secret": true
-      },
-      {
-        "name": "APPRISE_RMCP_VERSION",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "APPRISE_RMCP_REPO",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "APPRISE_RMCP_RELEASE_BASE_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "RUST_LOG",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/jmagar/apprise-rmcp",
-      "source": "registry"
-    },
-    "stars": 2
-  },
-  {
-    "name": "ai.dinglebear-arcane-rmcp",
-    "title": "Arcane RMCP",
-    "description": "Rust MCP server and CLI for Arcane Docker and container management.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "arcane-rmcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "arcane-rmcp",
-      "version": "0.4.2"
-    },
-    "env": [
-      {
-        "name": "RARCANE_API_URL",
-        "required": true,
-        "secret": false
-      },
-      {
-        "name": "RARCANE_API_KEY",
-        "required": true,
-        "secret": true
-      },
-      {
-        "name": "ARCANE_RMCP_VERSION",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "ARCANE_RMCP_REPO",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "ARCANE_RMCP_RELEASE_BASE_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "RUST_LOG",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/jmagar/arcane-rmcp",
-      "source": "registry"
-    },
-    "stars": 4
-  },
-  {
-    "name": "ai.dinglebear-cortex",
-    "title": "Cortex RMCP",
-    "description": "Self-hosted homelab log intelligence over MCP, CLI, and REST with SQLite/FTS.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@dinglebear/cortex"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@dinglebear/cortex",
-      "version": "3.13.2"
-    },
-    "env": [
-      {
-        "name": "CORTEX_HOME",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "CORTEX_TOKEN",
-        "required": false,
-        "secret": true
-      },
-      {
-        "name": "CORTEX_API_TOKEN",
-        "required": false,
-        "secret": true
-      },
-      {
-        "name": "CORTEX_RMCP_VERSION",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "CORTEX_RMCP_REPO",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "CORTEX_RMCP_RELEASE_BASE_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "RUST_LOG",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/dinglebear-ai/cortex",
-      "source": "registry"
-    },
-    "stars": 4
-  },
-  {
-    "name": "ai.dinglebear-cortex-rmcp",
-    "title": "Cortex RMCP",
-    "description": "Rust MCP server for homelab logs, syslog, Docker logs, FTS search, and AI transcript correlation.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "cortex-rmcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "cortex-rmcp",
-      "version": "3.9.1"
-    },
-    "env": [
-      {
-        "name": "CORTEX_HOME",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "CORTEX_TOKEN",
-        "required": false,
-        "secret": true
-      },
-      {
-        "name": "CORTEX_API_TOKEN",
-        "required": false,
-        "secret": true
-      },
-      {
-        "name": "CORTEX_RMCP_VERSION",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "CORTEX_RMCP_REPO",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "CORTEX_RMCP_RELEASE_BASE_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "RUST_LOG",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/jmagar/cortex",
-      "source": "registry"
-    },
-    "stars": 4
-  },
-  {
-    "name": "ai.dinglebear-gotify-rmcp",
-    "title": "Gotify RMCP",
-    "description": "Rust MCP server and CLI for Gotify push notifications and message management.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "gotify-rmcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "gotify-rmcp",
-      "version": "0.1.3"
-    },
-    "env": [
-      {
-        "name": "GOTIFY_URL",
-        "required": true,
-        "secret": false
-      },
-      {
-        "name": "GOTIFY_CLIENT_TOKEN",
-        "required": false,
-        "secret": true
-      },
-      {
-        "name": "GOTIFY_APP_TOKEN",
-        "required": false,
-        "secret": true
-      },
-      {
-        "name": "GOTIFY_RMCP_VERSION",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "GOTIFY_RMCP_REPO",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "GOTIFY_RMCP_RELEASE_BASE_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "RUST_LOG",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/jmagar/gotify-rmcp",
-      "source": "registry"
-    },
-    "stars": 2
-  },
-  {
-    "name": "ai.dinglebear-labby",
-    "title": "Labby",
-    "description": "Rust MCP gateway with Code Mode, authentication, setup, logs, CLI, HTTP API, and operator web UI.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@dinglebear/labby"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@dinglebear/labby",
-      "version": "2.7.0"
-    },
-    "env": [
-      {
-        "name": "LABBY_VERSION",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "LABBY_REPO",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "LABBY_LOG",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/dinglebear-ai/labby",
-      "source": "registry"
-    },
-    "stars": 9
-  },
-  {
-    "name": "ai.dinglebear-rapprise",
-    "title": "Apprise RMCP",
-    "description": "Apprise notifications over MCP and CLI with authenticated stdio and HTTP transports.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@dinglebear/rapprise"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@dinglebear/rapprise",
-      "version": "0.3.0"
-    },
-    "env": [
-      {
-        "name": "APPRISE_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "APPRISE_TOKEN",
-        "required": false,
-        "secret": true
-      },
-      {
-        "name": "APPRISE_RMCP_VERSION",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "APPRISE_RMCP_REPO",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "APPRISE_RMCP_RELEASE_BASE_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "RUST_LOG",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/dinglebear-ai/rapprise",
-      "source": "registry"
-    },
-    "stars": 2
-  },
-  {
-    "name": "ai.dinglebear-rarcane",
-    "title": "Arcane RMCP",
-    "description": "Arcane Docker and Compose management over MCP and CLI with authenticated stdio and HTTP.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@dinglebear/rarcane"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@dinglebear/rarcane",
-      "version": "0.4.4"
-    },
-    "env": [
-      {
-        "name": "RARCANE_API_URL",
-        "required": true,
-        "secret": false
-      },
-      {
-        "name": "RARCANE_API_KEY",
-        "required": true,
-        "secret": true
-      },
-      {
-        "name": "ARCANE_RMCP_VERSION",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "ARCANE_RMCP_REPO",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "ARCANE_RMCP_RELEASE_BASE_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "RUST_LOG",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/dinglebear-ai/rarcane",
-      "source": "registry"
-    },
-    "stars": 4
-  },
-  {
-    "name": "ai.dinglebear-rgotify",
-    "title": "Gotify RMCP",
-    "description": "Gotify notifications and app, client, and message management over MCP and CLI.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@dinglebear/rgotify"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@dinglebear/rgotify",
-      "version": "0.2.0"
-    },
-    "env": [
-      {
-        "name": "GOTIFY_URL",
-        "required": true,
-        "secret": false
-      },
-      {
-        "name": "GOTIFY_CLIENT_TOKEN",
-        "required": false,
-        "secret": true
-      },
-      {
-        "name": "GOTIFY_APP_TOKEN",
-        "required": false,
-        "secret": true
-      },
-      {
-        "name": "GOTIFY_RMCP_VERSION",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "GOTIFY_RMCP_REPO",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "GOTIFY_RMCP_RELEASE_BASE_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "RUST_LOG",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/dinglebear-ai/rgotify",
-      "source": "registry"
-    },
-    "stars": 2
-  },
-  {
-    "name": "ai.dinglebear-rtailscale",
-    "title": "Tailscale RMCP",
-    "description": "Tailscale device, route, DNS, key, user, and ACL management over MCP and CLI.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@dinglebear/rtailscale"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@dinglebear/rtailscale",
-      "version": "0.1.4"
-    },
-    "env": [
-      {
-        "name": "TAILSCALE_API_KEY",
-        "required": true,
-        "secret": true
-      },
-      {
-        "name": "TAILSCALE_RMCP_VERSION",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "TAILSCALE_RMCP_REPO",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "TAILSCALE_RMCP_RELEASE_BASE_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "RUST_LOG",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/dinglebear-ai/rtailscale",
-      "source": "registry"
-    },
-    "stars": 5
-  },
-  {
-    "name": "ai.dinglebear-runifi",
-    "title": "UniFi RMCP",
-    "description": "Rust MCP server and CLI for UniFi Network controller operations.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@dinglebear/runifi"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@dinglebear/runifi",
-      "version": "0.2.5"
-    },
-    "env": [
-      {
-        "name": "UNIFI_URL",
-        "required": true,
-        "secret": false
-      },
-      {
-        "name": "UNIFI_API_KEY",
-        "required": true,
-        "secret": true
-      },
-      {
-        "name": "UNIFI_RMCP_VERSION",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "UNIFI_RMCP_REPO",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "UNIFI_RMCP_RELEASE_BASE_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "RUST_LOG",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/dinglebear-ai/runifi",
-      "source": "registry"
-    },
-    "stars": 5
-  },
-  {
-    "name": "ai.dinglebear-rytdl",
-    "title": "YTDL RMCP",
-    "description": "yt-dlp search, download, metadata, delivery, and Plex workflows over MCP and CLI.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@dinglebear/rytdl"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@dinglebear/rytdl",
-      "version": "1.0.4"
-    },
-    "env": [
-      {
-        "name": "YTDLP_PLEX_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "YTDLP_PLEX_TOKEN",
-        "required": false,
-        "secret": true
-      },
-      {
-        "name": "YTDLP_ACOUSTID_CLIENT_KEY",
-        "required": false,
-        "secret": true
-      },
-      {
-        "name": "YTDL_RMCP_BINARY_VERSION",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "YTDL_RMCP_RELEASE_BASE_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "RUST_LOG",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/dinglebear-ai/rytdl",
-      "source": "registry"
-    },
-    "stars": 3
-  },
-  {
-    "name": "ai.dinglebear-soma",
-    "title": "Soma",
-    "description": "RMCP runtime for provider-backed agents with CLI, REST, HTTP MCP, plugins, and scaffold support.",
-    "transport": "stdio",
-    "command": "docker",
-    "args": [
-      "run",
-      "-i",
-      "--rm",
-      "ghcr.io/dinglebear-ai/soma:0.10.0"
-    ],
-    "package": {
-      "manager": "other",
-      "name": "ghcr.io/dinglebear-ai/soma:0.10.0"
-    },
-    "env": [
-      {
-        "name": "SOMA_HOME",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "SOMA_PROVIDER_DIR",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "SOMA_API_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "SOMA_API_KEY",
-        "required": false,
-        "secret": true
-      },
-      {
-        "name": "RUST_LOG",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/dinglebear-ai/soma",
-      "source": "registry"
-    },
-    "stars": 1
-  },
-  {
-    "name": "ai.dinglebear-synapse",
-    "title": "Synapse RMCP",
-    "description": "Host, Docker, Compose, SSH, logs, ZFS, and file operations over MCP and CLI.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@dinglebear/synapse"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@dinglebear/synapse",
-      "version": "1.0.0"
-    },
-    "env": [
-      {
-        "name": "SYNAPSE_HOME",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "SYNAPSE_HOSTS_CONFIG",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "SYNAPSE_CONFIG_FILE",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "SYNAPSE_RMCP_VERSION",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "SYNAPSE_RMCP_REPO",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "SYNAPSE_RMCP_RELEASE_BASE_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "RUST_LOG",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/dinglebear-ai/synapse",
-      "source": "registry"
-    },
-    "stars": 2
-  },
-  {
-    "name": "ai.dinglebear-synapse-rmcp",
-    "title": "Synapse RMCP",
-    "description": "Rust MCP and CLI server for Docker, host inspection, SSH, logs, ZFS, and safe file operations.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "synapse-rmcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "synapse-rmcp",
-      "version": "0.5.4"
-    },
-    "env": [
-      {
-        "name": "SYNAPSE_HOME",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "SYNAPSE_HOSTS_CONFIG",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "SYNAPSE_CONFIG_FILE",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "SYNAPSE_RMCP_VERSION",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "SYNAPSE_RMCP_REPO",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "SYNAPSE_RMCP_RELEASE_BASE_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "RUST_LOG",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/jmagar/synapse-rmcp",
-      "source": "registry"
-    },
-    "stars": 2
-  },
-  {
-    "name": "ai.dinglebear-tailscale-rmcp",
-    "title": "Tailscale RMCP",
-    "description": "Rust MCP server and CLI for Tailscale devices, users, keys, policies, and auth.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "tailscale-rmcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "tailscale-rmcp",
-      "version": "0.1.3"
-    },
-    "env": [
-      {
-        "name": "TAILSCALE_API_KEY",
-        "required": true,
-        "secret": true
-      },
-      {
-        "name": "TAILSCALE_RMCP_VERSION",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "TAILSCALE_RMCP_REPO",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "TAILSCALE_RMCP_RELEASE_BASE_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "RUST_LOG",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/jmagar/tailscale-rmcp",
-      "source": "registry"
-    },
-    "stars": 5
-  },
-  {
-    "name": "ai.dinglebear-unifi-rmcp",
-    "title": "UniFi RMCP",
-    "description": "Rust MCP server and CLI for UniFi Network controller operations.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "unifi-rmcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "unifi-rmcp",
-      "version": "0.2.4"
-    },
-    "env": [
-      {
-        "name": "UNIFI_URL",
-        "required": true,
-        "secret": false
-      },
-      {
-        "name": "UNIFI_API_KEY",
-        "required": true,
-        "secret": true
-      },
-      {
-        "name": "UNIFI_RMCP_VERSION",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "UNIFI_RMCP_REPO",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "UNIFI_RMCP_RELEASE_BASE_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "RUST_LOG",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/jmagar/unifi-rmcp",
-      "source": "registry"
-    },
-    "stars": 5
-  },
-  {
-    "name": "ai.dinglebear-unraid",
-    "title": "Unraid RMCP",
-    "description": "Rust MCP server and CLI for Unraid GraphQL operations across NAS, Docker, VM, and storage workflows.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@dinglebear/unraid"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@dinglebear/unraid",
-      "version": "0.6.3"
-    },
-    "env": [
-      {
-        "name": "UNRAID_API_URL",
-        "required": true,
-        "secret": false
-      },
-      {
-        "name": "UNRAID_API_KEY",
-        "required": true,
-        "secret": true
-      },
-      {
-        "name": "UNRAID_RMCP_VERSION",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "UNRAID_RMCP_REPO",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "UNRAID_RMCP_RELEASE_BASE_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "RUST_LOG",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/dinglebear-ai/unraid",
-      "source": "registry"
-    },
-    "stars": 153
-  },
-  {
-    "name": "ai.dinglebear-unraid-mcp",
-    "title": "Unraid MCP",
-    "description": "MCP server for Unraid API — provides tools to interact with an Unraid server's GraphQL API.",
-    "transport": "stdio",
-    "command": "uvx",
-    "args": [
-      "unraid-mcp"
-    ],
-    "package": {
-      "manager": "pypi",
-      "name": "unraid-mcp",
-      "version": "2.10.3"
-    },
-    "env": [
-      {
-        "name": "UNRAID_API_URL",
-        "required": true,
-        "secret": false
-      },
-      {
-        "name": "UNRAID_API_KEY",
-        "required": true,
-        "secret": true
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/dinglebear-ai/unraid",
-      "source": "registry"
-    },
-    "stars": 153
-  },
-  {
-    "name": "ai.dinglebear-unraid-rmcp",
-    "title": "Unraid RMCP",
-    "description": "Rust MCP server and CLI for Unraid GraphQL, NAS, Docker, VM, and storage workflows.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "unraid-rmcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "unraid-rmcp",
-      "version": "0.2.3"
-    },
-    "env": [
-      {
-        "name": "UNRAID_API_URL",
-        "required": true,
-        "secret": false
-      },
-      {
-        "name": "UNRAID_API_KEY",
-        "required": true,
-        "secret": true
-      },
-      {
-        "name": "UNRAID_RMCP_VERSION",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "UNRAID_RMCP_REPO",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "UNRAID_RMCP_RELEASE_BASE_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "RUST_LOG",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/jmagar/unraid-rmcp",
-      "source": "registry"
-    }
-  },
-  {
-    "name": "ai.dinglebear-yarr",
-    "title": "Yarr MCP",
-    "description": "Self-hosted media fleet operations across Sonarr, Radarr, Plex, and related apps over MCP and CLI.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@dinglebear/yarr"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@dinglebear/yarr",
-      "version": "2.2.2"
-    },
-    "env": [
-      {
-        "name": "YARR_SONARR_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "YARR_SONARR_API_KEY",
-        "required": false,
-        "secret": true
-      },
-      {
-        "name": "YARR_RADARR_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "YARR_RADARR_API_KEY",
-        "required": false,
-        "secret": true
-      },
-      {
-        "name": "YARR_PLEX_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "YARR_PLEX_TOKEN",
-        "required": false,
-        "secret": true
-      },
-      {
-        "name": "YARR_VERSION",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "YARR_REPO",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "YARR_RELEASE_BASE_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "RUST_LOG",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/dinglebear-ai/yarr",
-      "source": "registry"
-    },
-    "stars": 17
-  },
-  {
-    "name": "ai.dinglebear-yarr-mcp",
-    "title": "Yarr MCP",
-    "description": "Rust MCP and CLI server for Sonarr, Radarr, Prowlarr, Plex, Jellyfin, and download clients.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "yarr-mcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "yarr-mcp",
-      "version": "1.1.1"
-    },
-    "env": [
-      {
-        "name": "YARR_SONARR_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "YARR_SONARR_API_KEY",
-        "required": false,
-        "secret": true
-      },
-      {
-        "name": "YARR_RADARR_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "YARR_RADARR_API_KEY",
-        "required": false,
-        "secret": true
-      },
-      {
-        "name": "YARR_PLEX_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "YARR_PLEX_TOKEN",
-        "required": false,
-        "secret": true
-      },
-      {
-        "name": "YARR_VERSION",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "YARR_REPO",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "YARR_RELEASE_BASE_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "RUST_LOG",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/jmagar/yarr",
-      "source": "registry"
-    },
-    "stars": 17
-  },
-  {
-    "name": "ai.dinglebear-ytdl-rmcp",
-    "title": "YTDL RMCP",
-    "description": "Rust MCP server and CLI for yt-dlp search, downloads, metadata, transfers, and Plex playlists.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "ytdl-rmcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "ytdl-rmcp",
-      "version": "1.0.2"
-    },
-    "env": [
-      {
-        "name": "YTDLP_PLEX_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "YTDLP_PLEX_TOKEN",
-        "required": false,
-        "secret": true
-      },
-      {
-        "name": "YTDLP_ACOUSTID_CLIENT_KEY",
-        "required": false,
-        "secret": true
-      },
-      {
-        "name": "YTDL_RMCP_BINARY_VERSION",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "YTDL_RMCP_RELEASE_BASE_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "RUST_LOG",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/jmagar/ytdl-rmcp",
-      "source": "registry"
-    },
-    "stars": 3
-  },
-  {
-    "name": "ai.doublespeed-mcp",
-    "title": "doublespeed — Xcode as an API",
-    "description": "Build, test and run iOS apps on a remote Mac from any machine. XcodeBuildMCP-compatible tools.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@doublespeed/mcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@doublespeed/mcp",
-      "version": "0.1.1"
-    },
-    "env": [
-      {
-        "name": "DS_API_KEY",
-        "required": true,
-        "secret": true
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/doublespeed-main/mcp",
-      "source": "registry"
-    },
-    "stars": 0
-  },
-  {
-    "name": "ai.dxpert-mcp",
-    "title": "dxpert.ai — industrial AI-readiness & UNS agents",
-    "description": "AI-readiness diagnostic, dxpert Advisor and the industrial agents of dxpert Pro, for MCP clients.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@dxpert/mcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@dxpert/mcp",
-      "version": "0.2.1"
-    },
-    "env": [
-      {
-        "name": "DXPERT_API_KEY",
-        "required": true,
-        "secret": true
-      },
-      {
-        "name": "DXPERT_API_BASE",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/dxpert-ai/dxpert-mcp",
-      "source": "registry"
-    },
-    "stars": 0
-  },
-  {
-    "name": "ai.dxpert-uns-tools",
-    "title": "dxpert.ai — free UNS tools (no API key)",
-    "description": "Free Sparkplug B topic linting, UNS naming checks and AI-readiness screening. No API key.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@dxpert/uns-tools"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@dxpert/uns-tools",
-      "version": "0.1.4"
-    },
-    "env": [
-      {
-        "name": "DXPERT_API_BASE",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/dxpert-ai/uns-tools",
-      "source": "registry"
-    },
-    "stars": 0
-  },
-  {
-    "name": "ai.dynsoft-sac",
-    "title": "SaC — Software as Content",
-    "description": "Give your AI agent the ability to respond with live, interactive apps that evolve.",
-    "transport": "stdio",
-    "command": "uvx",
-    "args": [
-      "sac-sdk"
-    ],
-    "package": {
-      "manager": "pypi",
-      "name": "sac-sdk",
-      "version": "0.1.2"
-    },
-    "env": [
-      {
-        "name": "SAC_API_KEY",
-        "required": true,
-        "secret": true
-      },
-      {
-        "name": "SAC_API_BASE",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "SAC_MODEL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "SAC_SEARCH_API_KEY",
-        "required": false,
-        "secret": true
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/Software-As-Content/software-as-content-sdk",
-      "source": "registry"
-    },
-    "stars": 4
-  },
-  {
-    "name": "ai.ekwo-mcp",
-    "title": "Ekwo OS — open source accounting: ledger, invoices and VAT on your own Supabase or Postgres",
-    "description": "Double-entry books an agent keeps as the user: invoices, VAT returns, 174 country packs.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@ekwo-ai/mcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@ekwo-ai/mcp",
-      "version": "0.24.0"
-    },
-    "env": [
-      {
-        "name": "SUPABASE_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "SUPABASE_ANON_KEY",
-        "required": false,
-        "secret": true
-      },
-      {
-        "name": "EKWO_EMAIL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "EKWO_PASSWORD",
-        "required": false,
-        "secret": true
-      },
-      {
-        "name": "EKWO_ACCESS_TOKEN",
-        "required": false,
-        "secret": true
-      },
-      {
-        "name": "EKWO_DB_URL",
-        "required": false,
-        "secret": true
-      },
-      {
-        "name": "EKWO_ACT_AS_USER_ID",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "EKWO_EINVOICE_DIRECTORY",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "EKWO_AGENT_POSTING",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/Ekwo-ai/ekwo-os",
-      "source": "registry"
-    },
-    "stars": 42
-  },
-  {
-    "name": "ai.elfa-mcp",
-    "description": "Crypto social intelligence from X and Telegram, plus the Elfa Auto condition engine",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@elfa-ai/mcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@elfa-ai/mcp",
-      "version": "4.10.0"
-    },
-    "env": [
-      {
-        "name": "ELFA_API_KEY",
-        "required": true,
-        "secret": true
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/elfa-ai/mcp",
-      "source": "registry"
-    },
-    "stars": 7
-  },
-  {
-    "name": "ai.elicitly-elicitly",
-    "title": "Elicitly",
-    "description": "Human-in-the-loop for AI agents over MCP elicitation: confirm/form dialogs plus a capability doctor",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "elicitly"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "elicitly",
-      "version": "0.8.6"
-    },
-    "repository": {
-      "url": "https://github.com/elicitly/elicitly",
-      "source": "registry"
-    },
-    "stars": 1
-  },
-  {
-    "name": "ai.eonik-mcp",
-    "title": "eonik",
-    "description": "Set up eonik, watch competitors, read your own ads and make every size of an ad, from any assistant.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "eonik-mcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "eonik-mcp",
-      "version": "5.0.0"
-    },
-    "env": [
-      {
-        "name": "EONIK_API_KEY",
-        "required": true,
-        "secret": true
-      },
-      {
-        "name": "EONIK_API_URL",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "EONIK_BRAND_ID",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/eonik-ai/eonik-mcp",
-      "source": "registry"
-    },
-    "stars": 1
-  },
-  {
-    "name": "ai.escro-escro",
-    "title": "Escro",
-    "description": "USDC escrow on Solana for bot-to-bot work. The buyer releases on delivery; the default is refund.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@escro/mcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@escro/mcp",
-      "version": "0.1.3"
-    },
-    "env": [
-      {
-        "name": "ESCRO_API_URL",
-        "required": true,
-        "secret": false
-      },
-      {
-        "name": "ESCRO_RPC_URL",
-        "required": true,
-        "secret": false
-      },
-      {
-        "name": "CLUSTER",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "ESCRO_WALLET_SECRET",
-        "required": false,
-        "secret": true
-      },
-      {
-        "name": "ESCRO_SPEND_CAP_USDC",
-        "required": false,
-        "secret": false
-      },
-      {
-        "name": "ESCRO_PAY_402_ALLOW_PRIVATE_HOSTS",
-        "required": false,
-        "secret": false
-      }
-    ],
-    "repository": {
-      "url": "https://github.com/escro-ai/escro.ai",
-      "source": "registry"
-    },
-    "stars": 0
-  },
-  {
-    "name": "ai.etincel-etincel-nonfiction",
-    "description": "Trainable non-fiction writing voice, presets, and an anti-AI-tells audit for Claude, via MCP.",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "etincel"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "etincel",
-      "version": "0.10.1"
-    },
-    "repository": {
-      "url": "https://github.com/AIStoryHub/etincel",
-      "source": "registry"
-    },
-    "stars": 9
+      "name": "mcp/atlas-docs"
+    },
+    "popularity": 24663,
+    "homepage": "https://hub.docker.com/r/mcp/atlas-docs",
+    "origin": "marketplace"
   },
   {
     "name": "atlassian",
     "title": "Atlassian (Jira + Confluence)",
     "description": "Search and edit Jira issues and Confluence pages.",
+    "stars": 1600,
+    "repository": {
+      "url": "https://github.com/sooperset/mcp-atlassian",
+      "source": "marketplace"
+    },
+    "origin": "marketplace",
     "transport": "stdio",
     "command": "uvx",
     "args": [
@@ -3815,17 +51,117 @@
         "name": "JIRA_API_TOKEN",
         "required": false
       }
+    ]
+  },
+  {
+    "name": "audiense-insights",
+    "title": "Audiense Insights",
+    "description": "Audiense Insights MCP Server is a server based on the Model Context Protocol (MCP) that allows Cl...",
+    "transport": "stdio",
+    "command": "docker",
+    "args": [
+      "run",
+      "-i",
+      "--rm",
+      "mcp/audiense-insights"
     ],
-    "stars": 1600,
+    "package": {
+      "manager": "other",
+      "name": "mcp/audiense-insights"
+    },
+    "popularity": 41948,
+    "homepage": "https://hub.docker.com/r/mcp/audiense-insights",
+    "origin": "marketplace"
+  },
+  {
+    "name": "aws-documentation",
+    "title": "AWS Documentation",
+    "description": "Search and read AWS documentation, including the latest service guides.",
+    "transport": "stdio",
+    "command": "uvx",
+    "args": [
+      "awslabs.aws-documentation-mcp-server@latest"
+    ],
+    "package": {
+      "manager": "pypi",
+      "name": "awslabs.aws-documentation-mcp-server"
+    },
+    "homepage": "https://aws.amazon.com",
     "repository": {
-      "url": "https://github.com/sooperset/mcp-atlassian",
-      "source": "marketplace"
-    }
+      "url": "https://github.com/awslabs/mcp",
+      "source": "curated"
+    },
+    "origin": "curated"
+  },
+  {
+    "name": "aws-kb-retrieval-server",
+    "title": "AWS Kb Retrieval Server",
+    "description": "An MCP server implementation for retrieving information from the AWS Knowledge Base using the Bed...",
+    "transport": "stdio",
+    "command": "docker",
+    "args": [
+      "run",
+      "-i",
+      "--rm",
+      "mcp/aws-kb-retrieval-server"
+    ],
+    "package": {
+      "manager": "other",
+      "name": "mcp/aws-kb-retrieval-server"
+    },
+    "popularity": 23136,
+    "homepage": "https://hub.docker.com/r/mcp/aws-kb-retrieval-server",
+    "origin": "marketplace"
+  },
+  {
+    "name": "azure",
+    "title": "Azure",
+    "description": "The Azure MCP Server, bringing the power of Azure to your agents.",
+    "transport": "stdio",
+    "command": "docker",
+    "args": [
+      "run",
+      "-i",
+      "--rm",
+      "mcp/azure"
+    ],
+    "package": {
+      "manager": "other",
+      "name": "mcp/azure"
+    },
+    "popularity": 77406,
+    "homepage": "https://hub.docker.com/r/mcp/azure",
+    "origin": "marketplace"
+  },
+  {
+    "name": "bitrefill",
+    "title": "Bitrefill",
+    "description": "A Model Context Protocol Server connector for Bitrefill public API, to enable AI agents to search...",
+    "transport": "stdio",
+    "command": "docker",
+    "args": [
+      "run",
+      "-i",
+      "--rm",
+      "mcp/bitrefill"
+    ],
+    "package": {
+      "manager": "other",
+      "name": "mcp/bitrefill"
+    },
+    "popularity": 40186,
+    "homepage": "https://hub.docker.com/r/mcp/bitrefill",
+    "origin": "marketplace"
   },
   {
     "name": "brave-search",
     "title": "Brave Search",
     "description": "Web and local search powered by Brave's Search API.",
+    "repository": {
+      "url": "https://github.com/modelcontextprotocol/servers/tree/main/src/brave-search",
+      "source": "marketplace"
+    },
+    "origin": "marketplace",
     "transport": "stdio",
     "command": "npx",
     "args": [
@@ -3841,17 +177,58 @@
         "name": "BRAVE_API_KEY",
         "required": false
       }
+    ]
+  },
+  {
+    "name": "chroma",
+    "title": "Chroma",
+    "description": "A Model Context Protocol (MCP) server implementation that provides database capabilities for Chroma",
+    "transport": "stdio",
+    "command": "docker",
+    "args": [
+      "run",
+      "-i",
+      "--rm",
+      "mcp/chroma"
     ],
-    "stars": 51000,
-    "repository": {
-      "url": "https://github.com/modelcontextprotocol/servers/tree/main/src/brave-search",
-      "source": "marketplace"
-    }
+    "package": {
+      "manager": "other",
+      "name": "mcp/chroma"
+    },
+    "popularity": 62064,
+    "homepage": "https://hub.docker.com/r/mcp/chroma",
+    "origin": "marketplace"
+  },
+  {
+    "name": "circleci",
+    "title": "Circleci",
+    "description": "A specialized server implementation for the Model Context Protocol (MCP) designed to integrate wi...",
+    "transport": "stdio",
+    "command": "docker",
+    "args": [
+      "run",
+      "-i",
+      "--rm",
+      "mcp/circleci"
+    ],
+    "package": {
+      "manager": "other",
+      "name": "mcp/circleci"
+    },
+    "popularity": 42482,
+    "homepage": "https://hub.docker.com/r/mcp/circleci",
+    "origin": "marketplace"
   },
   {
     "name": "cloudflare",
     "title": "Cloudflare",
     "description": "Manage Workers, KV, R2, and D1 from your model.",
+    "stars": 4100,
+    "repository": {
+      "url": "https://github.com/cloudflare/mcp-server-cloudflare",
+      "source": "marketplace"
+    },
+    "origin": "marketplace",
     "transport": "stdio",
     "command": "npx",
     "args": [
@@ -3862,12 +239,20 @@
     "package": {
       "manager": "npm",
       "name": "@cloudflare/mcp-server-cloudflare"
-    },
-    "stars": 4100,
-    "repository": {
-      "url": "https://github.com/cloudflare/mcp-server-cloudflare",
-      "source": "marketplace"
     }
+  },
+  {
+    "name": "cloudflare-docs",
+    "title": "Cloudflare Docs",
+    "description": "Search Cloudflare's developer documentation from an HTTP MCP endpoint.",
+    "transport": "http",
+    "url": "https://docs.mcp.cloudflare.com/mcp",
+    "homepage": "https://developers.cloudflare.com",
+    "repository": {
+      "url": "https://github.com/cloudflare/cloudflare-docs",
+      "source": "curated"
+    },
+    "origin": "curated"
   },
   {
     "name": "context7",
@@ -3895,12 +280,213 @@
         "secret": true,
         "description": "Optional key for higher rate limits."
       }
-    ]
+    ],
+    "origin": "curated"
+  },
+  {
+    "name": "context7-http",
+    "title": "Context7",
+    "description": "Up-to-date library documentation over a hosted HTTP endpoint.",
+    "transport": "http",
+    "url": "https://mcp.context7.com/mcp",
+    "homepage": "https://context7.com",
+    "repository": {
+      "url": "https://github.com/upstash/context7",
+      "source": "curated"
+    },
+    "env": [
+      {
+        "name": "CONTEXT7_API_KEY",
+        "required": false,
+        "secret": true,
+        "description": "Optional key for higher rate limits."
+      }
+    ],
+    "origin": "curated"
+  },
+  {
+    "name": "cyreslab-ai-shodan",
+    "title": "Cyreslab AI Shodan",
+    "description": "MCP server for Shodan — host/network recon, CVE and exploit lookup, InternetDB, and persistent ...",
+    "transport": "stdio",
+    "command": "docker",
+    "args": [
+      "run",
+      "-i",
+      "--rm",
+      "mcp/cyreslab-ai-shodan"
+    ],
+    "package": {
+      "manager": "other",
+      "name": "mcp/cyreslab-ai-shodan"
+    },
+    "popularity": 47334,
+    "homepage": "https://hub.docker.com/r/mcp/cyreslab-ai-shodan",
+    "origin": "marketplace"
+  },
+  {
+    "name": "databutton",
+    "title": "Databutton",
+    "description": "Databutton MCP Server",
+    "transport": "stdio",
+    "command": "docker",
+    "args": [
+      "run",
+      "-i",
+      "--rm",
+      "mcp/databutton"
+    ],
+    "package": {
+      "manager": "other",
+      "name": "mcp/databutton"
+    },
+    "popularity": 22431,
+    "homepage": "https://hub.docker.com/r/mcp/databutton",
+    "origin": "marketplace"
+  },
+  {
+    "name": "deepwiki",
+    "title": "DeepWiki",
+    "description": "Ask questions about any public GitHub repository's documentation and code.",
+    "transport": "http",
+    "url": "https://mcp.deepwiki.com/mcp",
+    "homepage": "https://deepwiki.com",
+    "repository": {
+      "url": "https://github.com/AsyncFuncAI/deepwiki-open",
+      "source": "curated"
+    },
+    "origin": "curated"
+  },
+  {
+    "name": "desktop-commander",
+    "title": "Desktop Commander",
+    "description": "Search, update, manage files and run terminal commands with AI",
+    "transport": "stdio",
+    "command": "docker",
+    "args": [
+      "run",
+      "-i",
+      "--rm",
+      "mcp/desktop-commander"
+    ],
+    "package": {
+      "manager": "other",
+      "name": "mcp/desktop-commander"
+    },
+    "popularity": 245610,
+    "homepage": "https://hub.docker.com/r/mcp/desktop-commander",
+    "origin": "marketplace"
+  },
+  {
+    "name": "docker",
+    "title": "Docker",
+    "description": "MCP smart gateway used by the AI Tool Catalog",
+    "transport": "stdio",
+    "command": "docker",
+    "args": [
+      "run",
+      "-i",
+      "--rm",
+      "mcp/docker"
+    ],
+    "package": {
+      "manager": "other",
+      "name": "mcp/docker"
+    },
+    "popularity": 275703,
+    "homepage": "https://hub.docker.com/r/mcp/docker",
+    "origin": "marketplace"
+  },
+  {
+    "name": "duckduckgo",
+    "title": "Duckduckgo",
+    "description": "Community-maintained server for DuckDuckGo search. Not published by or affiliated with DuckDuckGo.",
+    "transport": "stdio",
+    "command": "docker",
+    "args": [
+      "run",
+      "-i",
+      "--rm",
+      "mcp/duckduckgo"
+    ],
+    "package": {
+      "manager": "other",
+      "name": "mcp/duckduckgo"
+    },
+    "popularity": 1065262,
+    "homepage": "https://hub.docker.com/r/mcp/duckduckgo",
+    "origin": "marketplace"
+  },
+  {
+    "name": "e2b",
+    "title": "E2b",
+    "description": "Giving Claude ability to run code with E2B via MCP (Model Context Protocol)",
+    "transport": "stdio",
+    "command": "docker",
+    "args": [
+      "run",
+      "-i",
+      "--rm",
+      "mcp/e2b"
+    ],
+    "package": {
+      "manager": "other",
+      "name": "mcp/e2b"
+    },
+    "popularity": 23981,
+    "homepage": "https://hub.docker.com/r/mcp/e2b",
+    "origin": "marketplace"
+  },
+  {
+    "name": "edubase",
+    "title": "Edubase",
+    "description": "The EduBase MCP server enables Claude and other LLMs to interact with EduBase's comprehensive e-l...",
+    "transport": "stdio",
+    "command": "docker",
+    "args": [
+      "run",
+      "-i",
+      "--rm",
+      "mcp/edubase"
+    ],
+    "package": {
+      "manager": "other",
+      "name": "mcp/edubase"
+    },
+    "popularity": 62576,
+    "homepage": "https://hub.docker.com/r/mcp/edubase",
+    "origin": "marketplace"
+  },
+  {
+    "name": "elasticsearch",
+    "title": "Elasticsearch",
+    "description": "Interact with your Elasticsearch indices through natural language conversations.",
+    "transport": "stdio",
+    "command": "docker",
+    "args": [
+      "run",
+      "-i",
+      "--rm",
+      "mcp/elasticsearch"
+    ],
+    "package": {
+      "manager": "other",
+      "name": "mcp/elasticsearch"
+    },
+    "popularity": 48972,
+    "homepage": "https://hub.docker.com/r/mcp/elasticsearch",
+    "origin": "marketplace"
   },
   {
     "name": "elevenlabs",
     "title": "ElevenLabs",
     "description": "Text-to-speech and voice cloning via ElevenLabs.",
+    "stars": 2700,
+    "repository": {
+      "url": "https://github.com/elevenlabs/elevenlabs-mcp",
+      "source": "marketplace"
+    },
+    "origin": "marketplace",
     "transport": "stdio",
     "command": "uvx",
     "args": [
@@ -3915,17 +501,17 @@
         "name": "ELEVENLABS_API_KEY",
         "required": false
       }
-    ],
-    "stars": 2700,
-    "repository": {
-      "url": "https://github.com/elevenlabs/elevenlabs-mcp",
-      "source": "marketplace"
-    }
+    ]
   },
   {
     "name": "everart",
     "title": "EverArt",
     "description": "Generate images via the EverArt API.",
+    "repository": {
+      "url": "https://github.com/modelcontextprotocol/servers/tree/main/src/everart",
+      "source": "marketplace"
+    },
+    "origin": "marketplace",
     "transport": "stdio",
     "command": "npx",
     "args": [
@@ -3941,17 +527,17 @@
         "name": "EVERART_API_KEY",
         "required": false
       }
-    ],
-    "stars": 51000,
-    "repository": {
-      "url": "https://github.com/modelcontextprotocol/servers/tree/main/src/everart",
-      "source": "marketplace"
-    }
+    ]
   },
   {
     "name": "everything",
     "title": "Everything",
     "description": "Reference server demonstrating every MCP capability.",
+    "repository": {
+      "url": "https://github.com/modelcontextprotocol/servers/tree/main/src/everything",
+      "source": "marketplace"
+    },
+    "origin": "marketplace",
     "transport": "stdio",
     "command": "npx",
     "args": [
@@ -3961,17 +547,18 @@
     "package": {
       "manager": "npm",
       "name": "@modelcontextprotocol/server-everything"
-    },
-    "stars": 51000,
-    "repository": {
-      "url": "https://github.com/modelcontextprotocol/servers/tree/main/src/everything",
-      "source": "marketplace"
     }
   },
   {
     "name": "exa",
     "title": "Exa Search",
     "description": "Neural search across the web with citations.",
+    "stars": 3100,
+    "repository": {
+      "url": "https://github.com/exa-labs/exa-mcp-server",
+      "source": "marketplace"
+    },
+    "origin": "marketplace",
     "transport": "stdio",
     "command": "npx",
     "args": [
@@ -3987,12 +574,7 @@
         "name": "EXA_API_KEY",
         "required": false
       }
-    ],
-    "stars": 3100,
-    "repository": {
-      "url": "https://github.com/exa-labs/exa-mcp-server",
-      "source": "marketplace"
-    }
+    ]
   },
   {
     "name": "fetch",
@@ -4006,12 +588,19 @@
     "package": {
       "manager": "pypi",
       "name": "mcp-server-fetch"
-    }
+    },
+    "origin": "curated"
   },
   {
     "name": "figma",
     "title": "Figma",
     "description": "Read Figma files, frames, and components.",
+    "stars": 6200,
+    "repository": {
+      "url": "https://github.com/figma/mcp",
+      "source": "marketplace"
+    },
+    "origin": "marketplace",
     "transport": "stdio",
     "command": "npx",
     "args": [
@@ -4027,12 +616,7 @@
         "name": "FIGMA_TOKEN",
         "required": false
       }
-    ],
-    "stars": 6200,
-    "repository": {
-      "url": "https://github.com/figma/mcp",
-      "source": "marketplace"
-    }
+    ]
   },
   {
     "name": "filesystem",
@@ -4056,7 +640,28 @@
           "purpose": "Files the server may read and edit"
         }
       ]
-    }
+    },
+    "origin": "curated"
+  },
+  {
+    "name": "firecrawl",
+    "title": "Firecrawl",
+    "description": "Search, scrape, and interact with the web for AI agents. Turn any URL into clean Markdown or stru...",
+    "transport": "stdio",
+    "command": "docker",
+    "args": [
+      "run",
+      "-i",
+      "--rm",
+      "mcp/firecrawl"
+    ],
+    "package": {
+      "manager": "other",
+      "name": "mcp/firecrawl"
+    },
+    "popularity": 151700,
+    "homepage": "https://hub.docker.com/r/mcp/firecrawl",
+    "origin": "marketplace"
   },
   {
     "name": "git",
@@ -4070,7 +675,8 @@
     "package": {
       "manager": "pypi",
       "name": "mcp-server-git"
-    }
+    },
+    "origin": "curated"
   },
   {
     "name": "github",
@@ -4093,12 +699,73 @@
         "secret": true,
         "description": "A fine-grained personal access token."
       }
-    ]
+    ],
+    "origin": "curated"
+  },
+  {
+    "name": "github-chat",
+    "title": "Github Chat",
+    "description": "A Model Context Protocol (MCP) for analyzing and querying GitHub repositories using the GitHub Ch...",
+    "transport": "stdio",
+    "command": "docker",
+    "args": [
+      "run",
+      "-i",
+      "--rm",
+      "mcp/github-chat"
+    ],
+    "package": {
+      "manager": "other",
+      "name": "mcp/github-chat"
+    },
+    "popularity": 46637,
+    "homepage": "https://hub.docker.com/r/mcp/github-chat",
+    "origin": "marketplace"
+  },
+  {
+    "name": "gitlab",
+    "title": "GitLab",
+    "description": "Read projects, merge requests and issues through the GitLab API.",
+    "transport": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@zereight/mcp-gitlab"
+    ],
+    "package": {
+      "manager": "npm",
+      "name": "@zereight/mcp-gitlab"
+    },
+    "homepage": "https://gitlab.com",
+    "repository": {
+      "url": "https://github.com/zereight/gitlab-mcp",
+      "source": "curated"
+    },
+    "env": [
+      {
+        "name": "GITLAB_PERSONAL_ACCESS_TOKEN",
+        "required": true,
+        "secret": true,
+        "description": "A token with api scope on the projects you want."
+      },
+      {
+        "name": "GITLAB_API_URL",
+        "required": false,
+        "secret": false,
+        "description": "API base, e.g. https://gitlab.com/api/v4."
+      }
+    ],
+    "origin": "curated"
   },
   {
     "name": "google-drive",
     "title": "Google Drive",
     "description": "Browse and read files in your Google Drive.",
+    "repository": {
+      "url": "https://github.com/modelcontextprotocol/servers/tree/main/src/gdrive",
+      "source": "marketplace"
+    },
+    "origin": "marketplace",
     "transport": "stdio",
     "command": "npx",
     "args": [
@@ -4108,17 +775,17 @@
     "package": {
       "manager": "npm",
       "name": "@modelcontextprotocol/server-gdrive"
-    },
-    "stars": 51000,
-    "repository": {
-      "url": "https://github.com/modelcontextprotocol/servers/tree/main/src/gdrive",
-      "source": "marketplace"
     }
   },
   {
     "name": "google-maps",
     "title": "Google Maps",
     "description": "Geocoding, places, directions via Google Maps API.",
+    "repository": {
+      "url": "https://github.com/modelcontextprotocol/servers/tree/main/src/google-maps",
+      "source": "marketplace"
+    },
+    "origin": "marketplace",
     "transport": "stdio",
     "command": "npx",
     "args": [
@@ -4134,17 +801,131 @@
         "name": "GOOGLE_MAPS_API_KEY",
         "required": false
       }
+    ]
+  },
+  {
+    "name": "grafana",
+    "title": "Grafana",
+    "description": "MCP server for Grafana",
+    "transport": "stdio",
+    "command": "docker",
+    "args": [
+      "run",
+      "-i",
+      "--rm",
+      "mcp/grafana"
     ],
-    "stars": 51000,
+    "package": {
+      "manager": "other",
+      "name": "mcp/grafana"
+    },
+    "popularity": 1188971,
+    "homepage": "https://hub.docker.com/r/mcp/grafana",
+    "origin": "marketplace"
+  },
+  {
+    "name": "heroku",
+    "title": "Heroku",
+    "description": "Heroku Platform MCP Server using the Heroku CLI",
+    "transport": "stdio",
+    "command": "docker",
+    "args": [
+      "run",
+      "-i",
+      "--rm",
+      "mcp/heroku"
+    ],
+    "package": {
+      "manager": "other",
+      "name": "mcp/heroku"
+    },
+    "popularity": 21228,
+    "homepage": "https://hub.docker.com/r/mcp/heroku",
+    "origin": "marketplace"
+  },
+  {
+    "name": "huggingface",
+    "title": "Hugging Face",
+    "description": "Search models, datasets and Spaces on the Hugging Face Hub.",
+    "transport": "http",
+    "url": "https://huggingface.co/mcp",
+    "homepage": "https://huggingface.co",
     "repository": {
-      "url": "https://github.com/modelcontextprotocol/servers/tree/main/src/google-maps",
-      "source": "marketplace"
-    }
+      "url": "https://github.com/huggingface/huggingface_hub",
+      "source": "curated"
+    },
+    "origin": "curated"
+  },
+  {
+    "name": "hyperbrowser",
+    "title": "Hyperbrowser",
+    "description": "A MCP server implementation for hyperbrowser",
+    "transport": "stdio",
+    "command": "docker",
+    "args": [
+      "run",
+      "-i",
+      "--rm",
+      "mcp/hyperbrowser"
+    ],
+    "package": {
+      "manager": "other",
+      "name": "mcp/hyperbrowser"
+    },
+    "popularity": 43819,
+    "homepage": "https://hub.docker.com/r/mcp/hyperbrowser",
+    "origin": "marketplace"
+  },
+  {
+    "name": "jetbrains",
+    "title": "Jetbrains",
+    "description": "A model context protocol server to work with JetBrains IDEs: IntelliJ, PyCharm, WebStorm, etc. Al...",
+    "transport": "stdio",
+    "command": "docker",
+    "args": [
+      "run",
+      "-i",
+      "--rm",
+      "mcp/jetbrains"
+    ],
+    "package": {
+      "manager": "other",
+      "name": "mcp/jetbrains"
+    },
+    "popularity": 60327,
+    "homepage": "https://hub.docker.com/r/mcp/jetbrains",
+    "origin": "marketplace"
+  },
+  {
+    "name": "kagisearch",
+    "title": "Kagisearch",
+    "description": "The Official Model Context Protocol (MCP) server for Kagi Search & other tools.",
+    "transport": "stdio",
+    "command": "docker",
+    "args": [
+      "run",
+      "-i",
+      "--rm",
+      "mcp/kagisearch"
+    ],
+    "package": {
+      "manager": "other",
+      "name": "mcp/kagisearch"
+    },
+    "popularity": 20524,
+    "homepage": "https://hub.docker.com/r/mcp/kagisearch",
+    "origin": "marketplace"
   },
   {
     "name": "kubernetes",
     "title": "Kubernetes",
     "description": "Inspect and manage a Kubernetes cluster.",
+    "stars": 2100,
+    "repository": {
+      "url": "https://github.com/Flux159/mcp-server-kubernetes",
+      "source": "marketplace"
+    },
+    "origin": "marketplace",
     "transport": "stdio",
     "command": "npx",
     "args": [
@@ -4154,17 +935,38 @@
     "package": {
       "manager": "npm",
       "name": "mcp-server-kubernetes"
-    },
-    "stars": 2100,
-    "repository": {
-      "url": "https://github.com/Flux159/mcp-server-kubernetes",
-      "source": "marketplace"
     }
+  },
+  {
+    "name": "line",
+    "title": "Line",
+    "description": "MCP server that integrates the LINE Messaging API to connect an AI Agent to the LINE Official Acc...",
+    "transport": "stdio",
+    "command": "docker",
+    "args": [
+      "run",
+      "-i",
+      "--rm",
+      "mcp/line"
+    ],
+    "package": {
+      "manager": "other",
+      "name": "mcp/line"
+    },
+    "popularity": 26215,
+    "homepage": "https://hub.docker.com/r/mcp/line",
+    "origin": "marketplace"
   },
   {
     "name": "linear",
     "title": "Linear",
     "description": "Manage Linear issues, projects, and cycles.",
+    "stars": 4900,
+    "repository": {
+      "url": "https://github.com/linear/linear-mcp",
+      "source": "marketplace"
+    },
+    "origin": "marketplace",
     "transport": "stdio",
     "command": "npx",
     "args": [
@@ -4180,12 +982,27 @@
         "name": "LINEAR_API_KEY",
         "required": false
       }
+    ]
+  },
+  {
+    "name": "mcp-discord",
+    "title": "MCP Discord",
+    "description": "Interact with the Discord platform.",
+    "transport": "stdio",
+    "command": "docker",
+    "args": [
+      "run",
+      "-i",
+      "--rm",
+      "mcp/mcp-discord"
     ],
-    "stars": 4900,
-    "repository": {
-      "url": "https://github.com/linear/linear-mcp",
-      "source": "marketplace"
-    }
+    "package": {
+      "manager": "other",
+      "name": "mcp/mcp-discord"
+    },
+    "popularity": 42766,
+    "homepage": "https://hub.docker.com/r/mcp/mcp-discord",
+    "origin": "marketplace"
   },
   {
     "name": "memory",
@@ -4208,7 +1025,8 @@
           "purpose": "Persistent memory store"
         }
       ]
-    }
+    },
+    "origin": "curated"
   },
   {
     "name": "mempalace",
@@ -4237,7 +1055,97 @@
         "secret": false,
         "description": "Optional palace directory; defaults to the home directory."
       }
-    ]
+    ],
+    "origin": "curated"
+  },
+  {
+    "name": "mongodb",
+    "title": "MongoDB",
+    "description": "Query and manage MongoDB databases and collections.",
+    "transport": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "mongodb-mcp-server"
+    ],
+    "package": {
+      "manager": "npm",
+      "name": "mongodb-mcp-server"
+    },
+    "homepage": "https://www.mongodb.com",
+    "repository": {
+      "url": "https://github.com/mongodb-js/mongodb-mcp-server",
+      "source": "curated"
+    },
+    "env": [
+      {
+        "name": "MDB_MCP_CONNECTION_STRING",
+        "required": true,
+        "secret": true,
+        "description": "mongodb+srv://user:password@cluster/database"
+      }
+    ],
+    "origin": "curated"
+  },
+  {
+    "name": "neo4j-cypher",
+    "title": "Neo4j Cypher",
+    "description": "Interact with Neo4j using Cypher graph queries.",
+    "transport": "stdio",
+    "command": "docker",
+    "args": [
+      "run",
+      "-i",
+      "--rm",
+      "mcp/neo4j-cypher"
+    ],
+    "package": {
+      "manager": "other",
+      "name": "mcp/neo4j-cypher"
+    },
+    "popularity": 75822,
+    "homepage": "https://hub.docker.com/r/mcp/neo4j-cypher",
+    "origin": "marketplace"
+  },
+  {
+    "name": "neo4j-memory",
+    "title": "Neo4j Memory",
+    "description": "Provide persistent memory capabilities through Neo4j graph database integration.",
+    "transport": "stdio",
+    "command": "docker",
+    "args": [
+      "run",
+      "-i",
+      "--rm",
+      "mcp/neo4j-memory"
+    ],
+    "package": {
+      "manager": "other",
+      "name": "mcp/neo4j-memory"
+    },
+    "popularity": 46733,
+    "homepage": "https://hub.docker.com/r/mcp/neo4j-memory",
+    "origin": "marketplace"
+  },
+  {
+    "name": "neon",
+    "title": "Neon",
+    "description": "MCP server for interacting with Neon Management API and databases",
+    "transport": "stdio",
+    "command": "docker",
+    "args": [
+      "run",
+      "-i",
+      "--rm",
+      "mcp/neon"
+    ],
+    "package": {
+      "manager": "other",
+      "name": "mcp/neon"
+    },
+    "popularity": 25595,
+    "homepage": "https://hub.docker.com/r/mcp/neon",
+    "origin": "marketplace"
   },
   {
     "name": "notion",
@@ -4260,12 +1168,19 @@
         "secret": true,
         "description": "A Notion integration token shared with the pages you want."
       }
-    ]
+    ],
+    "origin": "curated"
   },
   {
     "name": "obsidian",
     "title": "Obsidian",
     "description": "Read and write notes in an Obsidian vault.",
+    "stars": 2400,
+    "repository": {
+      "url": "https://github.com/MarkusPfundstein/mcp-obsidian",
+      "source": "marketplace"
+    },
+    "origin": "marketplace",
     "transport": "stdio",
     "command": "uvx",
     "args": [
@@ -4284,17 +1199,78 @@
         "name": "OBSIDIAN_HOST",
         "required": false
       }
+    ]
+  },
+  {
+    "name": "openapi-schema",
+    "title": "Openapi Schema",
+    "description": "OpenAPI Schema Model Context Protocol Server",
+    "transport": "stdio",
+    "command": "docker",
+    "args": [
+      "run",
+      "-i",
+      "--rm",
+      "mcp/openapi-schema"
     ],
-    "stars": 2400,
-    "repository": {
-      "url": "https://github.com/MarkusPfundstein/mcp-obsidian",
-      "source": "marketplace"
-    }
+    "package": {
+      "manager": "other",
+      "name": "mcp/openapi-schema"
+    },
+    "popularity": 32987,
+    "homepage": "https://hub.docker.com/r/mcp/openapi-schema",
+    "origin": "marketplace"
+  },
+  {
+    "name": "osp_marketing_tools",
+    "title": "Osp Marketing Tools",
+    "description": "A Model Context Protocol (MCP) server that empowers LLMs to use some of Open Srategy Partners' co...",
+    "transport": "stdio",
+    "command": "docker",
+    "args": [
+      "run",
+      "-i",
+      "--rm",
+      "mcp/osp_marketing_tools"
+    ],
+    "package": {
+      "manager": "other",
+      "name": "mcp/osp_marketing_tools"
+    },
+    "popularity": 44924,
+    "homepage": "https://hub.docker.com/r/mcp/osp_marketing_tools",
+    "origin": "marketplace"
+  },
+  {
+    "name": "oxylabs",
+    "title": "Oxylabs",
+    "description": "A Model Context Protocol (MCP) server that enables AI assistants like Claude to seamlessly access...",
+    "transport": "stdio",
+    "command": "docker",
+    "args": [
+      "run",
+      "-i",
+      "--rm",
+      "mcp/oxylabs"
+    ],
+    "package": {
+      "manager": "other",
+      "name": "mcp/oxylabs"
+    },
+    "popularity": 39880,
+    "homepage": "https://hub.docker.com/r/mcp/oxylabs",
+    "origin": "marketplace"
   },
   {
     "name": "perplexity",
     "title": "Perplexity",
     "description": "Web-grounded answers via the Perplexity API.",
+    "stars": 2200,
+    "repository": {
+      "url": "https://github.com/ppl-ai/modelcontextprotocol",
+      "source": "marketplace"
+    },
+    "origin": "marketplace",
     "transport": "stdio",
     "command": "npx",
     "args": [
@@ -4310,12 +1286,27 @@
         "name": "PERPLEXITY_API_KEY",
         "required": false
       }
+    ]
+  },
+  {
+    "name": "perplexity-ask",
+    "title": "Perplexity Ask",
+    "description": "Connector for Perplexity API, to enable real-time, web-wide research.",
+    "transport": "stdio",
+    "command": "docker",
+    "args": [
+      "run",
+      "-i",
+      "--rm",
+      "mcp/perplexity-ask"
     ],
-    "stars": 2200,
-    "repository": {
-      "url": "https://github.com/ppl-ai/modelcontextprotocol",
-      "source": "marketplace"
-    }
+    "package": {
+      "manager": "other",
+      "name": "mcp/perplexity-ask"
+    },
+    "popularity": 82087,
+    "homepage": "https://hub.docker.com/r/mcp/perplexity-ask",
+    "origin": "marketplace"
   },
   {
     "name": "playwright",
@@ -4338,7 +1329,8 @@
           "purpose": "Browser profile directory"
         }
       ]
-    }
+    },
+    "origin": "curated"
   },
   {
     "name": "postgres",
@@ -4361,7 +1353,8 @@
         "secret": true,
         "description": "postgresql://user:password@host:5432/database"
       }
-    ]
+    ],
+    "origin": "curated"
   },
   {
     "name": "puppeteer",
@@ -4384,12 +1377,19 @@
           "purpose": "Browser profile directory"
         }
       ]
-    }
+    },
+    "origin": "curated"
   },
   {
     "name": "qdrant",
     "title": "Qdrant",
     "description": "Vector search over a Qdrant collection.",
+    "stars": 1700,
+    "repository": {
+      "url": "https://github.com/qdrant/mcp-server-qdrant",
+      "source": "marketplace"
+    },
+    "origin": "marketplace",
     "transport": "stdio",
     "command": "uvx",
     "args": [
@@ -4408,17 +1408,134 @@
         "name": "COLLECTION_NAME",
         "required": false
       }
+    ]
+  },
+  {
+    "name": "redis",
+    "title": "Redis",
+    "description": "Read, write and inspect data in a Redis database.",
+    "transport": "stdio",
+    "command": "uvx",
+    "args": [
+      "--from",
+      "redis-mcp-server",
+      "redis-mcp-server"
     ],
-    "stars": 1700,
+    "package": {
+      "manager": "pypi",
+      "name": "redis-mcp-server"
+    },
+    "homepage": "https://redis.io",
     "repository": {
-      "url": "https://github.com/qdrant/mcp-server-qdrant",
-      "source": "marketplace"
-    }
+      "url": "https://github.com/redis/mcp-redis",
+      "source": "curated"
+    },
+    "env": [
+      {
+        "name": "REDIS_HOST",
+        "required": false,
+        "secret": false,
+        "description": "Redis host; defaults to localhost."
+      },
+      {
+        "name": "REDIS_PWD",
+        "required": false,
+        "secret": true,
+        "description": "Password when the server requires one."
+      }
+    ],
+    "origin": "curated"
+  },
+  {
+    "name": "redis-cloud",
+    "title": "Redis Cloud",
+    "description": "MCP Server for Redis Cloud's API, allowing you to manage your Redis Cloud resources using natural...",
+    "transport": "stdio",
+    "command": "docker",
+    "args": [
+      "run",
+      "-i",
+      "--rm",
+      "mcp/redis-cloud"
+    ],
+    "package": {
+      "manager": "other",
+      "name": "mcp/redis-cloud"
+    },
+    "popularity": 20453,
+    "homepage": "https://hub.docker.com/r/mcp/redis-cloud",
+    "origin": "marketplace"
+  },
+  {
+    "name": "resend",
+    "title": "Resend",
+    "description": "Send emails directly from Cursor with this email sending MCP server",
+    "transport": "stdio",
+    "command": "docker",
+    "args": [
+      "run",
+      "-i",
+      "--rm",
+      "mcp/resend"
+    ],
+    "package": {
+      "manager": "other",
+      "name": "mcp/resend"
+    },
+    "popularity": 22615,
+    "homepage": "https://hub.docker.com/r/mcp/resend",
+    "origin": "marketplace"
+  },
+  {
+    "name": "scrapegraph",
+    "title": "Scrapegraph",
+    "description": "ScapeGraph MCP Server",
+    "transport": "stdio",
+    "command": "docker",
+    "args": [
+      "run",
+      "-i",
+      "--rm",
+      "mcp/scrapegraph"
+    ],
+    "package": {
+      "manager": "other",
+      "name": "mcp/scrapegraph"
+    },
+    "popularity": 20749,
+    "homepage": "https://hub.docker.com/r/mcp/scrapegraph",
+    "origin": "marketplace"
+  },
+  {
+    "name": "scrapezy",
+    "title": "Scrapezy",
+    "description": "A Model Context Protocol server for Scrapezy that enables AI models to extract structured data fr...",
+    "transport": "stdio",
+    "command": "docker",
+    "args": [
+      "run",
+      "-i",
+      "--rm",
+      "mcp/scrapezy"
+    ],
+    "package": {
+      "manager": "other",
+      "name": "mcp/scrapezy"
+    },
+    "popularity": 41770,
+    "homepage": "https://hub.docker.com/r/mcp/scrapezy",
+    "origin": "marketplace"
   },
   {
     "name": "sentry",
     "title": "Sentry",
     "description": "Inspect Sentry issues and recent error events.",
+    "stars": 1500,
+    "repository": {
+      "url": "https://github.com/getsentry/sentry-mcp",
+      "source": "marketplace"
+    },
+    "origin": "marketplace",
     "transport": "stdio",
     "command": "npx",
     "args": [
@@ -4434,12 +1551,7 @@
         "name": "SENTRY_AUTH_TOKEN",
         "required": false
       }
-    ],
-    "stars": 1500,
-    "repository": {
-      "url": "https://github.com/getsentry/sentry-mcp",
-      "source": "marketplace"
-    }
+    ]
   },
   {
     "name": "sequential-thinking",
@@ -4454,7 +1566,28 @@
     "package": {
       "manager": "npm",
       "name": "@modelcontextprotocol/server-sequential-thinking"
-    }
+    },
+    "origin": "curated"
+  },
+  {
+    "name": "sequentialthinking",
+    "title": "Sequentialthinking",
+    "description": "Dynamic and reflective problem-solving through thought sequences.",
+    "transport": "stdio",
+    "command": "docker",
+    "args": [
+      "run",
+      "-i",
+      "--rm",
+      "mcp/sequentialthinking"
+    ],
+    "package": {
+      "manager": "other",
+      "name": "mcp/sequentialthinking"
+    },
+    "popularity": 441821,
+    "homepage": "https://hub.docker.com/r/mcp/sequentialthinking",
+    "origin": "marketplace"
   },
   {
     "name": "slack",
@@ -4483,7 +1616,8 @@
         "secret": false,
         "description": "Workspace team id."
       }
-    ]
+    ],
+    "origin": "curated"
   },
   {
     "name": "sqlite",
@@ -4507,12 +1641,19 @@
           "purpose": "The database file to open"
         }
       ]
-    }
+    },
+    "origin": "curated"
   },
   {
     "name": "stripe",
     "title": "Stripe",
     "description": "Read and write Stripe customers, subscriptions, and invoices.",
+    "stars": 3800,
+    "repository": {
+      "url": "https://github.com/stripe/agent-toolkit",
+      "source": "marketplace"
+    },
+    "origin": "marketplace",
     "transport": "stdio",
     "command": "npx",
     "args": [
@@ -4529,17 +1670,18 @@
         "name": "STRIPE_SECRET_KEY",
         "required": false
       }
-    ],
-    "stars": 3800,
-    "repository": {
-      "url": "https://github.com/stripe/agent-toolkit",
-      "source": "marketplace"
-    }
+    ]
   },
   {
     "name": "supabase",
     "title": "Supabase",
     "description": "Query Postgres, manage RLS, and call Edge Functions.",
+    "stars": 5400,
+    "repository": {
+      "url": "https://github.com/supabase-community/supabase-mcp",
+      "source": "marketplace"
+    },
+    "origin": "marketplace",
     "transport": "stdio",
     "command": "npx",
     "args": [
@@ -4551,17 +1693,18 @@
     "package": {
       "manager": "npm",
       "name": "@supabase/mcp-server-supabase@latest"
-    },
-    "stars": 5400,
-    "repository": {
-      "url": "https://github.com/supabase-community/supabase-mcp",
-      "source": "marketplace"
     }
   },
   {
     "name": "tavily",
     "title": "Tavily",
     "description": "Search-augmented retrieval optimized for agents.",
+    "stars": 1800,
+    "repository": {
+      "url": "https://github.com/tavily-ai/tavily-mcp",
+      "source": "marketplace"
+    },
+    "origin": "marketplace",
     "transport": "stdio",
     "command": "npx",
     "args": [
@@ -4577,17 +1720,71 @@
         "name": "TAVILY_API_KEY",
         "required": false
       }
+    ]
+  },
+  {
+    "name": "time",
+    "title": "Time",
+    "description": "Time and timezone conversion capabilities",
+    "transport": "stdio",
+    "command": "docker",
+    "args": [
+      "run",
+      "-i",
+      "--rm",
+      "mcp/time"
     ],
-    "stars": 1800,
+    "package": {
+      "manager": "other",
+      "name": "mcp/time"
+    },
+    "popularity": 1097144,
+    "homepage": "https://hub.docker.com/r/mcp/time",
+    "origin": "marketplace"
+  },
+  {
+    "name": "vercel",
+    "title": "Vercel",
+    "description": "Search Vercel documentation and projects; sign in with a Vercel account.",
+    "transport": "http",
+    "url": "https://mcp.vercel.com",
+    "homepage": "https://vercel.com",
     "repository": {
-      "url": "https://github.com/tavily-ai/tavily-mcp",
-      "source": "marketplace"
-    }
+      "url": "https://github.com/vercel/mcp-adapter",
+      "source": "curated"
+    },
+    "origin": "curated"
+  },
+  {
+    "name": "wolfram-alpha",
+    "title": "Wolfram Alpha",
+    "description": "Connect your chat repl to wolfram alpha computational intelligence",
+    "transport": "stdio",
+    "command": "docker",
+    "args": [
+      "run",
+      "-i",
+      "--rm",
+      "mcp/wolfram-alpha"
+    ],
+    "package": {
+      "manager": "other",
+      "name": "mcp/wolfram-alpha"
+    },
+    "popularity": 48284,
+    "homepage": "https://hub.docker.com/r/mcp/wolfram-alpha",
+    "origin": "marketplace"
   },
   {
     "name": "youtube-transcript",
     "title": "YouTube Transcript",
     "description": "Pull transcripts and metadata from YouTube videos.",
+    "stars": 900,
+    "repository": {
+      "url": "https://github.com/Kimtaeyoon83/mcp-server-youtube-transcript",
+      "source": "marketplace"
+    },
+    "origin": "marketplace",
     "transport": "stdio",
     "command": "npx",
     "args": [
@@ -4597,11 +1794,6 @@
     "package": {
       "manager": "npm",
       "name": "@kimtaeyoon83/mcp-server-youtube-transcript"
-    },
-    "stars": 900,
-    "repository": {
-      "url": "https://github.com/Kimtaeyoon83/mcp-server-youtube-transcript",
-      "source": "marketplace"
     }
   }
 ]

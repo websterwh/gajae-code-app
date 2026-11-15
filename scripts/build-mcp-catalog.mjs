@@ -8,9 +8,18 @@
  *   node scripts/build-mcp-catalog.mjs
  *
  * Sources:
- *  - vaibhav4046/mcp-marketplace servers.json + servers.seed.json (MIT)
- *  - the official MCP registry (packages only, runnable commands)
+ *  - vaibhav4046/mcp-marketplace servers.json + servers.seed.json (MIT), only
+ *    records with a concrete runnable command or a real remote URL
+ *  - Docker Hub's mcp namespace, cross-checked against docker/mcp-registry so
+ *    only images Docker actually publishes are bundled
  *  - data/catalog.curated.json, merged last so regeneration cannot drop it
+ *
+ * The official MCP registry is deliberately not a source. It is the runtime
+ * fallback for the long tail; copying it into the image is how namespaced
+ * packages such as `ai.foo` once buried every recognizable server.
+ *
+ * Test hooks (no network): CATALOG_MARKETPLACE_FILE, CATALOG_SEED_FILE,
+ * CATALOG_SKIP_DOCKER, CATALOG_MIN_ENTRIES, CATALOG_OUTPUT_DIR.
  */
 import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -20,9 +29,14 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MARKETPLACE_URL = 'https://raw.githubusercontent.com/vaibhav4046/mcp-marketplace/main/data/servers.json';
 const SEED_URL = 'https://raw.githubusercontent.com/vaibhav4046/mcp-marketplace/main/data/servers.seed.json';
-const REGISTRY_URL = 'https://registry.modelcontextprotocol.io/v0.1/servers';
-const REGISTRY_PAGES = 8;
+const DOCKER_HUB_URL = 'https://hub.docker.com/v2/repositories/mcp/';
+const DOCKER_TREE_URL = 'https://api.github.com/repos/docker/mcp-registry/git/trees/main?recursive=1';
+const DOCKER_LIMIT = 60;
 const RUNNABLE = /^(npx|uvx|uv|docker|pipx)\b/u;
+/** Bundled names have no slash and no dotted vendor prefix. */
+const BUNDLED_NAME = /^[a-z0-9][a-z0-9_-]{0,63}$/u;
+const SUBTREE_URL = /\/tree\/|\/blob\//u;
+const MIN_ENTRIES = Number.parseInt(process.env.CATALOG_MIN_ENTRIES ?? '60', 10);
 
 const githubToken = process.env.GITHUB_TOKEN
   || (() => {
@@ -30,7 +44,15 @@ const githubToken = process.env.GITHUB_TOKEN
   })();
 
 async function json(url) {
-  const response = await fetch(url, { signal: AbortSignal.timeout(30_000) });
+  const github = url.startsWith('https://api.github.com/') || url.startsWith('https://raw.githubusercontent.com/');
+  const response = await fetch(url, {
+    headers: {
+      accept: 'application/vnd.github+json',
+      'user-agent': 'gajae-code-app',
+      ...(github && githubToken ? { authorization: `Bearer ${githubToken}` } : {}),
+    },
+    signal: AbortSignal.timeout(30_000),
+  });
   if (!response.ok) throw new Error(`${url} returned HTTP ${response.status}`);
   return response.json();
 }
@@ -41,6 +63,12 @@ function isRecord(value) {
 
 function slugName(value) {
   return String(value ?? '').trim().toLowerCase().replace(/[^a-z0-9._-]+/gu, '-').replace(/^-+|-+$/gu, '').slice(0, 64);
+}
+
+/** A generated entry must be installable and must not be a vendor namespace. */
+function plainName(value) {
+  const name = slugName(value);
+  return name && BUNDLED_NAME.test(name) ? name : '';
 }
 
 function argsString(value) {
@@ -60,6 +88,26 @@ function marketplaceCommand(record) {
     if (/[|;&>`$]/u.test(cli)) return null;
     const [command, ...args] = cli.split(/\s+/u);
     return { command, args, env: {} };
+  }
+  return null;
+}
+
+/**
+ * A remote install is only used when the source names an http/sse transport and
+ * carries a real URL. Nothing is synthesized from a homepage.
+ */
+function marketplaceRemote(record) {
+  const install = isRecord(record.install) ? record.install : {};
+  const sources = [
+    ['remote', install.remote],
+    ['http', install.http],
+    ['sse', install.sse],
+    ['remote', record.remote],
+  ];
+  for (const [kind, block] of sources) {
+    if (!isRecord(block) || typeof block.url !== 'string' || !/^https?:\/\//u.test(block.url)) continue;
+    const declared = String(block.transport ?? block.type ?? kind).toLowerCase();
+    return { url: block.url, transport: kind === 'sse' || declared.includes('sse') ? 'sse' : 'http' };
   }
   return null;
 }
@@ -87,68 +135,99 @@ function envFrom(value) {
   return env.length ? env : undefined;
 }
 
-function fromMarketplace(record) {
+function fromMarketplace(record, name) {
+  if (!isRecord(record)) return null;
   const command = marketplaceCommand(record);
-  if (!command || !isRecord(record)) return null;
-  const name = slugName(record.slug || record.name);
-  if (!name) return null;
-  const transport = Array.isArray(record.transports) && record.transports.includes('stdio') ? 'stdio' : 'stdio';
+  const remote = marketplaceRemote(record);
+  if (!command && !remote) return null;
+  const transports = Array.isArray(record.transports) ? record.transports.map(String) : [];
+  const wantsRemote = transports.includes('http') || transports.includes('sse');
   const repository = repositoryUrl(record);
-  const pkg = packageFrom(command.command, command.args, name);
-  const stars = typeof record.stars === 'number' && Number.isFinite(record.stars) ? record.stars : undefined;
-  return {
+  const stars = typeof record.stars === 'number' && Number.isFinite(record.stars)
+    && !SUBTREE_URL.test(repository ?? '') ? record.stars : undefined;
+  const shared = {
     name,
     title: typeof record.name === 'string' ? record.name : undefined,
     description: String(record.tagline || record.description || '').trim(),
-    transport,
+    ...(stars ? { stars } : {}),
+    ...(typeof record.homepage === 'string' ? { homepage: record.homepage } : {}),
+    ...(repository ? { repository: { url: repository, source: 'marketplace' } } : {}),
+    origin: 'marketplace',
+  };
+
+  if (remote && (!command || wantsRemote)) {
+    return { ...shared, transport: remote.transport, url: remote.url };
+  }
+  if (!command) return null;
+  const pkg = packageFrom(command.command, command.args, name);
+  return {
+    ...shared,
+    transport: 'stdio',
     command: command.command,
     args: command.args,
     ...(pkg ? { package: pkg } : {}),
     ...(envFrom(command.env) ? { env: envFrom(command.env) } : {}),
-    ...(stars ? { stars } : {}),
-    ...(typeof record.homepage === 'string' ? { homepage: record.homepage } : {}),
-    ...(repository ? { repository: { url: repository, source: 'marketplace' } } : {}),
   };
 }
 
-function fromRegistry(record) {
-  if (!isRecord(record)) return null;
-  const server = isRecord(record.server) ? record.server : record;
-  const name = slugName(server.name);
-  if (!name) return null;
-  const packages = Array.isArray(server.packages) ? server.packages.filter(isRecord) : [];
-  const first = packages[0];
-  if (first && typeof first.identifier === 'string' && first.identifier) {
-    const registryType = String(first.registryType ?? '').toLowerCase();
-    const command = registryType === 'npm' ? 'npx' : registryType === 'pypi' ? 'uvx' : 'docker';
-    const args = command === 'npx' ? ['-y', first.identifier]
-      : command === 'docker' ? ['run', '-i', '--rm', first.identifier] : [first.identifier];
-    const env = (Array.isArray(first.environmentVariables) ? first.environmentVariables : [])
-      .filter((entry) => isRecord(entry) && typeof entry.name === 'string')
-      .map((entry) => ({
-        name: entry.name,
-        required: entry.isRequired === true,
-        secret: entry.isSecret === true,
-      }));
-    const repository = isRecord(server.repository) && typeof server.repository.url === 'string' ? server.repository.url : undefined;
-    return {
-      name,
-      title: typeof server.title === 'string' ? server.title : undefined,
-      description: String(server.description ?? '').trim(),
-      transport: 'stdio',
-      command,
-      args,
-      package: { manager: registryType === 'npm' ? 'npm' : registryType === 'pypi' ? 'pypi' : 'other', name: first.identifier, ...(typeof first.version === 'string' ? { version: first.version } : {}) },
-      ...(env.length ? { env } : {}),
-      ...(repository ? { repository: { url: repository, source: 'registry' } } : {}),
-    };
-  }
-  return null;
+function prettyName(value) {
+  const acronyms = new Set(['ai', 'api', 'aws', 'cd', 'ci', 'gcp', 'k8s', 'mcp', 'ocr', 'rag', 's3', 'sql']);
+  return value.split(/[-_]+/u).filter(Boolean).map((part) => (
+    acronyms.has(part) ? part.toUpperCase() : `${part[0].toUpperCase()}${part.slice(1)}`
+  )).join(' ');
+}
+
+/**
+ * Docker's MCP catalog is a second marketplace. A Docker Hub image is bundled
+ * only if docker/mcp-registry publishes it, so an abandoned namespace squat is
+ * not treated as a server.
+ */
+async function dockerEntries() {
+  if (process.env.CATALOG_SKIP_DOCKER === '1') return { entries: [], skipped: 0 };
+  const tree = await json(DOCKER_TREE_URL);
+  const dirs = new Set(
+    (Array.isArray(tree.tree) ? tree.tree : [])
+      .map((entry) => (typeof entry?.path === 'string' ? entry.path : ''))
+      .map((value) => /^servers\/([^/]+)\/server\.yaml$/u.exec(value)?.[1]?.toLowerCase())
+      .filter(Boolean),
+  );
+  const images = [];
+  let skipped = 0;
+  // One page is enough for the recognizable images; deeper pages are rate-limited
+  // anonymously, and the catalog does not want hundreds of Docker duplicates.
+  const body = await json(`${DOCKER_HUB_URL}?page_size=100&page=1`);
+  images.push(...(Array.isArray(body.results) ? body.results : []));
+  const seen = new Set();
+  return {
+    skipped,
+    entries: images
+      .filter((image) => {
+        const name = plainName(image?.name);
+        if (!name || name === 'signatures' || !dirs.has(name)) { skipped += 1; return false; }
+        if (seen.has(name)) return false;
+        seen.add(name);
+        return true;
+      })
+      .sort((a, b) => (b.pull_count ?? 0) - (a.pull_count ?? 0))
+      .slice(0, DOCKER_LIMIT)
+      .map((image) => ({
+        name: image.name,
+        title: prettyName(image.name),
+        description: String(image.description ?? '').trim(),
+        transport: 'stdio',
+        command: 'docker',
+        args: ['run', '-i', '--rm', `mcp/${image.name}`],
+        package: { manager: 'other', name: `mcp/${image.name}` },
+        popularity: typeof image.pull_count === 'number' ? image.pull_count : undefined,
+        homepage: `https://hub.docker.com/r/mcp/${image.name}`,
+        origin: 'marketplace',
+      })),
+  };
 }
 
 const starCache = new Map();
 async function starsFor(url) {
-  if (!url) return undefined;
+  if (!url || SUBTREE_URL.test(url)) return undefined;
   const match = /^https?:\/\/github\.com\/([^/]+)\/([^/#?]+)/u.exec(url);
   if (!match) return undefined;
   const key = `${match[1]}/${match[2].replace(/\.git$/u, '')}`;
@@ -189,28 +268,43 @@ function dedupe(entries) {
   return [...new Set([...byPackage.values(), ...byName.values()])];
 }
 
+async function sourceJson(url, fileEnvironment) {
+  const file = process.env[fileEnvironment];
+  if (file) return JSON.parse(await readFile(file, 'utf8'));
+  return json(url);
+}
+
+function reportText(details) {
+  return [
+    `- Marketplace records: ${details.marketplaceRecords} (${details.namespaced} namespaced, ${details.noCommand} without a runnable command)`,
+    `- Docker images bundled: ${details.dockerEntries} (${details.dockerSkipped} skipped: no registry entry or namespaced)`,
+    `- Duplicates collapsed: ${details.duplicates}`,
+    `- Stars omitted for monorepo subdirectory URLs: ${details.subtreeStars}`,
+    `- Curated entries merged last: ${details.curated}`,
+  ].join('\n');
+}
+
 async function main() {
   console.log('fetching marketplace…');
-  const marketplace = await json(MARKETPLACE_URL);
-  console.log('fetching seed…');
-  const seed = await json(SEED_URL).catch(() => ({ servers: [] }));
-  const registry = [];
-  let cursor;
-  for (let page = 0; page < REGISTRY_PAGES; page += 1) {
-    const params = new URLSearchParams({ limit: '100', version: 'latest', ...(cursor ? { cursor } : {}) });
-    const body = await json(`${REGISTRY_URL}?${params}`);
-    const records = Array.isArray(body.servers) ? body.servers : [];
-    registry.push(...records.map(fromRegistry).filter(Boolean));
-    cursor = body.metadata?.nextCursor;
-    console.log(`registry page ${page + 1}: ${records.length} records`);
-    if (!cursor) break;
+  const marketplace = await sourceJson(MARKETPLACE_URL, 'CATALOG_MARKETPLACE_FILE');
+  const seed = await sourceJson(SEED_URL, 'CATALOG_SEED_FILE').catch(() => ({ servers: [] }));
+  const raw = [...(marketplace.servers ?? []), ...(seed.servers ?? [])];
+
+  let namespaced = 0;
+  let noCommand = 0;
+  const marketplaceEntries = [];
+  for (const record of raw) {
+    const name = plainName(record?.slug || record?.name);
+    if (!name) { namespaced += 1; continue; }
+    const entry = fromMarketplace(record, name);
+    if (!entry) { noCommand += 1; continue; }
+    marketplaceEntries.push(entry);
   }
 
-  const raw = [...(marketplace.servers ?? []), ...(seed.servers ?? [])];
-  const generated = dedupe([
-    ...raw.map(fromMarketplace).filter(Boolean),
-    ...registry,
-  ]);
+  const docker = await dockerEntries();
+  const beforeDedupe = [...marketplaceEntries, ...docker.entries];
+  const generated = dedupe(beforeDedupe);
+  const duplicates = beforeDedupe.length - generated.length;
 
   let done = 0;
   for (const entry of generated) {
@@ -221,7 +315,8 @@ async function main() {
     if (done % 25 === 0) console.log(`stars ${done}/${generated.length}`);
   }
 
-  const curated = JSON.parse(await readFile(path.join(root, 'data', 'catalog.curated.json'), 'utf8'));
+  const curatedRaw = JSON.parse(await readFile(path.join(root, 'data', 'catalog.curated.json'), 'utf8'));
+  const curated = curatedRaw.map((entry) => ({ ...entry, origin: 'curated' }));
   const curatedNames = new Set(curated.map((entry) => entry.name));
   const curatedPackages = new Set(curated.map((entry) => entry.package?.name?.toLowerCase()).filter(Boolean));
   const surviving = generated.filter((entry) => {
@@ -234,25 +329,48 @@ async function main() {
     .filter((entry) => entry.transport !== 'stdio' || entry.command)
     .sort((a, b) => a.name.localeCompare(b.name));
 
+  if (!Number.isFinite(MIN_ENTRIES) || merged.length < MIN_ENTRIES) {
+    throw new Error(`refusing to write ${merged.length} entries; the floor is ${MIN_ENTRIES}. Add curated entries instead of padding with registry namespaces.`);
+  }
+
+  const subtreeStars = merged.filter((entry) => SUBTREE_URL.test(entry.repository?.url ?? '')).length;
+  const details = {
+    marketplaceRecords: raw.length,
+    namespaced,
+    noCommand,
+    dockerEntries: docker.entries.length,
+    dockerSkipped: docker.skipped,
+    duplicates,
+    subtreeStars,
+    curated: curated.length,
+  };
+
   const output = `${JSON.stringify(merged, null, 2)}\n`;
-  await writeFile(path.join(root, 'server', 'modules', 'mcp', 'catalog.data.json'), output, 'utf8');
-  await mkdir(path.join(root, 'deploy', 'mcp'), { recursive: true });
-  await writeFile(path.join(root, 'deploy', 'mcp', 'catalog.json'), output, 'utf8');
-  await writeFile(path.join(root, 'deploy', 'mcp', 'README.md'), `# Generated MCP catalog
+  const outputRoot = process.env.CATALOG_OUTPUT_DIR ?? root;
+  await mkdir(path.join(outputRoot, 'server', 'modules', 'mcp'), { recursive: true });
+  await writeFile(path.join(outputRoot, 'server', 'modules', 'mcp', 'catalog.data.json'), output, 'utf8');
+  await mkdir(path.join(outputRoot, 'deploy', 'mcp'), { recursive: true });
+  await writeFile(path.join(outputRoot, 'deploy', 'mcp', 'catalog.json'), output, 'utf8');
+  await writeFile(path.join(outputRoot, 'deploy', 'mcp', 'README.md'), `# Generated MCP catalog
 
 Generated by \`scripts/build-mcp-catalog.mjs\`. Do not edit by hand.
 
-- Source: ${MARKETPLACE_URL} (MIT, generated ${marketplace.generatedAt ?? 'unknown'}, totalCount ${marketplace.totalCount ?? 'unknown'})
+- Marketplace: ${MARKETPLACE_URL} (MIT, generated ${marketplace.generatedAt ?? 'unknown'}, totalCount ${marketplace.totalCount ?? 'unknown'})
 - Cross-check: ${SEED_URL}
-- Bulk supplement: ${REGISTRY_URL} (packages with runnable commands)
+- Docker: ${DOCKER_HUB_URL} (images cross-checked against docker/mcp-registry)
 - Curated entries merged last: \`data/catalog.curated.json\`
 - Output entries: ${merged.length}
 
+${reportText(details)}
+
 The bundled copy lives at \`server/modules/mcp/catalog.data.json\`; this file is
 the same content, served as the curated overlay so the app can grow without a
-new image. Stars were re-fetched from the GitHub API at generation time; the
-runtime never calls it to render the list.
+new image. The official MCP registry is not bundled; it is queried at runtime.
+Stars were re-fetched from the GitHub API at generation time, and a repository
+URL under \`/tree/\` or \`/blob/\` never contributes a count. The runtime never
+calls GitHub to render the list.
 `, 'utf8');
+  console.log(reportText(details));
   console.log(`wrote ${merged.length} entries`);
 }
 

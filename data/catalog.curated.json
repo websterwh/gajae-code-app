@@ -152,5 +152,108 @@
     "env": [
       { "name": "MEMPALACE_PALACE_PATH", "required": false, "secret": false, "description": "Optional palace directory; defaults to the home directory." }
     ]
+  },
+  {
+    "name": "redis",
+    "title": "Redis",
+    "description": "Read, write and inspect data in a Redis database.",
+    "transport": "stdio",
+    "command": "uvx",
+    "args": ["--from", "redis-mcp-server", "redis-mcp-server"],
+    "package": { "manager": "pypi", "name": "redis-mcp-server" },
+    "homepage": "https://redis.io",
+    "repository": { "url": "https://github.com/redis/mcp-redis", "source": "curated" },
+    "env": [
+      { "name": "REDIS_HOST", "required": false, "secret": false, "description": "Redis host; defaults to localhost." },
+      { "name": "REDIS_PWD", "required": false, "secret": true, "description": "Password when the server requires one." }
+    ]
+  },
+  {
+    "name": "mongodb",
+    "title": "MongoDB",
+    "description": "Query and manage MongoDB databases and collections.",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "mongodb-mcp-server"],
+    "package": { "manager": "npm", "name": "mongodb-mcp-server" },
+    "homepage": "https://www.mongodb.com",
+    "repository": { "url": "https://github.com/mongodb-js/mongodb-mcp-server", "source": "curated" },
+    "env": [
+      { "name": "MDB_MCP_CONNECTION_STRING", "required": true, "secret": true, "description": "mongodb+srv://user:password@cluster/database" }
+    ]
+  },
+  {
+    "name": "gitlab",
+    "title": "GitLab",
+    "description": "Read projects, merge requests and issues through the GitLab API.",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@zereight/mcp-gitlab"],
+    "package": { "manager": "npm", "name": "@zereight/mcp-gitlab" },
+    "homepage": "https://gitlab.com",
+    "repository": { "url": "https://github.com/zereight/gitlab-mcp", "source": "curated" },
+    "env": [
+      { "name": "GITLAB_PERSONAL_ACCESS_TOKEN", "required": true, "secret": true, "description": "A token with api scope on the projects you want." },
+      { "name": "GITLAB_API_URL", "required": false, "secret": false, "description": "API base, e.g. https://gitlab.com/api/v4." }
+    ]
+  },
+  {
+    "name": "aws-documentation",
+    "title": "AWS Documentation",
+    "description": "Search and read AWS documentation, including the latest service guides.",
+    "transport": "stdio",
+    "command": "uvx",
+    "args": ["awslabs.aws-documentation-mcp-server@latest"],
+    "package": { "manager": "pypi", "name": "awslabs.aws-documentation-mcp-server" },
+    "homepage": "https://aws.amazon.com",
+    "repository": { "url": "https://github.com/awslabs/mcp", "source": "curated" }
+  },
+  {
+    "name": "deepwiki",
+    "title": "DeepWiki",
+    "description": "Ask questions about any public GitHub repository's documentation and code.",
+    "transport": "http",
+    "url": "https://mcp.deepwiki.com/mcp",
+    "homepage": "https://deepwiki.com",
+    "repository": { "url": "https://github.com/AsyncFuncAI/deepwiki-open", "source": "curated" }
+  },
+  {
+    "name": "context7-http",
+    "title": "Context7",
+    "description": "Up-to-date library documentation over a hosted HTTP endpoint.",
+    "transport": "http",
+    "url": "https://mcp.context7.com/mcp",
+    "homepage": "https://context7.com",
+    "repository": { "url": "https://github.com/upstash/context7", "source": "curated" },
+    "env": [
+      { "name": "CONTEXT7_API_KEY", "required": false, "secret": true, "description": "Optional key for higher rate limits." }
+    ]
+  },
+  {
+    "name": "cloudflare-docs",
+    "title": "Cloudflare Docs",
+    "description": "Search Cloudflare's developer documentation from an HTTP MCP endpoint.",
+    "transport": "http",
+    "url": "https://docs.mcp.cloudflare.com/mcp",
+    "homepage": "https://developers.cloudflare.com",
+    "repository": { "url": "https://github.com/cloudflare/cloudflare-docs", "source": "curated" }
+  },
+  {
+    "name": "huggingface",
+    "title": "Hugging Face",
+    "description": "Search models, datasets and Spaces on the Hugging Face Hub.",
+    "transport": "http",
+    "url": "https://huggingface.co/mcp",
+    "homepage": "https://huggingface.co",
+    "repository": { "url": "https://github.com/huggingface/huggingface_hub", "source": "curated" }
+  },
+  {
+    "name": "vercel",
+    "title": "Vercel",
+    "description": "Search Vercel documentation and projects; sign in with a Vercel account.",
+    "transport": "http",
+    "url": "https://mcp.vercel.com",
+    "homepage": "https://vercel.com",
+    "repository": { "url": "https://github.com/vercel/mcp-adapter", "source": "curated" }
   }
 ]

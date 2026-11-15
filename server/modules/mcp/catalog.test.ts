@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import {
   DEFAULT_CATALOG_URL,
@@ -38,25 +40,43 @@ test('an overlay replaces entries by name and a registry entry never replaces a 
   assert.equal(searchCatalog(merged, 'overlay').length, 1);
 });
 
-test('the bundled catalog is a large, valid, deduplicated index with the named servers', async () => {
+test('the bundled catalog is a real, valid, deduplicated index with the named servers', async () => {
   const entries = bundledCatalog();
-  assert.ok(entries.length >= 150, `expected 150+ entries, got ${entries.length}`);
+  assert.ok(entries.length >= 60, `expected 60+ entries, got ${entries.length}`);
   assert.equal(new Set(entries.map((entry) => entry.name)).size, entries.length, 'names must be unique');
 
   for (const entry of entries) {
+    if (entry.origin !== 'curated') {
+      assert.match(entry.name, /^[a-z0-9][a-z0-9_-]*$/u, `${entry.name} must not be a vendor namespace`);
+    }
     if (entry.transport === 'stdio') assert.ok(entry.command, `${entry.name} needs a command`);
     else assert.ok(entry.url, `${entry.name} needs a url`);
+    if (entry.transport !== 'stdio') assert.equal(entry.command, undefined, `${entry.name} must not carry a command`);
     if (entry.package) {
       assert.ok(['npm', 'pypi', 'git', 'other'].includes(entry.package.manager), `${entry.name} package manager`);
       assert.ok(entry.package.name, `${entry.name} package name`);
     }
   }
 
-  assert.ok(entries.some((entry) => entry.name === 'context7'));
-  assert.ok(entries.some((entry) => entry.name === 'mempalace'));
+  const curated = JSON.parse(await readFile(new URL('../../../data/catalog.curated.json', import.meta.url), 'utf8')) as Array<Record<string, unknown>>;
+  for (const name of ['context7', 'mempalace']) {
+    const expected = curated.find((entry) => entry.name === name);
+    const actual = entries.find((entry) => entry.name === name);
+    assert.ok(expected, `${name} must stay curated`);
+    assert.equal(actual?.origin, 'curated');
+    assert.equal(actual?.command, expected.command, `${name} command`);
+    assert.deepEqual(actual?.args, expected.args, `${name} args`);
+    assert.equal(actual?.package?.name, (expected.package as { name?: string } | undefined)?.name, `${name} package`);
+  }
 
-  const deploy = JSON.parse(await readFile(new URL('../../../deploy/mcp/catalog.json', import.meta.url), 'utf8')) as unknown[];
-  assert.ok(Array.isArray(deploy) && deploy.length >= 150);
+  const remotes = entries.filter((entry) => entry.transport === 'http');
+  assert.ok(remotes.length >= 5, `expected 5+ http entries, got ${remotes.length}`);
+  assert.ok(remotes.every((entry) => entry.url && !entry.command), 'http entries need a url and no command');
+
+  const bundledText = await readFile(new URL('./catalog.data.json', import.meta.url), 'utf8');
+  const deployText = await readFile(new URL('../../../deploy/mcp/catalog.json', import.meta.url), 'utf8');
+  assert.equal(deployText, bundledText, 'the mirrored overlay must be byte-identical');
+  assert.ok(JSON.parse(deployText).length >= 60);
 });
 
 test('the default overlay URL points at a generated file that exists in the repo', async () => {
@@ -64,6 +84,32 @@ test('the default overlay URL points at a generated file that exists in the repo
   assert.ok(url.pathname.endsWith('/deploy/mcp/catalog.json'));
   const file = JSON.parse(await readFile(new URL('../../../deploy/mcp/catalog.json', import.meta.url), 'utf8')) as unknown[];
   assert.ok(file.length > 0);
+});
+
+test('ranking prefers a curated entry over a higher-starred generated entry at the same tier', () => {
+  const curated = normalizeCatalogEntry({
+    name: 'curated-docs', title: 'Docs', description: 'Hand-picked docs.', origin: 'curated',
+    transport: 'stdio', command: 'npx', stars: 1,
+  }, 'bundled')!;
+  const generated = normalizeCatalogEntry({
+    name: 'generated-docs', title: 'Docs', description: 'Generated docs.', origin: 'marketplace',
+    transport: 'stdio', command: 'npx', stars: 99_999,
+  }, 'bundled')!;
+
+  assert.equal(searchCatalog([generated, curated], 'docs')[0]?.name, 'curated-docs');
+});
+
+test('an exact registry name match beats a curated description match', () => {
+  const curated = normalizeCatalogEntry({
+    name: 'curated-data-tool', title: 'Data tool', description: 'A tool for redis data.',
+    origin: 'curated', transport: 'stdio', command: 'npx',
+  }, 'bundled')!;
+  const registry = normalizeCatalogEntry({
+    name: 'redis', title: 'Redis', description: 'Registry copy.', origin: 'registry',
+    transport: 'stdio', command: 'npx',
+  }, 'registry')!;
+
+  assert.equal(searchCatalog([curated, registry], 'redis')[0]?.name, 'redis');
 });
 
 test('ranking puts curated Context7 above forks and namespaced lookalikes', () => {
@@ -139,6 +185,17 @@ test('stars are fetched best-effort, cached, bounded, and never fatal', async ()
   const failing = (async () => { throw new Error('rate limited'); }) as unknown as typeof fetch;
   const unchanged = await attachGitHubStars([entry('offline', 'acme/offline')], { fetchImpl: failing, now: () => 0 });
   assert.equal(unchanged[0]?.stars, undefined);
+
+  let subtreeCalls = 0;
+  const subtree = normalizeCatalogEntry({
+    name: 'subtree', description: 'subtree', transport: 'stdio', command: 'npx',
+    repository: { url: 'https://github.com/acme/monorepo/tree/main/src/subtree' },
+  }, 'registry')!;
+  await attachGitHubStars([subtree], {
+    fetchImpl: (async () => { subtreeCalls += 1; return new Response('{}'); }) as unknown as typeof fetch,
+    now: () => 0,
+  });
+  assert.equal(subtreeCalls, 0, 'a monorepo subdirectory must not borrow the repo count');
 });
 
 test('a malformed overlay is ignored with a warning, and a valid one is cached', async (t) => {
@@ -164,6 +221,67 @@ test('a malformed overlay is ignored with a warning, and a valid one is cached',
   const cached = await loadOverlay({ url: 'https://example.test/catalog.json', fetchImpl: shouldNotRun as unknown as typeof fetch, cacheFile });
   assert.equal(called, false);
   assert.equal(cached.entries[0]?.name, 'project-extra');
+});
+
+test('the generator refuses to write fewer than 60 entries and writes mirrored, origin-tagged output', async (t) => {
+  const appRoot = fileURLToPath(new URL('../../../', import.meta.url));
+  const generator = fileURLToPath(new URL('../../../scripts/build-mcp-catalog.mjs', import.meta.url));
+  const root = await mkdtemp(join(tmpdir(), 'mcp-generator-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const seedFile = join(root, 'seed.json');
+  await writeFile(seedFile, JSON.stringify({ servers: [] }), 'utf8');
+
+  const marketplace = (count: number): { servers: unknown[] } => ({
+    servers: Array.from({ length: count }, (_, index) => (index === 0
+      ? { slug: 'ai.junk', name: 'Junk', install: { claudeDesktop: { command: 'npx', args: ['-y', 'junk'] } } }
+      : index === 1
+        ? {
+            slug: 'fixture-remote', name: 'Fixture Remote', description: 'A remote fixture.', transports: ['http'],
+            install: { remote: { url: 'https://mcp.example.test/mcp', type: 'http' } },
+          }
+        : index === 2
+          ? {
+              slug: 'fixture-tree', name: 'Fixture Tree', description: 'A monorepo fixture.', stars: 51_000,
+              repo: 'https://github.com/acme/monorepo/tree/main/src/fixture-tree',
+              install: { claudeDesktop: { command: 'npx', args: ['-y', 'fixture-tree'] } },
+            }
+          : {
+              slug: `fixture-${index}`, name: `Fixture ${index}`, description: `Fixture ${index}.`,
+              install: { claudeDesktop: { command: 'npx', args: ['-y', `fixture-pkg-${index}`] } },
+            })),
+  });
+
+  const run = (count: number, output: string) => execFileSync(process.execPath, [generator], {
+    cwd: appRoot,
+    env: {
+      ...process.env,
+      CATALOG_MARKETPLACE_FILE: join(root, `marketplace-${count}.json`),
+      CATALOG_SEED_FILE: seedFile,
+      CATALOG_SKIP_DOCKER: '1',
+      CATALOG_OUTPUT_DIR: output,
+    },
+    stdio: 'pipe',
+  });
+
+  const shortOutput = join(root, 'short');
+  await writeFile(join(root, 'marketplace-2.json'), JSON.stringify(marketplace(2)), 'utf8');
+  assert.throws(() => run(2, shortOutput), (error: unknown) => (error as { status?: number }).status === 1);
+  await assert.rejects(readFile(join(shortOutput, 'server/modules/mcp/catalog.data.json')), /ENOENT/u);
+
+  const output = join(root, 'ok');
+  await writeFile(join(root, 'marketplace-38.json'), JSON.stringify(marketplace(38)), 'utf8');
+  run(38, output);
+  const bundledText = await readFile(join(output, 'server/modules/mcp/catalog.data.json'), 'utf8');
+  const deployText = await readFile(join(output, 'deploy/mcp/catalog.json'), 'utf8');
+  assert.equal(deployText, bundledText);
+  const entries = JSON.parse(bundledText) as CatalogEntry[];
+  assert.equal(entries.length, 60);
+  assert.ok(entries.every((entry) => entry.name !== 'ai.junk'));
+  assert.equal(entries.find((entry) => entry.name === 'fixture-remote')?.url, 'https://mcp.example.test/mcp');
+  assert.equal(entries.find((entry) => entry.name === 'fixture-remote')?.command, undefined);
+  assert.equal(entries.find((entry) => entry.name === 'fixture-tree')?.stars, undefined);
+  assert.equal(entries.find((entry) => entry.name === 'context7')?.origin, 'curated');
+  assert.equal(entries.find((entry) => entry.name === 'fixture-3')?.origin, 'marketplace');
 });
 
 test('the registry client paginates, maps packages, keeps the repository and rejects short searches', async () => {

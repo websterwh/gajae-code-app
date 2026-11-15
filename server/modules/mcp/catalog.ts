@@ -4,6 +4,7 @@ import path from 'node:path';
 import bundledRaw from './catalog.data.json' with { type: 'json' };
 
 export type CatalogSource = 'bundled' | 'overlay' | 'registry';
+export type CatalogOrigin = 'curated' | 'marketplace' | 'registry';
 export type CatalogTransport = 'stdio' | 'http' | 'sse';
 
 export type CatalogEnvVar = {
@@ -30,6 +31,7 @@ export type CatalogEntry = {
   env?: CatalogEnvVar[];
   requires?: { mounts?: CatalogMount[] };
   source: CatalogSource;
+  origin?: CatalogOrigin;
   stars?: number;
   popularity?: number;
   homepage?: string;
@@ -76,6 +78,11 @@ function mounts(value: unknown): CatalogMount[] | undefined {
   return list.length ? list : undefined;
 }
 
+function origin(value: unknown, source: CatalogSource): CatalogOrigin | undefined {
+  if (value === 'curated' || value === 'marketplace' || value === 'registry') return value;
+  return source === 'registry' ? 'registry' : undefined;
+}
+
 function repository(value: unknown): CatalogEntry['repository'] | undefined {
   if (!isRecord(value) || typeof value.url !== 'string' || !value.url) return undefined;
   return { url: value.url, ...(typeof value.source === 'string' ? { source: value.source } : {}) };
@@ -117,6 +124,7 @@ export function normalizeCatalogEntry(value: unknown, source: CatalogSource): Ca
     ...(stars !== undefined ? { stars } : {}),
     ...(popularity !== undefined ? { popularity } : {}),
     source,
+    ...(origin(value.origin, source) ? { origin: origin(value.origin, source) as CatalogOrigin } : {}),
   };
 }
 
@@ -205,19 +213,25 @@ function hygienePenalty(entry: CatalogEntry): number {
   return entry.name.includes('/') || first.includes('.') ? 1 : 0;
 }
 
-const SOURCE_RANK: Record<CatalogSource, number> = { bundled: 0, overlay: 1, registry: 2 };
+const ORIGIN_RANK: Record<CatalogOrigin, number> = { curated: 0, marketplace: 1, registry: 2 };
+
+function originRank(entry: CatalogEntry): number {
+  return ORIGIN_RANK[entry.origin ?? (entry.source === 'registry' ? 'registry' : 'marketplace')];
+}
 
 export type RankedEntry = { entry: CatalogEntry; tier: MatchTier };
 
 /**
- * Curated entries outrank registry records, then match quality, popularity and
+ * Match quality comes first: an exact registry name match must not lose to a
+ * curated entry that only mentions the word in its description. Within a tier,
+ * provenance (curated, then marketplace, then registry), stars, popularity and
  * name hygiene decide. The name tie-break keeps the order deterministic.
  */
 export function rankCatalog(entries: RankedEntry[]): CatalogEntry[] {
   return [...entries].sort((a, b) => {
-    const source = SOURCE_RANK[a.entry.source] - SOURCE_RANK[b.entry.source];
-    if (source !== 0) return source;
     if (a.tier !== b.tier) return a.tier - b.tier;
+    const origin = originRank(a.entry) - originRank(b.entry);
+    if (origin !== 0) return origin;
     const stars = (b.entry.stars ?? 0) - (a.entry.stars ?? 0);
     if (stars !== 0) return stars;
     const popularity = (b.entry.popularity ?? 0) - (a.entry.popularity ?? 0);
@@ -242,7 +256,8 @@ export function searchCatalog(entries: CatalogEntry[], query: string): CatalogEn
 const starCache = new Map<string, { value: number | undefined; expires: number }>();
 
 function githubRepo(url: string | undefined): string | null {
-  if (!url) return null;
+  // A monorepo subdirectory is not its own server; its stars are the whole repo's.
+  if (!url || /\/tree\/|\/blob\//u.test(url)) return null;
   const match = /^https?:\/\/github\.com\/([^/]+)\/([^/#?]+)/u.exec(url);
   if (!match) return null;
   return `${match[1]}/${match[2].replace(/\.git$/u, '')}`;
