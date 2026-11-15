@@ -446,7 +446,9 @@
     "ledgerCount": "已安装 {{count}} 个依赖",
     "statusDetails": "详情",
     "installedBadge": "已安装",
-    "newBadge": "New"
+    "newBadge": "New",
+    "versionHint": "点击版本号可手动输入，保存后会锁定该版本。",
+    "noVersion": "无版本"
   },
   "packages": {
     "title": "软件包",

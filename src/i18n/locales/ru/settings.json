@@ -446,7 +446,9 @@
     "ledgerCount": "Установлено зависимостей: {{count}}",
     "statusDetails": "Подробности",
     "installedBadge": "Установлено",
-    "newBadge": "New"
+    "newBadge": "New",
+    "versionHint": "Нажмите на версию, чтобы ввести другую; при сохранении она закрепляется.",
+    "noVersion": "Нет версии"
   },
   "packages": {
     "title": "Пакеты",

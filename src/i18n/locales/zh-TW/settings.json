@@ -446,7 +446,9 @@
     "ledgerCount": "已安裝 {{count}} 個相依性",
     "statusDetails": "詳細資料",
     "installedBadge": "已安裝",
-    "newBadge": "New"
+    "newBadge": "New",
+    "versionHint": "點擊版本號可手動輸入，儲存後會鎖定該版本。",
+    "noVersion": "無版本"
   },
   "packages": {
     "title": "套件",

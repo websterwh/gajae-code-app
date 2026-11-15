@@ -446,7 +446,9 @@
     "ledgerCount": "설치된 종속성 {{count}}개",
     "statusDetails": "세부 정보",
     "installedBadge": "설치됨",
-    "newBadge": "New"
+    "newBadge": "New",
+    "versionHint": "버전을 클릭해 다른 버전을 입력할 수 있으며, 저장하면 고정됩니다.",
+    "noVersion": "버전 없음"
   },
   "packages": {
     "title": "패키지",

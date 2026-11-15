@@ -446,7 +446,9 @@
     "ledgerCount": "{{count}} dependencies installed",
     "statusDetails": "Details",
     "installedBadge": "Installed",
-    "newBadge": "New"
+    "newBadge": "New",
+    "versionHint": "Click the version to type another one; saving pins it.",
+    "noVersion": "No version"
   },
   "packages": {
     "title": "Packages",

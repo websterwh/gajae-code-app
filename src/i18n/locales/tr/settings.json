@@ -446,7 +446,9 @@
     "ledgerCount": "{{count}} bağımlılık kuruldu",
     "statusDetails": "Ayrıntılar",
     "installedBadge": "Kurulu",
-    "newBadge": "New"
+    "newBadge": "New",
+    "versionHint": "Başka bir sürüm yazmak için sürüme tıklayın; kaydedince sabitlenir.",
+    "noVersion": "Sürüm yok"
   },
   "packages": {
     "title": "Paketler",

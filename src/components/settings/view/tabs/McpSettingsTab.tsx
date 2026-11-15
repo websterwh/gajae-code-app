@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AlertTriangle, CheckCircle2, Copy, Loader2, Pencil, Pin, Plus, RefreshCw, Search, Server, Trash2, X,
 } from 'lucide-react';
@@ -140,7 +140,10 @@ export default function McpSettingsTab() {
   const [busy, setBusy] = useState<string | null>(null);
   const [verifying, setVerifying] = useState<string | null>(null);
   const [verifyResults, setVerifyResults] = useState<Record<string, VerifyResult>>({});
-  const [pinDrafts, setPinDrafts] = useState<Record<string, string>>({});
+  const [editingVersion, setEditingVersion] = useState<string | null>(null);
+  const [versionDraft, setVersionDraft] = useState('');
+  // Blur also fires on Escape; this keeps that path from writing a pin.
+  const skipPinCommit = useRef(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState({
     command: '', args: '', url: '', env: '', headers: '', requiredEnv: {} as Record<string, string>,
@@ -271,22 +274,44 @@ export default function McpSettingsTab() {
     }
   };
 
-  const setPin = async (server: McpServer, version: string) => {
+  const setPin = async (server: McpServer, version: string | null) => {
     setBusy(`pin:${server.name}`);
     setError('');
     try {
       await request(serverPath(server, '/pin'), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ version: version.trim() || null }),
+        body: JSON.stringify({ version }),
       });
-      setPinDrafts((current) => ({ ...current, [server.name]: '' }));
       await reload();
     } catch (pinError) {
       setError(messageOf(pinError));
     } finally {
       setBusy(null);
     }
+  };
+
+  const pinVersion = (server: McpServer) => {
+    void setPin(server, server.pin ? null : server.install?.version ?? null);
+  };
+
+  const beginVersionEdit = (server: McpServer) => {
+    skipPinCommit.current = false;
+    setVersionDraft(server.pin ?? server.install?.version ?? '');
+    setEditingVersion(server.name);
+  };
+
+  // Confirming an edited version pins the server to it, so the version itself is
+  // the pin control instead of a standing input in every row.
+  const commitVersionEdit = (server: McpServer) => {
+    if (skipPinCommit.current) {
+      skipPinCommit.current = false;
+      return;
+    }
+    const next = versionDraft.trim();
+    setEditingVersion(null);
+    if (next === (server.pin ?? '')) return;
+    void setPin(server, next || null);
   };
 
   const remove = async (server: McpServer) => {
@@ -568,6 +593,7 @@ export default function McpSettingsTab() {
           {servers.map((server) => {
             const result = verifyResults[server.name];
             const install = server.install;
+            const version = server.pin ?? install?.version ?? null;
             const requiredVars = requirementsFor(server);
             const missingRequired = requiredVars.filter((variable) => variable.required && !server.envIsSet[variable.name]);
             return (
@@ -597,11 +623,15 @@ export default function McpSettingsTab() {
                     <p className="mt-1 truncate text-xs text-muted-foreground">
                       {server.packageName ?? server.url ?? server.command ?? ''}
                     </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {t('mcp.version')}: {install?.version ?? t('mcp.notInstalled')}
-                      {install?.status === 'failed' ? ` · ${t('mcp.failed')}` : ''}
-                      {server.pin ? ` · ${t('mcp.pinnedTo', { version: server.pin })}` : ''}
-                    </p>
+                    {/* A pinnable row carries its version on the control, the
+                        same as the packages tab; the rest state it here. */}
+                    {(!server.pinnable || install?.status === 'failed') && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {server.pinnable
+                          ? t('mcp.failed')
+                          : `${t('mcp.version')}: ${install?.version ?? t('mcp.notInstalled')}`}
+                      </p>
+                    )}
                   </div>
                   <div className="flex flex-wrap items-center justify-end gap-2">
                     <SettingsToggle
@@ -617,6 +647,56 @@ export default function McpSettingsTab() {
                     <button type="button" className={buttonClass} onClick={() => beginEdit(server)}>
                       <Pencil className="h-3.5 w-3.5" aria-hidden />{t('mcp.configure')}
                     </button>
+                    {/* A remote server has no package version, so the control is
+                        absent rather than disabled with nothing to lock. */}
+                    {server.pinnable && (
+                      <div className="flex items-center gap-1">
+                        {editingVersion === server.name ? (
+                          <input
+                            autoFocus
+                            value={versionDraft}
+                            onChange={(event) => setVersionDraft(event.target.value)}
+                            onBlur={() => commitVersionEdit(server)}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') {
+                                event.preventDefault();
+                                event.currentTarget.blur();
+                              } else if (event.key === 'Escape') {
+                                skipPinCommit.current = true;
+                                setEditingVersion(null);
+                              }
+                            }}
+                            placeholder={t('mcp.pinPlaceholder')}
+                            aria-label={`${t('mcp.version')} ${server.name}`}
+                            className={`${inputClass} w-28 px-2 py-1 font-mono`}
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => beginVersionEdit(server)}
+                            title={t('mcp.versionHint')}
+                            aria-label={`${t('mcp.version')} ${server.name}: ${version ?? t('mcp.noVersion')}`}
+                            className={`${buttonClass} font-mono`}
+                          >
+                            <Pencil className="h-3 w-3 opacity-60" aria-hidden />
+                            {version ?? t('mcp.noVersion')}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          disabled={busy === `pin:${server.name}` || (!server.pin && !install?.version)}
+                          onClick={() => pinVersion(server)}
+                          aria-label={`${server.pin ? t('mcp.unpin') : t('mcp.pin')} ${server.name}`}
+                          title={server.pin ? t('mcp.unpin') : t('mcp.pin')}
+                          className={buttonClass}
+                        >
+                          {busy === `pin:${server.name}`
+                            ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+                            : <Pin className={`h-3 w-3 ${server.pin ? 'fill-current' : ''}`} aria-hidden />}
+                          {server.pin ? t('mcp.unpin') : t('mcp.pin')}
+                        </button>
+                      </div>
+                    )}
                     {confirmRemove === server.name ? (
                       <button type="button" className={`${buttonClass} border-destructive text-destructive`}
                         disabled={busy === `remove:${server.name}`} onClick={() => void remove(server)}>
@@ -635,30 +715,6 @@ export default function McpSettingsTab() {
                       ? t('mcp.verifiedTools', { count: result.toolCount ?? 0 })
                       : `${t('mcp.verifyFailed')}: ${result.error ?? ''}`}
                   </p>
-                )}
-                {/* A remote server has no package version, so the pin control is
-                    absent rather than disabled with nothing to lock. */}
-                {server.pinnable && (
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <Pin className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
-                    <input
-                      aria-label={t('mcp.pin')}
-                      className={`${inputClass} sm:w-40`}
-                      placeholder={t('mcp.pinPlaceholder')}
-                      value={pinDrafts[server.name] ?? ''}
-                      onChange={(event) => setPinDrafts((current) => ({ ...current, [server.name]: event.target.value }))}
-                    />
-                    <button type="button" className={buttonClass} disabled={busy === `pin:${server.name}`}
-                      onClick={() => void setPin(server, pinDrafts[server.name] ?? '')}>
-                      {t('mcp.pin')}
-                    </button>
-                    {server.pin && (
-                      <button type="button" className={buttonClass} disabled={busy === `pin:${server.name}`}
-                        onClick={() => void setPin(server, '')}>
-                        {t('mcp.unpin')}
-                      </button>
-                    )}
-                  </div>
                 )}
                 {editing === server.name && (
                   <div className="mt-3 grid gap-2 rounded-lg border border-border p-3">

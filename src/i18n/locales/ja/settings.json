@@ -446,7 +446,9 @@
     "ledgerCount": "依存パッケージ {{count}} 件をインストール済み",
     "statusDetails": "詳細",
     "installedBadge": "インストール済み",
-    "newBadge": "New"
+    "newBadge": "New",
+    "versionHint": "バージョンをクリックすると入力できます。保存すると固定されます。",
+    "noVersion": "バージョンなし"
   },
   "packages": {
     "title": "パッケージ",

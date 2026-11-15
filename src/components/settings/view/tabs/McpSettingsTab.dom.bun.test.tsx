@@ -32,15 +32,43 @@ function catalogEntry() {
   };
 }
 
-function fakeApi() {
+function installedServer(overrides: Record<string, unknown> = {}) {
+  return {
+    name: 'context7',
+    transport: 'stdio',
+    scope: 'global',
+    enabled: true,
+    command: 'npx',
+    args: ['-y', '@upstash/context7-mcp'],
+    env: {},
+    envIsSet: {},
+    headers: {},
+    headersIsSet: {},
+    pin: null,
+    pinnable: true,
+    packageName: '@upstash/context7-mcp',
+    install: { version: '4.7.0', status: 'installed' },
+    ...overrides,
+  };
+}
+
+function fakeApi(seed: Array<Record<string, unknown>> = []) {
   const calls: Call[] = [];
-  let installed: Array<Record<string, unknown>> = [];
+  let installed = seed;
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const path = typeof input === 'string' ? input : input instanceof URL ? input.pathname : input.url;
     const method = init?.method ?? 'GET';
     const body = typeof init?.body === 'string' ? JSON.parse(init.body) as Record<string, unknown> : undefined;
     calls.push({ path, method, ...(body ? { body } : {}) });
 
+    if (path.startsWith('/api/mcp/servers/') && path.includes('/pin') && method === 'POST') {
+      const name = decodeURIComponent(path.split('/')[4] ?? '');
+      installed = installed.map((server) => (server.name === name ? { ...server, pin: body?.version ?? null } : server));
+      return new Response(JSON.stringify({
+        success: true,
+        data: installed.find((server) => server.name === name),
+      }));
+    }
     if (path.startsWith('/api/mcp/servers?') && method === 'GET') {
       return new Response(JSON.stringify({ success: true, data: installed }));
     }
@@ -134,4 +162,65 @@ test('project scope refuses to install until a project is selected', async () =>
   const install = await screen.findByRole('button', { name: english.mcp.install });
   assert.equal((install as HTMLButtonElement).disabled, true);
   assert.ok(screen.getByText(english.mcp.projectRequired));
+});
+
+test('a server version is text until clicked, and confirming a typed version pins it', async () => {
+  const calls = fakeApi([installedServer()]);
+  await mount();
+
+  const versionButton = await screen.findByRole('button', { name: `${english.mcp.version} context7: 4.7.0` });
+  assert.match(versionButton.textContent ?? '', /4\.7\.0/u);
+  assert.equal(screen.queryByRole('textbox', { name: `${english.mcp.version} context7` }), null);
+
+  fireEvent.click(versionButton);
+
+  const input = screen.getByRole('textbox', { name: `${english.mcp.version} context7` }) as HTMLInputElement;
+  assert.equal(input.value, '4.7.0');
+  fireEvent.change(input, { target: { value: '4.6.0' } });
+  fireEvent.keyDown(input, { key: 'Enter' });
+
+  await waitFor(() => {
+    const pin = calls.find((call) => call.method === 'POST' && call.path.includes('/pin'));
+    assert.deepEqual(pin?.body, { version: '4.6.0' });
+  });
+  await screen.findByRole('button', { name: `${english.mcp.unpin} context7` });
+});
+
+test('the pin button locks the version the server is running', async () => {
+  const calls = fakeApi([installedServer()]);
+  await mount();
+
+  fireEvent.click(await screen.findByRole('button', { name: `${english.mcp.pin} context7` }));
+
+  await waitFor(() => {
+    const pin = calls.find((call) => call.method === 'POST' && call.path.includes('/pin'));
+    assert.deepEqual(pin?.body, { version: '4.7.0' });
+  });
+  await screen.findByRole('button', { name: `${english.mcp.unpin} context7` });
+});
+
+test('a pinned server unpins with the same button', async () => {
+  const calls = fakeApi([installedServer({ pin: '4.7.0' })]);
+  await mount();
+
+  fireEvent.click(await screen.findByRole('button', { name: `${english.mcp.unpin} context7` }));
+
+  await waitFor(() => {
+    const pin = calls.find((call) => call.method === 'POST' && call.path.includes('/pin'));
+    assert.deepEqual(pin?.body, { version: null });
+  });
+  await screen.findByRole('button', { name: `${english.mcp.pin} context7` });
+});
+
+test('escape leaves the version alone', async () => {
+  const calls = fakeApi([installedServer()]);
+  await mount();
+
+  fireEvent.click(await screen.findByRole('button', { name: `${english.mcp.version} context7: 4.7.0` }));
+  const input = screen.getByRole('textbox', { name: `${english.mcp.version} context7` });
+  fireEvent.change(input, { target: { value: '9.9.9' } });
+  fireEvent.keyDown(input, { key: 'Escape' });
+
+  await waitFor(() => assert.equal(screen.queryByRole('textbox', { name: `${english.mcp.version} context7` }), null));
+  assert.equal(calls.some((call) => call.path.includes('/pin')), false);
 });

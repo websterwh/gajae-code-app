@@ -446,7 +446,9 @@
     "ledgerCount": "{{count}} Abhängigkeiten installiert",
     "statusDetails": "Details",
     "installedBadge": "Installiert",
-    "newBadge": "New"
+    "newBadge": "New",
+    "versionHint": "Auf die Version klicken, um eine andere einzugeben; beim Speichern wird sie gepinnt.",
+    "noVersion": "Keine Version"
   },
   "packages": {
     "title": "Pakete",

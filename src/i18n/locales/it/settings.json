@@ -446,7 +446,9 @@
     "ledgerCount": "{{count}} dipendenze installate",
     "statusDetails": "Dettagli",
     "installedBadge": "Installato",
-    "newBadge": "New"
+    "newBadge": "New",
+    "versionHint": "Clicca la versione per scriverne un’altra; salvandola la blocchi.",
+    "noVersion": "Nessuna versione"
   },
   "packages": {
     "title": "Pacchetti",
