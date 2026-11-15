@@ -17,6 +17,13 @@ coding agent. MIT. Four runtime layers:
 `shared/` is code shared between client and server (product identity, network hosts,
 job projection protocol). `scripts/` holds build/release/verify tooling.
 
+## Repository layout
+
+- The application is the repository root: no `app/` wrapper; `.github/`, `.npmrc`, `.nvmrc`, `.husky/` and `.release-it.json` are top-level, as upstream.
+- `deploy/docker/` is the only container packaging (Dockerfile, entrypoint, compose). Never add a second copy.
+- `docker/gjc/` is the GJC sandbox template image, not this app's deployment container.
+- `scripts/verify-layout.mjs` runs in `npm test` and CI and fails on drift.
+
 ## Environment
 
 - Node 22.22.2+ (22.x) or 24.15.0+ (24.x) — the test runner refuses other majors.

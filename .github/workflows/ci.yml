@@ -51,6 +51,11 @@ jobs:
       - name: Fetch pinned Bun runtime
         run: node scripts/fetch-bun.mjs
 
+      # A second container tree silently diverged once already; fail the build
+      # on the layout rather than discovering it in a deployment.
+      - name: Verify repository layout
+        run: node scripts/verify-layout.mjs
+
       - name: Verify
         run: npm run verify
 
