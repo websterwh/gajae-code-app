@@ -112,6 +112,39 @@ test('a git failure is reported as unavailable rather than as zero changes', asy
   assert.doesNotMatch(section().textContent ?? '', /\b0\b/);
 });
 
+/*
+ * A session the server cannot place in this project - an orphan whose project
+ * row was removed, a worktree session whose checkout is gone - answers 403/409
+ * instead of a summary. That is not "git is unavailable": the project's own
+ * checkout is still readable, so the section asks for it plainly and keeps
+ * reporting the branch and its changes.
+ */
+
+test('a session the server cannot place falls back to the project checkout', async () => {
+  globalThis.fetch = (async (input) => {
+    const url = String(input);
+    requests.push(url);
+    if (url.includes('sessionId=')) {
+      return new Response(
+        JSON.stringify({ error: 'Session does not belong to this project.', code: 'SESSION_PROJECT_MISMATCH' }),
+        { status: 403 },
+      );
+    }
+    return new Response(status(), { status: 200 });
+  }) as typeof fetch;
+
+  render(environment());
+  await screen.findByText('main');
+
+  assert.deepEqual(requests, [
+    '/api/git/status?project=project-alpha&sessionId=session-1',
+    '/api/git/status?project=project-alpha',
+  ]);
+  assert.equal(screen.queryByText('agentSidebar.environment.gitUnavailable'), null);
+  const changes = screen.getByText('agentSidebar.environment.changes').parentElement!;
+  assert.equal(within(changes).getByText('4').textContent, '4');
+});
+
 test('a repository whose branch git could not name omits the branch row', async () => {
   answer(status({ branch: '', modified: [], added: [], untracked: [], staged: [] }));
   render(environment());

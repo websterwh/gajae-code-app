@@ -62,8 +62,17 @@ export function useProjectGitSummary(projectId: string | undefined, enabled: boo
 
     publish({ kind: 'loading' });
     try {
-      const response = await api.gitStatus(projectId, sessionId);
-      const body = await response.json() as Record<string, unknown>;
+      let response = await api.gitStatus(projectId, sessionId);
+      let body = await response.json() as Record<string, unknown>;
+      // The server refuses to read a session's checkout when it cannot place
+      // that session in this project - an orphan whose project was removed, or
+      // a managed worktree that is gone. The project's own working tree is
+      // still readable, so ask for it plainly instead of reporting that git
+      // could not be read at all.
+      if (!response.ok && sessionId && (body.code === 'SESSION_PROJECT_MISMATCH' || body.code === 'SESSION_WORKTREE_UNAVAILABLE')) {
+        response = await api.gitStatus(projectId);
+        body = await response.json() as Record<string, unknown>;
+      }
       if (response.ok && body.isRepository === false) {
         publish({ kind: 'not-a-repository' });
         return;
