@@ -38,6 +38,24 @@ const BUNDLED_NAME = /^[a-z0-9][a-z0-9_-]{0,63}$/u;
 const SUBTREE_URL = /\/tree\/|\/blob\//u;
 const MIN_ENTRIES = Number.parseInt(process.env.CATALOG_MIN_ENTRIES ?? '60', 10);
 
+async function remoteAnswers(url) {
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
+      body: JSON.stringify({
+        jsonrpc: '2.0', id: 1, method: 'initialize',
+        params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'gajae-catalog-check', version: '1' } },
+      }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!response.ok) return false;
+    return (await response.text()).includes('"result"');
+  } catch {
+    return false;
+  }
+}
+
 const githubToken = process.env.GITHUB_TOKEN
   || (() => {
     try { return execFileSync('gh', ['auth', 'token'], { encoding: 'utf8' }).trim(); } catch { return ''; }
@@ -281,6 +299,7 @@ function reportText(details) {
     `- Duplicates collapsed: ${details.duplicates}`,
     `- Stars omitted for monorepo subdirectory URLs: ${details.subtreeStars}`,
     `- Curated entries merged last: ${details.curated}`,
+    `- Stars re-fetched from GitHub: ${details.starsRefreshed} re-fetched, ${details.starsKept} kept after a failed lookup`,
   ].join('\n');
 }
 
@@ -307,16 +326,37 @@ async function main() {
   const duplicates = beforeDedupe.length - generated.length;
 
   let done = 0;
+  let starsRefreshed = 0;
+  let starsKept = 0;
   for (const entry of generated) {
-    if (typeof entry.stars === 'number') continue;
-    const stars = await starsFor(entry.repository?.url);
-    if (typeof stars === 'number') entry.stars = stars;
+    const repository = entry.repository?.url;
+    if (!repository) continue;
+    // A marketplace copy is a snapshot; always ask GitHub, and fall back to
+    // the published number only when the lookup itself fails.
+    const stars = await starsFor(repository);
+    if (typeof stars === 'number') {
+      entry.stars = stars;
+      starsRefreshed += 1;
+    } else if (typeof entry.stars === 'number') {
+      starsKept += 1;
+    }
     done += 1;
     if (done % 25 === 0) console.log(`stars ${done}/${generated.length}`);
   }
 
   const curatedRaw = JSON.parse(await readFile(path.join(root, 'data', 'catalog.curated.json'), 'utf8'));
   const curated = curatedRaw.map((entry) => ({ ...entry, origin: 'curated' }));
+  if (process.env.CATALOG_SKIP_REMOTE_CHECK !== '1') {
+    const remotes = curated.filter((entry) => entry.transport !== 'stdio');
+    const failures = [];
+    for (const entry of remotes) {
+      if (!(await remoteAnswers(entry.url))) failures.push(entry.name);
+    }
+    if (failures.length > 0) {
+      throw new Error(`curated remote endpoints did not answer without credentials: ${failures.join(', ')}`);
+    }
+    console.log(`verified ${remotes.length} curated remote endpoints`);
+  }
   const curatedNames = new Set(curated.map((entry) => entry.name));
   const curatedPackages = new Set(curated.map((entry) => entry.package?.name?.toLowerCase()).filter(Boolean));
   const surviving = generated.filter((entry) => {
@@ -343,6 +383,8 @@ async function main() {
     duplicates,
     subtreeStars,
     curated: curated.length,
+    starsRefreshed,
+    starsKept,
   };
 
   const output = `${JSON.stringify(merged, null, 2)}\n`;
@@ -367,8 +409,9 @@ The bundled copy lives at \`server/modules/mcp/catalog.data.json\`; this file is
 the same content, served as the curated overlay so the app can grow without a
 new image. The official MCP registry is not bundled; it is queried at runtime.
 Stars were re-fetched from the GitHub API at generation time, and a repository
-URL under \`/tree/\` or \`/blob/\` never contributes a count. The runtime never
-calls GitHub to render the list.
+URL under \`/tree/\` or \`/blob/\` never contributes a count. At request time the
+runtime refreshes missing stars best-effort with a bounded, cached lookup; a
+rate limit or missing token only omits the count.
 `, 'utf8');
   console.log(reportText(details));
   console.log(`wrote ${merged.length} entries`);

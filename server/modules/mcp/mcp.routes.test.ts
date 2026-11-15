@@ -47,6 +47,10 @@ test('the MCP router validates input and serves the bundled catalog offline', as
   const badScope = await fetch(`${base}/servers?scope=elsewhere`);
   assert.equal(badScope.status, 400);
 
+  const badSort = await fetch(`${base}/catalog?sort=stars`);
+  assert.equal(badSort.status, 400);
+  assert.match(JSON.stringify(await badSort.json()), /sort must be name, relevance or popularity/u);
+
   const catalog = await fetch(`${base}/catalog?source=bundled`);
   assert.equal(catalog.status, 200);
   const body = await catalog.json() as { data: { entries: Array<{ name: string; source: string }>; warning?: string } };

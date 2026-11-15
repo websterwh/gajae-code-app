@@ -248,12 +248,11 @@
     "repository": { "url": "https://github.com/huggingface/huggingface_hub", "source": "curated" }
   },
   {
-    "name": "vercel",
-    "title": "Vercel",
-    "description": "Search Vercel documentation and projects; sign in with a Vercel account.",
+    "name": "grep",
+    "title": "Grep.app",
+    "description": "Search public GitHub code with grep.app, without an API key.",
     "transport": "http",
-    "url": "https://mcp.vercel.com",
-    "homepage": "https://vercel.com",
-    "repository": { "url": "https://github.com/vercel/mcp-adapter", "source": "curated" }
+    "url": "https://mcp.grep.app",
+    "homepage": "https://grep.app"
   }
 ]

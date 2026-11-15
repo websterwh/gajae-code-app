@@ -8,6 +8,7 @@ import {
   bundledCatalog,
   loadOverlay,
   mergeCatalog,
+  rankCatalog,
   searchCatalog,
   type CatalogEntry,
   type CatalogSource,
@@ -43,6 +44,7 @@ export type McpCliRunner = (
 
 export type McpServerView = PublicMcpServer & { install: LedgerEntry | null };
 export type VerifyResult = { ok: boolean; toolCount?: number; tools?: string[]; error?: string };
+export type CatalogSort = 'name' | 'relevance' | 'popularity';
 
 export type McpServiceOptions = {
   agentDir?: string;
@@ -402,7 +404,7 @@ export class McpService {
     await writeLedger(this.ledgerFile(), ledger);
   }
 
-  async catalog(query: { q?: string; source?: string; cursor?: string; limit?: number } = {}): Promise<{
+  async catalog(query: { q?: string; source?: string; cursor?: string; limit?: number; sort?: CatalogSort } = {}): Promise<{
     entries: CatalogEntry[];
     nextCursor: string | null;
     warning?: string;
@@ -436,7 +438,7 @@ export class McpService {
     const merged = mergeCatalog(bundledCatalog(), overlay.entries, registryEntries);
     const counts: Record<CatalogSource, number> = { bundled: 0, overlay: 0, registry: 0 };
     for (const entry of merged) counts[entry.source] += 1;
-    let entries = q ? searchCatalog(merged, q) : [...merged].sort((a, b) => a.name.localeCompare(b.name));
+    let entries = q ? searchCatalog(merged, q) : [...merged];
     if (query.source === 'bundled' || query.source === 'overlay' || query.source === 'registry') {
       entries = entries.filter((entry) => entry.source === query.source);
     }
@@ -447,7 +449,23 @@ export class McpService {
       ...(this.options.now ? { now: this.options.now } : {}),
       ...(this.env.GITHUB_TOKEN ? { token: this.env.GITHUB_TOKEN } : {}),
     });
-    if (q) entries = searchCatalog(entries, q);
+    if (q) {
+      entries = searchCatalog(entries, q);
+    } else if (query.sort === 'relevance') {
+      // Browse has no match tiers: every entry ties, so provenance and quality
+      // decide. Reuse the search comparator rather than growing a second one.
+      entries = rankCatalog(entries.map((entry) => ({ entry, tier: 0 })));
+    } else if (query.sort === 'popularity') {
+      // Deliberately ignores provenance: a starred marketplace server can
+      // outrank a curated one, which is the point of this option.
+      entries = [...entries].sort((a, b) => (
+        (b.stars ?? 0) - (a.stars ?? 0)
+        || (b.popularity ?? 0) - (a.popularity ?? 0)
+        || a.name.localeCompare(b.name)
+      ));
+    } else {
+      entries = [...entries].sort((a, b) => a.name.localeCompare(b.name));
+    }
     return {
       entries,
       nextCursor,

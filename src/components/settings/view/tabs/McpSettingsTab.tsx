@@ -57,6 +57,7 @@ type CatalogEntry = {
 };
 
 type CatalogCounts = Record<CatalogEntry['source'], number>;
+type CatalogSort = 'name' | 'relevance' | 'popularity';
 type ProjectSummary = { projectId: string; path: string; displayName: string };
 
 type VerifyResult = { ok: boolean; toolCount?: number; tools?: string[]; error?: string };
@@ -132,6 +133,7 @@ export default function McpSettingsTab() {
   const [projectsLoading, setProjectsLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [source, setSource] = useState('');
+  const [sort, setSort] = useState<CatalogSort>('name');
   const [busy, setBusy] = useState<string | null>(null);
   const [verifying, setVerifying] = useState<string | null>(null);
   const [verifyResults, setVerifyResults] = useState<Record<string, VerifyResult>>({});
@@ -213,6 +215,7 @@ export default function McpSettingsTab() {
       const params = new URLSearchParams();
       if (search.trim()) params.set('q', search.trim());
       if (source) params.set('source', source);
+      if (!search.trim()) params.set('sort', sort);
       void request<{ entries: CatalogEntry[]; warning?: string; registryError?: string; counts: CatalogCounts }>(`/api/mcp/catalog?${params.toString()}`)
         .then((result) => {
           setCatalog(result.entries);
@@ -224,7 +227,7 @@ export default function McpSettingsTab() {
         .catch((catalogError) => setError(messageOf(catalogError)));
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [rememberRequirements, search, source]);
+  }, [rememberRequirements, search, sort, source]);
 
   const serverPath = (server: McpServer, suffix = ''): string => {
     const params = new URLSearchParams({ scope: server.scope });
@@ -730,7 +733,7 @@ export default function McpSettingsTab() {
 
       <SettingsSection title={t('mcp.findTitle')} description={t('mcp.findDescription')}>
         <SettingsCard divided>
-          <div className="grid gap-2 p-4 sm:grid-cols-2">
+          <div className="grid gap-2 p-4 sm:grid-cols-3">
             <label className="text-xs font-medium text-muted-foreground">
               {t('mcp.findTitle')}
               <span className="relative mt-1 block">
@@ -751,6 +754,17 @@ export default function McpSettingsTab() {
               <span className="mt-1 block font-normal">{sourceDescription}</span>
               {source === 'registry' && <span className="mt-1 block font-normal">{t('mcp.registryNote')}</span>}
             </label>
+            {!search.trim() && (
+              <label className="text-xs font-medium text-muted-foreground">
+                {t('mcp.sort')}
+                <select aria-label={t('mcp.sort')} className={`mt-1 ${inputClass}`} value={sort}
+                  onChange={(event) => setSort(event.target.value as CatalogSort)}>
+                  <option value="name">{t('mcp.sortName')}</option>
+                  <option value="relevance">{t('mcp.sortRelevance')}</option>
+                  <option value="popularity">{t('mcp.sortPopularity')}</option>
+                </select>
+              </label>
+            )}
           </div>
           {(catalogWarning || registryError) && (
             <div className="flex flex-wrap items-center gap-2 border-t border-border px-4 py-2">

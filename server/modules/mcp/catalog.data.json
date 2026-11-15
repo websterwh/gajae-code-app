@@ -23,7 +23,7 @@
     "name": "atlassian",
     "title": "Atlassian (Jira + Confluence)",
     "description": "Search and edit Jira issues and Confluence pages.",
-    "stars": 1600,
+    "stars": 6122,
     "repository": {
       "url": "https://github.com/sooperset/mcp-atlassian",
       "source": "marketplace"
@@ -129,7 +129,7 @@
       "manager": "other",
       "name": "mcp/azure"
     },
-    "popularity": 77406,
+    "popularity": 77407,
     "homepage": "https://hub.docker.com/r/mcp/azure",
     "origin": "marketplace"
   },
@@ -223,7 +223,7 @@
     "name": "cloudflare",
     "title": "Cloudflare",
     "description": "Manage Workers, KV, R2, and D1 from your model.",
-    "stars": 4100,
+    "stars": 4467,
     "repository": {
       "url": "https://github.com/cloudflare/mcp-server-cloudflare",
       "source": "marketplace"
@@ -373,7 +373,7 @@
       "manager": "other",
       "name": "mcp/desktop-commander"
     },
-    "popularity": 245610,
+    "popularity": 245618,
     "homepage": "https://hub.docker.com/r/mcp/desktop-commander",
     "origin": "marketplace"
   },
@@ -393,7 +393,7 @@
       "manager": "other",
       "name": "mcp/docker"
     },
-    "popularity": 275703,
+    "popularity": 275714,
     "homepage": "https://hub.docker.com/r/mcp/docker",
     "origin": "marketplace"
   },
@@ -413,7 +413,7 @@
       "manager": "other",
       "name": "mcp/duckduckgo"
     },
-    "popularity": 1065262,
+    "popularity": 1065290,
     "homepage": "https://hub.docker.com/r/mcp/duckduckgo",
     "origin": "marketplace"
   },
@@ -481,7 +481,7 @@
     "name": "elevenlabs",
     "title": "ElevenLabs",
     "description": "Text-to-speech and voice cloning via ElevenLabs.",
-    "stars": 2700,
+    "stars": 1551,
     "repository": {
       "url": "https://github.com/elevenlabs/elevenlabs-mcp",
       "source": "marketplace"
@@ -553,7 +553,7 @@
     "name": "exa",
     "title": "Exa Search",
     "description": "Neural search across the web with citations.",
-    "stars": 3100,
+    "stars": 5234,
     "repository": {
       "url": "https://github.com/exa-labs/exa-mcp-server",
       "source": "marketplace"
@@ -659,7 +659,7 @@
       "manager": "other",
       "name": "mcp/firecrawl"
     },
-    "popularity": 151700,
+    "popularity": 151711,
     "homepage": "https://hub.docker.com/r/mcp/firecrawl",
     "origin": "marketplace"
   },
@@ -819,9 +819,18 @@
       "manager": "other",
       "name": "mcp/grafana"
     },
-    "popularity": 1188971,
+    "popularity": 1188995,
     "homepage": "https://hub.docker.com/r/mcp/grafana",
     "origin": "marketplace"
+  },
+  {
+    "name": "grep",
+    "title": "Grep.app",
+    "description": "Search public GitHub code with grep.app, without an API key.",
+    "transport": "http",
+    "url": "https://mcp.grep.app",
+    "homepage": "https://grep.app",
+    "origin": "curated"
   },
   {
     "name": "heroku",
@@ -920,7 +929,7 @@
     "name": "kubernetes",
     "title": "Kubernetes",
     "description": "Inspect and manage a Kubernetes cluster.",
-    "stars": 2100,
+    "stars": 1612,
     "repository": {
       "url": "https://github.com/Flux159/mcp-server-kubernetes",
       "source": "marketplace"
@@ -1000,7 +1009,7 @@
       "manager": "other",
       "name": "mcp/mcp-discord"
     },
-    "popularity": 42766,
+    "popularity": 42767,
     "homepage": "https://hub.docker.com/r/mcp/mcp-discord",
     "origin": "marketplace"
   },
@@ -1103,7 +1112,7 @@
       "manager": "other",
       "name": "mcp/neo4j-cypher"
     },
-    "popularity": 75822,
+    "popularity": 75828,
     "homepage": "https://hub.docker.com/r/mcp/neo4j-cypher",
     "origin": "marketplace"
   },
@@ -1123,7 +1132,7 @@
       "manager": "other",
       "name": "mcp/neo4j-memory"
     },
-    "popularity": 46733,
+    "popularity": 46737,
     "homepage": "https://hub.docker.com/r/mcp/neo4j-memory",
     "origin": "marketplace"
   },
@@ -1175,7 +1184,7 @@
     "name": "obsidian",
     "title": "Obsidian",
     "description": "Read and write notes in an Obsidian vault.",
-    "stars": 2400,
+    "stars": 4539,
     "repository": {
       "url": "https://github.com/MarkusPfundstein/mcp-obsidian",
       "source": "marketplace"
@@ -1217,7 +1226,7 @@
       "manager": "other",
       "name": "mcp/openapi-schema"
     },
-    "popularity": 32987,
+    "popularity": 32989,
     "homepage": "https://hub.docker.com/r/mcp/openapi-schema",
     "origin": "marketplace"
   },
@@ -1265,7 +1274,7 @@
     "name": "perplexity",
     "title": "Perplexity",
     "description": "Web-grounded answers via the Perplexity API.",
-    "stars": 2200,
+    "stars": 2629,
     "repository": {
       "url": "https://github.com/ppl-ai/modelcontextprotocol",
       "source": "marketplace"
@@ -1384,7 +1393,7 @@
     "name": "qdrant",
     "title": "Qdrant",
     "description": "Vector search over a Qdrant collection.",
-    "stars": 1700,
+    "stars": 1570,
     "repository": {
       "url": "https://github.com/qdrant/mcp-server-qdrant",
       "source": "marketplace"
@@ -1530,7 +1539,7 @@
     "name": "sentry",
     "title": "Sentry",
     "description": "Inspect Sentry issues and recent error events.",
-    "stars": 1500,
+    "stars": 964,
     "repository": {
       "url": "https://github.com/getsentry/sentry-mcp",
       "source": "marketplace"
@@ -1585,7 +1594,7 @@
       "manager": "other",
       "name": "mcp/sequentialthinking"
     },
-    "popularity": 441821,
+    "popularity": 441830,
     "homepage": "https://hub.docker.com/r/mcp/sequentialthinking",
     "origin": "marketplace"
   },
@@ -1648,7 +1657,7 @@
     "name": "stripe",
     "title": "Stripe",
     "description": "Read and write Stripe customers, subscriptions, and invoices.",
-    "stars": 3800,
+    "stars": 2063,
     "repository": {
       "url": "https://github.com/stripe/agent-toolkit",
       "source": "marketplace"
@@ -1676,7 +1685,7 @@
     "name": "supabase",
     "title": "Supabase",
     "description": "Query Postgres, manage RLS, and call Edge Functions.",
-    "stars": 5400,
+    "stars": 3014,
     "repository": {
       "url": "https://github.com/supabase-community/supabase-mcp",
       "source": "marketplace"
@@ -1699,7 +1708,7 @@
     "name": "tavily",
     "title": "Tavily",
     "description": "Search-augmented retrieval optimized for agents.",
-    "stars": 1800,
+    "stars": 2488,
     "repository": {
       "url": "https://github.com/tavily-ai/tavily-mcp",
       "source": "marketplace"
@@ -1738,22 +1747,9 @@
       "manager": "other",
       "name": "mcp/time"
     },
-    "popularity": 1097144,
+    "popularity": 1097179,
     "homepage": "https://hub.docker.com/r/mcp/time",
     "origin": "marketplace"
-  },
-  {
-    "name": "vercel",
-    "title": "Vercel",
-    "description": "Search Vercel documentation and projects; sign in with a Vercel account.",
-    "transport": "http",
-    "url": "https://mcp.vercel.com",
-    "homepage": "https://vercel.com",
-    "repository": {
-      "url": "https://github.com/vercel/mcp-adapter",
-      "source": "curated"
-    },
-    "origin": "curated"
   },
   {
     "name": "wolfram-alpha",
@@ -1779,7 +1775,7 @@
     "name": "youtube-transcript",
     "title": "YouTube Transcript",
     "description": "Pull transcripts and metadata from YouTube videos.",
-    "stars": 900,
+    "stars": 604,
     "repository": {
       "url": "https://github.com/Kimtaeyoon83/mcp-server-youtube-transcript",
       "source": "marketplace"

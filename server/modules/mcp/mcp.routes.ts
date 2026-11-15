@@ -102,12 +102,17 @@ export function createMcpRouter(service: McpService = mcpService): Router {
       if (source !== undefined && source !== 'bundled' && source !== 'overlay' && source !== 'registry') {
         return response.status(400).json({ success: false, error: { message: 'source must be bundled, overlay or registry.' } });
       }
+      const sort = request.query.sort;
+      if (sort !== undefined && sort !== 'name' && sort !== 'relevance' && sort !== 'popularity') {
+        return response.status(400).json({ success: false, error: { message: 'sort must be name, relevance or popularity.' } });
+      }
       const limit = request.query.limit === undefined ? undefined : Number(request.query.limit);
       response.json({
         success: true,
         data: await service.catalog({
           ...(typeof request.query.q === 'string' ? { q: request.query.q } : {}),
           ...(typeof source === 'string' ? { source } : {}),
+          ...(typeof sort === 'string' ? { sort } : {}),
           ...(typeof request.query.cursor === 'string' ? { cursor: request.query.cursor } : {}),
           ...(limit === undefined || !Number.isFinite(limit) ? {} : { limit }),
         }),

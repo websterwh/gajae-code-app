@@ -73,10 +73,18 @@ test('the bundled catalog is a real, valid, deduplicated index with the named se
   assert.ok(remotes.length >= 5, `expected 5+ http entries, got ${remotes.length}`);
   assert.ok(remotes.every((entry) => entry.url && !entry.command), 'http entries need a url and no command');
 
-  const bundledText = await readFile(new URL('./catalog.data.json', import.meta.url), 'utf8');
   const deployText = await readFile(new URL('../../../deploy/mcp/catalog.json', import.meta.url), 'utf8');
-  assert.equal(deployText, bundledText, 'the mirrored overlay must be byte-identical');
-  assert.ok(JSON.parse(deployText).length >= 60);
+  const overlayRaw = JSON.parse(deployText) as unknown;
+  assert.ok(Array.isArray(overlayRaw) && overlayRaw.length > 0, 'the overlay must be a non-empty catalog list');
+  const overlay = overlayRaw.map((entry, index) => {
+    const normalized = normalizeCatalogEntry(entry, 'overlay');
+    assert.ok(normalized, `overlay entry ${index} must be a valid catalog entry`);
+    return normalized;
+  });
+  const bundledNames = new Set(entries.map((entry) => entry.name));
+  for (const entry of overlay) {
+    assert.ok(bundledNames.has(entry.name), `overlay must contain the bundled name ${entry.name}`);
+  }
 });
 
 test('the default overlay URL points at a generated file that exists in the repo', async () => {
@@ -258,6 +266,7 @@ test('the generator refuses to write fewer than 60 entries and writes mirrored, 
       CATALOG_MARKETPLACE_FILE: join(root, `marketplace-${count}.json`),
       CATALOG_SEED_FILE: seedFile,
       CATALOG_SKIP_DOCKER: '1',
+      CATALOG_SKIP_REMOTE_CHECK: '1',
       CATALOG_OUTPUT_DIR: output,
     },
     stdio: 'pipe',

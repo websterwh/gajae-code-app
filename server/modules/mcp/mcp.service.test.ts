@@ -149,3 +149,41 @@ test('remote servers are not pinnable, and duplicate names are rejected', async 
   await assert.rejects(service.add({ name: 'bad name', transport: 'stdio', command: 'x' }), /name/u);
   await assert.rejects(service.add({ name: 'no-command', transport: 'stdio' }), /needs a command/u);
 });
+
+test('browse sorting exposes name, provenance-first relevance, and provenance-blind popularity', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'mcp-sort-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const overlay = [
+    { name: 'zeta', description: 'server curated', transport: 'stdio', command: 'npx', origin: 'curated', stars: 1 },
+    { name: 'alpha', description: 'server marketplace', transport: 'stdio', command: 'npx', origin: 'marketplace', stars: 9_000 },
+    { name: 'beta', description: 'server marketplace', transport: 'stdio', command: 'npx', origin: 'marketplace', stars: 100 },
+  ];
+  const service = new McpService({
+    agentDir: root,
+    catalogCachePath: join(root, 'catalog-cache.json'),
+    fetchImpl: (async (input: string | URL | Request) => {
+      if (String(input).endsWith('/catalog.json')) {
+        return new Response(JSON.stringify(overlay), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      throw new Error('offline');
+    }) as unknown as typeof fetch,
+  });
+  const names = async (query: Parameters<McpService['catalog']>[0]) => (
+    await service.catalog(query)
+  ).entries.map((entry) => entry.name);
+
+  assert.deepEqual(await names({ source: 'overlay', sort: 'name' }), ['alpha', 'beta', 'zeta']);
+  assert.deepEqual(await names({ source: 'overlay', sort: 'relevance' }), ['zeta', 'alpha', 'beta']);
+  assert.deepEqual(await names({ source: 'overlay', sort: 'popularity' }), ['alpha', 'beta', 'zeta']);
+
+  const popular = await service.catalog({ source: 'overlay', sort: 'popularity' });
+  assert.equal(popular.entries[0]?.origin, 'marketplace');
+  assert.equal(popular.entries[0]?.stars, 9_000);
+  const relevant = await service.catalog({ source: 'overlay', sort: 'relevance' });
+  assert.equal(relevant.entries[0]?.origin, 'curated');
+
+  // A query keeps its match ranking regardless of the browse sort control.
+  const absent = await names({ q: 'server', source: 'overlay' });
+  assert.deepEqual(await names({ q: 'server', source: 'overlay', sort: 'name' }), absent);
+  assert.deepEqual(await names({ q: 'server', source: 'overlay', sort: 'popularity' }), absent);
+});
