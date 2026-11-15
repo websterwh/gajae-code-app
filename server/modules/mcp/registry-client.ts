@@ -44,6 +44,9 @@ export function normalizeRegistryRecord(record: unknown): CatalogEntry | null {
       }
       const command = registryType === 'npm' ? 'npx' : registryType === 'pypi' ? 'uvx' : 'docker';
       const args = command === 'npx' ? ['-y', identifier] : command === 'docker' ? ['run', '-i', '--rm', identifier] : [identifier];
+      const repository = isRecord(server.repository) && typeof server.repository.url === 'string'
+        ? { url: server.repository.url, ...(typeof server.repository.source === 'string' ? { source: server.repository.source } : {}) }
+        : undefined;
       entry = normalizeCatalogEntry({
         name,
         title: typeof server.title === 'string' ? server.title : undefined,
@@ -57,6 +60,7 @@ export function normalizeRegistryRecord(record: unknown): CatalogEntry | null {
           ...(typeof first.version === 'string' ? { version: first.version } : {}),
         },
         env,
+        ...(repository ? { repository } : {}),
       }, 'registry');
     }
   }

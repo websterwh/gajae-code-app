@@ -1,0 +1,156 @@
+[
+  {
+    "name": "filesystem",
+    "title": "Filesystem",
+    "description": "Read, write and search files inside directories the server is given.",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-filesystem", "/workspace"],
+    "package": { "manager": "npm", "name": "@modelcontextprotocol/server-filesystem" },
+    "requires": { "mounts": [{ "path": "/workspace", "purpose": "Files the server may read and edit" }] }
+  },
+  {
+    "name": "git",
+    "title": "Git",
+    "description": "Inspect and search a git repository: status, diffs, log and show.",
+    "transport": "stdio",
+    "command": "uvx",
+    "args": ["mcp-server-git"],
+    "package": { "manager": "pypi", "name": "mcp-server-git" }
+  },
+  {
+    "name": "fetch",
+    "title": "Fetch",
+    "description": "Fetch a URL and convert its contents to markdown for reading.",
+    "transport": "stdio",
+    "command": "uvx",
+    "args": ["mcp-server-fetch"],
+    "package": { "manager": "pypi", "name": "mcp-server-fetch" }
+  },
+  {
+    "name": "memory",
+    "title": "Memory",
+    "description": "A persistent knowledge graph the agent can build across sessions.",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-memory"],
+    "package": { "manager": "npm", "name": "@modelcontextprotocol/server-memory" },
+    "requires": { "mounts": [{ "path": "/root/.gjc/mcp/memory.json", "purpose": "Persistent memory store" }] }
+  },
+  {
+    "name": "sqlite",
+    "title": "SQLite",
+    "description": "Query and modify a SQLite database with read and write tools.",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-sqlite", "/workspace/app.db"],
+    "package": { "manager": "npm", "name": "@modelcontextprotocol/server-sqlite" },
+    "requires": { "mounts": [{ "path": "/workspace/app.db", "purpose": "The database file to open" }] }
+  },
+  {
+    "name": "puppeteer",
+    "title": "Puppeteer",
+    "description": "Drive a headless Chromium browser for screenshots and page automation.",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-puppeteer"],
+    "package": { "manager": "npm", "name": "@modelcontextprotocol/server-puppeteer" },
+    "requires": { "mounts": [{ "path": "/root/.gjc/mcp/browser-profile", "purpose": "Browser profile directory" }] }
+  },
+  {
+    "name": "playwright",
+    "title": "Playwright",
+    "description": "Browser automation through Playwright's accessibility snapshots.",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@playwright/mcp@latest"],
+    "package": { "manager": "npm", "name": "@playwright/mcp" },
+    "requires": { "mounts": [{ "path": "/root/.gjc/mcp/playwright", "purpose": "Browser profile directory" }] }
+  },
+  {
+    "name": "github",
+    "title": "GitHub",
+    "description": "Read repositories, issues and pull requests through the GitHub API.",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-github"],
+    "package": { "manager": "npm", "name": "@modelcontextprotocol/server-github" },
+    "env": [
+      { "name": "GITHUB_PERSONAL_ACCESS_TOKEN", "required": true, "secret": true, "description": "A fine-grained personal access token." }
+    ]
+  },
+  {
+    "name": "slack",
+    "title": "Slack",
+    "description": "Read channels and post messages in a Slack workspace.",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-slack"],
+    "package": { "manager": "npm", "name": "@modelcontextprotocol/server-slack" },
+    "env": [
+      { "name": "SLACK_BOT_TOKEN", "required": true, "secret": true, "description": "Bot token with the scopes the workspace grants." },
+      { "name": "SLACK_TEAM_ID", "required": true, "secret": false, "description": "Workspace team id." }
+    ]
+  },
+  {
+    "name": "notion",
+    "title": "Notion",
+    "description": "Search and read Notion pages and databases.",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@notionhq/notion-mcp-server"],
+    "package": { "manager": "npm", "name": "@notionhq/notion-mcp-server" },
+    "env": [
+      { "name": "NOTION_API_TOKEN", "required": true, "secret": true, "description": "A Notion integration token shared with the pages you want." }
+    ]
+  },
+  {
+    "name": "postgres",
+    "title": "PostgreSQL",
+    "description": "Run read-only SQL against a PostgreSQL database.",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-postgres"],
+    "package": { "manager": "npm", "name": "@modelcontextprotocol/server-postgres" },
+    "env": [
+      { "name": "DATABASE_URL", "required": true, "secret": true, "description": "postgresql://user:password@host:5432/database" }
+    ]
+  },
+  {
+    "name": "sequential-thinking",
+    "title": "Sequential thinking",
+    "description": "A structured scratchpad for multi-step reasoning.",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
+    "package": { "manager": "npm", "name": "@modelcontextprotocol/server-sequential-thinking" }
+  },
+  {
+    "name": "context7",
+    "title": "Context7",
+    "description": "Up-to-date library documentation and code examples, fetched by package name.",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@upstash/context7-mcp"],
+    "package": { "manager": "npm", "name": "@upstash/context7-mcp" },
+    "homepage": "https://context7.com",
+    "repository": { "url": "https://github.com/upstash/context7", "source": "curated" },
+    "env": [
+      { "name": "CONTEXT7_API_KEY", "required": false, "secret": true, "description": "Optional key for higher rate limits." }
+    ]
+  },
+  {
+    "name": "mempalace",
+    "title": "MemPalace",
+    "description": "A persistent memory palace for notes, documents and long-term recall.",
+    "transport": "stdio",
+    "command": "uvx",
+    "args": ["--from", "mempalace", "mempalace-mcp"],
+    "package": { "manager": "pypi", "name": "mempalace" },
+    "homepage": "https://mempalaceofficial.com",
+    "repository": { "url": "https://github.com/MemPalace/mempalace", "source": "curated" },
+    "env": [
+      { "name": "MEMPALACE_PALACE_PATH", "required": false, "secret": false, "description": "Optional palace directory; defaults to the home directory." }
+    ]
+  }
+]

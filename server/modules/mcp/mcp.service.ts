@@ -4,11 +4,13 @@ import path from 'node:path';
 import { createInterface } from 'node:readline';
 
 import {
+  attachGitHubStars,
   bundledCatalog,
   loadOverlay,
   mergeCatalog,
   searchCatalog,
   type CatalogEntry,
+  type CatalogSource,
 } from './catalog.js';
 import {
   failedEntries,
@@ -404,6 +406,7 @@ export class McpService {
     nextCursor: string | null;
     warning?: string;
     registryError?: string;
+    counts: Record<CatalogSource, number>;
   }> {
     const overlay = await loadOverlay({
       ...(this.env.MCP_CATALOG_URL ? { url: this.env.MCP_CATALOG_URL } : {}),
@@ -429,14 +432,25 @@ export class McpService {
         registryError = messageOf(error, 'The MCP registry is unavailable.');
       }
     }
-    let entries = mergeCatalog(bundledCatalog(), overlay.entries, registryEntries);
-    if (q) entries = searchCatalog(entries, q);
+    const merged = mergeCatalog(bundledCatalog(), overlay.entries, registryEntries);
+    const counts: Record<CatalogSource, number> = { bundled: 0, overlay: 0, registry: 0 };
+    for (const entry of merged) counts[entry.source] += 1;
+    let entries = q ? searchCatalog(merged, q) : [...merged].sort((a, b) => a.name.localeCompare(b.name));
     if (query.source === 'bundled' || query.source === 'overlay' || query.source === 'registry') {
       entries = entries.filter((entry) => entry.source === query.source);
     }
+    // Popularity is a ranking input, but the lookup is bounded and cached; a
+    // failure leaves the entry without a number instead of failing the list.
+    entries = await attachGitHubStars(entries, {
+      ...(this.options.fetchImpl ? { fetchImpl: this.options.fetchImpl } : {}),
+      ...(this.options.now ? { now: this.options.now } : {}),
+      ...(this.env.GITHUB_TOKEN ? { token: this.env.GITHUB_TOKEN } : {}),
+    });
+    if (q) entries = searchCatalog(entries, q);
     return {
       entries,
       nextCursor,
+      counts,
       ...(overlay.warning ? { warning: overlay.warning } : {}),
       ...(registryError ? { registryError } : {}),
     };
