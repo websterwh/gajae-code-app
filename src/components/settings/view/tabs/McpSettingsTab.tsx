@@ -76,6 +76,14 @@ const inputClass = 'w-full touch-manipulation rounded-lg border border-input bg-
 const buttonClass = 'inline-flex items-center gap-1.5 rounded-lg border border-input px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50';
 const primaryButtonClass = 'inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50';
 const chipClass = 'inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] text-muted-foreground';
+// w-28 rather than w-full: the version chip and the input that replaces it have
+// to occupy the same space, or the row's action bar jumps when the chip is clicked.
+const versionInputClass = 'w-28 touch-manipulation rounded-lg border border-input bg-card px-2 py-1 font-mono text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary';
+// Controls whose label swaps (Verify/Verifying, Pin/Unpin) hold their width so
+// the rest of the bar does not shift while a request runs.
+const verifyButtonClass = `${buttonClass} min-w-28 justify-center whitespace-nowrap`;
+const pinnedButtonClass = `${buttonClass} min-w-20 justify-center whitespace-nowrap`;
+const versionChipClass = `${buttonClass} w-28 justify-center font-mono`;
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await authenticatedFetch(path, init);
@@ -639,7 +647,7 @@ export default function McpSettingsTab() {
                       onChange={() => void toggle(server)}
                       ariaLabel={`${server.enabled ? t('mcp.enabled') : t('mcp.disabled')}: ${server.name}`}
                     />
-                    <button type="button" className={buttonClass} aria-busy={verifying === server.name}
+                    <button type="button" className={verifyButtonClass} aria-busy={verifying === server.name}
                       disabled={verifying === server.name} onClick={() => void verify(server)}>
                       {verifying === server.name ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />}
                       {verifying === server.name ? t('mcp.verifying') : t('mcp.verify')}
@@ -668,7 +676,7 @@ export default function McpSettingsTab() {
                             }}
                             placeholder={t('mcp.pinPlaceholder')}
                             aria-label={`${t('mcp.version')} ${server.name}`}
-                            className={`${inputClass} w-28 px-2 py-1 font-mono`}
+                            className={versionInputClass}
                           />
                         ) : (
                           <button
@@ -676,10 +684,10 @@ export default function McpSettingsTab() {
                             onClick={() => beginVersionEdit(server)}
                             title={t('mcp.versionHint')}
                             aria-label={`${t('mcp.version')} ${server.name}: ${version ?? t('mcp.noVersion')}`}
-                            className={`${buttonClass} font-mono`}
+                            className={versionChipClass}
                           >
-                            <Pencil className="h-3 w-3 opacity-60" aria-hidden />
-                            {version ?? t('mcp.noVersion')}
+                            <Pencil className="h-3 w-3 shrink-0 opacity-60" aria-hidden />
+                            <span className="min-w-0 truncate">{version ?? t('mcp.noVersion')}</span>
                           </button>
                         )}
                         <button
@@ -688,7 +696,7 @@ export default function McpSettingsTab() {
                           onClick={() => pinVersion(server)}
                           aria-label={`${server.pin ? t('mcp.unpin') : t('mcp.pin')} ${server.name}`}
                           title={server.pin ? t('mcp.unpin') : t('mcp.pin')}
-                          className={buttonClass}
+                          className={pinnedButtonClass}
                         >
                           {busy === `pin:${server.name}`
                             ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden />

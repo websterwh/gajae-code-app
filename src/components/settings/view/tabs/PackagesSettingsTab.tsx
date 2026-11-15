@@ -30,6 +30,12 @@ const inputClass = 'w-full touch-manipulation rounded-lg border border-input bg-
 const buttonClass = 'inline-flex items-center gap-1.5 rounded-lg border border-input px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50';
 const primaryButtonClass = 'inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50';
 const chipClass = 'inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] text-muted-foreground';
+// w-28 rather than w-full: the version chip and the input that replaces it have
+// to occupy the same space, or the row's action bar jumps when the chip is clicked.
+const versionInputClass = 'w-28 touch-manipulation rounded-lg border border-input bg-card px-2 py-1 font-mono text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary';
+// Controls whose label swaps (Pin/Unpin) hold their width so the bar stays put.
+const pinnedButtonClass = `${buttonClass} min-w-20 justify-center whitespace-nowrap`;
+const versionChipClass = `${buttonClass} w-28 justify-center font-mono`;
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await authenticatedFetch(path, init);
@@ -108,8 +114,6 @@ export default function PackagesSettingsTab() {
     method: 'POST',
     body: JSON.stringify({ manager: row.manager, spec: row.spec, pin: row.pin }),
   }));
-
-  const upgrade = (row: PackageRow) => void run(`upgrade:${row.manager}:${row.name}`, () => request(`${packagePath(row)}/upgrade`, { method: 'POST' }));
 
   const pinVersion = (row: PackageRow, pin: string | null) => {
     const key = `${row.manager}:${row.name}`;
@@ -226,12 +230,6 @@ export default function PackagesSettingsTab() {
                       {t('packages.retry')}
                     </button>
                   ) : null}
-                  {row.desired && !row.pin && row.status === 'installed' ? (
-                    <button type="button" disabled={busy !== null} onClick={() => upgrade(row)} className={buttonClass}>
-                      {busy === `upgrade:${key}` ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : <RefreshCw className="h-3 w-3" aria-hidden />}
-                      {t('packages.upgrade')}
-                    </button>
-                  ) : null}
                   {versionControl ? (
                     <div className="flex items-center gap-1">
                       {editingVersion === key ? (
@@ -251,7 +249,7 @@ export default function PackagesSettingsTab() {
                           }}
                           placeholder={t('packages.pinPlaceholder')}
                           aria-label={`${t('packages.version')} ${row.name}`}
-                          className={`${inputClass} w-28 px-2 py-1 font-mono`}
+                          className={versionInputClass}
                         />
                       ) : (
                         <button
@@ -259,10 +257,10 @@ export default function PackagesSettingsTab() {
                           onClick={() => beginVersionEdit(row)}
                           title={t('packages.versionHint')}
                           aria-label={`${t('packages.version')} ${row.name}: ${version ?? t('packages.noVersion')}`}
-                          className={`${buttonClass} font-mono`}
+                          className={versionChipClass}
                         >
-                          <Pencil className="h-3 w-3 opacity-60" aria-hidden />
-                          {version ?? t('packages.noVersion')}
+                          <Pencil className="h-3 w-3 shrink-0 opacity-60" aria-hidden />
+                          <span className="min-w-0 truncate">{version ?? t('packages.noVersion')}</span>
                         </button>
                       )}
                       <button
@@ -271,7 +269,7 @@ export default function PackagesSettingsTab() {
                         onClick={() => pinVersion(row, row.pin ? null : row.version)}
                         aria-label={`${row.pin ? t('packages.unpin') : t('packages.pinAction')} ${row.name}`}
                         title={row.pin ? t('packages.unpin') : t('packages.pinAction')}
-                        className={buttonClass}
+                        className={pinnedButtonClass}
                       >
                         {busy === `pin:${key}` ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : <Pin className={`h-3 w-3 ${row.pin ? 'fill-current' : ''}`} aria-hidden />}
                         {row.pin ? t('packages.unpin') : t('packages.pinAction')}
