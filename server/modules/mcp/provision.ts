@@ -45,6 +45,24 @@ export function installCommand(
   }
 }
 
+/** `skylot/jadx` installs a `jadx` binary; a generic aqua package writes /data/aqua/aqua.yaml. */
+function aquaBinary(name: string): string {
+  const last = name.split('/').filter(Boolean).pop() ?? name;
+  return last.replace(/\.git$/u, '').toLowerCase();
+}
+
+/**
+ * `aqua list` needs an aqua.yaml, which only the generic fallback writes, so
+ * the installer's special handlers (jadx, apktool) failed verification with
+ * "configuration file isn't found" after a perfectly good install. Check the
+ * binary the installer linked into PATH first, then the aqua config.
+ */
+const AQUA_VERIFY = [
+  'bin=$(command -v "$1" 2>/dev/null) && { printf "%s\\n" "$bin"; exit 0; }',
+  'cfg="${AQUA_ROOT_DIR:-/data/aqua}/aqua.yaml"',
+  '[ -f "$cfg" ] && aqua list -c "$cfg" 2>/dev/null | grep -F -- "$2"',
+].join('; ');
+
 export function verifyCommand(manager: InstallManager, name: string): { command: string; args: string[] } {
   switch (manager) {
     case 'uv':
@@ -54,14 +72,16 @@ export function verifyCommand(manager: InstallManager, name: string): { command:
     case 'npm':
       return { command: 'npm', args: ['ls', '-g', '--json', '--depth=0', name] };
     case 'aqua':
-      return { command: 'aqua', args: ['list'] };
+      return { command: 'sh', args: ['-c', AQUA_VERIFY, 'sh', aquaBinary(name), name] };
   }
 }
 
 /** Exit 0 alone is not proof: `uv tool list` succeeds on an empty tool set. */
 function verificationConfirms(manager: InstallManager, name: string, output: string, version: string | null): boolean {
   if (manager === 'uv') return version !== null || output.includes(name);
-  if (manager === 'aqua') return output.includes(name);
+  // The aqua check is the command itself: exit 0 means the binary or the
+  // package entry was found, and it prints what it found.
+  if (manager === 'aqua') return output.trim().length > 0;
   return version !== null;
 }
 
@@ -180,9 +200,25 @@ export async function autoUpdatePackages(options: {
     const upgrade = upgradeCommand(options.manager, parsed);
     const result = await options.runner(upgrade.command, upgrade.args);
     if (result.code !== 0) {
-      recordFailure(options.ledger, options.manager, name, entry.spec, `update exit ${result.code}: ${tailLines(result.stderr || result.stdout)}`, now());
-      log(`[${options.manager}] ${name} update failed (exit ${result.code}).`);
-      continue;
+      const detail = tailLines(result.stderr || result.stdout);
+      // `uv tool upgrade` refuses a tool that is missing from the inventory and
+      // tells you to install it. Installing is the recovery; retrying the
+      // upgrade every boot is what left the entry failed forever.
+      if (options.manager === 'uv' && /not installed/iu.test(detail)) {
+        log(`[uv] ${name} is missing from the tool inventory; installing it again.`);
+        const reinstall = installCommand(options.manager, parsed, pin);
+        const retried = await options.runner(reinstall.command, reinstall.args);
+        if (retried.code !== 0) {
+          const error = `reinstall exit ${retried.code}: ${tailLines(retried.stderr || retried.stdout)}`;
+          recordFailure(options.ledger, options.manager, name, entry.spec, error, now());
+          log(`[uv] ${name} reinstall failed (exit ${retried.code}).`);
+          continue;
+        }
+      } else {
+        recordFailure(options.ledger, options.manager, name, entry.spec, `update exit ${result.code}: ${detail}`, now());
+        log(`[${options.manager}] ${name} update failed (exit ${result.code}).`);
+        continue;
+      }
     }
     const verify = verifyCommand(options.manager, name);
     const verified = await options.runner(verify.command, verify.args);

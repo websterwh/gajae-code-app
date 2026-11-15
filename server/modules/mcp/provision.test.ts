@@ -124,6 +124,46 @@ test('auto-update moves unpinned packages and leaves pinned ones alone', async (
   assert.ok(lines.some((line) => /1\.0\.0 -> 2\.0\.0/u.test(line)));
 });
 
+test('a uv tool missing from the inventory is reinstalled instead of failing forever', async () => {
+  const ledger = emptyLedger();
+  recordInstalled(ledger, 'uv', 'serena', { spec: 'serena', version: '1.0.0' });
+  const calls: string[] = [];
+  const runner = scripted({
+    'uv tool upgrade -q serena': {
+      code: 1,
+      stderr: 'error: Failed to upgrade serena | cause: `serena` is not installed; run `uv tool install serena` to install',
+    },
+    'uv tool install -q serena': { code: 0 },
+    'uv tool list': { code: 0, stdout: 'serena v2.0.0\n' },
+  }, calls);
+
+  const outcomes = await autoUpdatePackages({ manager: 'uv', ledger, runner });
+  assert.equal(outcomes[0]?.status, 'installed');
+  assert.ok(calls.includes('uv tool install -q serena'), 'a missing tool must be installed, not just upgraded');
+  assert.equal(ledger.packages.uv.serena.version, '2.0.0');
+  assert.equal(ledger.packages.uv.serena.lastAttempt, undefined);
+});
+
+test('aqua verification checks the installed binary, not a config-less aqua list', async () => {
+  const ledger = emptyLedger();
+  const calls: string[] = [];
+  const runner: CommandRunner = async (command, args) => {
+    calls.push([command, ...args].join(' '));
+    if (command === 'install-github-app') return { code: 0, stdout: '', stderr: '' };
+    if (command === 'sh') {
+      assert.equal(args[0], '-c');
+      assert.deepEqual(args.slice(2), ['sh', 'jadx', 'skylot/jadx']);
+      return { code: 0, stdout: '/data/bin/jadx\n', stderr: '' };
+    }
+    return { code: 1, stdout: '', stderr: `unexpected command: ${command}` };
+  };
+
+  const outcomes = await provisionPackages({ manager: 'aqua', packages: ['skylot/jadx'], ledger, runner });
+  assert.equal(outcomes[0]?.status, 'installed');
+  assert.equal(ledger.packages.aqua['skylot/jadx'].status, 'installed');
+  assert.ok(calls.some((line) => line.startsWith('sh -c')));
+});
+
 test('the ledger lives under the config mount, not the data volume', () => {
   assert.equal(
     ledgerFilePath({ GJC_WORKER_AGENT_DIR: '/root/.gjc/agent' }),

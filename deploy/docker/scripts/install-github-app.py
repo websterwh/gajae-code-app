@@ -9,7 +9,7 @@ import stat
 def install_github_app(repo, target_bin="/data/bin", target_share="/data/share"):
     repo = repo.strip()
     if not repo:
-        return
+        return True
     headers = {"User-Agent": "GitHub-App-Installer"}
     token = os.environ.get("GITHUB_TOKEN")
     if token:
@@ -21,8 +21,8 @@ def install_github_app(repo, target_bin="/data/bin", target_share="/data/share")
         with urllib.request.urlopen(req) as resp:
             data = json.loads(resp.read().decode())
     except Exception as e:
-        print(f"==> [WARN] Could not fetch release info for {repo}: {e}")
-        return
+        print(f"==> [ERROR] Could not fetch release info for {repo}: {e}")
+        return False
 
     tag = data.get("tag_name", "latest")
     assets = data.get("assets", [])
@@ -37,26 +37,30 @@ def install_github_app(repo, target_bin="/data/bin", target_share="/data/share")
         link_path = os.path.join(target_bin, "jadx")
         if os.path.exists(os.path.join(dest_dir, "bin", "jadx")) and (os.path.exists(link_path) or os.path.islink(link_path)):
             print(f"==> [GitHub App] jadx {tag} is already installed.")
-            return
+            return True
 
         print(f"==> [GitHub App] Installing {repo}...")
         asset = next((a for a in assets if a["name"].endswith(".zip") and "win" not in a["name"]), None)
-        if asset:
-            zip_tmp = f"/tmp/jadx-{tag}.zip"
-            print(f"==> [GitHub App] Downloading {asset['name']} ({tag})...")
-            urllib.request.urlretrieve(asset["browser_download_url"], zip_tmp)
-            with zipfile.ZipFile(zip_tmp, 'r') as zip_ref:
-                zip_ref.extractall(dest_dir)
-            if os.path.exists(zip_tmp):
-                os.remove(zip_tmp)
-            jadx_bin = os.path.join(dest_dir, "bin", "jadx")
-            if os.path.exists(jadx_bin):
-                os.chmod(jadx_bin, os.stat(jadx_bin).st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
-                if os.path.islink(link_path) or os.path.exists(link_path):
-                    os.remove(link_path)
-                os.symlink(jadx_bin, link_path)
-                print(f"==> [GitHub App] Successfully installed jadx -> {link_path}")
-            return
+        if not asset:
+            print(f"==> [ERROR] {repo} has no release zip for this platform (release {tag}).")
+            return False
+        zip_tmp = f"/tmp/jadx-{tag}.zip"
+        print(f"==> [GitHub App] Downloading {asset['name']} ({tag})...")
+        urllib.request.urlretrieve(asset["browser_download_url"], zip_tmp)
+        with zipfile.ZipFile(zip_tmp, 'r') as zip_ref:
+            zip_ref.extractall(dest_dir)
+        if os.path.exists(zip_tmp):
+            os.remove(zip_tmp)
+        jadx_bin = os.path.join(dest_dir, "bin", "jadx")
+        if not os.path.exists(jadx_bin):
+            print(f"==> [ERROR] {repo} archive did not contain bin/jadx.")
+            return False
+        os.chmod(jadx_bin, os.stat(jadx_bin).st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+        if os.path.islink(link_path) or os.path.exists(link_path):
+            os.remove(link_path)
+        os.symlink(jadx_bin, link_path)
+        print(f"==> [GitHub App] Successfully installed jadx -> {link_path}")
+        return True
 
     # Special handler: apktool
     if "apktool" in repo_lower:
@@ -64,39 +68,47 @@ def install_github_app(repo, target_bin="/data/bin", target_share="/data/share")
         wrapper_path = os.path.join(target_bin, "apktool")
         if os.path.exists(jar_dest) and os.path.exists(wrapper_path):
             print(f"==> [GitHub App] apktool {tag} is already installed.")
-            return
+            return True
 
         print(f"==> [GitHub App] Installing {repo}...")
         asset = next((a for a in assets if a["name"].endswith(".jar")), None)
-        if asset:
-            print(f"==> [GitHub App] Downloading {asset['name']} ({tag})...")
-            urllib.request.urlretrieve(asset["browser_download_url"], jar_dest)
-            with open(wrapper_path, "w") as f:
-                f.write(f'#!/bin/sh\nexec java -Xmx1024M -Dfile.encoding=UTF-8 -jar "{jar_dest}" "$@"\n')
-            os.chmod(wrapper_path, 0o755)
-            print(f"==> [GitHub App] Successfully installed apktool wrapper -> {wrapper_path}")
-            return
+        if not asset:
+            print(f"==> [ERROR] {repo} has no release jar (release {tag}).")
+            return False
+        print(f"==> [GitHub App] Downloading {asset['name']} ({tag})...")
+        urllib.request.urlretrieve(asset["browser_download_url"], jar_dest)
+        with open(wrapper_path, "w") as f:
+            f.write(f'#!/bin/sh\nexec java -Xmx1024M -Dfile.encoding=UTF-8 -jar "{jar_dest}" "$@"\n')
+        os.chmod(wrapper_path, 0o755)
+        print(f"==> [GitHub App] Successfully installed apktool wrapper -> {wrapper_path}")
+        return True
 
     # Fallback to aqua if it's a standard aqua package
     import subprocess
     pkg_entry = f"{repo}@{tag}" if "@" not in repo else repo
     print(f"==> [Aqua] Attempting aqua install for {pkg_entry}...")
     yaml_path = "/data/aqua/aqua.yaml"
+    os.makedirs(os.path.dirname(yaml_path), exist_ok=True)
     with open(yaml_path, "w") as f:
         f.write(f"---\nregistries:\n  - type: standard\n    ref: v4.325.0\npackages:\n  - name: {pkg_entry}\n")
     res = subprocess.run(["aqua", "install", "-l", "-a", "-c", yaml_path], env=dict(os.environ, AQUA_ROOT_DIR="/data/aqua"))
-    if res.returncode == 0:
-        aqua_bin_dir = "/data/aqua/bin"
-        if os.path.exists(aqua_bin_dir):
-            for b in os.listdir(aqua_bin_dir):
-                src = os.path.join(aqua_bin_dir, b)
-                dst = os.path.join(target_bin, b)
-                if os.path.islink(dst) or os.path.exists(dst):
-                    os.remove(dst)
-                os.symlink(src, dst)
-        print(f"==> [Aqua] Successfully installed {pkg_entry}")
+    if res.returncode != 0:
+        print(f"==> [ERROR] aqua could not install {pkg_entry} (exit {res.returncode}).")
+        return False
+    aqua_bin_dir = "/data/aqua/bin"
+    if os.path.exists(aqua_bin_dir):
+        for b in os.listdir(aqua_bin_dir):
+            src = os.path.join(aqua_bin_dir, b)
+            dst = os.path.join(target_bin, b)
+            if os.path.islink(dst) or os.path.exists(dst):
+                os.remove(dst)
+            os.symlink(src, dst)
+    print(f"==> [Aqua] Successfully installed {pkg_entry}")
+    return True
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        for app in sys.argv[1:]:
-            install_github_app(app)
+    ok = True
+    for app in sys.argv[1:]:
+        if not install_github_app(app):
+            ok = False
+    sys.exit(0 if ok else 1)
