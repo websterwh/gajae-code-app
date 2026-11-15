@@ -135,8 +135,7 @@
       "search": "Rechercher des compétences",
       "noMatches": "Aucune compétence ne correspond."
     },
-    "agentConfigurationCurrent": "Actuelle",
-    "btw": "Au fait — envoyer une remarque à l’agent"
+    "agentConfigurationCurrent": "Actuelle"
   },
   "session": {
     "loading": {

@@ -135,8 +135,7 @@
       "search": "スキルを検索",
       "noMatches": "一致するスキルはありません。"
     },
-    "agentConfigurationCurrent": "現在",
-    "btw": "ちなみに — エージェントに補足を送る"
+    "agentConfigurationCurrent": "現在"
   },
   "session": {
     "loading": {

@@ -11,7 +11,7 @@ import type {
   TouchEvent,
 } from 'react';
 import type { DropzoneInputProps, DropzoneRootProps } from 'react-dropzone';
-import { PlusIcon, Loader2, ArrowUpIcon, ForwardIcon, MessageCircleIcon, AlertTriangleIcon, XIcon } from 'lucide-react';
+import { PlusIcon, Loader2, ArrowUpIcon, ForwardIcon, AlertTriangleIcon, XIcon } from 'lucide-react';
 
 import { classifyCommandInput, isAutoSendable } from '../commandDispatchPolicy';
 import { isComposerSealed, registerComposerInputValue, subscribeComposerFreeze } from '../../../shared/composerFreeze';
@@ -84,7 +84,6 @@ interface ChatComposerProps {
       | KeyboardEvent<HTMLTextAreaElement>,
   ) => void;
   onSteer: (event: MouseEvent<HTMLButtonElement>) => void;
-  onBtw?: () => void;
   isDragActive: boolean;
   /** Model pinned to this session, if any; outranks the last-run model. */
   sessionPinnedModel?: string | null;
@@ -163,7 +162,6 @@ export default function ChatComposer({
   onShowTokenUsage,
   onSubmit,
   onSteer,
-  onBtw,
   isDragActive,
   sessionPinnedModel,
   sessionLocationControl,
@@ -527,16 +525,6 @@ export default function ChatComposer({
 
           <div data-slot="prompt-input-actions" className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
             <ContextUsageRing sessionState={sessionState} onClick={onShowTokenUsage} />
-            {onBtw && (
-              <PromptInputButton
-                onClick={() => onBtw()}
-                disabled={composerFrozen}
-                aria-label={t('input.btw')}
-                className="shrink-0 rounded-full border border-border/70 bg-background/70 text-muted-foreground hover:border-primary/30 hover:text-foreground"
-              >
-                <MessageCircleIcon className="size-4" />
-              </PromptInputButton>
-            )}
             {canSteer && (
               <PromptInputButton
                 onClick={onSteer}

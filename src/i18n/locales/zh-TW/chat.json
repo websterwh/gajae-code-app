@@ -135,8 +135,7 @@
       "search": "搜尋技能",
       "noMatches": "沒有符合的技能。"
     },
-    "agentConfigurationCurrent": "目前",
-    "btw": "順帶一提 — 傳一則附註給代理"
+    "agentConfigurationCurrent": "目前"
   },
   "session": {
     "loading": {

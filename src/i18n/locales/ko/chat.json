@@ -135,8 +135,7 @@
       "search": "스킬 검색",
       "noMatches": "일치하는 스킬이 없습니다."
     },
-    "agentConfigurationCurrent": "현재",
-    "btw": "참고로 — 에이전트에게 덧붙일 말 보내기"
+    "agentConfigurationCurrent": "현재"
   },
   "session": {
     "loading": {

@@ -278,7 +278,6 @@ function ChatInterface({
       onShowTokenUsage={composer.showCostModal}
       onSubmit={composer.handleSubmit}
       onSteer={composer.handleSteer}
-      onBtw={composer.wrapAsBtw}
       isDragActive={composer.isDragActive}
       sessionPinnedModel={sessionPinnedModel}
       sessionLocationControl={worktreeAvailable || locationSessionId

@@ -135,8 +135,7 @@
       "search": "Cerca skill",
       "noMatches": "Nessuna skill corrisponde."
     },
-    "agentConfigurationCurrent": "Attuale",
-    "btw": "A proposito — invia una nota all’agente"
+    "agentConfigurationCurrent": "Attuale"
   },
   "session": {
     "loading": {

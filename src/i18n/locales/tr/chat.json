@@ -135,8 +135,7 @@
       "search": "Beceri ara",
       "noMatches": "Eşleşen beceri yok."
     },
-    "agentConfigurationCurrent": "Geçerli",
-    "btw": "Bu arada — ajana bir not gönder"
+    "agentConfigurationCurrent": "Geçerli"
   },
   "session": {
     "loading": {

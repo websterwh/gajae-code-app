@@ -137,8 +137,7 @@
       "search": "Поиск навыков",
       "noMatches": "Подходящих навыков нет."
     },
-    "agentConfigurationCurrent": "Текущая",
-    "btw": "Кстати — отправить агенту замечание"
+    "agentConfigurationCurrent": "Текущая"
   },
   "session": {
     "loading": {
