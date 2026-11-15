@@ -109,6 +109,7 @@ import {
 import userRoutes from './routes/user.js';
 import systemRoutes from './routes/system.js';
 import providerRoutes from './modules/providers/provider.routes.js';
+import { mcpRoutes } from './modules/mcp/index.js';
 import voiceRoutes from './voice-proxy.js';
 import { assetsRoutes } from './modules/assets/index.js';
 import { initializeDatabase, projectsDb, sessionsDb } from './modules/database/index.js';
@@ -339,6 +340,10 @@ app.use('/api/providers', authenticateToken, providerRoutes);
 // can dispatch shell commands into an approved companion.
 app.use('/api/automation', authenticateAutomation, authenticateToken, automationRoutes);
 app.use('/api/browser', authenticateAutomation, authenticateToken, createBrowserAutomationRouter());
+
+// MCP manager (protected by the sign-in gate and the token middleware). It
+// reads and writes the agent's own mcp.json; it is deliberately not exempt.
+app.use('/api/mcp', authenticateToken, mcpRoutes);
 
 // Host control (protected). Inert unless GAJAE_HOST_CONTROL is set, and then
 // only the capabilities switched on in Settings: the module owns the Docker
