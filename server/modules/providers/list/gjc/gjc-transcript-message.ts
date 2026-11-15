@@ -2,19 +2,60 @@ import type { AnyRecord } from '@/shared/types.js';
 import { readObjectRecord } from '@/shared/utils.js';
 
 /**
- * Reads a normal SDK message or the visible user request behind a skill entry.
+ * The runtime wraps the generated handoff document in a tag plus a sentence
+ * addressed to the next session (`createHandoffContext` in the coding agent).
+ * Only the document itself is the agent's work, so the wrapper is removed
+ * before anything renders it or derives a title from it.
+ */
+const HANDOFF_CONTEXT = /^<handoff-context>\r?\n([\s\S]*?)\r?\n<\/handoff-context>/u;
+
+function readHandoffDocument(content: unknown): string | null {
+  let text = '';
+  if (typeof content === 'string') {
+    text = content;
+  } else if (Array.isArray(content)) {
+    text = content
+      .map((part) => {
+        const record = readObjectRecord(part);
+        return record?.type === 'text' && typeof record.text === 'string' ? record.text : '';
+      })
+      .join('');
+  }
+
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  const document = (HANDOFF_CONTEXT.exec(trimmed)?.[1] ?? trimmed).trim();
+  return document || null;
+}
+
+/**
+ * Reads a normal SDK message, the visible user request behind a skill entry, or
+ * the handoff document that is the entire content of a continued session.
+ *
  * Skill content is expanded instructions, not the user's prompt. Only the
  * explicit attribution and structured name/args can reconstruct that prompt;
  * never fall back to parsing content, paths, or other custom message types.
- * History, turn lineage, and session titles must use the same interpretation.
+ * A handoff is the opposite case: the document *is* what the session starts
+ * with, so it is read as the first visible message - without it a continued
+ * session has no history and no title. History, turn lineage, and session
+ * titles must use the same interpretation.
  */
 export function readGjcTranscriptMessage(value: unknown): AnyRecord | null {
   const entry = readObjectRecord(value);
   if (!entry) return null;
   if (entry.type === 'message') return readObjectRecord(entry.message);
+  if (entry.type !== 'custom_message') return null;
+
+  // Mirrors the runtime's own visibility rule for handoffs: displayed only,
+  // regardless of attribution, because the document carries no user prompt.
+  if (entry.customType === 'handoff') {
+    if (entry.display !== true) return null;
+    const document = readHandoffDocument(entry.content);
+    return document ? { role: 'user', content: document } : null;
+  }
+
   if (
-    entry.type !== 'custom_message'
-    || entry.customType !== 'skill-prompt'
+    entry.customType !== 'skill-prompt'
     || entry.display !== true
     || entry.attribution !== 'user'
   ) return null;
