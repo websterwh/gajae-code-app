@@ -163,6 +163,26 @@ test('a uv tool missing from the inventory is reinstalled instead of failing for
   assert.equal(ledger.packages.uv.serena.lastAttempt, undefined);
 });
 
+test('a git-installed uv tool is upgraded under the name uv registered', async () => {
+  const ledger = emptyLedger();
+  const spec = 'git+https://github.com/oraios/serena';
+  recordInstalled(ledger, 'uv', 'serena', { spec, version: '0.1.4' });
+  const calls: string[] = [];
+  // uv registers the distribution by its project name and lists the commands
+  // it exposes underneath, which is where the spec name shows up.
+  const runner = scripted({
+    'uv tool list': { code: 0, stdout: 'serena-agent v0.1.4\n- serena\n- serena-agent\n' },
+    'uv tool upgrade -q serena-agent': { code: 0 },
+  }, calls);
+
+  const outcomes = await autoUpdatePackages({ manager: 'uv', ledger, runner });
+  assert.equal(outcomes[0]?.status, 'installed');
+  assert.ok(calls.includes('uv tool upgrade -q serena-agent'), 'the registered name is what uv upgrades');
+  assert.equal(calls.includes('uv tool upgrade -q serena'), false);
+  assert.equal(calls.some((line) => line.startsWith('uv tool install')), false, 'an installed tool must not be reinstalled');
+  assert.equal(ledger.packages.uv.serena.status, 'installed');
+});
+
 test('aqua verification checks the installed binary, not a config-less aqua list', async () => {
   const ledger = emptyLedger();
   const calls: string[] = [];

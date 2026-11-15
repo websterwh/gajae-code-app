@@ -98,6 +98,37 @@ export function verifyCommand(manager: InstallManager, name: string): { command:
   }
 }
 
+/** `uv tool list` prints each registered distribution, then its executables indented under it. */
+export function parseUvToolInventory(output: string): Array<{ name: string; executables: string[] }> {
+  const tools: Array<{ name: string; executables: string[] }> = [];
+  for (const line of String(output ?? '').split(/\r?\n/u)) {
+    const header = /^(\S+)\s+v(\S+)\s*$/u.exec(line);
+    if (header?.[1]) {
+      tools.push({ name: header[1], executables: [] });
+      continue;
+    }
+    const executable = /^\s*-\s+(\S+)\s*$/u.exec(line);
+    const current = tools[tools.length - 1];
+    if (executable?.[1] && current) current.executables.push(executable[1]);
+  }
+  return tools;
+}
+
+/**
+ * The name a spec asks for is not always the name uv registered: installing
+ * `git+https://github.com/oraios/serena` registers `serena-agent` and exposes a
+ * `serena` command. Upgrading by the spec name failed with "not installed",
+ * which looked like a missing tool and reinstalled it on every boot.
+ */
+async function registeredUvTool(runner: CommandRunner, name: string): Promise<string | null> {
+  const result = await runner('uv', ['tool', 'list']);
+  if (result.code !== 0) return null;
+  const tools = parseUvToolInventory(result.stdout);
+  const match = tools.find((tool) => tool.name === name)
+    ?? tools.find((tool) => tool.executables.includes(name));
+  return match?.name ?? null;
+}
+
 /** Exit 0 alone is not proof: `uv tool list` succeeds on an empty tool set. */
 function verificationConfirms(manager: InstallManager, name: string, output: string, version: string | null): boolean {
   if (manager === 'uv') return version !== null || output.includes(name);
@@ -232,7 +263,10 @@ export async function upgradePackage(options: {
   const now = options.now ?? (() => new Date().toISOString());
   const { manager, name, entry, ledger, runner } = options;
   const parsed = parsePackageSpec(entry.spec);
-  const upgrade = upgradeCommand(manager, parsed);
+  // Upgrade what is actually registered, so a git checkout that installed
+  // under a different distribution name is not mistaken for a missing tool.
+  const registered = manager === 'uv' ? await registeredUvTool(runner, name) : null;
+  const upgrade = upgradeCommand(manager, { ...parsed, name: registered ?? parsed.name });
   const result = await runner(upgrade.command, upgrade.args);
   if (result.code !== 0) {
     const detail = tailLines(result.stderr || result.stdout);
