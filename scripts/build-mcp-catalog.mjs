@@ -18,8 +18,13 @@
  * fallback for the long tail; copying it into the image is how namespaced
  * packages such as `ai.foo` once buried every recognizable server.
  *
+ * Every npm and PyPI package is resolved against its registry, and every
+ * GitHub repository is looked up; an entry pointing at something unpublished
+ * is not bundled.
+ *
  * Test hooks (no network): CATALOG_MARKETPLACE_FILE, CATALOG_SEED_FILE,
- * CATALOG_SKIP_DOCKER, CATALOG_MIN_ENTRIES, CATALOG_OUTPUT_DIR.
+ * CATALOG_SKIP_DOCKER, CATALOG_SKIP_REMOTE_CHECK, CATALOG_SKIP_PACKAGE_CHECK,
+ * CATALOG_MIN_ENTRIES, CATALOG_OUTPUT_DIR.
  */
 import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -130,6 +135,23 @@ function marketplaceRemote(record) {
   return null;
 }
 
+/** A dist-tag or version spec belongs in the args, not in the package name. */
+function packageSpec(manager, raw) {
+  const value = String(raw ?? '').trim();
+  if (!value) return null;
+  if (manager === 'npm') {
+    const at = value.lastIndexOf('@');
+    return at > 0 ? { name: value.slice(0, at), version: value.slice(at + 1) } : { name: value };
+  }
+  if (manager === 'pypi') {
+    const match = /^([A-Za-z0-9._-]+)\s*(?:[[<>=!~].*)?$/u.exec(value);
+    if (!match) return { name: value };
+    const version = value.slice(match[1].length).trim();
+    return version ? { name: match[1], version } : { name: match[1] };
+  }
+  return { name: value };
+}
+
 function packageFrom(command, args, fallbackName) {
   let name = '';
   const fromIndex = args.indexOf('--from');
@@ -137,7 +159,31 @@ function packageFrom(command, args, fallbackName) {
   if (!name) name = args.find((arg) => !arg.startsWith('-')) ?? fallbackName;
   if (!name) return undefined;
   const manager = command === 'npx' ? 'npm' : command === 'uvx' || command === 'uv' || command === 'pipx' ? 'pypi' : 'other';
-  return { manager, name };
+  const spec = packageSpec(manager, name);
+  if (!spec) return undefined;
+  return { manager, name: spec.name, ...(spec.version ? { version: spec.version } : {}) };
+}
+
+const packageCache = new Map();
+/** 'ok', 'missing' (a 404, so it does not exist) or 'unverified' (keep it). */
+async function packagePublished(manager, name) {
+  if (process.env.CATALOG_SKIP_PACKAGE_CHECK === '1') return 'ok';
+  if (manager !== 'npm' && manager !== 'pypi') return 'ok';
+  const key = `${manager}:${name.toLowerCase()}`;
+  if (packageCache.has(key)) return packageCache.get(key);
+  const url = manager === 'pypi'
+    ? `https://pypi.org/pypi/${encodeURIComponent(name)}/json`
+    : `https://registry.npmjs.org/${encodeURIComponent(name)}`;
+  let state = 'unverified';
+  try {
+    const response = await fetch(url, { method: 'HEAD', signal: AbortSignal.timeout(15_000) });
+    if (response.ok) state = 'ok';
+    else if (response.status === 404) state = 'missing';
+  } catch {
+    state = 'unverified';
+  }
+  packageCache.set(key, state);
+  return state;
 }
 
 function repositoryUrl(record) {
@@ -243,13 +289,19 @@ async function dockerEntries() {
   };
 }
 
-const starCache = new Map();
-async function starsFor(url) {
-  if (!url || SUBTREE_URL.test(url)) return undefined;
+const repoCache = new Map();
+/**
+ * A GitHub 404 means the repository does not exist, which is evidence against
+ * the entry itself. Anything else (rate limit, 5xx, timeout) is a failed
+ * lookup and keeps the published number.
+ */
+async function repoLookup(url) {
+  if (!url || SUBTREE_URL.test(url)) return { state: 'none' };
   const match = /^https?:\/\/github\.com\/([^/]+)\/([^/#?]+)/u.exec(url);
-  if (!match) return undefined;
+  if (!match) return { state: 'none' };
   const key = `${match[1]}/${match[2].replace(/\.git$/u, '')}`;
-  if (starCache.has(key)) return starCache.get(key);
+  if (repoCache.has(key)) return repoCache.get(key);
+  let result = { state: 'error' };
   try {
     const response = await fetch(`https://api.github.com/repos/${key}`, {
       headers: {
@@ -258,15 +310,19 @@ async function starsFor(url) {
       },
       signal: AbortSignal.timeout(10_000),
     });
-    if (!response.ok) { starCache.set(key, undefined); return undefined; }
-    const body = await response.json();
-    const value = typeof body.stargazers_count === 'number' ? body.stargazers_count : undefined;
-    starCache.set(key, value);
-    return value;
+    if (response.status === 404) {
+      result = { state: 'missing' };
+    } else if (response.ok) {
+      const body = await response.json();
+      result = typeof body.stargazers_count === 'number'
+        ? { state: 'ok', stars: body.stargazers_count }
+        : { state: 'missing' };
+    }
   } catch {
-    starCache.set(key, undefined);
-    return undefined;
+    result = { state: 'error' };
   }
+  repoCache.set(key, result);
+  return result;
 }
 
 function dedupe(entries) {
@@ -297,6 +353,8 @@ function reportText(details) {
     `- Marketplace records: ${details.marketplaceRecords} (${details.namespaced} namespaced, ${details.noCommand} without a runnable command)`,
     `- Docker images bundled: ${details.dockerEntries} (${details.dockerSkipped} skipped: no registry entry or namespaced)`,
     `- Duplicates collapsed: ${details.duplicates}`,
+    `- Packages rejected at the registry: ${details.rejectedPackages.length}${details.rejectedPackages.length ? ` (${details.rejectedPackages.join(', ')})` : ''}`,
+    `- Repositories dropped after a GitHub 404: ${details.deadRepositories.length}${details.deadRepositories.length ? ` (${details.deadRepositories.join(', ')})` : ''}`,
     `- Stars omitted for monorepo subdirectory URLs: ${details.subtreeStars}`,
     `- Curated entries merged last: ${details.curated}`,
     `- Stars re-fetched from GitHub: ${details.starsRefreshed} re-fetched, ${details.starsKept} kept after a failed lookup`,
@@ -325,27 +383,59 @@ async function main() {
   const generated = dedupe(beforeDedupe);
   const duplicates = beforeDedupe.length - generated.length;
 
+  // A package that is not published cannot be installed, so it is not bundled.
+  const published = [];
+  const rejectedPackages = [];
+  const unverifiedPackages = [];
+  for (const entry of generated) {
+    const pkg = entry.package;
+    if (pkg) {
+      const state = await packagePublished(pkg.manager, pkg.name);
+      if (state === 'missing') {
+        rejectedPackages.push(`${entry.name} (${pkg.manager} ${pkg.name})`);
+        continue;
+      }
+      if (state === 'unverified') unverifiedPackages.push(entry.name);
+    }
+    published.push(entry);
+  }
+
   let done = 0;
   let starsRefreshed = 0;
   let starsKept = 0;
-  for (const entry of generated) {
+  const deadRepositories = [];
+  for (const entry of published) {
     const repository = entry.repository?.url;
     if (!repository) continue;
     // A marketplace copy is a snapshot; always ask GitHub, and fall back to
     // the published number only when the lookup itself fails.
-    const stars = await starsFor(repository);
-    if (typeof stars === 'number') {
-      entry.stars = stars;
+    const lookup = await repoLookup(repository);
+    if (lookup.state === 'missing') {
+      delete entry.repository;
+      delete entry.stars;
+      deadRepositories.push(entry.name);
+    } else if (lookup.state === 'ok' && typeof lookup.stars === 'number') {
+      entry.stars = lookup.stars;
       starsRefreshed += 1;
     } else if (typeof entry.stars === 'number') {
       starsKept += 1;
     }
     done += 1;
-    if (done % 25 === 0) console.log(`stars ${done}/${generated.length}`);
+    if (done % 25 === 0) console.log(`stars ${done}/${published.length}`);
   }
+  if (unverifiedPackages.length) console.log(`package check unverified: ${unverifiedPackages.join(', ')}`);
 
   const curatedRaw = JSON.parse(await readFile(path.join(root, 'data', 'catalog.curated.json'), 'utf8'));
   const curated = curatedRaw.map((entry) => ({ ...entry, origin: 'curated' }));
+  // Curated entries are hand-maintained, so an unpublished package there is a
+  // typo worth stopping for instead of a quiet drop.
+  for (const entry of curated) {
+    const pkg = entry.package;
+    if (!pkg || pkg.manager === 'other') continue;
+    if ((await packagePublished(pkg.manager, pkg.name)) === 'missing') {
+      throw new Error(`curated entry ${entry.name} points at an unpublished ${pkg.manager} package ${pkg.name}`);
+    }
+  }
   if (process.env.CATALOG_SKIP_REMOTE_CHECK !== '1') {
     const remotes = curated.filter((entry) => entry.transport !== 'stdio');
     const failures = [];
@@ -359,7 +449,7 @@ async function main() {
   }
   const curatedNames = new Set(curated.map((entry) => entry.name));
   const curatedPackages = new Set(curated.map((entry) => entry.package?.name?.toLowerCase()).filter(Boolean));
-  const surviving = generated.filter((entry) => {
+  const surviving = published.filter((entry) => {
     if (curatedNames.has(entry.name)) return false;
     const pkg = entry.package?.name?.toLowerCase();
     if (pkg && curatedPackages.has(pkg)) return false;
@@ -381,6 +471,8 @@ async function main() {
     dockerEntries: docker.entries.length,
     dockerSkipped: docker.skipped,
     duplicates,
+    rejectedPackages,
+    deadRepositories,
     subtreeStars,
     curated: curated.length,
     starsRefreshed,
@@ -409,9 +501,11 @@ The bundled copy lives at \`server/modules/mcp/catalog.data.json\`; this file is
 the same content, served as the curated overlay so the app can grow without a
 new image. The official MCP registry is not bundled; it is queried at runtime.
 Stars were re-fetched from the GitHub API at generation time, and a repository
-URL under \`/tree/\` or \`/blob/\` never contributes a count. At request time the
-runtime refreshes missing stars best-effort with a bounded, cached lookup; a
-rate limit or missing token only omits the count.
+URL under \`/tree/\` or \`/blob/\` never contributes a count, nor does a
+repository that answers 404. Every npm and PyPI package is resolved against its
+registry at generation time; an entry whose package is not published is not
+bundled. At request time the runtime refreshes missing stars best-effort with a
+bounded, cached lookup; a rate limit or missing token only omits the count.
 `, 'utf8');
   console.log(reportText(details));
   console.log(`wrote ${merged.length} entries`);

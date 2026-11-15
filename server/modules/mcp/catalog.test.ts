@@ -81,9 +81,31 @@ test('the bundled catalog is a real, valid, deduplicated index with the named se
     assert.ok(normalized, `overlay entry ${index} must be a valid catalog entry`);
     return normalized;
   });
-  const bundledNames = new Set(entries.map((entry) => entry.name));
-  for (const entry of overlay) {
-    assert.ok(bundledNames.has(entry.name), `overlay must contain the bundled name ${entry.name}`);
+  // The overlay is how the list grows without a new image, so it must carry
+  // every bundled name and may carry names the bundled copy does not have.
+  const overlayNames = new Set(overlay.map((entry) => entry.name));
+  for (const entry of entries) {
+    assert.ok(overlayNames.has(entry.name), `the overlay lost the bundled name ${entry.name}`);
+  }
+});
+
+test('an overlay-only server survives the merge without relabelling bundled entries', () => {
+  const bundled = normalizeCatalogEntry({ name: 'filesystem', transport: 'stdio', command: 'npx', args: ['-y', 'pkg'] }, 'bundled')!;
+  const mirrored = normalizeCatalogEntry({ name: 'filesystem', transport: 'stdio', command: 'npx', args: ['-y', 'pkg'], description: 'mirror' }, 'overlay')!;
+  const extra = normalizeCatalogEntry({
+    name: 'team-docs', description: 'Overlay only.', transport: 'stdio', command: 'npx', args: ['-y', 'team-docs'],
+  }, 'overlay')!;
+  const merged = mergeCatalog([bundled], [mirrored, extra]);
+  assert.equal(merged.find((entry) => entry.name === 'filesystem')?.source, 'bundled');
+  assert.equal(merged.find((entry) => entry.name === 'team-docs')?.source, 'overlay');
+});
+
+test('no bundled package name carries a version or dist-tag', () => {
+  for (const entry of bundledCatalog()) {
+    const name = entry.package?.name ?? '';
+    const unscoped = name.startsWith('@') ? name.slice(1) : name;
+    assert.ok(!unscoped.includes('@'), `${entry.name} package name must not carry a tag: ${name}`);
+    assert.ok(!/[=<>~^]/u.test(name), `${entry.name} package name must not carry a version: ${name}`);
   }
 });
 
@@ -267,6 +289,7 @@ test('the generator refuses to write fewer than 60 entries and writes mirrored, 
       CATALOG_SEED_FILE: seedFile,
       CATALOG_SKIP_DOCKER: '1',
       CATALOG_SKIP_REMOTE_CHECK: '1',
+      CATALOG_SKIP_PACKAGE_CHECK: '1',
       CATALOG_OUTPUT_DIR: output,
     },
     stdio: 'pipe',

@@ -42,9 +42,9 @@
     "title": "SQLite",
     "description": "Query and modify a SQLite database with read and write tools.",
     "transport": "stdio",
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-sqlite", "/workspace/app.db"],
-    "package": { "manager": "npm", "name": "@modelcontextprotocol/server-sqlite" },
+    "command": "uvx",
+    "args": ["mcp-server-sqlite", "--db-path", "/workspace/app.db"],
+    "package": { "manager": "pypi", "name": "mcp-server-sqlite" },
     "requires": { "mounts": [{ "path": "/workspace/app.db", "purpose": "The database file to open" }] }
   },
   {

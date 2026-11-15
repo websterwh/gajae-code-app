@@ -129,7 +129,7 @@
       "manager": "other",
       "name": "mcp/azure"
     },
-    "popularity": 77407,
+    "popularity": 77410,
     "homepage": "https://hub.docker.com/r/mcp/azure",
     "origin": "marketplace"
   },
@@ -373,7 +373,7 @@
       "manager": "other",
       "name": "mcp/desktop-commander"
     },
-    "popularity": 245618,
+    "popularity": 245626,
     "homepage": "https://hub.docker.com/r/mcp/desktop-commander",
     "origin": "marketplace"
   },
@@ -413,7 +413,7 @@
       "manager": "other",
       "name": "mcp/duckduckgo"
     },
-    "popularity": 1065290,
+    "popularity": 1065312,
     "homepage": "https://hub.docker.com/r/mcp/duckduckgo",
     "origin": "marketplace"
   },
@@ -592,33 +592,6 @@
     "origin": "curated"
   },
   {
-    "name": "figma",
-    "title": "Figma",
-    "description": "Read Figma files, frames, and components.",
-    "stars": 6200,
-    "repository": {
-      "url": "https://github.com/figma/mcp",
-      "source": "marketplace"
-    },
-    "origin": "marketplace",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@figma/mcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@figma/mcp"
-    },
-    "env": [
-      {
-        "name": "FIGMA_TOKEN",
-        "required": false
-      }
-    ]
-  },
-  {
     "name": "filesystem",
     "title": "Filesystem",
     "description": "Read, write and search files inside directories the server is given.",
@@ -659,7 +632,7 @@
       "manager": "other",
       "name": "mcp/firecrawl"
     },
-    "popularity": 151711,
+    "popularity": 151713,
     "homepage": "https://hub.docker.com/r/mcp/firecrawl",
     "origin": "marketplace"
   },
@@ -819,7 +792,7 @@
       "manager": "other",
       "name": "mcp/grafana"
     },
-    "popularity": 1188995,
+    "popularity": 1189024,
     "homepage": "https://hub.docker.com/r/mcp/grafana",
     "origin": "marketplace"
   },
@@ -965,33 +938,6 @@
     "popularity": 26215,
     "homepage": "https://hub.docker.com/r/mcp/line",
     "origin": "marketplace"
-  },
-  {
-    "name": "linear",
-    "title": "Linear",
-    "description": "Manage Linear issues, projects, and cycles.",
-    "stars": 4900,
-    "repository": {
-      "url": "https://github.com/linear/linear-mcp",
-      "source": "marketplace"
-    },
-    "origin": "marketplace",
-    "transport": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@linear/mcp"
-    ],
-    "package": {
-      "manager": "npm",
-      "name": "@linear/mcp"
-    },
-    "env": [
-      {
-        "name": "LINEAR_API_KEY",
-        "required": false
-      }
-    ]
   },
   {
     "name": "mcp-discord",
@@ -1246,7 +1192,7 @@
       "manager": "other",
       "name": "mcp/osp_marketing_tools"
     },
-    "popularity": 44924,
+    "popularity": 44925,
     "homepage": "https://hub.docker.com/r/mcp/osp_marketing_tools",
     "origin": "marketplace"
   },
@@ -1313,7 +1259,7 @@
       "manager": "other",
       "name": "mcp/perplexity-ask"
     },
-    "popularity": 82087,
+    "popularity": 82090,
     "homepage": "https://hub.docker.com/r/mcp/perplexity-ask",
     "origin": "marketplace"
   },
@@ -1594,7 +1540,7 @@
       "manager": "other",
       "name": "mcp/sequentialthinking"
     },
-    "popularity": 441830,
+    "popularity": 441839,
     "homepage": "https://hub.docker.com/r/mcp/sequentialthinking",
     "origin": "marketplace"
   },
@@ -1633,15 +1579,15 @@
     "title": "SQLite",
     "description": "Query and modify a SQLite database with read and write tools.",
     "transport": "stdio",
-    "command": "npx",
+    "command": "uvx",
     "args": [
-      "-y",
-      "@modelcontextprotocol/server-sqlite",
+      "mcp-server-sqlite",
+      "--db-path",
       "/workspace/app.db"
     ],
     "package": {
-      "manager": "npm",
-      "name": "@modelcontextprotocol/server-sqlite"
+      "manager": "pypi",
+      "name": "mcp-server-sqlite"
     },
     "requires": {
       "mounts": [
@@ -1701,7 +1647,8 @@
     ],
     "package": {
       "manager": "npm",
-      "name": "@supabase/mcp-server-supabase@latest"
+      "name": "@supabase/mcp-server-supabase",
+      "version": "latest"
     }
   },
   {
@@ -1747,7 +1694,7 @@
       "manager": "other",
       "name": "mcp/time"
     },
-    "popularity": 1097179,
+    "popularity": 1097259,
     "homepage": "https://hub.docker.com/r/mcp/time",
     "origin": "marketplace"
   },
