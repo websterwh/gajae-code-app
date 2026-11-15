@@ -127,7 +127,8 @@
     "about": "关于",
     "permissions": "权限",
     "authentication": "身份验证",
-    "mcp": "MCP"
+    "mcp": "MCP",
+    "packages": "软件包"
   },
   "automation": {
     "browserBackend": {
@@ -450,5 +451,34 @@
     "registryNote": "注册表结果来自第三方，未经审核。",
     "installedBadge": "已安装",
     "newBadge": "New"
+  },
+  "packages": {
+    "title": "软件包",
+    "description": "安装并锁定 MCP 服务器和工具使用的命令行软件包。来自容器环境的软件包也会显示在这里。",
+    "manager": "管理器",
+    "spec": "软件包",
+    "specPlaceholder": "例如 serena、@playwright/mcp、skylot/jadx",
+    "pin": "锁定版本（可选）",
+    "pinPlaceholder": "例如 1.2.3",
+    "add": "添加软件包",
+    "adding": "正在安装…",
+    "upgrade": "升级",
+    "upgrading": "正在升级…",
+    "retry": "重试",
+    "pinAction": "锁定",
+    "unpin": "取消锁定",
+    "remove": "移除",
+    "confirmRemove": "不再管理 {{name}}？软件包本身不会被卸载。",
+    "statusInstalled": "已安装",
+    "statusFailed": "失败",
+    "statusMissing": "未安装",
+    "sourceEnv": "来自环境",
+    "sourceUi": "在此添加",
+    "sourceInstalled": "已安装，未管理",
+    "empty": "暂无软件包。",
+    "loadFailed": "无法加载软件包。",
+    "actionFailed": "操作失败",
+    "refresh": "刷新",
+    "pinnedNote": "已锁定的软件包不会自动升级。"
   }
 }

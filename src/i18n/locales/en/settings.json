@@ -127,7 +127,8 @@
     "about": "About",
     "permissions": "Permissions",
     "authentication": "Authentication",
-    "mcp": "MCP"
+    "mcp": "MCP",
+    "packages": "Packages"
   },
   "automation": {
     "browserBackend": {
@@ -450,5 +451,34 @@
     "registryNote": "Registry results are third-party and uncurated.",
     "installedBadge": "Installed",
     "newBadge": "New"
+  },
+  "packages": {
+    "title": "Packages",
+    "description": "Install and pin the command-line packages that MCP servers and tools run. Packages from the container environment are listed here too.",
+    "manager": "Manager",
+    "spec": "Package",
+    "specPlaceholder": "e.g. serena, @playwright/mcp, skylot/jadx",
+    "pin": "Pin version (optional)",
+    "pinPlaceholder": "e.g. 1.2.3",
+    "add": "Add package",
+    "adding": "Installing…",
+    "upgrade": "Upgrade",
+    "upgrading": "Upgrading…",
+    "retry": "Retry",
+    "pinAction": "Pin",
+    "unpin": "Unpin",
+    "remove": "Remove",
+    "confirmRemove": "Stop managing {{name}}? The package itself is not uninstalled.",
+    "statusInstalled": "Installed",
+    "statusFailed": "Failed",
+    "statusMissing": "Not installed",
+    "sourceEnv": "From the environment",
+    "sourceUi": "Added here",
+    "sourceInstalled": "Installed, not managed",
+    "empty": "No packages yet.",
+    "loadFailed": "Could not load packages.",
+    "actionFailed": "Action failed",
+    "refresh": "Refresh",
+    "pinnedNote": "Pinned packages are not upgraded automatically."
   }
 }

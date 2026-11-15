@@ -127,7 +127,8 @@
     "about": "概要",
     "permissions": "権限",
     "authentication": "認証",
-    "mcp": "MCP"
+    "mcp": "MCP",
+    "packages": "パッケージ"
   },
   "automation": {
     "browserBackend": {
@@ -450,5 +451,34 @@
     "registryNote": "レジストリの結果は第三者によるもので、未検証です。",
     "installedBadge": "インストール済み",
     "newBadge": "New"
+  },
+  "packages": {
+    "title": "パッケージ",
+    "description": "MCP サーバーとツールが使うコマンドラインパッケージをインストールし、バージョンを固定します。コンテナ環境のパッケージもここに表示されます。",
+    "manager": "マネージャー",
+    "spec": "パッケージ",
+    "specPlaceholder": "例: serena, @playwright/mcp, skylot/jadx",
+    "pin": "バージョンを固定（任意）",
+    "pinPlaceholder": "例: 1.2.3",
+    "add": "パッケージを追加",
+    "adding": "インストール中…",
+    "upgrade": "アップグレード",
+    "upgrading": "アップグレード中…",
+    "retry": "再試行",
+    "pinAction": "固定",
+    "unpin": "固定を解除",
+    "remove": "削除",
+    "confirmRemove": "{{name}} の管理をやめますか？パッケージ自体はアンインストールされません。",
+    "statusInstalled": "インストール済み",
+    "statusFailed": "失敗",
+    "statusMissing": "未インストール",
+    "sourceEnv": "環境から",
+    "sourceUi": "ここで追加",
+    "sourceInstalled": "インストール済み（未管理）",
+    "empty": "パッケージはまだありません。",
+    "loadFailed": "パッケージを読み込めませんでした。",
+    "actionFailed": "操作に失敗しました",
+    "refresh": "更新",
+    "pinnedNote": "固定したパッケージは自動更新されません。"
   }
 }

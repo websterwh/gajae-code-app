@@ -127,7 +127,8 @@
     "about": "О",
     "permissions": "Разрешения",
     "authentication": "Аутентификация",
-    "mcp": "MCP"
+    "mcp": "MCP",
+    "packages": "Пакеты"
   },
   "automation": {
     "browserBackend": {
@@ -450,5 +451,34 @@
     "registryNote": "Результаты реестра принадлежат третьим сторонам и не проверены.",
     "installedBadge": "Установлено",
     "newBadge": "New"
+  },
+  "packages": {
+    "title": "Пакеты",
+    "description": "Устанавливайте и закрепляйте пакеты командной строки, которые используют серверы MCP и инструменты. Пакеты из окружения контейнера тоже отображаются здесь.",
+    "manager": "Менеджер",
+    "spec": "Пакет",
+    "specPlaceholder": "например, serena, @playwright/mcp, skylot/jadx",
+    "pin": "Закрепить версию (необязательно)",
+    "pinPlaceholder": "например, 1.2.3",
+    "add": "Добавить пакет",
+    "adding": "Установка…",
+    "upgrade": "Обновить",
+    "upgrading": "Обновление…",
+    "retry": "Повторить",
+    "pinAction": "Закрепить",
+    "unpin": "Открепить",
+    "remove": "Удалить",
+    "confirmRemove": "Перестать управлять {{name}}? Сам пакет не удаляется.",
+    "statusInstalled": "Установлен",
+    "statusFailed": "Ошибка",
+    "statusMissing": "Не установлен",
+    "sourceEnv": "Из окружения",
+    "sourceUi": "Добавлено здесь",
+    "sourceInstalled": "Установлен, не управляется",
+    "empty": "Пакетов пока нет.",
+    "loadFailed": "Не удалось загрузить пакеты.",
+    "actionFailed": "Действие не выполнено",
+    "refresh": "Обновить",
+    "pinnedNote": "Закреплённые пакеты не обновляются автоматически."
   }
 }

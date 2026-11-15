@@ -127,7 +127,8 @@
     "about": "Hakkında",
     "permissions": "İzinler",
     "authentication": "Kimlik doğrulama",
-    "mcp": "MCP"
+    "mcp": "MCP",
+    "packages": "Paketler"
   },
   "automation": {
     "browserBackend": {
@@ -450,5 +451,34 @@
     "registryNote": "Kayıt defteri sonuçları üçüncü taraflara aittir ve doğrulanmamıştır.",
     "installedBadge": "Kurulu",
     "newBadge": "New"
+  },
+  "packages": {
+    "title": "Paketler",
+    "description": "MCP sunucularının ve araçların kullandığı komut satırı paketlerini kurun ve sürümlerini sabitleyin. Kapsayıcı ortamından gelen paketler de burada görünür.",
+    "manager": "Yönetici",
+    "spec": "Paket",
+    "specPlaceholder": "örn. serena, @playwright/mcp, skylot/jadx",
+    "pin": "Sürümü sabitle (isteğe bağlı)",
+    "pinPlaceholder": "örn. 1.2.3",
+    "add": "Paket ekle",
+    "adding": "Kuruluyor…",
+    "upgrade": "Yükselt",
+    "upgrading": "Yükseltiliyor…",
+    "retry": "Yeniden dene",
+    "pinAction": "Sabitle",
+    "unpin": "Sabitlemeyi kaldır",
+    "remove": "Kaldır",
+    "confirmRemove": "{{name}} artık yönetilmesin mi? Paketin kendisi kaldırılmaz.",
+    "statusInstalled": "Kurulu",
+    "statusFailed": "Başarısız",
+    "statusMissing": "Kurulu değil",
+    "sourceEnv": "Ortamdan",
+    "sourceUi": "Burada eklendi",
+    "sourceInstalled": "Kurulu, yönetilmiyor",
+    "empty": "Henüz paket yok.",
+    "loadFailed": "Paketler yüklenemedi.",
+    "actionFailed": "İşlem başarısız",
+    "refresh": "Yenile",
+    "pinnedNote": "Sabitlenmiş paketler otomatik yükseltilmez."
   }
 }

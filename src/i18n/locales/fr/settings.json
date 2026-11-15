@@ -127,7 +127,8 @@
     "about": "À propos",
     "permissions": "Permissions",
     "authentication": "Authentification",
-    "mcp": "MCP"
+    "mcp": "MCP",
+    "packages": "Paquets"
   },
   "automation": {
     "browserBackend": {
@@ -450,5 +451,34 @@
     "registryNote": "Les résultats du registre proviennent de tiers et ne sont pas vérifiés.",
     "installedBadge": "Installé",
     "newBadge": "New"
+  },
+  "packages": {
+    "title": "Paquets",
+    "description": "Installez et épinglez les paquets en ligne de commande utilisés par les serveurs MCP et les outils. Les paquets de l’environnement du conteneur apparaissent ici aussi.",
+    "manager": "Gestionnaire",
+    "spec": "Paquet",
+    "specPlaceholder": "ex. serena, @playwright/mcp, skylot/jadx",
+    "pin": "Épingler une version (facultatif)",
+    "pinPlaceholder": "ex. 1.2.3",
+    "add": "Ajouter le paquet",
+    "adding": "Installation…",
+    "upgrade": "Mettre à jour",
+    "upgrading": "Mise à jour…",
+    "retry": "Réessayer",
+    "pinAction": "Épingler",
+    "unpin": "Désépingler",
+    "remove": "Supprimer",
+    "confirmRemove": "Ne plus gérer {{name}} ? Le paquet lui-même n’est pas désinstallé.",
+    "statusInstalled": "Installé",
+    "statusFailed": "Échec",
+    "statusMissing": "Non installé",
+    "sourceEnv": "Depuis l’environnement",
+    "sourceUi": "Ajouté ici",
+    "sourceInstalled": "Installé, non géré",
+    "empty": "Aucun paquet pour le moment.",
+    "loadFailed": "Impossible de charger les paquets.",
+    "actionFailed": "Échec de l’action",
+    "refresh": "Actualiser",
+    "pinnedNote": "Les paquets épinglés ne sont pas mis à jour automatiquement."
   }
 }

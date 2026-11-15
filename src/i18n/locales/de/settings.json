@@ -127,7 +127,8 @@
     "about": "Über",
     "permissions": "Berechtigungen",
     "authentication": "Anmeldung",
-    "mcp": "MCP"
+    "mcp": "MCP",
+    "packages": "Pakete"
   },
   "automation": {
     "browserBackend": {
@@ -450,5 +451,34 @@
     "registryNote": "Registry-Ergebnisse stammen von Dritten und sind ungeprüft.",
     "installedBadge": "Installiert",
     "newBadge": "New"
+  },
+  "packages": {
+    "title": "Pakete",
+    "description": "Kommandozeilen-Pakete installieren und pinnen, die MCP-Server und Tools ausführen. Pakete aus der Container-Umgebung stehen hier ebenfalls.",
+    "manager": "Manager",
+    "spec": "Paket",
+    "specPlaceholder": "z. B. serena, @playwright/mcp, skylot/jadx",
+    "pin": "Version pinnen (optional)",
+    "pinPlaceholder": "z. B. 1.2.3",
+    "add": "Paket hinzufügen",
+    "adding": "Wird installiert…",
+    "upgrade": "Aktualisieren",
+    "upgrading": "Wird aktualisiert…",
+    "retry": "Erneut versuchen",
+    "pinAction": "Pinnen",
+    "unpin": "Pin lösen",
+    "remove": "Entfernen",
+    "confirmRemove": "{{name}} nicht mehr verwalten? Das Paket selbst wird nicht deinstalliert.",
+    "statusInstalled": "Installiert",
+    "statusFailed": "Fehlgeschlagen",
+    "statusMissing": "Nicht installiert",
+    "sourceEnv": "Aus der Umgebung",
+    "sourceUi": "Hier hinzugefügt",
+    "sourceInstalled": "Installiert, nicht verwaltet",
+    "empty": "Noch keine Pakete.",
+    "loadFailed": "Pakete konnten nicht geladen werden.",
+    "actionFailed": "Aktion fehlgeschlagen",
+    "refresh": "Aktualisieren",
+    "pinnedNote": "Gepinnte Pakete werden nicht automatisch aktualisiert."
   }
 }

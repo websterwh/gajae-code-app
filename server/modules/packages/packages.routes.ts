@@ -1,0 +1,73 @@
+import { Router, type Response } from 'express';
+
+import { asyncHandler, routeParam } from '@/shared/utils.js';
+
+import { packagesService, type PackagesService } from './packages.service.js';
+
+function fail(response: Response, error: unknown): Response {
+  const message = error instanceof Error ? error.message : 'Package request failed.';
+  const status = /not found/iu.test(message) ? 404
+    : /already running|pinned/iu.test(message) ? 409
+      : /required|must be|has no name|invalid/iu.test(message) ? 400
+        : 500;
+  return response.status(status).json({ success: false, error: { message } });
+}
+
+export function createPackagesRouter(service: PackagesService = packagesService): Router {
+  const router = Router();
+
+  router.get('/', asyncHandler(async (_request, response) => {
+    try {
+      response.json({ success: true, data: await service.list() });
+    } catch (error) {
+      fail(response, error);
+    }
+  }));
+
+  router.post('/', asyncHandler(async (request, response) => {
+    try {
+      response.status(201).json({ success: true, data: await service.add(request.body ?? {}) });
+    } catch (error) {
+      fail(response, error);
+    }
+  }));
+
+  router.patch('/:manager/:name', asyncHandler(async (request, response) => {
+    try {
+      response.json({
+        success: true,
+        data: await service.setPin(
+          routeParam(request.params.manager),
+          routeParam(request.params.name),
+          (request.body ?? {}).pin ?? null,
+        ),
+      });
+    } catch (error) {
+      fail(response, error);
+    }
+  }));
+
+  router.post('/:manager/:name/upgrade', asyncHandler(async (request, response) => {
+    try {
+      response.json({
+        success: true,
+        data: await service.upgrade(routeParam(request.params.manager), routeParam(request.params.name)),
+      });
+    } catch (error) {
+      fail(response, error);
+    }
+  }));
+
+  router.delete('/:manager/:name', asyncHandler(async (request, response) => {
+    try {
+      await service.remove(routeParam(request.params.manager), routeParam(request.params.name));
+      response.status(204).end();
+    } catch (error) {
+      fail(response, error);
+    }
+  }));
+
+  return router;
+}
+
+export default createPackagesRouter();

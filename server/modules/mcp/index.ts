@@ -1,3 +1,43 @@
 export { createMcpRouter, default as mcpRoutes } from './mcp.routes.js';
 export { McpService, mcpService, type McpServerView, type VerifyResult } from './mcp.service.js';
 export { REDACTED } from './mcp.config.js';
+export {
+  INSTALL_MANAGERS,
+  emptyLedger,
+  failedEntries,
+  ledgerFilePath,
+  readLedger,
+  recordFailure,
+  recordInstalled,
+  writeLedger,
+  type InstallManager,
+  type Ledger,
+  type LedgerEntry,
+  type LedgerStatus,
+} from './ledger.js';
+export { isDowngrade, normalizePin, parsePackageSpec, pinnedSpec, shouldAutoUpdate } from './pins.js';
+export {
+  autoUpdatePackages,
+  installCommand,
+  parseInstalledVersion,
+  provisionPackages,
+  spawnCommandRunner,
+  upgradePackage,
+  verifyCommand,
+  type CommandRunner,
+  type ProvisionOutcome,
+} from './provision.js';
+export { provisionStatePath, readProvisionState, writeProvisionState, type ProvisionState } from './provision-state.js';
+export {
+  ENV_PACKAGE_VARIABLES,
+  desiredPackagesPath,
+  emptyDesired,
+  envSeeds,
+  readDesired,
+  removeDesired,
+  upsertDesired,
+  writeDesired,
+  type DesiredPackage,
+  type DesiredState,
+  type EnvSeed,
+} from './desired.js';

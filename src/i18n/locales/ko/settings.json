@@ -127,7 +127,8 @@
     "about": "소개",
     "permissions": "권한",
     "authentication": "인증",
-    "mcp": "MCP"
+    "mcp": "MCP",
+    "packages": "패키지"
   },
   "automation": {
     "browserBackend": {
@@ -450,5 +451,34 @@
     "registryNote": "레지스트리 결과는 제3자 제공이며 검증되지 않았습니다.",
     "installedBadge": "설치됨",
     "newBadge": "New"
+  },
+  "packages": {
+    "title": "패키지",
+    "description": "MCP 서버와 도구가 사용하는 명령줄 패키지를 설치하고 버전을 고정합니다. 컨테이너 환경의 패키지도 여기에 표시됩니다.",
+    "manager": "관리자",
+    "spec": "패키지",
+    "specPlaceholder": "예: serena, @playwright/mcp, skylot/jadx",
+    "pin": "버전 고정(선택)",
+    "pinPlaceholder": "예: 1.2.3",
+    "add": "패키지 추가",
+    "adding": "설치 중…",
+    "upgrade": "업그레이드",
+    "upgrading": "업그레이드 중…",
+    "retry": "다시 시도",
+    "pinAction": "고정",
+    "unpin": "고정 해제",
+    "remove": "제거",
+    "confirmRemove": "{{name}} 관리를 중지할까요? 패키지 자체는 제거되지 않습니다.",
+    "statusInstalled": "설치됨",
+    "statusFailed": "실패",
+    "statusMissing": "설치되지 않음",
+    "sourceEnv": "환경에서",
+    "sourceUi": "여기에서 추가됨",
+    "sourceInstalled": "설치됨, 관리되지 않음",
+    "empty": "아직 패키지가 없습니다.",
+    "loadFailed": "패키지를 불러오지 못했습니다.",
+    "actionFailed": "작업 실패",
+    "refresh": "새로 고침",
+    "pinnedNote": "고정된 패키지는 자동으로 업그레이드되지 않습니다."
   }
 }

@@ -127,7 +127,8 @@
     "about": "Circa",
     "permissions": "Permessi",
     "authentication": "Autenticazione",
-    "mcp": "MCP"
+    "mcp": "MCP",
+    "packages": "Pacchetti"
   },
   "automation": {
     "browserBackend": {
@@ -450,5 +451,34 @@
     "registryNote": "I risultati del registro provengono da terze parti e non sono verificati.",
     "installedBadge": "Installato",
     "newBadge": "New"
+  },
+  "packages": {
+    "title": "Pacchetti",
+    "description": "Installa e blocca i pacchetti da riga di comando usati dai server MCP e dagli strumenti. Anche i pacchetti dell’ambiente del container compaiono qui.",
+    "manager": "Gestore",
+    "spec": "Pacchetto",
+    "specPlaceholder": "es. serena, @playwright/mcp, skylot/jadx",
+    "pin": "Blocca versione (facoltativo)",
+    "pinPlaceholder": "es. 1.2.3",
+    "add": "Aggiungi pacchetto",
+    "adding": "Installazione…",
+    "upgrade": "Aggiorna",
+    "upgrading": "Aggiornamento…",
+    "retry": "Riprova",
+    "pinAction": "Blocca",
+    "unpin": "Sblocca",
+    "remove": "Rimuovi",
+    "confirmRemove": "Smetti di gestire {{name}}? Il pacchetto non viene disinstallato.",
+    "statusInstalled": "Installato",
+    "statusFailed": "Non riuscito",
+    "statusMissing": "Non installato",
+    "sourceEnv": "Dall’ambiente",
+    "sourceUi": "Aggiunto qui",
+    "sourceInstalled": "Installato, non gestito",
+    "empty": "Nessun pacchetto.",
+    "loadFailed": "Impossibile caricare i pacchetti.",
+    "actionFailed": "Operazione non riuscita",
+    "refresh": "Aggiorna",
+    "pinnedNote": "I pacchetti bloccati non vengono aggiornati automaticamente."
   }
 }

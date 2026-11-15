@@ -7,33 +7,12 @@
  * path, keeps the boot non-blocking (the caller backgrounds it), and writes a
  * small progress file so `GET /api/mcp/status` can report in-flight work.
  */
-import { spawn } from 'node:child_process';
-
+import { desiredPackagesPath, envSeeds, readDesired } from './desired.js';
 import { ledgerFilePath, readLedger, writeLedger, type InstallManager } from './ledger.js';
 import { packageNameFromEntry, readMcpConfig } from './mcp.config.js';
-import { autoUpdatePackages, provisionPackages, type CommandRunner } from './provision.js';
+import { parsePackageSpec } from './pins.js';
+import { autoUpdatePackages, provisionPackages, spawnCommandRunner } from './provision.js';
 import { provisionStatePath, writeProvisionState, type ProvisionState } from './provision-state.js';
-
-function csv(value: string | undefined): string[] {
-  return String(value ?? '').split(',').map((entry) => entry.trim()).filter(Boolean);
-}
-
-function spawnRunner(): CommandRunner {
-  return (command, args, options) => new Promise((resolve) => {
-    const child = spawn(command, args, {
-      cwd: options?.cwd,
-      shell: false,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: process.env,
-    });
-    let stdout = '';
-    let stderr = '';
-    child.stdout?.on('data', (chunk) => { stdout += String(chunk); });
-    child.stderr?.on('data', (chunk) => { stderr += String(chunk); });
-    child.once('error', (error) => resolve({ code: 127, stdout, stderr: error.message }));
-    child.once('close', (code) => resolve({ code: code ?? 1, stdout, stderr }));
-  });
-}
 
 async function pinsFromConfigAndLedger(ledger: Awaited<ReturnType<typeof readLedger>>): Promise<Record<string, string | null>> {
   const pins: Record<string, string | null> = {};
@@ -61,14 +40,23 @@ async function main(): Promise<void> {
   const ledger = await readLedger(ledgerFile);
   const pins = await pinsFromConfigAndLedger(ledger);
   const autoUpdate = env.AUTO_UPDATE_PACKAGES === 'true' || env.AUTO_UPDATE_PACKAGES === '1';
-  const runner = spawnRunner();
+  const runner = spawnCommandRunner();
 
-  const groups: Array<{ manager: InstallManager; packages: string[] }> = [
-    { manager: 'uv', packages: csv(env.UV_TOOLS) },
-    { manager: 'pip', packages: csv(env.PIP_PACKAGES) },
-    { manager: 'npm', packages: csv(env.NPM_PACKAGES) },
-    { manager: 'aqua', packages: csv(env.GITHUB_APPS) },
-  ];
+  const groups: Array<{ manager: InstallManager; packages: string[] }> = (['uv', 'pip', 'npm', 'aqua'] as const)
+    .map((manager) => ({
+      manager,
+      packages: envSeeds(env).filter((seed) => seed.manager === manager).map((seed) => seed.spec),
+    }));
+
+  // Packages added from Settings live beside the ledger; boot treats them the
+  // same as the env seeds, so there is one install path, not two.
+  const desired = await readDesired(desiredPackagesPath(env));
+  for (const group of groups) {
+    for (const [name, entry] of Object.entries(desired.packages[group.manager])) {
+      if (!group.packages.some((spec) => parsePackageSpec(spec).name === name)) group.packages.push(entry.spec);
+      if (entry.pin) pins[name] = entry.pin;
+    }
+  }
 
   const state: ProvisionState = {
     running: true,

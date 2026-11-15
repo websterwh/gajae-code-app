@@ -127,7 +127,8 @@
     "about": "關於",
     "permissions": "權限",
     "authentication": "身分驗證",
-    "mcp": "MCP"
+    "mcp": "MCP",
+    "packages": "套件"
   },
   "automation": {
     "browserBackend": {
@@ -450,5 +451,34 @@
     "registryNote": "登錄表結果來自第三方，未經審核。",
     "installedBadge": "已安裝",
     "newBadge": "New"
+  },
+  "packages": {
+    "title": "套件",
+    "description": "安裝並鎖定 MCP 伺服器與工具使用的命令列套件。來自容器環境的套件也會顯示在這裡。",
+    "manager": "管理器",
+    "spec": "套件",
+    "specPlaceholder": "例如 serena、@playwright/mcp、skylot/jadx",
+    "pin": "鎖定版本（選填）",
+    "pinPlaceholder": "例如 1.2.3",
+    "add": "新增套件",
+    "adding": "正在安裝…",
+    "upgrade": "升級",
+    "upgrading": "正在升級…",
+    "retry": "重試",
+    "pinAction": "鎖定",
+    "unpin": "取消鎖定",
+    "remove": "移除",
+    "confirmRemove": "不再管理 {{name}}？套件本身不會被解除安裝。",
+    "statusInstalled": "已安裝",
+    "statusFailed": "失敗",
+    "statusMissing": "未安裝",
+    "sourceEnv": "來自環境",
+    "sourceUi": "在此新增",
+    "sourceInstalled": "已安裝，未管理",
+    "empty": "尚無套件。",
+    "loadFailed": "無法載入套件。",
+    "actionFailed": "操作失敗",
+    "refresh": "重新整理",
+    "pinnedNote": "已鎖定的套件不會自動升級。"
   }
 }

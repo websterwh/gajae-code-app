@@ -82,14 +82,33 @@ test('a successful install and verification records the concrete version', async
 test('a pin is applied in the manager syntax', async () => {
   const ledger = emptyLedger();
   const calls: string[] = [];
-  const runner = scripted({
-    'uv tool install -q serena==1.2.3': { code: 0 },
-    'uv tool list': { code: 0, stdout: 'serena v1.2.3\n' },
-  }, calls);
+  let verifications = 0;
+  const runner: CommandRunner = async (command, args) => {
+    const line = [command, ...args].join(' ');
+    calls.push(line);
+    if (line === 'uv tool list') {
+      verifications += 1;
+      return { code: 0, stdout: verifications === 1 ? 'serena v1.0.0\n' : 'serena v1.2.3\n', stderr: '' };
+    }
+    if (line === 'uv tool install -q serena==1.2.3') return { code: 0, stdout: '', stderr: '' };
+    return { code: 1, stdout: '', stderr: `unexpected command: ${line}` };
+  };
 
   await provisionPackages({ manager: 'uv', packages: ['serena'], ledger, runner, pins: { serena: '1.2.3' } });
   assert.ok(calls.includes('uv tool install -q serena==1.2.3'));
   assert.equal(ledger.packages.uv.serena.pin, '1.2.3');
+});
+
+test('verify-first leaves a healthy install alone instead of reinstalling it', async () => {
+  const ledger = emptyLedger();
+  const calls: string[] = [];
+  const runner = scripted({ 'uv tool list': { code: 0, stdout: 'serena v1.2.3\n' } }, calls);
+
+  const outcomes = await provisionPackages({ manager: 'uv', packages: ['serena'], ledger, runner });
+  assert.equal(outcomes[0]?.status, 'installed');
+  assert.equal(outcomes[0]?.action, 'verified');
+  assert.equal(calls.some((line) => line.startsWith('uv tool install')), false, 'a verified package must not be reinstalled');
+  assert.equal(ledger.packages.uv.serena.version, '1.2.3');
 });
 
 test('an install that exits 0 but leaves the package absent is a failure', async () => {
