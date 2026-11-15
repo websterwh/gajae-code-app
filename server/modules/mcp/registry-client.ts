@@ -12,6 +12,25 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 type RegistryRecord = Record<string, unknown>;
 
+const INSTALLABLE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u;
+
+/**
+ * Registry names are reverse-DNS identifiers and often contain `/`, which the
+ * mcp.json name validator rejects. The title stays as published; only the
+ * installable name is made valid.
+ */
+function installableName(value: string, fallback: string): string {
+  const candidates = [value, fallback];
+  for (const candidate of candidates) {
+    const cleaned = candidate.trim()
+      .replace(/[^A-Za-z0-9._-]+/gu, '-')
+      .replace(/^[^A-Za-z0-9]+/u, '')
+      .slice(0, 64);
+    if (INSTALLABLE_NAME.test(cleaned)) return cleaned;
+  }
+  return 'mcp-server';
+}
+
 /**
  * Registry records wrap the server document in `server`. Package metadata
  * carries required/secret environment variables; remotes are streamable HTTP.
@@ -19,18 +38,19 @@ type RegistryRecord = Record<string, unknown>;
 export function normalizeRegistryRecord(record: unknown): CatalogEntry | null {
   if (!isRecord(record)) return null;
   const server = isRecord(record.server) ? record.server : record;
-  const name = typeof server.name === 'string' ? server.name.trim() : '';
-  if (!name) return null;
+  const rawName = typeof server.name === 'string' ? server.name.trim() : '';
+  if (!rawName) return null;
 
   const env: NonNullable<CatalogEntry['env']> = [];
   const packages = Array.isArray(server.packages) ? server.packages.filter(isRecord) : [];
   const first = packages[0];
   const remotes = Array.isArray(server.remotes) ? server.remotes.filter(isRecord) : [];
   const remote = remotes[0];
+  const identifier = first && typeof first.identifier === 'string' ? first.identifier : '';
+  const name = installableName(rawName, identifier);
   let entry: CatalogEntry | null = null;
 
   if (first) {
-    const identifier = typeof first.identifier === 'string' ? first.identifier : '';
     const registryType = String(first.registryType ?? '').toLowerCase();
     if (identifier) {
       for (const variable of Array.isArray(first.environmentVariables) ? first.environmentVariables : []) {

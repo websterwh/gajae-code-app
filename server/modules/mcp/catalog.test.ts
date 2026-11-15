@@ -191,7 +191,7 @@ test('the registry client paginates, maps packages, keeps the repository and rej
   const client = createRegistryClient({ baseUrl: 'https://registry.test/servers', fetchImpl });
 
   const result = await client.search({ search: 'one', limit: 5 });
-  assert.equal(result.entries[0]?.name, 'io.test/one');
+  assert.equal(result.entries[0]?.name, 'io.test-one', 'registry names must be installable');
   assert.equal(result.entries[0]?.source, 'registry');
   assert.equal(result.entries[0]?.command, 'npx');
   assert.equal(result.entries[0]?.env?.[0]?.secret, true);
