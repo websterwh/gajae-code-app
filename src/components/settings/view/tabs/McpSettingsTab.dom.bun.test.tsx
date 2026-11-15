@@ -328,3 +328,34 @@ test('escape leaves the version alone', async () => {
   await waitFor(() => assert.equal(screen.queryByRole('textbox', { name: `${english.mcp.version} context7` }), null));
   assert.equal(calls.some((call) => call.path.includes('/pin')), false);
 });
+
+// The switch used to be the last thing added to the button cluster, so rows
+// with pin controls carried it further left than rows without and the toggles
+// never lined up. It now leads the row, at the same x for every server.
+test('every row opens with its switch instead of ending with it', async () => {
+  fakeApi([
+    installedServer(),
+    installedServer({
+      name: 'home-assistant',
+      transport: 'http',
+      url: 'http://192.168.1.9:9583/api/mcp',
+      command: undefined,
+      args: undefined,
+      pinnable: false,
+      packageName: null,
+      install: null,
+    }),
+  ]);
+  await mount();
+
+  const switches = await screen.findAllByRole('switch');
+  assert.equal(switches.length, 2);
+  for (const control of switches) {
+    assert.equal(control.parentElement?.firstElementChild, control, 'the switch is the first control in its row');
+  }
+  // The button cluster is what used to carry the switch, at whichever x the
+  // row's controls happened to end.
+  const bars = screen.getAllByRole('button', { name: english.mcp.verify }).map((button) => button.parentElement);
+  assert.equal(bars.length, 2);
+  for (const bar of bars) assert.equal(bar?.querySelector('[role="switch"]'), null, 'the buttons no longer hold the switch');
+});

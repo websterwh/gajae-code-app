@@ -663,7 +663,16 @@ export default function McpSettingsTab() {
             return (
               <div key={`${server.scope}:${server.name}`} className={`p-4 ${recentlyAdded === server.name ? 'bg-primary/5' : ''}`}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
+                  {/* The switch opens the row on every server. Trailing the
+                      buttons put it wherever that row's controls ended, so a
+                      row with pin controls showed it further left than one
+                      without, and the toggles never lined up. */}
+                  <SettingsToggle
+                    checked={server.enabled}
+                    onChange={() => void toggle(server)}
+                    ariaLabel={`${server.enabled ? t('mcp.enabled') : t('mcp.disabled')}: ${server.name}`}
+                  />
+                  <div className="min-w-0 flex-1">
                     <p className="flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">
                       <Server className="h-4 w-4" aria-hidden />
                       <span className="truncate">{server.name}</span>
@@ -695,11 +704,6 @@ export default function McpSettingsTab() {
                     )}
                   </div>
                   <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto sm:shrink-0">
-                    <SettingsToggle
-                      checked={server.enabled}
-                      onChange={() => void toggle(server)}
-                      ariaLabel={`${server.enabled ? t('mcp.enabled') : t('mcp.disabled')}: ${server.name}`}
-                    />
                     {/* The label stays put while the handshake runs: swapping it
                         for the longer text made the whole bar jump. */}
                     <button type="button" className={verifyButtonClass} aria-busy={verifying === server.name}
