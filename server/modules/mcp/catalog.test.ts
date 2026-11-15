@@ -85,6 +85,14 @@ test('ranking puts curated Context7 above forks and namespaced lookalikes', () =
   assert.equal(searchCatalog([fork, paid, curated], 'context-7')[0]?.name, 'context7');
 });
 
+test('a mirrored overlay does not relabel bundled entries', () => {
+  const bundled = normalizeCatalogEntry({ name: 'filesystem', transport: 'stdio', command: 'npx', args: ['-y', 'pkg'] }, 'bundled')!;
+  const mirrored = normalizeCatalogEntry({ name: 'filesystem', transport: 'stdio', command: 'npx', args: ['-y', 'pkg'], description: 'same install' }, 'overlay')!;
+  assert.equal(mergeCatalog([bundled], [mirrored])[0]?.source, 'bundled');
+  const changed = normalizeCatalogEntry({ name: 'filesystem', transport: 'stdio', command: 'npx', args: ['-y', 'pkg@2'] }, 'overlay')!;
+  assert.equal(mergeCatalog([bundled], [changed])[0]?.source, 'overlay');
+});
+
 test('a registry duplicate of a curated title or package is collapsed', () => {
   const curated = normalizeCatalogEntry({
     name: 'context7', title: 'Context7', description: 'Docs', transport: 'stdio', command: 'npx',

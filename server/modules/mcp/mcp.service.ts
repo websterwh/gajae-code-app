@@ -289,7 +289,8 @@ export class McpService {
     for (const arg of value.args ?? []) args.push('--arg', arg);
     for (const [key, envValue] of Object.entries(value.env ?? {})) args.push('--env', `${key}=${envValue}`);
     if (value.url) args.push('--url', value.url);
-    for (const [key, headerValue] of Object.entries(value.headers ?? {})) args.push('--header', `${key}: ${headerValue}`);
+    // gjc accepts header values as KEY=VALUE; a colon is rejected as invalid.
+    for (const [key, headerValue] of Object.entries(value.headers ?? {})) args.push('--header', `${key}=${headerValue}`);
     if (scope === 'project') args.push('--project');
 
     const result = await this.runCli(args, { ...(projectPath ? { cwd: projectPath } : {}) });

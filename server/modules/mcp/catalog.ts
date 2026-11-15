@@ -129,6 +129,16 @@ export function bundledCatalog(): CatalogEntry[] {
 const compact = (value: string | undefined): string => String(value ?? '').toLowerCase().replace(/[^a-z0-9]+/gu, '');
 const tokens = (value: string): string[] => value.toLowerCase().split(/[^a-z0-9]+/u).filter(Boolean);
 
+/** Identical install definitions do not make a new source worth showing. */
+function sameInstall(a: CatalogEntry, b: CatalogEntry): boolean {
+  return a.transport === b.transport
+    && a.command === b.command
+    && a.url === b.url
+    && JSON.stringify(a.args ?? []) === JSON.stringify(b.args ?? [])
+    && a.package?.manager === b.package?.manager
+    && a.package?.name === b.package?.name;
+}
+
 /**
  * A registry record that repeats a curated title or package is the same server
  * published twice. Keep the curated card and drop the duplicate.
@@ -136,7 +146,13 @@ const tokens = (value: string): string[] => value.toLowerCase().split(/[^a-z0-9]
 export function mergeCatalog(baseline: CatalogEntry[], overlay: CatalogEntry[], registry: CatalogEntry[] = []): CatalogEntry[] {
   const byName = new Map<string, CatalogEntry>();
   for (const entry of baseline) byName.set(entry.name, entry);
-  for (const entry of overlay) byName.set(entry.name, entry);
+  for (const entry of overlay) {
+    const existing = byName.get(entry.name);
+    // The overlay mirrors the bundled file, so an identical record must not
+    // relabel every bundled entry as overlay and empty the Bundled filter.
+    if (existing?.source === 'bundled' && sameInstall(existing, entry)) continue;
+    byName.set(entry.name, entry);
+  }
 
   const curatedTitles = new Set<string>();
   const curatedPackages = new Set<string>();

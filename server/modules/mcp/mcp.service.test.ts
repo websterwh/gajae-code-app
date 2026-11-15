@@ -51,7 +51,7 @@ function fakeCli(agentDir: string, calls: string[][]) {
       const headers = all(args, '--header');
       if (headers.length) {
         entry.headers = Object.fromEntries(headers.map((value) => {
-          const at = value.indexOf(':');
+          const at = value.indexOf('=');
           return [value.slice(0, at).trim(), value.slice(at + 1).trim()];
         }));
       }
