@@ -11,13 +11,17 @@ type StoredFile = { mcpServers: Record<string, Record<string, unknown>> };
 
 function flag(args: string[], name: string): string | undefined {
   const index = args.indexOf(name);
-  return index >= 0 ? args[index + 1] : undefined;
+  if (index >= 0) return args[index + 1];
+  const inline = args.find((arg) => arg.startsWith(`${name}=`));
+  return inline === undefined ? undefined : inline.slice(name.length + 1);
 }
 
 function all(args: string[], name: string): string[] {
   const values: string[] = [];
   for (let index = 0; index < args.length; index += 1) {
-    if (args[index] === name && args[index + 1] !== undefined) values.push(args[index + 1] as string);
+    const current = args[index] as string;
+    if (current === name && args[index + 1] !== undefined) values.push(args[index + 1] as string);
+    else if (current.startsWith(`${name}=`)) values.push(current.slice(name.length + 1));
   }
   return values;
 }
@@ -95,7 +99,14 @@ test('add → list → toggle → pin → verify → remove against a temporary 
   assert.equal(JSON.stringify(added).includes('super-secret'), false);
   // Spawning is argv-only: the secret is one argument, never a shell string.
   assert.deepEqual(calls[0]?.slice(0, 2), ['mcp', 'add']);
-  assert.ok(calls[0]?.includes('API_TOKEN=super-secret'));
+  assert.ok(calls[0]?.includes('--env=API_TOKEN=super-secret'));
+  // Every value flag carries its value inline. Space-separated, gjc reads the
+  // `-y` of `npx -y <pkg>` as a flag and exits 2 with nothing written.
+  const valueFlags = (calls[0] ?? []).filter((arg) => arg.startsWith('--') && arg !== '--project');
+  assert.ok(valueFlags.length > 0);
+  assert.ok(valueFlags.every((arg) => arg.includes('=')), `inline values only: ${valueFlags.join(' ')}`);
+  assert.ok(calls[0]?.includes('--type=stdio'));
+  assert.ok(calls[0]?.includes('--arg=-y'));
 
   const listed = await service.list('global');
   assert.equal(listed.length, 1);

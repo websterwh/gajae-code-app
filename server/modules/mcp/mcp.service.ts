@@ -34,6 +34,7 @@ import {
   type PublicMcpServer,
 } from './mcp.config.js';
 import { isDowngrade, normalizePin } from './pins.js';
+import { tailLines } from './provision.js';
 import { provisionStatePath, readProvisionState } from './provision-state.js';
 import { createRegistryClient, type RegistryClient } from './registry-client.js';
 
@@ -286,17 +287,26 @@ export class McpService {
     const file = await this.read(scope, projectPath);
     if (file.mcpServers[value.name]) throw new Error(`A server named "${value.name}" already exists.`);
 
-    const args = ['mcp', 'add', value.name, '--type', value.transport];
-    if (value.command) args.push('--command', value.command);
-    for (const arg of value.args ?? []) args.push('--arg', arg);
-    for (const [key, envValue] of Object.entries(value.env ?? {})) args.push('--env', `${key}=${envValue}`);
-    if (value.url) args.push('--url', value.url);
+    // Values travel inline as --flag=value. Space-separated, a value that
+    // starts with a dash (`--arg -y`) is parsed as another flag, and gjc exits
+    // 2 without writing anything - every catalog server starts `npx -y ...`,
+    // so every install from the page failed that way.
+    const args = ['mcp', 'add', value.name, `--type=${value.transport}`];
+    if (value.command) args.push(`--command=${value.command}`);
+    for (const arg of value.args ?? []) args.push(`--arg=${arg}`);
+    for (const [key, envValue] of Object.entries(value.env ?? {})) args.push(`--env=${key}=${envValue}`);
+    if (value.url) args.push(`--url=${value.url}`);
     // gjc accepts header values as KEY=VALUE; a colon is rejected as invalid.
-    for (const [key, headerValue] of Object.entries(value.headers ?? {})) args.push('--header', `${key}=${headerValue}`);
+    for (const [key, headerValue] of Object.entries(value.headers ?? {})) args.push(`--header=${key}=${headerValue}`);
     if (scope === 'project') args.push('--project');
 
     const result = await this.runCli(args, { ...(projectPath ? { cwd: projectPath } : {}) });
-    if (result.code !== 0) throw new Error(`gjc mcp add failed with exit ${result.code}.`);
+    if (result.code !== 0) {
+      // The CLI's own usage text is the only thing that explains a rejected
+      // argument, so it belongs in the message instead of a bare exit code.
+      const detail = tailLines(result.stderr || result.stdout, 3);
+      throw new Error(`gjc mcp add failed with exit ${result.code}.${detail ? ` ${detail}` : ''}`);
+    }
     const written = await this.read(scope, projectPath);
     const entry = written.mcpServers[value.name];
     if (!entry) throw new Error('gjc mcp add reported success but the server is not in mcp.json.');
