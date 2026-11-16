@@ -46,7 +46,7 @@ export function useFileMentions({ selectedProject, sessionId, executionCwd, inpu
 
     const load = async () => {
       try {
-        const response = await api.getFiles(projectId, { signal: request.signal }, sessionId ?? undefined);
+        const response = await api.filePaths(projectId, { signal: request.signal }, sessionId ?? undefined);
         if (response.ok) {
           const files = collectFiles((await response.json()) as ProjectFileNode[]);
           if (!request.signal.aborted) setFiles(files);

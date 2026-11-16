@@ -46,7 +46,7 @@ function resolveReference(files: FileEntry[], reference: string): string | undef
 
 async function fetchProjectFiles(projectId: string, sessionId?: string): Promise<FileEntry[] | null> {
   try {
-    const response = await api.getFiles(projectId, {}, sessionId);
+    const response = await api.filePaths(projectId, {}, sessionId);
     if (!response.ok) return null;
     const payload: unknown = await response.json();
     return collectFiles(Array.isArray(payload) ? payload as FileNode[] : []);

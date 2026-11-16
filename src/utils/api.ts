@@ -216,6 +216,14 @@ export const api = {
     }),
   getFiles: (projectId: string, options: RequestInit = {}, sessionId?: string) =>
     authenticatedFetch(`/api/projects/${projectId}/files${sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : ''}`, options),
+  // The same tree without per-entry metadata, for callers that only need
+  // names and paths. Listing a large mounted workspace costs one stat per file
+  // otherwise, which is what made opening it take minutes.
+  filePaths: (projectId: string, options: RequestInit = {}, sessionId?: string) => {
+    const params = new URLSearchParams({ metadata: '0' });
+    if (sessionId) params.set('sessionId', sessionId);
+    return authenticatedFetch(`/api/projects/${projectId}/files?${params.toString()}`, options);
+  },
 
 
   // Browse filesystem for project suggestions

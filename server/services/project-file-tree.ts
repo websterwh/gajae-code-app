@@ -37,6 +37,10 @@ type FileTreeOptions = {
   maxDepth?: number;
   showHidden?: boolean;
   directoriesOnly?: boolean;
+  // A caller that only needs names and paths (mention completion, the file
+  // palette, reference resolution) sets this false: the directory entry
+  // already carries the type, so no per-entry stat is needed.
+  withMetadata?: boolean;
   signal?: AbortSignal;
 };
 
@@ -50,7 +54,7 @@ function permissionsRwx(mode: number): string {
 /** Streaming depth-first enumeration: at most one pending disk operation and
  * MAX_DEPTH + 1 buffered directory handles per scan, with no per-entry queue. */
 export async function getFileTree(root: string, options: FileTreeOptions = {}): Promise<ProjectFileNode[]> {
-  const { signal, showHidden = true, directoriesOnly = false } = options;
+  const { signal, showHidden = true, directoriesOnly = false, withMetadata = true } = options;
   const maxDepth = Math.max(0, Math.min(MAX_DEPTH, Math.floor(options.maxDepth ?? 3)));
   signal?.throwIfAborted();
   if (activeScans >= MAX_ACTIVE_SCANS) {
@@ -93,18 +97,25 @@ export async function getFileTree(root: string, options: FileTreeOptions = {}): 
           permissionsRwx: '---------',
         };
         let descend = false;
-        try {
-          const stats = await fs.lstat(item.path);
-          check();
-          item.size = stats.size;
-          item.modified = stats.mtime.toISOString();
-          item.permissions = (stats.mode & 0o777).toString(8).padStart(3, '0');
-          item.permissionsRwx = permissionsRwx(stats.mode);
-          if (stats.isSymbolicLink()) item.isSymlink = true;
-          // Do not descend into a directory replaced by a symlink after listing.
-          descend = entry.isDirectory() && stats.isDirectory();
-        } catch (error) {
-          if (!UNREADABLE.has((error as NodeJS.ErrnoException).code ?? '')) throw error;
+        if (!withMetadata) {
+          // One stat per file is the whole cost of listing a workspace on a
+          // mounted filesystem, and these callers never read the metadata.
+          if (entry.isSymbolicLink()) item.isSymlink = true;
+          descend = entry.isDirectory();
+        } else {
+          try {
+            const stats = await fs.lstat(item.path);
+            check();
+            item.size = stats.size;
+            item.modified = stats.mtime.toISOString();
+            item.permissions = (stats.mode & 0o777).toString(8).padStart(3, '0');
+            item.permissionsRwx = permissionsRwx(stats.mode);
+            if (stats.isSymbolicLink()) item.isSymlink = true;
+            // Do not descend into a directory replaced by a symlink after listing.
+            descend = entry.isDirectory() && stats.isDirectory();
+          } catch (error) {
+            if (!UNREADABLE.has((error as NodeJS.ErrnoException).code ?? '')) throw error;
+          }
         }
         // Reserve children punctuation too; the final JSON is bounded even for
         // long, escaped or multibyte paths. Never return a silently partial tree.

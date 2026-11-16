@@ -53,6 +53,30 @@ async function wideDirectory(t: TestContext, count: number, name = (i: number) =
   return { root, counts: () => ({ reads, stats, closed }) };
 }
 
+test('a path-only scan stats nothing and still reports types, symlinks and nesting', async (t) => {
+  const root = await fixture(t);
+  await fs.mkdir(path.join(root, 'src/deep'), { recursive: true });
+  await fs.writeFile(path.join(root, 'src/deep/file.ts'), 'x');
+  await fs.symlink(path.join(root, 'src'), path.join(root, 'linked-src'));
+  const stats = t.mock.method(fs, 'lstat');
+  const tree = await getFileTree(root, { maxDepth: 10, withMetadata: false });
+  assert.equal(stats.mock.callCount(), 0, 'no per-entry stat on the path-only path');
+  assert.deepEqual(paths(tree), ['src', 'src/deep', 'src/deep/file.ts', 'linked-src']);
+  const find = (nodes: ProjectFileNode[], name: string): ProjectFileNode | undefined => {
+    for (const node of nodes) {
+      if (node.name === name) return node;
+      const hit = find(node.children ?? [], name);
+      if (hit) return hit;
+    }
+    return undefined;
+  };
+  const file = find(tree, 'file.ts')!;
+  assert.deepEqual({ size: file.size, modified: file.modified, permissions: file.permissions },
+    { size: 0, modified: null, permissions: '000' });
+  // A symlink to a directory is never walked, same as the metadata scan.
+  assert.equal(tree.find((node) => node.name === 'linked-src')!.children, undefined);
+});
+
 test('tree preserves metadata, sorting and dotfiles while excluding runtime scratch and worktrees', async (t) => {
   const root = await fixture(t);
   for (const dir of ['src/nested', 'node_modules/pkg', '.gjc/_session-one/runtime', '.gjc/skills/review', '.gjc-worktrees/job']) {

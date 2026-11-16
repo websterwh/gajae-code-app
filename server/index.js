@@ -429,7 +429,9 @@ app.get('/api/browse-filesystem', authenticateToken, asyncHandler(async (req, re
         // Suggestions need immediate directories only, never their contents.
         // Hidden folders stay in the payload: the folder browser owns a
         // show-hidden toggle, and sorts them after the visible ones below.
-        const fileTree = await getFileTree(resolvedPath, { maxDepth: 0, directoriesOnly: true, signal: listing.signal });
+        // Suggestions use only the path and name, so this listing skips the
+        // per-entry stat that typing in the path field would otherwise pay.
+        const fileTree = await getFileTree(resolvedPath, { maxDepth: 0, directoriesOnly: true, signal: listing.signal, withMetadata: false });
 
         // Filter only directories and format for suggestions
         const directories = fileTree
@@ -729,7 +731,10 @@ app.get('/api/projects/:projectId/files', authenticateToken, asyncHandler(async 
         // repo and pins the event loop for minutes, so it lists the root's own
         // entries but does not open any child repo.
         const depth = (await isWorkspaceRoot(actualPath)) ? 0 : 10;
-        const files = await getFileTree(actualPath, { maxDepth: depth, signal: listing.signal });
+        // `?metadata=0` is the path-only listing used by completion and
+        // reference resolution; it skips the per-entry stat entirely.
+        const withMetadata = req.query.metadata !== '0' && req.query.metadata !== 'false';
+        const files = await getFileTree(actualPath, { maxDepth: depth, signal: listing.signal, withMetadata });
         res.json(files);
     } catch (error) {
         if (listing.signal.aborted) return;

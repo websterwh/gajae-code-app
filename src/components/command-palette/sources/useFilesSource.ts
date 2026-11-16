@@ -29,7 +29,7 @@ export function useFilesSource(projectId: string | undefined, enabled: boolean) 
   return useApiSource<FileResult>({
     enabled: canLoad,
     deps: [projectId],
-    fetcher: (signal) => api.getFiles(projectId!, { signal }),
+    fetcher: (signal) => api.filePaths(projectId!, { signal }),
     parse: (payload) => collectFiles(Array.isArray(payload) ? payload as FileNode[] : []),
   });
 }
