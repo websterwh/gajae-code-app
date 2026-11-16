@@ -143,6 +143,20 @@ test('add → list → toggle → pin → verify → remove against a temporary 
   assert.deepEqual(await service.list('global'), []);
 });
 
+test('a stored legacy disabled flag is migrated to the switch the runtime reads', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'mcp-legacy-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await writeFile(join(root, 'mcp.json'), JSON.stringify({
+    mcpServers: { off: { type: 'stdio', command: 'npx', args: ['-y', 'off'], disabled: true } },
+  }));
+  const service = new McpService({ agentDir: root, runCli: fakeCli(root, []), verifyTimeoutMs: 3_000 });
+  const [server] = await service.list('global');
+  assert.equal(server?.enabled, false);
+  const disk = JSON.parse(await readFile(join(root, 'mcp.json'), 'utf8')) as StoredFile;
+  assert.equal(disk.mcpServers.off?.enabled, false);
+  assert.equal('disabled' in (disk.mcpServers.off ?? {}), false);
+});
+
 test('the runtime\'s own keys and denylist survive a toggle or an edit', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'mcp-preserve-'));
   t.after(() => rm(root, { recursive: true, force: true }));

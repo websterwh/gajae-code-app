@@ -130,9 +130,47 @@ export async function readMcpConfig(
         .filter((name): name is string => typeof name === 'string')
       : [];
     // Rewriting the file must not silently wipe the runtime's denylist.
-    return disabledServers.length ? { ...result, disabledServers } : result;
+    const output = disabledServers.length ? { ...result, disabledServers } : result;
+    if (canonicalizeMcpFile(output)) {
+      // Best effort: a read-only project must still be listable.
+      await writeMcpConfig(scope, projectPath, output, env).catch(() => undefined);
+    }
+    return output;
   } catch {
     return { mcpServers: {} };
+  }
+}
+
+/**
+ * Convert the field builds before `enabled` used. The runtime ignored
+ * `disabled`, so a server stored as "off" was still loaded; this rewrites it
+ * once as the switch the agent actually reads.
+ */
+export function canonicalizeMcpFile(file: McpFile): boolean {
+  let changed = false;
+  for (const entry of Object.values(file.mcpServers)) {
+    if (entry.disabled === true && entry.enabled === undefined) {
+      entry.enabled = false;
+    }
+    if ('disabled' in entry) {
+      delete entry.disabled;
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+/**
+ * Rewrite every known scope once at boot, so a stored "off" is off for the
+ * very next chat turn even before Settings is opened.
+ */
+export async function migrateLegacyMcpSwitch(
+  projectPaths: string[],
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<void> {
+  await readMcpConfig('global', undefined, env);
+  for (const projectPath of projectPaths) {
+    await readMcpConfig('project', projectPath, env).catch(() => undefined);
   }
 }
 

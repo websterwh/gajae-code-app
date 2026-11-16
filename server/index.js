@@ -1700,6 +1700,18 @@ async function startServer() {
         await (startupFlight = initializeDatabase());
         if (shutdownStarted)
             return;
+        // Builds before the MCP toggle wrote a field the runtime ignores. Rewrite
+        // it once here so a stored "off" is honored by the next chat turn.
+        try {
+            const [{ migrateLegacyMcpSwitch }, { projectsDb: projectRepository }] = await Promise.all([
+                import('./modules/mcp/mcp.config.js'),
+                import('./modules/database/repositories/projects.db.js'),
+            ]);
+            await migrateLegacyMcpSwitch(projectRepository.getProjectPaths());
+        }
+        catch (error) {
+            console.warn('[mcp] Could not migrate legacy disabled servers:', error?.message || error);
+        }
         await (startupFlight = automationService.startBridge());
         if (shutdownStarted)
             return;
