@@ -5,6 +5,7 @@
 export { createOidcRouter } from './oidc.routes.js';
 export {
   OIDC_EXEMPT_PREFIXES,
+  admitsWithoutSession,
   clientAddress,
   clientAddressAllowed,
   coversLocalBypass,

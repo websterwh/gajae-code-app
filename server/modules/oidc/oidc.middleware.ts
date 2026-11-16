@@ -196,6 +196,46 @@ export type OidcGateOptions = {
   authenticateRequest?: (request: Request) => boolean;
 };
 
+/**
+ * `trust proxy` never ran on an upgrade request, so Express never stamped `ip`.
+ * The nearest proxy is the last hop it appended to `x-forwarded-for`.
+ */
+function forwardedClientAddress(request: {
+  socket?: { remoteAddress?: string };
+  headers: Record<string, unknown>;
+}): string | undefined {
+  const forwarded = String(request.headers['x-forwarded-for'] ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+  return forwarded.length ? forwarded[forwarded.length - 1] : undefined;
+}
+
+/**
+ * Whether a request reaches the app without a session: the desktop shell, sign-in
+ * that is not enforcing, the NO_AUTH break-glass, or a trusted local address.
+ *
+ * The WebSocket upgrade runs no HTTP middleware, so the handshake asks this
+ * instead of restating the gate. Restating it is how a LAN deployment ended up
+ * with a fully working app and a 401 on every `/ws` handshake: HTTP admitted the
+ * local address, while the handshake only ever looked for a cookie.
+ */
+export function admitsWithoutSession(request: {
+  socket?: { remoteAddress?: string };
+  headers: Record<string, unknown>;
+  url?: string;
+}): boolean {
+  const config = readOidcConfig();
+  if (isDesktopMode() || !oidcEnforcing(config) || noAuthEnabled()) return true;
+  if (!config.allowLocal) return false;
+  const target = String(request.url ?? '/');
+  const pathname = target.startsWith('/') ? target.split('?')[0] || '/' : '/';
+  if (!coversLocalBypass(pathname)) return false;
+  const ip = forwardedClientAddress(request);
+  const address = clientAddress({ socket: request.socket, headers: request.headers, ...(ip ? { ip } : {}) });
+  return clientAddressAllowed(address, config.allowedIps);
+}
+
 export function createOidcGate(options: OidcGateOptions = {}) {
   return (request: Request, response: Response, next: NextFunction) => {
     const config = readOidcConfig();

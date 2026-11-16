@@ -31,7 +31,7 @@ export interface SessionEstablishedContext { project: Project; provider: LLMProv
 
 
 export interface ChatInterfaceProps {
-  selectedProject: Project | null; selectedSession: ProjectSession | null; ws: WebSocket | null; sendMessage: (message: unknown) => void;
+  selectedProject: Project | null; selectedSession: ProjectSession | null; ws: WebSocket | null; sendMessage: (message: unknown) => boolean | void;
   sessionStore: SessionStore;
   onFileOpen?: (filePath: string, diffInfo?: CodeEditorDiffInfo | null) => void; onInputFocusChange?: (focused: boolean) => void; onSessionProcessing?: MarkSessionProcessing; onSessionIdle?: MarkSessionIdle; processingSessions?: SessionActivityMap; onNavigateToSession?: (targetSessionId: string, options?: SessionNavigationOptions) => void; onSessionEstablished?: (sessionId: string, context: SessionEstablishedContext) => void; onShowSettings?: () => void;
   toolOutputDensity?: ToolOutputDensity; showImagePreviews?: boolean; sendByCtrlEnter?: boolean; newSessionTrigger?: number; onTaskClick?: (...args: unknown[]) => void;

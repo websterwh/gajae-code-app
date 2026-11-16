@@ -196,6 +196,29 @@ test('with sign-in enforced an upgrade needs a session or a configured deploymen
   assert.equal(verifyWebSocketClient(upgrade({ host: '127.0.0.1:3001' }), dependencies(false, false)), true);
 });
 
+test('the session requirement is answered per upgrade request, so a locally admitted client can connect', (t) => {
+  const previous = process.env.API_KEY;
+  const desktop = process.env.GJC_DESKTOP;
+  delete process.env.API_KEY;
+  delete process.env.GJC_DESKTOP;
+  t.after(() => {
+    if (previous === undefined) delete process.env.API_KEY;
+    else process.env.API_KEY = previous;
+    if (desktop === undefined) delete process.env.GJC_DESKTOP;
+    else process.env.GJC_DESKTOP = desktop;
+  });
+
+  // The gate's answer depends on the address and path of the request, so the
+  // handshake has to hand it the upgrade instead of a bare boolean.
+  const asked: unknown[] = [];
+  const accepted = verifyWebSocketClient(upgrade({ host: '192.168.1.2:3001' }), {
+    authenticateWebSocket: owner,
+    sessionRequired: (request) => { asked.push(request.headers.host); return false; },
+  });
+  assert.deepEqual(asked, ['192.168.1.2:3001']);
+  assert.equal(accepted, true);
+});
+
 test('the live gateway rejects unauthorized, malformed, and removed routes while retaining authenticated chat', async (t) => {
   const previous = process.env.API_KEY;
   const desktop = process.env.GJC_DESKTOP;

@@ -6,8 +6,8 @@ import express from 'express';
 import { parseAllowedHosts } from '../shared/networkHosts.js';
 import { isDesktopNativeCommand } from '../shared/desktopRestartProtocol.js';
 
-import { createDesktopAuth, DESKTOP_BOOTSTRAP_PATH, isDesktopMode } from './middleware/desktop-auth.js';
-import { hasSessionCookie, oidcEnforcing, readOidcConfig } from './modules/oidc/index.js';
+import { createDesktopAuth, DESKTOP_BOOTSTRAP_PATH } from './middleware/desktop-auth.js';
+import { admitsWithoutSession, hasSessionCookie } from './modules/oidc/index.js';
 import { createWebSocketServer } from './modules/websocket/index.js';
 import { createGjcJobsRouter } from './routes/gjc-jobs.js';
 import { isAllowedRequestOrigin } from './shared/request-origin.js';
@@ -50,9 +50,12 @@ export function createGjcAppFactory({
       desktopAuth,
       desktopRestartAdmission,
       // The upgrade cannot use HTTP middleware, so it consults the gate's own
-      // cookie reader and enforcement state instead of re-implementing either.
+      // cookie reader and admission rule instead of re-implementing either. The
+      // earlier restatement dropped the local-access and NO_AUTH bypasses, so a
+      // LAN deployment had a fully working app and a 401 on every `/ws`
+      // handshake - which the client can only report as "Connection lost".
       hasSession: hasSessionCookie,
-      sessionRequired: () => !isDesktopMode() && oidcEnforcing(readOidcConfig()),
+      sessionRequired: (request) => !admitsWithoutSession(request),
     },
     chat: { ...chat, desktopRestartAdmission },
     shell: { ...shell, desktopRestartAdmission },

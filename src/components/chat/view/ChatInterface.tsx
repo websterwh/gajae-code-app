@@ -260,6 +260,7 @@ function ChatInterface({
   // conversation and issues the same prompt again, so the retry re-runs the
   // turn instead of stacking a second copy of it, and the session's pinned
   // model still answers it.
+  const appendSessionMessage = session.addMessage;
   const retryFailedTurn = useCallback(() => {
     const sessionId = session.currentSessionId ?? selectedSession?.id ?? null;
     if (!sessionId || session.isProcessing) return;
@@ -267,8 +268,14 @@ function ChatInterface({
       .reverse()
       .find((message) => message.type === 'user' && String(message.content ?? '').trim().length > 0)?.content;
     if (content === undefined || content === null) return;
-    sendMessage({ type: 'chat.send', sessionId, content: String(content), options: { retryLastTurn: true } });
-  }, [selectedSession?.id, sendMessage, session.chatMessages, session.currentSessionId, session.isProcessing]);
+    // A disconnected socket used to make this button a silent no-op: the frame
+    // was dropped and nothing appeared anywhere, so the click looked broken
+    // rather than the connection. Say what actually happened.
+    const accepted = sendMessage({ type: 'chat.send', sessionId, content: String(content), options: { retryLastTurn: true } });
+    if (accepted === false) {
+      appendSessionMessage({ type: 'error', content: 'Not sent: the chat socket is not connected. Reconnect, then retry.', timestamp: new Date() });
+    }
+  }, [appendSessionMessage, selectedSession?.id, sendMessage, session.chatMessages, session.currentSessionId, session.isProcessing]);
   const endsInFailure = session.chatMessages[session.chatMessages.length - 1]?.type === 'error';
 
   if (!selectedProject) {
