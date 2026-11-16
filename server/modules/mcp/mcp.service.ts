@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
 
@@ -57,24 +57,61 @@ function parseNpmVersion(stdout: string): string | null {
   }
 }
 
-/** The ledger keyed by package name, with the manager that recorded it. */
-type LedgerIndex = Record<string, { manager: InstallManager; entry: LedgerEntry }>;
+/** The ledger keyed by package name (and by the binary tail), with the manager that recorded it. */
+type LedgerIndex = Record<string, { manager: InstallManager; entry: LedgerEntry; name: string }>;
 
-/** npm is applied last: its bin directory leads PATH, so it is the binary a shell finds. */
+/**
+ * npm is applied last: its bin directory leads PATH, so it is the binary a
+ * shell finds. Each package is also keyed by its unscoped tail, because the
+ * linked binary is named after the console script rather than the package:
+ * `command: /root/.gjc/app/bin/oc-mcp` has to find the package that owns it.
+ */
 function indexLedger(ledger: Ledger): LedgerIndex {
   const index: LedgerIndex = {};
   for (const manager of ['uv', 'pip', 'aqua', 'npm'] as const) {
     for (const [name, entry] of Object.entries(ledger.packages[manager])) {
-      index[name] = { manager, entry };
+      index[name] = { manager, entry, name };
+      const tail = name.split('/').filter(Boolean).pop();
+      if (tail && tail !== name && !index[tail]) index[tail] = { manager, entry, name };
     }
   }
   return index;
 }
 
-/** Only the two managers a pin can address; an aqua release is not a package version. */
-function installedPackage(manager: InstallManager, name: string): { manager: 'npm' | 'pypi'; name: string } | null {
-  if (manager === 'npm') return { manager: 'npm', name };
-  if (manager === 'uv' || manager === 'pip') return { manager: 'pypi', name };
+/** A pin addresses a package version; an aqua release is a tag, not one. */
+function pinnableManager(manager: InstallManager): boolean {
+  return manager === 'npm' || manager === 'uv' || manager === 'pip';
+}
+
+/**
+ * The package that owns a linked binary, read from where the link points.
+ *
+ * `uv tool install` links `<bin>/oc-mcp` into `<tools>/<package>/bin/oc-mcp`, and
+ * a global npm install links into `.../lib/node_modules/<package>/bin/...`, so
+ * the resolved path names the package even when the console script does not.
+ */
+function owningPackageName(command: string): string | null {
+  if (!path.isAbsolute(command)) return null;
+  let resolved = command;
+  try {
+    // A bin entry is a symlink; the target is what carries the package name.
+    resolved = realpathSync(command);
+  } catch {
+    // Not linked or not on this filesystem: the path as written is all there is.
+  }
+  const segments = resolved.split(path.sep).filter(Boolean);
+  const modules = segments.lastIndexOf('node_modules');
+  if (modules >= 0) {
+    const rest = segments.slice(modules + 1);
+    const head = rest[0];
+    if (head?.startsWith('@') && rest[1]) return `${head}/${rest[1]}`;
+    return head ?? null;
+  }
+  const bin = segments.lastIndexOf('bin');
+  if (bin >= 2) {
+    const candidate = segments[bin - 1];
+    if (candidate && candidate !== 'bin' && candidate !== path.basename(command)) return candidate;
+  }
   return null;
 }
 
@@ -92,6 +129,8 @@ function spawnCommand(command: string, args: string[]): Promise<{ code: number; 
 
 export type McpServerView = PublicMcpServer & {
   install: LedgerEntry | null;
+  /** Which registry `packageName` belongs to; absent for a non-package install. */
+  packageManager?: 'npm' | 'pypi' | null;
   /** What the package resolves to when this app never installed it. */
   availableVersion?: string | null;
 };
@@ -312,19 +351,30 @@ export class McpService {
    */
   private async resolveVersion(server: McpServerView): Promise<string | null> {
     const name = server.packageName;
-    const command = path.basename(String(server.command ?? ''));
-    if (!name || (command !== 'npx' && command !== 'npm')) return null;
-    const cached = this.versionCache.get(name);
+    const manager = server.packageManager ?? null;
+    if (!name || !manager) return null;
+    const key = `${manager}:${name}`;
+    const cached = this.versionCache.get(key);
     const at = Date.now();
     if (cached && at - cached.at < 10 * 60_000) return cached.version;
     let version: string | null = null;
+    // The registry is asked over HTTP: a spawned `npm view` depends on the
+    // server process having npm on PATH and its registry config intact, and an
+    // answer of "no version" there was indistinguishable from "not installed".
     try {
-      const result = await (this.options.runCommand ?? spawnCommand)('npm', ['view', name, 'version', '--json']);
-      if (result.code === 0) version = parseNpmVersion(result.stdout);
+      version = await this.registry().latestVersion(manager, name);
     } catch {
       version = null;
     }
-    this.versionCache.set(name, { version, at });
+    if (!version && manager === 'npm') {
+      try {
+        const result = await (this.options.runCommand ?? spawnCommand)('npm', ['view', name, 'version', '--json']);
+        if (result.code === 0) version = parseNpmVersion(result.stdout);
+      } catch {
+        version = null;
+      }
+    }
+    this.versionCache.set(key, { version, at });
     return version;
   }
 
@@ -339,19 +389,33 @@ export class McpService {
    * binary named after a ledger entry, or a catalog entry carrying this
    * server's name, identifies the package.
    */
-  private packageFor(name: string, entry: McpServerEntry, ledger: LedgerIndex): { manager: 'npm' | 'pypi'; name: string } | null {
+  private packageFor(name: string, entry: McpServerEntry, ledger: LedgerIndex): { manager: InstallManager; name: string } | null {
     if (transportOf(entry) !== 'stdio') return null;
     const direct = packageNameFromEntry(entry);
-    if (direct) return direct;
-    const executable = path.basename(String(entry.command ?? '').trim());
+    if (direct) {
+      const known = ledger[direct.name];
+      return { manager: known?.manager ?? (direct.manager === 'npm' ? 'npm' : 'uv'), name: known?.name ?? direct.name };
+    }
+    const command = String(entry.command ?? '').trim();
+    const executable = path.basename(command);
     if (!executable) return null;
     const byBinary = ledger[executable];
-    if (byBinary) return installedPackage(byBinary.manager, executable);
+    if (byBinary) return { manager: byBinary.manager, name: byBinary.name };
+    // The console script can differ from its package (`oc-mcp` inside
+    // `opencode-mcp`), so ask the link target which package owns it.
+    const owner = owningPackageName(command);
+    const owned = owner ? ledger[owner] : undefined;
+    if (owned) return { manager: owned.manager, name: owned.name };
     const packaged = bundledCatalog().find((candidate) => candidate.name === name)?.package;
-    if (!packaged) return null;
+    if (!packaged || packaged.manager === 'other') return null;
     const spec = parsePackageSpec(packaged.name).name;
     const known = ledger[spec];
-    return known ? installedPackage(known.manager, spec) : null;
+    // A catalog package with no ledger entry still names the package, which is
+    // what lets a config written elsewhere resolve a version and pin at all.
+    return {
+      manager: known?.manager ?? (packaged.manager === 'npm' ? 'npm' : 'uv'),
+      name: known?.name ?? spec,
+    };
   }
 
   private view(name: string, entry: McpServerEntry, scope: McpScope, ledger: LedgerIndex): McpServerView {
@@ -359,10 +423,13 @@ export class McpService {
     const install = pkg ? ledger[pkg.name]?.entry ?? null : null;
     const server: McpServerView = { ...publicServer(name, entry, scope), install };
     // publicServer reads the package from the command alone; one recovered from
-    // the ledger is what gives a binary-path entry its version chip and pin.
+    // the ledger or the catalog is what gives a binary-path entry its version
+    // chip. Only a package has a pinnable version, so an aqua release reports
+    // its recorded version while staying unpinnable.
     if (pkg) {
-      server.pinnable = true;
       server.packageName = pkg.name;
+      server.packageManager = pkg.manager === 'npm' ? 'npm' : pkg.manager === 'aqua' ? null : 'pypi';
+      server.pinnable = pinnableManager(pkg.manager);
     }
     return server;
   }
@@ -505,6 +572,7 @@ export class McpService {
     const index = indexLedger(currentLedger);
     const pkg = this.packageFor(name, entry, index);
     if (!pkg) throw new Error('This server has no package version to pin.');
+    if (!pinnableManager(pkg.manager)) throw new Error('This server is installed from a release, not a package, so it has no version to pin.');
 
     // Read the entry the installer recorded: a uv tool is a pypi package, so a
     // bucket chosen from the manager name would miss its uv entry.

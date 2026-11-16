@@ -98,10 +98,25 @@ export function normalizeRegistryRecord(record: unknown): CatalogEntry | null {
   return entry;
 }
 
-export type RegistryClient = { search(query?: RegistryQuery): Promise<RegistryResult> };
+export type RegistryClient = {
+  search(query?: RegistryQuery): Promise<RegistryResult>;
+  /**
+   * The newest published version of a package, asked of the package registry
+   * over HTTP rather than through `npm view`: the app already reaches these
+   * hosts for catalog search, while a spawned CLI depends on the server
+   * process having npm on PATH and its registry config intact.
+   */
+  latestVersion(manager: 'npm' | 'pypi', name: string): Promise<string | null>;
+};
+
+const NPM_REGISTRY_URL = 'https://registry.npmjs.org';
+const PYPI_REGISTRY_URL = 'https://pypi.org/pypi';
+const VERSION_TTL_MS = 10 * 60_000;
 
 export function createRegistryClient(options: {
   baseUrl?: string;
+  npmRegistryUrl?: string;
+  pypiRegistryUrl?: string;
   fetchImpl?: typeof fetch;
   now?: () => number;
   ttlMs?: number;
@@ -111,8 +126,41 @@ export function createRegistryClient(options: {
   const now = options.now ?? (() => Date.now());
   const ttl = options.ttlMs ?? DEFAULT_TTL_MS;
   const cache = new Map<string, { expires: number; value: RegistryResult }>();
+  const versions = new Map<string, { expires: number; value: string | null }>();
+  const npmBase = (options.npmRegistryUrl ?? process.env.NPM_REGISTRY_URL ?? NPM_REGISTRY_URL).replace(/\/+$/u, '');
+  const pypiBase = (options.pypiRegistryUrl ?? process.env.PYPI_REGISTRY_URL ?? PYPI_REGISTRY_URL).replace(/\/+$/u, '');
+
+  async function fetchLatest(manager: 'npm' | 'pypi', name: string): Promise<string | null> {
+    const key = `${manager}:${name}`;
+    const hit = versions.get(key);
+    if (hit && hit.expires > now()) return hit.value;
+    let value: string | null = null;
+    try {
+      // Scoped npm names keep their slash; the registry path expects it.
+      const url = manager === 'npm'
+        ? `${npmBase}/${name.replace(/^\//u, '')}/latest`
+        : `${pypiBase}/${encodeURIComponent(name)}/json`;
+      const response = await doFetch(url, {
+        headers: { accept: 'application/json' },
+        signal: AbortSignal.timeout(8_000),
+      });
+      if (response.ok) {
+        const body = await response.json() as unknown;
+        const candidate = manager === 'npm'
+          ? isRecord(body) ? body.version : undefined
+          : isRecord(body) && isRecord(body.info) ? body.info.version : undefined;
+        if (typeof candidate === 'string' && candidate.trim()) value = candidate.trim();
+      }
+    } catch {
+      value = null;
+    }
+    versions.set(key, { expires: now() + VERSION_TTL_MS, value });
+    return value;
+  }
 
   return {
+    latestVersion: fetchLatest,
+
     async search(query: RegistryQuery = {}): Promise<RegistryResult> {
       const search = query.search?.trim();
       // The registry rejects short searches; answer before spending a request.

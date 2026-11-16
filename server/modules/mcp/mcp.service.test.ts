@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -190,6 +190,89 @@ test('an installed package is found from a launcher spec, an installed binary, o
   assert.equal(pinned.pin, '0.4.0');
   const ledger = JSON.parse(await readFile(ledgerFile, 'utf8')) as { packages: { uv: Record<string, { pin?: string }> } };
   assert.equal(ledger.packages.uv.mempalace?.pin, '0.4.0');
+});
+
+test('a linked binary names the package that owns it, even when the console script differs', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'mcp-linked-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const ledgerFile = join(root, 'provision-ledger.json');
+  await writeFile(ledgerFile, JSON.stringify({
+    version: 1,
+    packages: {
+      uv: { 'opencode-mcp': { spec: 'opencode-mcp', version: '0.9.1', status: 'installed' } },
+      pip: {}, npm: {}, aqua: {},
+    },
+  }));
+  // `uv tool install` links <bin>/oc-mcp into <tools>/<package>/bin/oc-mcp, so
+  // the console script carries no package name of its own.
+  const toolBin = join(root, 'uv', 'opencode-mcp', 'bin');
+  await mkdir(toolBin, { recursive: true });
+  await writeFile(join(toolBin, 'oc-mcp'), '#!/bin/sh\n');
+  const binDir = join(root, 'bin');
+  await mkdir(binDir, { recursive: true });
+  await symlink(join(toolBin, 'oc-mcp'), join(binDir, 'oc-mcp'));
+  await writeFile(join(root, 'mcp.json'), JSON.stringify({
+    mcpServers: { 'oc-mcp': { type: 'stdio', command: join(binDir, 'oc-mcp'), args: [] } },
+  }));
+
+  const service = new McpService({ agentDir: root, ledgerPath: ledgerFile });
+  const [row] = await service.list('global');
+
+  assert.equal(row?.packageName, 'opencode-mcp', 'the link target names the package, not the script');
+  assert.equal(row?.install?.version, '0.9.1');
+  assert.equal(row?.pinnable, true);
+});
+
+test('a server this app never installed still gets its catalog package and a registry version', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'mcp-catalog-package-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await writeFile(join(root, 'mcp.json'), JSON.stringify({
+    // Configured by hand, running a binary nothing here recorded in the ledger.
+    mcpServers: { playwright: { type: 'stdio', command: '/opt/tools/bin/playwright-mcp', args: [] } },
+  }));
+  const asked: string[] = [];
+  const service = new McpService({
+    agentDir: root,
+    ledgerPath: join(root, 'provision-ledger.json'),
+    registryClient: {
+      search: async () => ({ entries: [], nextCursor: null }),
+      latestVersion: async (manager, name) => {
+        asked.push(`${manager}:${name}`);
+        return '0.0.85';
+      },
+    },
+  });
+
+  const [row] = await service.list('global');
+
+  assert.equal(row?.packageName, '@playwright/mcp', 'the catalog names the package a bare launcher runs');
+  assert.equal(row?.pinnable, true);
+  assert.equal(row?.availableVersion, '0.0.85');
+  assert.deepEqual(asked, ['npm:@playwright/mcp']);
+});
+
+test('a release-installed binary reports its version without pretending it can be pinned', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'mcp-release-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const ledgerFile = join(root, 'provision-ledger.json');
+  await writeFile(ledgerFile, JSON.stringify({
+    version: 1,
+    packages: {
+      uv: {}, pip: {}, npm: {},
+      aqua: { 'owner/tool': { spec: 'owner/tool', version: 'v1.2.3', status: 'installed' } },
+    },
+  }));
+  await writeFile(join(root, 'mcp.json'), JSON.stringify({
+    mcpServers: { tool: { type: 'stdio', command: '/data/aqua/bin/tool', args: [] } },
+  }));
+
+  const service = new McpService({ agentDir: root, ledgerPath: ledgerFile });
+  const [row] = await service.list('global');
+
+  assert.equal(row?.packageName, 'owner/tool');
+  assert.equal(row?.install?.version, 'v1.2.3', 'the recorded release tag is still the version on the row');
+  assert.equal(row?.pinnable, false, 'a release tag is not a package version');
+  await assert.rejects(() => service.pin('global', 'tool', 'v1.1.0'), /release/);
 });
 
 test('remote servers are not pinnable, and duplicate names are rejected', async (t) => {
