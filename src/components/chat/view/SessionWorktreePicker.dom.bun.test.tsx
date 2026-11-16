@@ -197,7 +197,9 @@ test('file references resolve through the selected session to its worktree', asy
   const view = renderHook(() => useFileOpenResolver(project, (file) => opened.push(file), 'session-one', '/repo/.gjc-worktrees/job-one'));
   act(() => view.result.current('README.md'));
   await waitFor(() => assert.deepEqual(opened, ['/repo/.gjc-worktrees/job-one/README.md']));
-  assert.ok(requests[0].endsWith('/api/projects/project-one/files?sessionId=session-one'));
+  // The resolver wants names and paths only, so it asks for the path-only
+  // listing; the session id still travels so the worktree tree is the one read.
+  assert.ok(requests[0].endsWith('/api/projects/project-one/files?metadata=0&sessionId=session-one'));
 });
 
 test('an unavailable session directory never opens a relative file at the server root', async () => {
