@@ -264,6 +264,10 @@ test('the gate is inert until the config is complete, and the exemption list is 
   for (const path of ['/health', '/api/auth/oidc/start', '/api/gjc/jobs', '/ws', '/.well-known/openid-configuration', '/assets/index-abc.js']) {
     assert.equal(isExemptPath(path), true, `${path} must stay reachable`);
   }
+  // An extension is not an exemption: chat images are served from /api and must
+  // still require the session that uploaded them.
+  assert.equal(isExemptPath('/api/assets/images/abc123.png'), false);
+  assert.equal(isExemptPath('/api/projects/1/file/secret.txt'), false);
   // Every new surface is authenticated by default: automation dispatches into a
   // paired companion, browser drives CDP, and MCP mutates the agent's config.
   // A future feature cannot quietly join this list.

@@ -42,6 +42,13 @@ export function createGjcAppFactory({
   // index.js, and by every message on already-connected chat/terminal sockets.
   app.locals.desktopRestartAdmission = desktopRestartAdmission;
   app.set('trust proxy', 1);
+  // Baseline headers for every response, including API errors and files. The
+  // SPA shell adds its own frame-ancestors CSP on top of these.
+  app.use((_request, response, next) => {
+    response.setHeader('X-Content-Type-Options', 'nosniff');
+    response.setHeader('Referrer-Policy', 'no-referrer');
+    next();
+  });
   const server = http.createServer(app);
   const desktopAuth = createDesktopAuth({ server });
   const wss = createWebSocketServer(server, {

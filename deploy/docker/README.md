@@ -40,8 +40,13 @@ compose files and pulls keep working.
 2. Configure environment variables:
    ```bash
    cp .env.example .env
-   # Edit .env to customize packages, SSH, or port mappings
+   # Set API_KEY (openssl rand -hex 32) or configure OIDC sign-in first.
+   # Edit .env to customize packages, SSH, or port mappings.
    ```
+
+   The container must bind `0.0.0.0` to be port-mapped, so the port is reachable
+   from wherever it is published. With neither `API_KEY` nor sign-in configured
+   the server refuses to start rather than serving an open shell.
 
 3. Build and start the container:
    ```bash
@@ -92,10 +97,11 @@ revision is required.
 ### Core App & Network
 | Variable | Default | Description |
 |---|---|---|
-| `HOST` | `0.0.0.0` | Bind address, and the only knob for it. `0.0.0.0` is required for container port mapping; `127.0.0.1` keeps the app unreachable from outside the container. A non-loopback bind is logged as a warning at startup. |
+| `HOST` | `0.0.0.0` | Bind address, and the only knob for it. `0.0.0.0` is required for container port mapping; `127.0.0.1` keeps the app unreachable from outside the container. A non-loopback bind with no `API_KEY` and no sign-in is refused at startup. |
 | `SERVER_PORT` | `3001` | Port the internal WebUI server listens on. |
 | `NO_AUTH` | `false` | Set to `true` to disable sign-in entirely as a break-glass. Saved OIDC settings are kept and apply again once it is unset. |
-| `ALLOWED_HOSTS` | `*` | Admitted hostnames/origins (`*` allows all, or enter comma-separated domains). |
+| `API_KEY` | *(empty)* | Shared key for non-desktop deployments. Required for a non-loopback bind unless OIDC sign-in is configured. Send it as `x-api-key`; per-user `ck_...` keys from Settings are also accepted. |
+| `ALLOWED_HOSTS` | `localhost,127.0.0.1` | Extra DNS names admitted by the host/origin check, comma separated. Literal IPs and localhost are always admitted; `*` disables the check. |
 | `DATABASE_PATH` | `/data/auth.db` | Path to persistent SQLite database. |
 | `WORKSPACES_ROOT` | `/workspace` | Default directory root for GJC agent projects. |
 | `GJC_WORKER_AGENT_DIR` | `/root/.gjc/agent` | Storage directory for agent sessions and custom skills. |
@@ -152,6 +158,27 @@ declared in the compose file.
 | `SSH_NO_AUTH` | `false` | Permit passwordless/keyless direct SSH login (for trusted private networks). |
 | `SSH_DEFAULT_COMMAND`| *(empty)* | Optional command to run on SSH login (leave empty to land directly in standard bash shell). |
 | `INSTALL_GJC_CLI` | `true` | Create standalone launcher at `/data/bin/gjc`. |
+
+---
+
+## Security Notes
+
+- **A credential is required for a remote bind.** Set `API_KEY` or configure
+  OIDC sign-in before publishing the port. `ALLOW_UNAUTHENTICATED_REMOTE=true`
+  exists only for an operator who deliberately wants an open instance.
+- **Host admission is closed by default.** Loopback and literal IP addresses are
+  admitted on their own, so `http://<lan-ip>:3001` still works. Add reverse-proxy
+  DNS names to `ALLOWED_HOSTS`; `*` turns the check off and restores the
+  DNS-rebinding exposure it exists to prevent.
+- **Secrets are stored in plain text, as the GJC client stores them.** `auth.db`
+  holds provider tokens, GitHub tokens, API keys and the OIDC client secret;
+  `voice-config.json` and everything under `gjc-config/` are secret material too.
+  The entrypoint applies `umask 077` and the database is created `0600`, so other
+  local users cannot read them. Treat backups of `./data` and `./gjc-config` as
+  credentials and encrypt them (encrypted volume, `age`, `gpg`), and never commit
+  `.env` or `data/`.
+- **`POST_COMMANDS` is executed with `eval` on every boot.** Keep it out of
+  shared compose files and treat it like any other root shell command.
 
 ---
 

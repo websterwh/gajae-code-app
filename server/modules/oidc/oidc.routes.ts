@@ -33,6 +33,33 @@ import {
 
 const SESSION_TTL_SECONDS = 12 * 60 * 60;
 
+/**
+ * A deliberately high ceiling on sign-in traffic. Only the endpoints that make
+ * the server talk to the provider are counted: a human starts a handful of
+ * sign-ins per session, so this blocks a loop without being felt. Audio and
+ * agent endpoints are not throttled here - their providers meter them.
+ */
+const AUTH_WINDOW_MS = 5 * 60 * 1000;
+const AUTH_MAX_PER_WINDOW = 120;
+const authAttempts = new Map<string, { count: number; resetAt: number }>();
+
+function allowAuthAttempt(request: Request): boolean {
+  const now = Date.now();
+  const key = clientAddress(request) || 'unknown';
+  const entry = authAttempts.get(key);
+  if (!entry || entry.resetAt <= now) {
+    if (authAttempts.size > 5_000) {
+      for (const [candidate, value] of authAttempts) {
+        if (value.resetAt <= now) authAttempts.delete(candidate);
+      }
+    }
+    authAttempts.set(key, { count: 1, resetAt: now + AUTH_WINDOW_MS });
+    return true;
+  }
+  entry.count += 1;
+  return entry.count <= AUTH_MAX_PER_WINDOW;
+}
+
 const ok = (response: Response, data: unknown) => response.json({ success: true, data });
 const fail = (response: Response, status: number, code: string, message: string) => response
   .status(status)
@@ -153,6 +180,7 @@ export function createOidcRouter() {
   router.get('/start', asyncHandler(async (request, response) => {
     const config = readOidcConfig();
     if (!oidcEnforcing(config)) return fail(response, 404, 'OIDC_DISABLED', 'OIDC sign-in is not configured.');
+    if (!allowAuthAttempt(request)) return fail(response, 429, 'TOO_MANY_REQUESTS', 'Too many sign-in attempts. Wait a minute and try again.');
     const discovery = await discoverOidc(config.issuer);
     const redirectUri = redirectUriFor(request, config);
     const transaction = createTransaction(redirectUri);
@@ -169,6 +197,7 @@ export function createOidcRouter() {
   router.get('/callback', asyncHandler(async (request, response) => {
     const config = readOidcConfig();
     if (!oidcEnforcing(config)) return fail(response, 404, 'OIDC_DISABLED', 'OIDC sign-in is not configured.');
+    if (!allowAuthAttempt(request)) return fail(response, 429, 'TOO_MANY_REQUESTS', 'Too many sign-in attempts. Wait a minute and try again.');
     const transaction = readTransaction(request.headers.cookie);
     if (!transaction) return fail(response, 400, 'OIDC_STATE_INVALID', 'This sign-in attempt expired. Start again.');
     const error = text(request.query.error, 256);
@@ -197,6 +226,18 @@ export function createOidcRouter() {
     const rejection = identityRejection(config, identity);
     if (rejection) {
       return fail(response, 403, 'OIDC_IDENTITY_NOT_ALLOWED', `Sign-in is not allowed for ${identity.email}. ${rejection}`);
+    }
+
+    // `email_verified === false` is the only signal a provider gives that the
+    // address is unproven. Binding it onto an existing local account would be
+    // a takeover of that account's row, so only a fresh identity may proceed.
+    if (!identity.emailVerified) {
+      const existing = getConnection()
+        .prepare('SELECT id FROM users WHERE username = ? LIMIT 1')
+        .get(identity.email) as { id: number } | undefined;
+      if (existing) {
+        return fail(response, 403, 'OIDC_EMAIL_UNVERIFIED', 'The provider has not verified this email address.');
+      }
     }
 
     const owner = ensureOwner(identity);

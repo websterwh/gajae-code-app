@@ -5,7 +5,7 @@ export const DESKTOP_BOOTSTRAP_PATH = '/desktop/bootstrap';
 export const isDesktopMode = (env = process.env) => env.GJC_DESKTOP === '1';
 
 
-const secureEqual = (actual, expected) => {
+export const secureEqual = (actual, expected) => {
   if (typeof actual !== 'string' || typeof expected !== 'string') {
     return false;
   }

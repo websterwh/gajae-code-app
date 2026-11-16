@@ -85,6 +85,7 @@ import authRoutes from './routes/auth.js';
 import {
     createOidcGate,
     createOidcRouter,
+    hasSessionCookie,
     noAuthEnabled,
     oidcEnforcing,
     readOidcConfig,
@@ -128,7 +129,8 @@ import {
 import { hostControlRoutes } from './modules/host-control/index.js';
 import { statsRoutes } from './modules/stats/index.js';
 import { shellRunRoutes } from './modules/shell/index.js';
-import { validateApiKey, authenticateToken, authenticateWebSocket } from './middleware/auth.js';
+import { validateApiKey, authenticateToken, authenticateWebSocket, hasExplicitCredential } from './middleware/auth.js';
+import { isDesktopMode } from './middleware/desktop-auth.js';
 import { c } from './utils/colors.js';
 import { evaluateExposure } from './utils/exposure-guard.js';
 
@@ -238,6 +240,24 @@ function steerGjcChatRun(runId, message) {
     return steerGjcRun(runId, message);
 }
 
+/**
+ * `/api/gjc` is exempt from the sign-in gate so an external worker can present
+ * a key, but the exemption must not be a way in: with sign-in enforced the
+ * route accepts only the deployment key, a revocable per-user key, a session
+ * cookie, or the desktop boot cookie. With sign-in unconfigured the app is
+ * already the implicit owner, so existing deployments keep their behaviour.
+ */
+const authenticateGjcAccess = (request, response, next) => {
+    if (isDesktopMode() || !oidcEnforcing(readOidcConfig()) || hasExplicitCredential(request)
+        || hasSessionCookie(request.headers.cookie)) {
+        return authenticateToken(request, response, next);
+    }
+    return response.status(401).json({
+        success: false,
+        error: { code: 'UNAUTHORIZED', message: 'An API key or sign-in session is required.' },
+    });
+};
+
 const { app, server, wss } = createGjcAppFactory({
     desktopRestartAdmission,
     desktopUpdateRelay: new DesktopUpdateRelay({ initialization: desktopNativeInit, restart: desktopRestartBackend }),
@@ -250,7 +270,7 @@ const { app, server, wss } = createGjcAppFactory({
     projection: gjcJobProjection,
     terminalNotificationAdapter: gjcTerminalNotificationAdapter,
     authenticateWebSocket,
-    authenticateGjcRoute: authenticateToken,
+    authenticateGjcRoute: authenticateGjcAccess,
     validateApiKey,
     chat: {
         spawnFns: {
@@ -310,6 +330,9 @@ app.use(createOidcGate({ authenticateRequest: authenticateAutomationDeviceReques
 const bootOidcConfig = readOidcConfig();
 if (!oidcEnforcing(bootOidcConfig)) {
     console.warn('[auth] Sign-in is not configured or NO_AUTH is set: every route, including /ws, /api/automation, /api/browser and /api/mcp, accepts callers who can reach the port.');
+}
+if (oidcEnforcing(bootOidcConfig) && bootOidcConfig.allowedGroups.length === 0) {
+    console.warn('[auth] Sign-in is enabled without an allowed group: any account this provider signs in gets full access. Add a group in Settings to restrict it.');
 }
 if (oidcEnforcing(bootOidcConfig) && bootOidcConfig.allowLocal) {
     console.warn(`[auth] Local access without sign-in is enabled for ${noAuthEnabled() ? 'all callers (NO_AUTH)' : resolvedAllowedIps(bootOidcConfig).join(', ')}; clients on those ranges can use the app, including shell commands, terminals and file edits.`);
@@ -1690,8 +1713,23 @@ async function startServer() {
         if (shutdownStarted)
             return;
         // HOST decides the interface; a non-loopback bind is reported, because a
-        // container has to bind 0.0.0.0 to be port-mapped at all.
+        // container has to bind 0.0.0.0 to be port-mapped at all. A remote bind
+        // with no credential is refused unless the operator asks for it: this
+        // app runs shell commands, and "reachable" was the whole authorization
+        // model on that path.
         const exposure = evaluateExposure({ host: HOST });
+        const remoteUnauthenticated = exposure.level === 'warn'
+            && !isDesktopMode()
+            && !process.env.API_KEY
+            && !oidcEnforcing(readOidcConfig())
+            && !noAuthEnabled();
+        const allowRemoteOptOut = String(process.env.ALLOW_UNAUTHENTICATED_REMOTE ?? '').trim().toLowerCase() === 'true';
+        if (remoteUnauthenticated && !allowRemoteOptOut) {
+            throw new Error(
+                `Refusing to listen on ${HOST} with no authentication. Set API_KEY, enable sign-in, `
+                + 'or set ALLOW_UNAUTHENTICATED_REMOTE=true to accept the risk.'
+            );
+        }
         if (exposure.level === 'warn') {
             console.warn(`${c.warn('[SECURITY]')} ${exposure.message}`);
         }

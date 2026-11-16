@@ -63,12 +63,19 @@ export function coversLocalBypass(pathname: string, env: NodeJS.ProcessEnv = pro
   return !requiresSession(pathname) || hostControlAvailable(env);
 }
 
-const STATIC_FILE = /\.[a-z0-9]{1,8}$/iu;
+/**
+ * The app's own build output and public directory. This is a positive list,
+ * not "any path ending in an extension": project files and chat images carry
+ * real extensions too, and a suffix test let `/api/assets/images/<id>.png` past
+ * the gate without a session.
+ */
+const STATIC_PREFIX = /^\/(?:assets|brand|icons|screenshots)\//u;
+const STATIC_ROOT_FILE = /^\/(?:favicon\.png|mark\.svg|manifest\.json|sw\.js)$/u;
 
 export function isExemptPath(pathname: string): boolean {
   if (OIDC_EXEMPT_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) return true;
   // Hashed bundles, icons and the manifest are needed to render the login page.
-  return STATIC_FILE.test(pathname);
+  return STATIC_PREFIX.test(pathname) || STATIC_ROOT_FILE.test(pathname);
 }
 
 /** `true`/`false` are canonical; `1`/`0` stay accepted for older deployments. */

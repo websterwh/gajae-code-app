@@ -1,12 +1,20 @@
 #!/usr/bin/env bash
 set -e
 
+# Files this container writes (auth.db, voice-config.json, logs) hold provider
+# tokens and per-user keys in plain text, as the GJC client stores them. Keep
+# new files owner-only without changing how they are read or edited.
+umask 077
+
 # ==============================================================================
 # Environment Defaults
 # ==============================================================================
 export HOST="${HOST:-0.0.0.0}"
 export SERVER_PORT="${SERVER_PORT:-3001}"
-export ALLOWED_HOSTS="${ALLOWED_HOSTS:-*}"
+# Host admission stays closed for DNS names unless the operator lists them;
+# loopback and literal IP addresses are admitted on their own, so reaching the
+# container by LAN address or localhost keeps working without `*`.
+export ALLOWED_HOSTS="${ALLOWED_HOSTS:-localhost,127.0.0.1}"
 export DATABASE_PATH="${DATABASE_PATH:-/data/auth.db}"
 export WORKSPACES_ROOT="${WORKSPACES_ROOT:-/workspace}"
 export GJC_WORKER_AGENT_DIR="${GJC_WORKER_AGENT_DIR:-/root/.gjc/agent}"

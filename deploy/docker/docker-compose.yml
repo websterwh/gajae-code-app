@@ -22,7 +22,13 @@ services:
       # NO_AUTH=true disables sign-in entirely (break-glass): stored auth settings
       # are kept, the gate just stops enforcing them.
       - NO_AUTH=${NO_AUTH:-false}
-      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-*}
+      # A non-loopback bind with neither a key nor sign-in is refused at boot.
+      # Set API_KEY for key-authenticated deployments, or configure OIDC sign-in
+      # in Settings before exposing the port.
+      - API_KEY=${API_KEY:-}
+      # Host admission: literal IPs and localhost always work. Add public DNS
+      # names (comma separated) when the app sits behind a reverse proxy.
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1}
       
       # Host control (opt-in, default off). Without GAJAE_HOST_CONTROL=true the
       # /api/host routes answer "not available" whatever the settings say.
