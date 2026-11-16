@@ -435,7 +435,7 @@ export function serverPackages(
 ): ServerPackage[] {
   const packages: ServerPackage[] = [];
   for (const [server, entry] of Object.entries(servers)) {
-    if (entry.disabled === true || !entry.command) continue;
+    if (entry.enabled === false || entry.disabled === true || !entry.command) continue;
     const direct = packageSpecFromEntry(entry);
     const known = direct ? null : catalog.find((candidate) => candidate.name === server && candidate.command);
     const pkg = direct ?? (known ? packageSpecFromEntry({ command: known.command, args: known.args }) : null);

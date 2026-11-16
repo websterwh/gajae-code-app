@@ -418,10 +418,16 @@ export class McpService {
     };
   }
 
-  private view(name: string, entry: McpServerEntry, scope: McpScope, ledger: LedgerIndex): McpServerView {
+  private view(
+    name: string,
+    entry: McpServerEntry,
+    scope: McpScope,
+    ledger: LedgerIndex,
+    disabledServers: ReadonlySet<string> = new Set(),
+  ): McpServerView {
     const pkg = this.packageFor(name, entry, ledger);
     const install = pkg ? ledger[pkg.name]?.entry ?? null : null;
-    const server: McpServerView = { ...publicServer(name, entry, scope), install };
+    const server: McpServerView = { ...publicServer(name, entry, scope, disabledServers), install };
     // publicServer reads the package from the command alone; one recovered from
     // the ledger or the catalog is what gives a binary-path entry its version
     // chip. Only a package has a pinnable version, so an aqua release reports
@@ -446,8 +452,9 @@ export class McpService {
     const servers: McpServerView[] = [];
     for (const current of scopes) {
       const file = await this.read(current, current === 'project' ? this.requireProject(projectPath) : undefined);
+      const disabled = new Set(file.disabledServers ?? []);
       for (const [name, entry] of Object.entries(file.mcpServers)) {
-        servers.push(this.view(name, entry, current, entries));
+        servers.push(this.view(name, entry, current, entries, disabled));
       }
     }
     const sorted = servers.sort((a, b) => a.name.localeCompare(b.name));
@@ -463,7 +470,9 @@ export class McpService {
   async get(scope: McpScope, name: string, projectPath?: string): Promise<McpServerView | null> {
     const file = await this.read(scope, scope === 'project' ? this.requireProject(projectPath) : undefined);
     const entry = file.mcpServers[name];
-    return entry ? this.view(name, entry, scope, await this.allLedgerEntries()) : null;
+    return entry
+      ? this.view(name, entry, scope, await this.allLedgerEntries(), new Set(file.disabledServers ?? []))
+      : null;
   }
 
   async add(input: unknown): Promise<McpServerView> {
@@ -498,7 +507,7 @@ export class McpService {
     const written = await this.read(scope, projectPath);
     const entry = written.mcpServers[value.name];
     if (!entry) throw new Error('gjc mcp add reported success but the server is not in mcp.json.');
-    return this.view(value.name, entry, scope, await this.allLedgerEntries());
+    return this.view(value.name, entry, scope, await this.allLedgerEntries(), new Set(written.disabledServers ?? []));
   }
 
   async update(scope: McpScope, name: string, patch: Record<string, unknown>, projectPath?: string): Promise<McpServerView> {
@@ -507,7 +516,18 @@ export class McpService {
     const entry = file.mcpServers[name];
     if (!entry) throw new Error('MCP server was not found.');
 
-    if (typeof patch.enabled === 'boolean') entry.disabled = !patch.enabled;
+    if (typeof patch.enabled === 'boolean') {
+      // The runtime reads `enabled`, and a name in `disabledServers` blocks the
+      // server independently. Older builds wrote a non-standard `disabled`
+      // field that nothing reads, which is why the toggle appeared to do
+      // nothing; drop it and write the field the agent actually honors.
+      entry.enabled = patch.enabled;
+      delete entry.disabled;
+      if (file.disabledServers) {
+        file.disabledServers = file.disabledServers.filter((serverName) => serverName !== name);
+        if (!file.disabledServers.length) delete file.disabledServers;
+      }
+    }
     if ('pin' in patch) entry.pin = normalizePin(patch.pin);
     if (typeof patch.command === 'string') entry.command = patch.command.trim();
     if (Array.isArray(patch.args)) entry.args = patch.args.filter((arg): arg is string => typeof arg === 'string');
@@ -540,7 +560,7 @@ export class McpService {
     const reread = await this.read(scope, resolvedProject);
     if (!reread.mcpServers[name]) throw new Error('The MCP config write did not persist.');
     if ('pin' in patch) await this.recordPin(name, reread.mcpServers[name]);
-    return this.view(name, reread.mcpServers[name], scope, await this.allLedgerEntries());
+    return this.view(name, reread.mcpServers[name], scope, await this.allLedgerEntries(), new Set(reread.disabledServers ?? []));
   }
 
   async remove(scope: McpScope, name: string, projectPath?: string): Promise<void> {
@@ -589,7 +609,7 @@ export class McpService {
     const reread = await this.read(scope, resolvedProject);
     if (!reread.mcpServers[name]) throw new Error('The MCP config write did not persist.');
     await this.recordPin(name, reread.mcpServers[name]);
-    return this.view(name, reread.mcpServers[name], scope, await this.allLedgerEntries());
+    return this.view(name, reread.mcpServers[name], scope, await this.allLedgerEntries(), new Set(reread.disabledServers ?? []));
   }
 
   private async recordPin(name: string, entry: McpServerEntry): Promise<void> {

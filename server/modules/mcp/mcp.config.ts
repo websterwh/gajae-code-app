@@ -13,17 +13,31 @@ export type McpTransport = (typeof MCP_TRANSPORTS)[number];
 
 export type McpServerEntry = {
   type?: string;
+  /** The runtime's own switch: `false` keeps the server stored but unloaded. */
+  enabled?: boolean;
+  autoload?: boolean;
+  timeout?: number;
+  sharing?: string;
+  protocol?: string;
+  noInheritEnv?: boolean;
+  auth?: Record<string, unknown>;
+  oauth?: Record<string, unknown>;
   command?: string;
   args?: string[];
   cwd?: string;
   env?: Record<string, string>;
   url?: string;
   headers?: Record<string, string>;
+  /** Written by builds before the switch used `enabled`; read only. */
   disabled?: boolean;
   pin?: string | null;
 };
 
-export type McpFile = { mcpServers: Record<string, McpServerEntry> };
+export type McpFile = {
+  mcpServers: Record<string, McpServerEntry>;
+  /** The runtime's other denylist; a name here is not loaded. */
+  disabledServers?: string[];
+};
 
 export type PublicMcpServer = {
   name: string;
@@ -73,6 +87,14 @@ function normalizeEntry(value: unknown): McpServerEntry | null {
   if (!isRecord(value)) return null;
   const entry: McpServerEntry = {};
   if (typeof value.type === 'string') entry.type = value.type;
+  if (typeof value.enabled === 'boolean') entry.enabled = value.enabled;
+  if (typeof value.autoload === 'boolean') entry.autoload = value.autoload;
+  if (typeof value.timeout === 'number' && Number.isFinite(value.timeout)) entry.timeout = value.timeout;
+  if (typeof value.sharing === 'string') entry.sharing = value.sharing;
+  if (typeof value.protocol === 'string') entry.protocol = value.protocol;
+  if (typeof value.noInheritEnv === 'boolean') entry.noInheritEnv = value.noInheritEnv;
+  if (isRecord(value.auth)) entry.auth = value.auth;
+  if (isRecord(value.oauth)) entry.oauth = value.oauth;
   if (typeof value.command === 'string') entry.command = value.command;
   if (Array.isArray(value.args)) entry.args = value.args.filter((arg): arg is string => typeof arg === 'string');
   if (typeof value.cwd === 'string') entry.cwd = value.cwd;
@@ -103,7 +125,12 @@ export async function readMcpConfig(
       const normalized = normalizeEntry(entry);
       if (normalized) result.mcpServers[name] = normalized;
     }
-    return result;
+    const disabledServers = Array.isArray((parsed as { disabledServers?: unknown }).disabledServers)
+      ? ((parsed as { disabledServers: unknown[] }).disabledServers)
+        .filter((name): name is string => typeof name === 'string')
+      : [];
+    // Rewriting the file must not silently wipe the runtime's denylist.
+    return disabledServers.length ? { ...result, disabledServers } : result;
   } catch {
     return { mcpServers: {} };
   }
@@ -173,7 +200,12 @@ function publicValues(record: Record<string, string> | undefined): { values: Rec
  * and a blanked-out token only asks the user for something already saved.
  * `envIsSet`/`headersIsSet` stay, since a row needs to know a value exists.
  */
-export function publicServer(name: string, entry: McpServerEntry, scope: McpScope): PublicMcpServer {
+export function publicServer(
+  name: string,
+  entry: McpServerEntry,
+  scope: McpScope,
+  disabledServers: ReadonlySet<string> = new Set(),
+): PublicMcpServer {
   const transport = transportOf(entry);
   const pkg = transport === 'stdio' ? packageNameFromEntry(entry) : null;
   const env = publicValues(entry.env);
@@ -182,7 +214,7 @@ export function publicServer(name: string, entry: McpServerEntry, scope: McpScop
     name,
     transport,
     scope,
-    enabled: entry.disabled !== true,
+    enabled: entry.enabled !== false && entry.disabled !== true && !disabledServers.has(name),
     ...(entry.command ? { command: entry.command } : {}),
     ...(entry.args ? { args: entry.args } : {}),
     ...(entry.cwd ? { cwd: entry.cwd } : {}),

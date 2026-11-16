@@ -7,7 +7,7 @@ import test from 'node:test';
 import { McpService } from './mcp.service.js';
 import { REDACTED } from './mcp.config.js';
 
-type StoredFile = { mcpServers: Record<string, Record<string, unknown>> };
+type StoredFile = { mcpServers: Record<string, Record<string, unknown>>; disabledServers?: string[] };
 
 function flag(args: string[], name: string): string | undefined {
   const index = args.indexOf(name);
@@ -113,6 +113,10 @@ test('add → list → toggle → pin → verify → remove against a temporary 
 
   const toggled = await service.update('global', 'custom', { enabled: false });
   assert.equal(toggled.enabled, false);
+  const toggledDisk = JSON.parse(await readFile(join(root, 'mcp.json'), 'utf8')) as StoredFile;
+  // The runtime honors `enabled`; the old `disabled` field was ignored.
+  assert.equal(toggledDisk.mcpServers.custom?.enabled, false);
+  assert.equal('disabled' in (toggledDisk.mcpServers.custom ?? {}), false);
 
   // A rotation sends only the new value; the redaction marker keeps the old one.
   await service.update('global', 'custom', { env: { API_TOKEN: REDACTED, EXTRA: 'two' } });
@@ -137,6 +141,32 @@ test('add → list → toggle → pin → verify → remove against a temporary 
 
   await service.remove('global', 'custom');
   assert.deepEqual(await service.list('global'), []);
+});
+
+test('the runtime\'s own keys and denylist survive a toggle or an edit', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'mcp-preserve-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await writeFile(join(root, 'mcp.json'), JSON.stringify({
+    mcpServers: {
+      kept: { type: 'stdio', command: 'npx', args: ['-y', 'kept'], timeout: 10_000, autoload: false, enabled: false },
+      denied: { type: 'stdio', command: 'npx', args: ['-y', 'denied'] },
+    },
+    disabledServers: ['denied'],
+  }));
+  const service = new McpService({ agentDir: root, runCli: fakeCli(root, []), verifyTimeoutMs: 3_000 });
+
+  const kept = await service.update('global', 'kept', { args: ['-y', 'kept', '--flag'] });
+  assert.equal(kept.enabled, false);
+  const first = JSON.parse(await readFile(join(root, 'mcp.json'), 'utf8')) as StoredFile;
+  assert.equal(first.mcpServers.kept?.timeout, 10_000);
+  assert.equal(first.mcpServers.kept?.autoload, false);
+  assert.deepEqual(first.disabledServers, ['denied']);
+
+  // Enabling a denylisted server must also remove the entry that blocks it.
+  const enabled = await service.update('global', 'denied', { enabled: true });
+  assert.equal(enabled.enabled, true);
+  const second = JSON.parse(await readFile(join(root, 'mcp.json'), 'utf8')) as StoredFile;
+  assert.equal(second.disabledServers, undefined);
 });
 
 test('an installed package is found from a launcher spec, an installed binary, or the catalog', async (t) => {
