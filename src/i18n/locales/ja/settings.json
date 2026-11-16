@@ -430,7 +430,7 @@
     "adding": "追加中…",
     "addTitle": "手動で追加",
     "addDescription": "どのカタログにもないサーバー向けです。Home Assistant の HTTP サーバーやローカルの stdio サーバーはここから追加します。",
-    "findTitle": "サーバーを探す",
+    "findTitle": "MCP サーバーを探す",
     "findDescription": "同梱リストはオフラインで動作し、プロジェクトのオーバーレイと公式レジストリが項目を増やします。",
     "searchPlaceholder": "名前または説明で検索",
     "source": "ソース",
@@ -483,7 +483,12 @@
     "installedBadge": "インストール済み",
     "newBadge": "New",
     "versionHint": "バージョンをクリックすると入力できます。保存すると固定されます。",
-    "noVersion": "バージョンなし"
+    "noVersion": "バージョンなし",
+    "configBlock": "設定ブロック",
+    "configBlockHint": "mcp.json に書き込まれるそのままの項目です。どこからコピーしたブロックでも貼り付けられます。",
+    "blockInvalid": "このブロックは MCP の項目として読めません。",
+    "blockNeedsCommand": "stdio の項目には command、http と sse には url が必要です。",
+    "allInstalled": "この一覧のサーバーはすべてインストール済みです。"
   },
   "packages": {
     "title": "パッケージ",

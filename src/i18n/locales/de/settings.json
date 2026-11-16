@@ -430,7 +430,7 @@
     "adding": "Wird hinzugefügt…",
     "addTitle": "Manuell hinzufügen",
     "addDescription": "Für Server, die in keinem Katalog stehen. Home-Assistant-HTTP-Server und lokale stdio-Server nehmen diesen Weg.",
-    "findTitle": "Server finden",
+    "findTitle": "MCP-Server finden",
     "findDescription": "Die mitgelieferte Liste funktioniert offline; das Projekt-Overlay und die offizielle Registry ergänzen mehr.",
     "searchPlaceholder": "Nach Name oder Beschreibung suchen",
     "source": "Quelle",
@@ -483,7 +483,12 @@
     "installedBadge": "Installiert",
     "newBadge": "New",
     "versionHint": "Auf die Version klicken, um eine andere einzugeben; beim Speichern wird sie gepinnt.",
-    "noVersion": "Keine Version"
+    "noVersion": "Keine Version",
+    "configBlock": "Konfigurationsblock",
+    "configBlockHint": "Genau der Eintrag, der in mcp.json geschrieben wird – ein von woanders kopierter Block lässt sich unverändert einfügen.",
+    "blockInvalid": "Dieser Block lässt sich nicht als MCP-Eintrag lesen.",
+    "blockNeedsCommand": "Ein stdio-Eintrag braucht einen command; http und sse brauchen eine url.",
+    "allInstalled": "Alle Server in dieser Liste sind bereits installiert."
   },
   "packages": {
     "title": "Pakete",

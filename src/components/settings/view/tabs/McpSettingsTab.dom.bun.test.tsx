@@ -141,13 +141,13 @@ test('install does not require env first, then the new row asks for configuratio
   assert.equal(post?.body?.env, undefined, 'install never blocks on or sends env');
 
   await screen.findByText(english.mcp.needsConfiguration);
-  const secret = document.querySelector('input[type="password"]') as HTMLInputElement | null;
-  assert.ok(secret, 'configure opens with the required secret field');
-  await waitFor(() => assert.equal(document.activeElement, secret, 'the required field is focused'));
-  assert.ok(screen.getByText(/GITHUB_PERSONAL_ACCESS_TOKEN/u));
+  const block = screen.getByLabelText(`${english.mcp.configBlock} github`) as HTMLTextAreaElement;
+  assert.ok(block, 'configure opens on the block for this server');
+  await waitFor(() => assert.equal(document.activeElement, block, 'the block is focused'));
+  assert.match(block.value, /GITHUB_PERSONAL_ACCESS_TOKEN: ""/u, 'the variable the catalog knows is in the block');
 });
 
-test('configure fills the fields the catalog knows and only asks for what that server uses', async () => {
+test('configure opens on the block the server runs and saves what that block says', async () => {
   const calls = fakeApi([installedServer({
     args: ['-y', '@modelcontextprotocol/server-github'],
     packageName: '@modelcontextprotocol/server-github',
@@ -155,28 +155,36 @@ test('configure fills the fields the catalog knows and only asks for what that s
     envIsSet: { GITHUB_PERSONAL_ACCESS_TOKEN: true },
   })]);
   await mount();
-  // The catalog request has to land before the form can be prefilled from it.
+  // The catalog request has to land before the block can be topped up from it.
   await screen.findByText('GitHub');
 
   fireEvent.click(await screen.findByRole('button', { name: english.mcp.configure }));
 
-  const command = screen.getByLabelText(english.mcp.command) as HTMLInputElement;
-  assert.equal(command.value, 'npx');
-  const args = screen.getByLabelText(/Arguments/u) as HTMLTextAreaElement;
-  assert.equal(args.value, '-y\n@modelcontextprotocol/server-github');
-  assert.equal(screen.queryByText(english.mcp.headers), null, 'a stdio server has no headers field');
+  const block = screen.getByLabelText(`${english.mcp.configBlock} context7`) as HTMLTextAreaElement;
+  assert.match(block.value, /^context7:\n {2}type: stdio\n {2}command: npx\n {2}args:\n/u);
+  assert.match(block.value, /@modelcontextprotocol\/server-github/u);
+  assert.match(block.value, /GITHUB_PERSONAL_ACCESS_TOKEN: ""/u, 'a stored secret stays empty so it is kept');
 
-  const token = screen.getByLabelText(/GITHUB_PERSONAL_ACCESS_TOKEN/u) as HTMLInputElement;
-  assert.equal(token.type, 'password');
-  assert.equal(token.value, '', 'a stored secret is never put back into the field');
-  assert.equal(token.placeholder, english.mcp.requiredEnvPlaceholder, 'an existing value is marked as set');
-
-  fireEvent.change(token, { target: { value: 'ghp_new' } });
+  fireEvent.change(block, {
+    target: {
+      value: [
+        'context7:',
+        '  type: stdio',
+        '  command: npx',
+        '  args:',
+        '    - "-y"',
+        '    - "@upstash/context7-mcp"',
+        '  env:',
+        '    CONTEXT7_API_KEY: "ctx_new"',
+      ].join('\n'),
+    },
+  });
   fireEvent.click(screen.getByRole('button', { name: english.mcp.save }));
 
   await waitFor(() => {
     const patch = calls.find((call) => call.method === 'PATCH');
-    assert.deepEqual(patch?.body?.env, { GITHUB_PERSONAL_ACCESS_TOKEN: 'ghp_new' });
+    assert.deepEqual(patch?.body?.env, { CONTEXT7_API_KEY: 'ctx_new' });
+    assert.deepEqual(patch?.body?.args, ['-y', '@upstash/context7-mcp']);
   });
 });
 
@@ -191,24 +199,27 @@ test('the manual add dialog asks for headers only when the transport uses them',
   await screen.findByText(english.mcp.headers);
 });
 
-test('save stays disabled while the server has nothing to run', async () => {
+test('save stays disabled while the block has nothing to run', async () => {
   fakeApi([installedServer()]);
   await mount();
 
   fireEvent.click(await screen.findByRole('button', { name: english.mcp.configure }));
   assert.equal((screen.getByRole('button', { name: english.mcp.save }) as HTMLButtonElement).disabled, false);
 
-  fireEvent.change(screen.getByLabelText(english.mcp.command), { target: { value: '   ' } });
+  fireEvent.change(screen.getByLabelText(`${english.mcp.configBlock} context7`), {
+    target: { value: 'context7:\n  type: stdio\n  command: ""\n' },
+  });
   assert.equal((screen.getByRole('button', { name: english.mcp.save }) as HTMLButtonElement).disabled, true);
+  assert.ok(screen.getByText(english.mcp.blockInvalid), 'the block says why it cannot be used');
 });
 
-test('arming remove in one place does not arm the same server twice', async () => {
+test('the catalog leaves configured servers out instead of listing them twice', async () => {
   fakeApi([installedServer({ name: 'github', packageName: '@modelcontextprotocol/server-github' })]);
   await mount();
 
-  await screen.findByText('GitHub');
+  await screen.findByText(english.mcp.allInstalled);
   const removeButtons = screen.getAllByRole('button', { name: english.mcp.remove });
-  assert.equal(removeButtons.length, 2, 'the server is listed both as installed and in the catalog');
+  assert.equal(removeButtons.length, 1, 'only the installed list carries the server');
 
   fireEvent.click(removeButtons[0]);
   assert.equal(screen.getAllByRole('button', { name: english.mcp.confirmRemove }).length, 1);
@@ -222,7 +233,9 @@ test('saving a configuration drops the handshake result from the old one', async
   await screen.findByText(new RegExp(english.mcp.verifiedTools.replace('{{count}}', '3').replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')));
 
   fireEvent.click(screen.getByRole('button', { name: english.mcp.configure }));
-  fireEvent.change(screen.getByLabelText(english.mcp.command), { target: { value: 'node' } });
+  fireEvent.change(screen.getByLabelText(`${english.mcp.configBlock} context7`), {
+    target: { value: 'context7:\n  type: stdio\n  command: node\n  args:\n    - server.js\n' },
+  });
   fireEvent.click(screen.getByRole('button', { name: english.mcp.save }));
 
   await waitFor(() => {

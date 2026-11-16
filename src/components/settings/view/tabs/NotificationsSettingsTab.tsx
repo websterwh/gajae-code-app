@@ -86,45 +86,72 @@ function EventCheckbox({ event, label, preferences, onChange }: {
   );
 }
 
-function WebPushCard({ webPush, onSubscribe, onUnsubscribe, onTest }: {
-  webPush: WebPushState;
+/**
+ * Push and sound are one section: the sound is how a push announces itself on
+ * this device, so a separate switch elsewhere read as a second, unrelated
+ * notification channel.
+ */
+function PushAndSoundCard({ webPush, preferences, onPreferencesChange, onSubscribe, onUnsubscribe, onTest }: {
+  webPush?: WebPushState | null;
+  preferences: NotificationPreferencesState;
+  onPreferencesChange: (value: NotificationPreferencesState) => void;
   onSubscribe?: () => void;
   onUnsubscribe?: () => void;
   onTest?: () => void;
 }) {
   const { t } = useTranslation('settings');
-  if (!webPush.supported && !webPush.requiresHomeScreenInstall && !webPush.requiresSecureContext) return null;
-  const denied = webPush.permission === 'denied';
+  const pushAvailable = Boolean(webPush && (webPush.supported || webPush.requiresHomeScreenInstall || webPush.requiresSecureContext));
+  const denied = webPush?.permission === 'denied';
   return (
-    <SettingsSection title={t('notifications.webPush.title')} description={t('notifications.webPush.description')}>
-      <SettingsCard>
-        {webPush.requiresSecureContext ? (
-          <p className="px-4 py-4 text-sm text-muted-foreground">{t('notifications.webPush.httpsRequired')}</p>
-        ) : webPush.requiresHomeScreenInstall ? (
-          <p className="px-4 py-4 text-sm text-muted-foreground">{t('notifications.webPush.installFirst')}</p>
-        ) : denied ? (
-          <p className="px-4 py-4 text-sm text-destructive">{t('notifications.webPush.denied')}</p>
-        ) : (
-          <div className="flex flex-wrap items-center gap-3 px-4 py-4">
-            <button
-              type="button"
-              disabled={webPush.busy}
-              onClick={webPush.subscribed ? onUnsubscribe : onSubscribe}
-              className={webPush.subscribed
-                ? 'inline-flex items-center gap-2 rounded-lg bg-destructive/10 px-4 py-2 text-sm font-medium text-destructive transition-colors hover:bg-destructive/20 disabled:opacity-60'
-                : 'inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60'}
-            >
-              {webPush.subscribed ? <BellOff className="h-4 w-4" /> : <BellRing className="h-4 w-4" />}
-              {webPush.subscribed ? t('notifications.webPush.disable') : t('notifications.webPush.enable')}
-            </button>
-            {webPush.subscribed && (
-              <Button type="button" variant="outline" size="sm" onClick={onTest}>
-                {t('notifications.webPush.test')}
-              </Button>
-            )}
+    <SettingsSection
+      title={pushAvailable ? t('notifications.webPush.title') : t('notifications.sound.title', { defaultValue: 'Sound' })}
+      description={pushAvailable
+        ? t('notifications.webPush.description')
+        : t('notifications.sound.description', { defaultValue: 'Play a short tone when a chat run finishes.' })}
+    >
+      <SettingsCard divided>
+        {pushAvailable && webPush ? (
+          webPush.requiresSecureContext ? (
+            <p className="px-4 py-4 text-sm text-muted-foreground">{t('notifications.webPush.httpsRequired')}</p>
+          ) : webPush.requiresHomeScreenInstall ? (
+            <p className="px-4 py-4 text-sm text-muted-foreground">{t('notifications.webPush.installFirst')}</p>
+          ) : denied ? (
+            <p className="px-4 py-4 text-sm text-destructive">{t('notifications.webPush.denied')}</p>
+          ) : (
+            <div className="flex flex-wrap items-center gap-3 px-4 py-4">
+              <button
+                type="button"
+                disabled={webPush.busy}
+                onClick={webPush.subscribed ? onUnsubscribe : onSubscribe}
+                className={webPush.subscribed
+                  ? 'inline-flex items-center gap-2 rounded-lg bg-destructive/10 px-4 py-2 text-sm font-medium text-destructive transition-colors hover:bg-destructive/20 disabled:opacity-60'
+                  : 'inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60'}
+              >
+                {webPush.subscribed ? <BellOff className="h-4 w-4" /> : <BellRing className="h-4 w-4" />}
+                {webPush.subscribed ? t('notifications.webPush.disable') : t('notifications.webPush.enable')}
+              </button>
+              {webPush.subscribed && (
+                <Button type="button" variant="outline" size="sm" onClick={onTest}>
+                  {t('notifications.webPush.test')}
+                </Button>
+              )}
+            </div>
+          )
+        ) : null}
+        {webPush?.error && <p className="px-4 pb-4 text-sm text-destructive">{t('notifications.webPush.failed', { reason: webPush.error })}</p>}
+        <SettingsRow label={t('notifications.sound.title', { defaultValue: 'Sound' })}>
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => { void playChatCompletionSound({ force: true }); }}>
+              <Play className="h-4 w-4" aria-hidden />
+              {t('notifications.sound.test', { defaultValue: 'Test sound' })}
+            </Button>
+            <SettingsToggle
+              checked={preferences.channels.sound}
+              onChange={(sound) => onPreferencesChange({ ...preferences, channels: { ...preferences.channels, sound } })}
+              ariaLabel={t('notifications.sound.title', { defaultValue: 'Sound' })}
+            />
           </div>
-        )}
-        {webPush.error && <p className="px-4 pb-4 text-sm text-destructive">{t('notifications.webPush.failed', { reason: webPush.error })}</p>}
+        </SettingsRow>
       </SettingsCard>
     </SettingsSection>
   );
@@ -366,36 +393,16 @@ export default function NotificationsSettingsTab(props: NotificationsSettingsTab
         </SettingsSection>
       ) : null}
 
-      {props.webPush && (
-        <WebPushCard
-          webPush={props.webPush}
-          onSubscribe={props.onSubscribeWebPush}
-          onUnsubscribe={props.onUnsubscribeWebPush}
-          onTest={props.onTestWebPush}
-        />
-      )}
+      <PushAndSoundCard
+        webPush={props.webPush}
+        preferences={preferences}
+        onPreferencesChange={changePreferences}
+        onSubscribe={props.onSubscribeWebPush}
+        onUnsubscribe={props.onUnsubscribeWebPush}
+        onTest={props.onTestWebPush}
+      />
 
       <GjcNotificationsCard />
-
-      <SettingsSection title={t('notifications.sound.title', { defaultValue: 'Sound' })} description={t('notifications.sound.description', { defaultValue: 'Play a short tone when a chat run finishes.' })}>
-        <SettingsCard>
-          <SettingsRow
-            label={t('notifications.sound.enabled', { defaultValue: 'Enabled' })}
-          >
-            <div className="flex items-center gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={() => { void playChatCompletionSound({ force: true }); }}>
-                <Play className="h-4 w-4" aria-hidden />
-                {t('notifications.sound.test', { defaultValue: 'Test sound' })}
-              </Button>
-              <SettingsToggle
-                checked={preferences.channels.sound}
-                onChange={(sound) => changePreferences({ ...preferences, channels: { ...preferences.channels, sound } })}
-                ariaLabel={t('notifications.sound.title', { defaultValue: 'Sound' })}
-              />
-            </div>
-          </SettingsRow>
-        </SettingsCard>
-      </SettingsSection>
 
       <SettingsSection title={t('notifications.events.title')}>
         <div className="grid gap-2 sm:grid-cols-3">

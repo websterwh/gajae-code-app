@@ -430,7 +430,7 @@
     "adding": "Adding…",
     "addTitle": "Add manually",
     "addDescription": "For servers that are not in any catalog. Home Assistant HTTP servers and local stdio servers take this path.",
-    "findTitle": "Find servers",
+    "findTitle": "Find MCP server",
     "findDescription": "The bundled list works offline; the project overlay and the official registry add more.",
     "searchPlaceholder": "Search by name or description",
     "source": "Source",
@@ -483,7 +483,12 @@
     "installedBadge": "Installed",
     "newBadge": "New",
     "versionHint": "Click the version to type another one; saving pins it.",
-    "noVersion": "No version"
+    "noVersion": "No version",
+    "configBlock": "Config block",
+    "configBlockHint": "Exactly the entry written to mcp.json, so a server block copied from anywhere can be pasted in as it is.",
+    "blockInvalid": "This block does not read as an MCP entry.",
+    "blockNeedsCommand": "A stdio entry needs a command; http and sse need a url.",
+    "allInstalled": "Every server in this list is already installed."
   },
   "packages": {
     "title": "Packages",

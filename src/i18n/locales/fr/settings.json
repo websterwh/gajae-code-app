@@ -430,7 +430,7 @@
     "adding": "Ajout…",
     "addTitle": "Ajouter manuellement",
     "addDescription": "Pour les serveurs absents de tout catalogue. Les serveurs HTTP Home Assistant et les serveurs stdio locaux passent par ici.",
-    "findTitle": "Trouver des serveurs",
+    "findTitle": "Rechercher un serveur MCP",
     "findDescription": "La liste fournie fonctionne hors ligne ; l’overlay du projet et le registre officiel en ajoutent d’autres.",
     "searchPlaceholder": "Rechercher par nom ou description",
     "source": "Source",
@@ -483,7 +483,12 @@
     "installedBadge": "Installé",
     "newBadge": "New",
     "versionHint": "Cliquez sur la version pour en saisir une autre ; l’enregistrer l’épingle.",
-    "noVersion": "Aucune version"
+    "noVersion": "Aucune version",
+    "configBlock": "Bloc de configuration",
+    "configBlockHint": "Exactement l'entrée écrite dans mcp.json : un bloc copié ailleurs peut être collé tel quel.",
+    "blockInvalid": "Ce bloc ne se lit pas comme une entrée MCP.",
+    "blockNeedsCommand": "Une entrée stdio a besoin d'un command ; http et sse d'une url.",
+    "allInstalled": "Tous les serveurs de cette liste sont déjà installés."
   },
   "packages": {
     "title": "Paquets",

@@ -10,6 +10,8 @@ import SettingsCard from '../SettingsCard';
 import SettingsSection from '../SettingsSection';
 import SettingsToggle from '../SettingsToggle';
 
+import { formatMcpBlock, parseMcpBlock } from './mcpBlock';
+
 type McpTransport = 'stdio' | 'http' | 'sse';
 type McpScope = 'global' | 'project';
 
@@ -38,6 +40,8 @@ type McpServer = {
   pinnable: boolean;
   packageName: string | null;
   install: InstallState | null;
+  /** Resolved from the registry when this app never installed the package. */
+  availableVersion?: string | null;
 };
 
 type CatalogEnv = { name: string; required?: boolean; secret?: boolean; description?: string };
@@ -155,9 +159,7 @@ export default function McpSettingsTab() {
   // Blur also fires on Escape; this keeps that path from writing a pin.
   const skipPinCommit = useRef(false);
   const [editing, setEditing] = useState<string | null>(null);
-  const [editDraft, setEditDraft] = useState({
-    command: '', args: '', url: '', env: '', headers: '', knownEnv: {} as Record<string, string>,
-  });
+  const [editDraft, setEditDraft] = useState({ block: '' });
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
   const [copyNote, setCopyNote] = useState<string | null>(null);
   const [recentlyAdded, setRecentlyAdded] = useState<string | null>(null);
@@ -333,7 +335,7 @@ export default function McpSettingsTab() {
   };
 
   const pinVersion = (server: McpServer) => {
-    void setPin(server, server.pin ? null : server.install?.version ?? null);
+    void setPin(server, server.pin ? null : (server.install?.version ?? server.availableVersion ?? null));
   };
 
   const beginVersionEdit = (server: McpServer) => {
@@ -379,38 +381,46 @@ export default function McpSettingsTab() {
     window.setTimeout(() => {
       document.getElementById(`mcp-edit-${server.name}`)?.scrollIntoView?.({ block: 'center' });
     }, 0);
+    // The form is the block mcp.json gets, filled from what the server already
+    // runs and topped up with the catalog entry when the row is empty.
+    const command = server.command ?? known?.command;
+    const args = server.args ?? known?.args;
+    const url = server.url ?? known?.url;
     setEditDraft({
-      command: server.command ?? known?.command ?? '',
-      args: (server.args ?? known?.args ?? []).join('\n'),
-      url: server.url ?? known?.url ?? '',
-      env: '',
-      headers: '',
-      knownEnv: {},
+      block: formatMcpBlock(
+        {
+          ...server,
+          ...(command ? { command } : {}),
+          ...(args ? { args } : {}),
+          ...(url ? { url } : {}),
+        },
+        (known?.env ?? []).map((variable) => variable.name),
+      ),
     });
   };
 
-  // A stdio server without a command, or a remote one without a URL, has
-  // nothing to save; the server would only reject it.
+  // What parses out of the block is exactly what gets written, so a stdio
+  // entry without a command or a remote one without a URL is the only thing
+  // that can leave Save unavailable.
+  const editBlock = parseMcpBlock(editDraft.block);
   const editReady = (server: McpServer): boolean => (
-    server.transport === 'stdio' ? Boolean(editDraft.command.trim()) : Boolean(editDraft.url.trim())
+    editBlock.ok && (server.transport === 'stdio' ? Boolean(editBlock.value.command) : Boolean(editBlock.value.url))
   );
 
   const saveEdit = async (server: McpServer) => {
+    if (!editBlock.ok) return;
     setBusy(`edit:${server.name}`);
     setError('');
     try {
       const patch: Record<string, unknown> = {};
       if (server.transport === 'stdio') {
-        patch.command = editDraft.command.trim();
-        patch.args = parseLines(editDraft.args);
+        patch.command = editBlock.value.command ?? '';
+        patch.args = editBlock.value.args ?? [];
       } else {
-        patch.url = editDraft.url.trim();
+        patch.url = editBlock.value.url ?? '';
       }
-      const configured = Object.fromEntries(Object.entries(editDraft.knownEnv).filter(([, value]) => value.trim()));
-      const env = { ...parsePairs(editDraft.env, '='), ...configured };
-      if (Object.keys(env).length) patch.env = env;
-      const headers = parsePairs(editDraft.headers, ':');
-      if (Object.keys(headers).length) patch.headers = headers;
+      if (editBlock.value.env) patch.env = editBlock.value.env;
+      if (editBlock.value.headers) patch.headers = editBlock.value.headers;
       await request(serverPath(server), {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
@@ -526,6 +536,9 @@ export default function McpSettingsTab() {
     .sort()
     .at(-1);
   const selectedProject = projects.find((project) => project.path === projectPath);
+  // The catalog is for finding something new; a server already in the config
+  // is configured from the list above, so it is left out here.
+  const uninstalled = catalog.filter((entry) => !servers.some((server) => server.name === entry.name));
 
   return (
     <div className="space-y-6">
@@ -592,7 +605,7 @@ export default function McpSettingsTab() {
         </div>
 
         <SettingsCard>
-          <div className="flex flex-wrap items-end gap-3 p-4">
+          <div className="flex flex-wrap items-start gap-3 p-4">
             <label className="min-w-40 flex-1 text-xs font-medium text-muted-foreground">
               {t('mcp.scope')}
               <select
@@ -624,18 +637,20 @@ export default function McpSettingsTab() {
                     <option key={project.projectId} value={project.path}>{project.displayName}</option>
                   ))}
                 </select>
-                {selectedProject && (
-                  <span className="mt-1 block truncate font-mono text-[11px] font-normal">{selectedProject.path}</span>
-                )}
-                {!projectsLoading && projects.length === 0 && (
-                  <span className="mt-1 block font-normal">{t('mcp.noProjects')} {t('mcp.noProjectsHint')}</span>
-                )}
               </label>
             )}
             <button type="button" className={`${buttonClass} h-9`} onClick={() => setManualOpen(true)}>
               <Plus className="h-3.5 w-3.5" aria-hidden />{t('mcp.manuallyAdd')}
             </button>
           </div>
+          {/* The path sits under the row, not inside the label: a longer line
+              inside the second box pushed its select out of line with the
+              scope select beside it. */}
+          {scope === 'project' && (selectedProject || (!projectsLoading && projects.length === 0)) && (
+            <p className="truncate px-4 pb-3 font-mono text-[11px] text-muted-foreground">
+              {selectedProject ? selectedProject.path : `${t('mcp.noProjects')} ${t('mcp.noProjectsHint')}`}
+            </p>
+          )}
           {error && <p role="alert" className="border-t border-border px-4 py-3 text-xs text-destructive">{error}</p>}
           <div className="flex items-center justify-between gap-3 border-t border-border px-4 py-3">
             <p className="text-xs text-muted-foreground" role="status">{t('mcp.installed')}: {servers.length}</p>
@@ -654,12 +669,10 @@ export default function McpSettingsTab() {
           {servers.map((server) => {
             const result = verifyResults[server.name];
             const install = server.install;
-            const version = server.pin ?? install?.version ?? null;
+            const version = server.pin ?? install?.version ?? server.availableVersion ?? null;
             const removeKey = `row:${server.scope}:${server.name}`;
             const knownVars = catalogFor(server)?.env ?? [];
             const missingRequired = knownVars.filter((variable) => variable.required && !server.envIsSet[variable.name]);
-            // The first variable the row still needs is the one the form focuses.
-            const firstMissing = knownVars.findIndex((variable) => variable.required && !server.envIsSet[variable.name]);
             return (
               <div key={`${server.scope}:${server.name}`} className={`p-4 ${recentlyAdded === server.name ? 'bg-primary/5' : ''}`}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -703,7 +716,7 @@ export default function McpSettingsTab() {
                       <p className="mt-1 text-xs text-muted-foreground">{t('mcp.failed')}</p>
                     )}
                   </div>
-                  <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto sm:shrink-0">
+                  <div className="flex w-full flex-wrap items-center gap-2">
                     {/* The label stays put while the handshake runs: swapping it
                         for the longer text made the whole bar jump. */}
                     <button type="button" className={verifyButtonClass} aria-busy={verifying === server.name}
@@ -786,66 +799,29 @@ export default function McpSettingsTab() {
                 )}
                 {editing === server.name && (
                   <div id={`mcp-edit-${server.name}`} className="mt-3 grid gap-2 rounded-lg border border-border p-3">
-                    {server.transport === 'stdio' ? (
-                      <>
-                        <label className="text-xs text-muted-foreground">
-                          {t('mcp.command')}
-                          <input className={`mt-1 ${inputClass}`} value={editDraft.command}
-                            onChange={(event) => setEditDraft((current) => ({ ...current, command: event.target.value }))} />
-                        </label>
-                        <label className="text-xs text-muted-foreground">
-                          {t('mcp.args')}
-                          <textarea className={`mt-1 ${inputClass}`} rows={3} value={editDraft.args}
-                            onChange={(event) => setEditDraft((current) => ({ ...current, args: event.target.value }))} />
-                        </label>
-                      </>
-                    ) : (
-                      <label className="text-xs text-muted-foreground">
-                        {t('mcp.url')}
-                        <input className={`mt-1 ${inputClass}`} value={editDraft.url}
-                          onChange={(event) => setEditDraft((current) => ({ ...current, url: event.target.value }))} />
-                      </label>
+                    <label className="text-xs text-muted-foreground">
+                      {t('mcp.configBlock')}
+                      <textarea
+                        className={`mt-1 ${inputClass} font-mono leading-relaxed`}
+                        rows={10}
+                        spellCheck={false}
+                        autoFocus
+                        value={editDraft.block}
+                        aria-label={`${t('mcp.configBlock')} ${server.name}`}
+                        onChange={(event) => setEditDraft({ block: event.target.value })}
+                      />
+                      <span className="mt-1 block font-normal">{t('mcp.configBlockHint')}</span>
+                      <span className="mt-1 block font-normal">{t('mcp.envKeep')}</span>
+                    </label>
+                    {!editBlock.ok && (
+                      <p role="alert" className="text-xs text-destructive">{t('mcp.blockInvalid')}</p>
                     )}
-                    <div className="grid gap-2 border-t border-border pt-2">
-                      {/* The catalog already knows which variables this server
-                          takes, so each gets its own field instead of a blank box. */}
-                      {knownVars.map((variable, index) => (
-                        <label key={variable.name} className="text-xs text-muted-foreground">
-                          <span className="font-mono">{variable.name}</span>{variable.required ? ' *' : ''}
-                          <input
-                            className={`mt-1 ${inputClass}`}
-                            type={variable.secret ? 'password' : 'text'}
-                            autoComplete="off"
-                            autoFocus={index === firstMissing}
-                            placeholder={server.envIsSet[variable.name] ? t('mcp.requiredEnvPlaceholder') : (variable.description ?? t('mcp.requiredEnvPlaceholder'))}
-                            value={editDraft.knownEnv[variable.name] ?? ''}
-                            onChange={(event) => setEditDraft((current) => ({
-                              ...current,
-                              knownEnv: { ...current.knownEnv, [variable.name]: event.target.value },
-                            }))}
-                          />
-                          {variable.description && <span className="mt-1 block font-normal">{variable.description}</span>}
-                        </label>
-                      ))}
-                      <label className="text-xs text-muted-foreground">
-                        {t('mcp.env')}
-                        <textarea className={`mt-1 ${inputClass}`} rows={2} placeholder="KEY=value"
-                          value={editDraft.env}
-                          onChange={(event) => setEditDraft((current) => ({ ...current, env: event.target.value }))} />
-                        <span className="mt-1 block font-normal">{t('mcp.envKeep')}</span>
-                      </label>
-                    </div>
-                    {/* Headers only apply to remote transports. */}
-                    {server.transport !== 'stdio' && (
-                      <label className="text-xs text-muted-foreground">
-                        {t('mcp.headers')}
-                        <textarea className={`mt-1 ${inputClass}`} rows={2} placeholder="Authorization: Bearer …"
-                          value={editDraft.headers}
-                          onChange={(event) => setEditDraft((current) => ({ ...current, headers: event.target.value }))} />
-                      </label>
+                    {editBlock.ok && !editReady(server) && (
+                      <p className="text-xs text-destructive">{t('mcp.blockNeedsCommand')}</p>
                     )}
                     <div className="flex justify-end gap-2">
-                      <button type="button" className={buttonClass} onClick={() => setEditing(null)}>{t('mcp.cancel')}</button>                        <button type="button" className={primaryButtonClass} disabled={busy === `edit:${server.name}` || !editReady(server)}
+                      <button type="button" className={buttonClass} onClick={() => setEditing(null)}>{t('mcp.cancel')}</button>
+                      <button type="button" className={primaryButtonClass} disabled={busy === `edit:${server.name}` || !editReady(server)}
                         onClick={() => void saveEdit(server)}>{t('mcp.save')}</button>
                     </div>
                   </div>
@@ -916,8 +892,10 @@ export default function McpSettingsTab() {
           {catalog.length === 0 && (
             <p className="border-t border-border px-4 py-3 text-sm text-muted-foreground">{t('mcp.noResults')}</p>
           )}
-          {catalog.map((entry) => {
-            const installed = servers.find((server) => server.name === entry.name);
+          {catalog.length > 0 && uninstalled.length === 0 && (
+            <p className="border-t border-border px-4 py-3 text-sm text-muted-foreground">{t('mcp.allInstalled')}</p>
+          )}
+          {uninstalled.map((entry) => {
             const isBusy = busy === `install:${entry.name}`;
             return (
               <div key={`${entry.source}:${entry.name}`}
@@ -936,38 +914,12 @@ export default function McpSettingsTab() {
                       {entry.package?.manager ? ` · ${entry.package.manager}` : ''}
                     </p>
                   </div>
-                  <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-                    {installed ? (
-                      <>
-                        <span className="rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] tracking-wide text-muted-foreground uppercase">
-                          {t('mcp.installedBadge')}
-                        </span>
-                        <button type="button" className={buttonClass} onClick={() => beginEdit(installed)}>
-                          <Pencil className="h-3.5 w-3.5" aria-hidden />{t('mcp.configure')}
-                        </button>
-                        <button type="button" className={verifyButtonClass} aria-busy={verifying === installed.name}
-                          disabled={verifying === installed.name} onClick={() => void verify(installed)}>
-                          {verifying === installed.name ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />}
-                          {t('mcp.verify')}
-                        </button>
-                        {confirmRemove === `catalog:${installed.scope}:${installed.name}` ? (
-                          <button type="button" className={`${buttonClass} border-destructive text-destructive`}
-                            disabled={busy === `remove:${installed.name}`} onClick={() => void remove(installed)}>
-                            <Trash2 className="h-3.5 w-3.5" aria-hidden />{t('mcp.confirmRemove')}
-                          </button>
-                        ) : (
-                          <button type="button" className={buttonClass} onClick={() => setConfirmRemove(`catalog:${installed.scope}:${installed.name}`)}>
-                            <Trash2 className="h-3.5 w-3.5" aria-hidden />{t('mcp.remove')}
-                          </button>
-                        )}
-                      </>
-                    ) : (
-                      <button type="button" className={primaryButtonClass} disabled={isBusy || !projectReady}
-                        onClick={() => void installEntry(entry)}>
-                        {isBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <Plus className="h-3.5 w-3.5" aria-hidden />}
-                        {isBusy ? t('mcp.installing') : t('mcp.install')}
-                      </button>
-                    )}
+                  <div className="flex w-full flex-wrap items-center gap-2">
+                    <button type="button" className={primaryButtonClass} disabled={isBusy || !projectReady}
+                      onClick={() => void installEntry(entry)}>
+                      {isBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <Plus className="h-3.5 w-3.5" aria-hidden />}
+                      {isBusy ? t('mcp.installing') : t('mcp.install')}
+                    </button>
                   </div>
                 </div>
               </div>

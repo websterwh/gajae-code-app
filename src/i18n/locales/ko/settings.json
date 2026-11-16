@@ -430,7 +430,7 @@
     "adding": "추가 중…",
     "addTitle": "수동으로 추가",
     "addDescription": "어떤 카탈로그에도 없는 서버용입니다. Home Assistant HTTP 서버와 로컬 stdio 서버는 이 경로를 사용합니다.",
-    "findTitle": "서버 찾기",
+    "findTitle": "MCP 서버 찾기",
     "findDescription": "함께 제공되는 목록은 오프라인에서 작동하며, 프로젝트 오버레이와 공식 레지스트리가 항목을 더합니다.",
     "searchPlaceholder": "이름 또는 설명으로 검색",
     "source": "소스",
@@ -483,7 +483,12 @@
     "installedBadge": "설치됨",
     "newBadge": "New",
     "versionHint": "버전을 클릭해 다른 버전을 입력할 수 있으며, 저장하면 고정됩니다.",
-    "noVersion": "버전 없음"
+    "noVersion": "버전 없음",
+    "configBlock": "설정 블록",
+    "configBlockHint": "mcp.json에 기록되는 그대로의 항목입니다. 어디서 복사한 블록이든 그대로 붙여넣을 수 있습니다.",
+    "blockInvalid": "이 블록은 MCP 항목으로 읽을 수 없습니다.",
+    "blockNeedsCommand": "stdio 항목에는 command가, http와 sse에는 url이 필요합니다.",
+    "allInstalled": "이 목록의 서버는 모두 설치되어 있습니다."
   },
   "packages": {
     "title": "패키지",

@@ -430,7 +430,7 @@
     "adding": "Ekleniyor…",
     "addTitle": "Elle ekle",
     "addDescription": "Hiçbir katalogda olmayan sunucular için. Home Assistant HTTP sunucuları ve yerel stdio sunucuları bu yolu kullanır.",
-    "findTitle": "Sunucu bul",
+    "findTitle": "MCP sunucusu bul",
     "findDescription": "Paketle gelen liste çevrimdışı çalışır; proje kaplaması ve resmi kayıt daha fazlasını ekler.",
     "searchPlaceholder": "Ada veya açıklamaya göre ara",
     "source": "Kaynak",
@@ -483,7 +483,12 @@
     "installedBadge": "Kurulu",
     "newBadge": "New",
     "versionHint": "Başka bir sürüm yazmak için sürüme tıklayın; kaydedince sabitlenir.",
-    "noVersion": "Sürüm yok"
+    "noVersion": "Sürüm yok",
+    "configBlock": "Ayar bloğu",
+    "configBlockHint": "mcp.json'a yazılan girdinin aynısı; başka yerden kopyalanan bir blok olduğu gibi yapıştırılabilir.",
+    "blockInvalid": "Bu blok bir MCP girdisi olarak okunamıyor.",
+    "blockNeedsCommand": "stdio girdisi command ister; http ve sse url ister.",
+    "allInstalled": "Bu listedeki tüm sunucular zaten kurulu."
   },
   "packages": {
     "title": "Paketler",

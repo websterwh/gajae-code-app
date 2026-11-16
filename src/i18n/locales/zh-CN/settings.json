@@ -430,7 +430,7 @@
     "adding": "正在添加…",
     "addTitle": "手动添加",
     "addDescription": "用于不在任何目录中的服务器。Home Assistant HTTP 服务器和本地 stdio 服务器走这条路径。",
-    "findTitle": "查找服务器",
+    "findTitle": "查找 MCP 服务器",
     "findDescription": "内置列表可离线使用；项目叠加层和官方注册表会补充更多。",
     "searchPlaceholder": "按名称或描述搜索",
     "source": "来源",
@@ -483,7 +483,12 @@
     "installedBadge": "已安装",
     "newBadge": "New",
     "versionHint": "点击版本号可手动输入，保存后会锁定该版本。",
-    "noVersion": "无版本"
+    "noVersion": "无版本",
+    "configBlock": "配置块",
+    "configBlockHint": "就是写入 mcp.json 的那段内容，从任何地方复制的服务器块都能直接粘贴。",
+    "blockInvalid": "这段内容读不出 MCP 条目。",
+    "blockNeedsCommand": "stdio 条目需要 command，http 和 sse 需要 url。",
+    "allInstalled": "此列表中的服务器都已安装。"
   },
   "packages": {
     "title": "软件包",
