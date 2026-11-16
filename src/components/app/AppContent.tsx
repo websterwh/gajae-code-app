@@ -1,11 +1,12 @@
 import { type SyntheticEvent, useCallback, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 import Sidebar from '../sidebar/view/Sidebar';
 import MainContent from '../main-content/view/MainContent';
 import type { MainContentProps } from '../main-content/types/types';
 import CommandPalette from '../command-palette/CommandPalette';
+import StatsPage from '../stats/view/StatsPage';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { usePaletteOpsRegister } from '../../stores/usePaletteOpsStore';
 import { useDeviceSettings } from '../../hooks/useDeviceSettings';
@@ -69,6 +70,9 @@ function SidebarLayer({ isMobile, isOpen, onClose, closeLabel, sidebarProps }: S
 
 export default function AppContent() {
   const navigate = useNavigate();
+  // The usage dashboard is a route of the same shell, so the sidebar and the
+  // socket survive the visit instead of the page reloading around it.
+  const showingStats = useLocation().pathname.replace(/\/+$/, '') === '/stats';
   const { sessionId } = useParams<{ sessionId?: string }>();
   const { t } = useTranslation('common');
   const { isMobile } = useDeviceSettings({ trackPWA: false });
@@ -159,11 +163,19 @@ export default function AppContent() {
         isOpen={sidebarOpen}
         onClose={hideSidebar}
         closeLabel={t('versionUpdate.ariaLabels.closeSidebar')}
-        sidebarProps={sidebarSharedProps}
+        sidebarProps={{
+          ...sidebarSharedProps,
+          onOpenStats: () => {
+            // On a phone the sidebar is a drawer: opening the dashboard has to
+            // put it away, or the page appears behind an open curtain.
+            if (isMobile) setSidebarOpen(false);
+            navigate('/stats');
+          },
+        }}
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <MainContent
+        {showingStats ? <StatsPage /> : <MainContent
           selectedProject={selectedProject}
           selectedSession={selectedSession}
           ws={ws}
@@ -180,7 +192,7 @@ export default function AppContent() {
           onSessionEstablished={establishSession}
           onShowSettings={openSettings}
           newSessionTrigger={newSessionTrigger}
-        />
+        />}
       </div>
 
       <CommandPalette

@@ -226,6 +226,11 @@ export const api = {
   },
 
 
+  // Lifetime token usage read from every gjc transcript, for the stats page.
+  // `refresh` bypasses the server's short-lived cache.
+  statsOverview: (refresh: boolean = false) =>
+    authenticatedFetch(`/api/stats/overview${refresh ? '?refresh=1' : ''}`),
+
   // Browse filesystem for project suggestions
   browseFilesystem: (dirPath: string | null = null) => {
     const params = new URLSearchParams();

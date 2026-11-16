@@ -126,6 +126,7 @@ import {
     createComputerDesktopRestartReader,
 } from './modules/automation/index.js';
 import { hostControlRoutes } from './modules/host-control/index.js';
+import { statsRoutes } from './modules/stats/index.js';
 import { validateApiKey, authenticateToken, authenticateWebSocket } from './middleware/auth.js';
 import { c } from './utils/colors.js';
 import { evaluateExposure } from './utils/exposure-guard.js';
@@ -346,6 +347,9 @@ app.use('/api/browser', authenticateAutomation, authenticateToken, createBrowser
 // reads and writes the agent's own mcp.json; it is deliberately not exempt.
 app.use('/api/mcp', authenticateToken, mcpRoutes);
 app.use('/api/packages', authenticateToken, packagesRoutes);
+
+// Lifetime usage across the transcripts on this machine (stats page).
+app.use('/api/stats', authenticateToken, statsRoutes);
 
 // Host control (protected). Inert unless GAJAE_HOST_CONTROL is set, and then
 // only the capabilities switched on in Settings: the module owns the Docker

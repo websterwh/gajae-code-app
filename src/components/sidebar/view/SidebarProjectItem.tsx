@@ -191,7 +191,13 @@ export default function SidebarProjectItem({
               )}
             </button>
 
-            <div className="absolute top-1/2 right-1 flex -translate-y-1/2 items-center rounded-md bg-accent/95 opacity-0 shadow-xs transition-opacity group-focus-within/project:opacity-100 group-hover/project:opacity-100">
+            {/*
+              Revealed by hover or by a keyboard landing inside it. It must not
+              answer to `focus-within`: a click focuses the button it hit, so
+              starring a workspace left the whole toolbar on screen after the
+              pointer had already left the row.
+            */}
+            <div className="pointer-events-none absolute top-1/2 right-1 flex -translate-y-1/2 items-center rounded-md bg-accent/95 opacity-0 shadow-xs transition-opacity group-hover/project:pointer-events-auto group-hover/project:opacity-100 has-[:focus-visible]:pointer-events-auto has-[:focus-visible]:opacity-100">
               <button
                 className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:text-foreground"
                 onClick={() => onNewSession(project)}

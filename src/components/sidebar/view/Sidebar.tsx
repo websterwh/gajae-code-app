@@ -25,7 +25,7 @@ import type { SidebarProjectListProps } from './SidebarProjectList';
 function Sidebar(props: SidebarProps) {
   // Keep the shared native client alive across expanded/collapsed subscriptions.
   useDesktopUpdate();
-  const { activeSessions, onProjectSelect, onSessionSelect, onNewSession, onSessionDelete, onLoadMoreSessions, onProjectArchive, onProjectDelete, onRefresh, isMobile } = props;
+  const { activeSessions, onProjectSelect, onSessionSelect, onNewSession, onSessionDelete, onLoadMoreSessions, onProjectArchive, onProjectDelete, onRefresh, onOpenStats, isMobile } = props;
   const { t } = useTranslation(['sidebar', 'common']);
   const { isPWA } = useDeviceSettings({ trackMobile: false });
   const { preferences, setPreference } = useUiPreferences();
@@ -180,6 +180,7 @@ function Sidebar(props: SidebarProps) {
           onSearch={palette.openCommandPalette}
           onCreateProject={() => controller.setShowNewProject(true)}
           onCollapseSidebar={controller.collapseSidebar}
+          onOpenStats={onOpenStats}
           currentVersion={currentVersion}
           onShowSettings={() => openSettings()}
           projectListProps={projectListProps}

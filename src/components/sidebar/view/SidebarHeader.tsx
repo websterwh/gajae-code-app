@@ -10,6 +10,8 @@ type SidebarHeaderProps = {
   isMobile: boolean;
   onSearch: () => void;
   onCollapseSidebar: () => void;
+  /** Opens the usage dashboard. Optional so a host without routing still renders. */
+  onOpenStats?: () => void;
   t: TFunction;
 };
 
@@ -18,6 +20,7 @@ export default function SidebarHeader({
   isMobile,
   onSearch,
   onCollapseSidebar,
+  onOpenStats,
   t,
 }: SidebarHeaderProps) {
   const searchLabel = t('actions.search', 'Search');
@@ -36,12 +39,28 @@ export default function SidebarHeader({
       */}
       <div className="flex min-w-0 items-center gap-1.5">
         <img src="/mark.svg" alt="" className="size-7 shrink-0 object-contain" />
-        <h1
-          className="truncate text-lg font-semibold tracking-[-0.02em] text-foreground"
-          title={BRAND_NAME}
-        >
-          {BRAND_NAME}
-        </h1>
+        {onOpenStats ? (
+          // The wordmark is the way into the usage dashboard; the heading keeps
+          // its name so the brand is still text, not a button label.
+          <button
+            type="button"
+            onClick={onOpenStats}
+            title={t('stats.open', 'Usage and stats')}
+            aria-label={t('stats.open', 'Usage and stats')}
+            className="min-w-0 rounded-md text-left outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
+          >
+            <h1 className="truncate text-lg font-semibold tracking-[-0.02em] text-foreground transition-colors hover:text-foreground/80">
+              {BRAND_NAME}
+            </h1>
+          </button>
+        ) : (
+          <h1
+            className="truncate text-lg font-semibold tracking-[-0.02em] text-foreground"
+            title={BRAND_NAME}
+          >
+            {BRAND_NAME}
+          </h1>
+        )}
       </div>
 
       <div className="flex shrink-0 items-center gap-0.5">

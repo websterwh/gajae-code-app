@@ -84,14 +84,17 @@ const formatCompactSessionAge = (dateString: string, currentTime: Date): string 
 };
 
 /**
- * Quick actions collapse to nothing until the row is hovered or a child takes
- * focus, so a resting row is only its title and its age. They keep their width
- * at zero rather than `display:none` so the keyboard can still reach them, and
- * drop pointer events while invisible: a button you cannot see must not be a
- * button you can click.
+ * Quick actions collapse to nothing until the row is hovered or the action
+ * itself takes keyboard focus, so a resting row is only its title and its age.
+ * `focus-visible` rather than `focus-within` is what keeps them honest: a mouse
+ * click focuses the button it landed on, and the group then stayed expanded
+ * long after the pointer and the keyboard had both moved on. They keep their
+ * width at zero rather than `display:none` so the keyboard can still reach
+ * them, and drop pointer events while invisible: a button you cannot see must
+ * not be a button you can click.
  */
 const COLLAPSED_ACTION =
-  'pointer-events-none w-0 opacity-0 group-hover:pointer-events-auto group-hover:w-6 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:w-6 group-focus-within:opacity-100';
+  'pointer-events-none w-0 opacity-0 group-hover:pointer-events-auto group-hover:w-6 group-hover:opacity-100 focus-visible:pointer-events-auto focus-visible:w-6 focus-visible:opacity-100';
 
 const ACTION_BUTTON =
   'flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-opacity duration-150 hover:bg-accent hover:text-foreground';
@@ -371,11 +374,18 @@ export default function SidebarSessionItem({
     <div
       className={cn(
         'group relative my-0.5 flex h-8 items-center gap-1 rounded-md border border-transparent pr-2 pl-3.5 transition-colors duration-150 data-context-menu-open:border-ring/60',
+        // A pinned row has to read as pinned at rest, not only through its
+        // filled pin: the border survives every other row state, and the tint
+        // fills in wherever the background is not already speaking (selection,
+        // a live run).
+        isStarred && 'border-primary/40',
         isSelected
           ? 'bg-accent text-accent-foreground'
-          : isBusy || sessionView.isActive
-            ? 'bg-muted/30 hover:bg-muted/40'
-            : 'hover:bg-accent/70',
+          : isStarred
+            ? 'bg-primary/5 hover:bg-primary/10'
+            : isBusy || sessionView.isActive
+              ? 'bg-muted/30 hover:bg-muted/40'
+              : 'hover:bg-accent/70',
       )}
       data-session-status={status}
       data-context-menu-open={contextMenu.isOpen || undefined}

@@ -36,6 +36,7 @@ type SidebarContentProps = {
   onSearch: () => void;
   onCreateProject: () => void;
   onCollapseSidebar: () => void;
+  onOpenStats?: () => void;
   currentVersion: string;
   onShowSettings: () => void;
   projectListProps: SidebarProjectListProps;
@@ -62,6 +63,7 @@ export default function SidebarContent({
   onSearch,
   onCreateProject,
   onCollapseSidebar,
+  onOpenStats,
   currentVersion,
   onShowSettings,
   projectListProps,
@@ -132,6 +134,7 @@ export default function SidebarContent({
         isMobile={isMobile}
         onSearch={onSearch}
         onCollapseSidebar={onCollapseSidebar}
+        onOpenStats={onOpenStats}
         t={t}
       />
 
