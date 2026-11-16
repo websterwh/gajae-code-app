@@ -15,8 +15,28 @@ import { GjcJobsClientError } from './gjc-jobs-client.js';
 const execFile = promisify(execFileCallback);
 const unavailable = () => new AppError('Session worktree is unavailable.', { code: 'SESSION_WORKTREE_UNAVAILABLE', statusCode: 409 });
 
-type JobArchival = { archive(params: { jobId: string }): Promise<unknown>; unarchive(params: { jobId: string }): Promise<unknown> };
+type JobArchival = { archive(params: { jobId: string }): Promise<unknown>; unarchive(params: { jobId: string }): Promise<unknown>; get?(params: { jobId: string }): Promise<unknown> };
 type WorktreePruner = { prune(params: Record<string, unknown>): Promise<unknown> };
+
+/** The states in which the native authority refuses to archive a job. */
+const ACTIVE_JOB_STATES = new Set(['reserved', 'queued', 'running', 'aborting']);
+
+/**
+ * Whether a refusing `archive` (the native authority's `invalid_transition`)
+ * means a run still owns the job. The authority refuses only for reserved,
+ * queued, running and aborting, so the job's own state answers it; an
+ * unreadable answer stays conservative and counts as still running.
+ */
+async function jobStillRunning(authority: Pick<JobArchival, 'get'>, jobId: string): Promise<boolean> {
+  if (!authority.get) return true;
+  try {
+    const job = await authority.get({ jobId });
+    const state = job && typeof job === 'object' ? (job as { state?: unknown }).state : undefined;
+    return typeof state !== 'string' || ACTIVE_JOB_STATES.has(state.toLowerCase());
+  } catch {
+    return true;
+  }
+}
 
 /**
  * Tears a worktree session's checkout down when the session is deleted for
@@ -45,9 +65,27 @@ export async function releaseSessionWorktree(
     const code = error instanceof GjcJobsClientError ? error.code : undefined;
     if (code === 'not_found') return { released: false, branchRetained: false };
     if (code === 'invalid_transition') {
-      throw new AppError('The session is still running. Stop it before deleting it.', { code: 'SESSION_WORKTREE_RUNNING', statusCode: 409 });
+      // The run may have finished between the authority's state check and this
+      // refusal. Nothing is running now, so archive the job again and continue
+      // the teardown instead of leaving a session that can neither run nor be
+      // deleted. Archiving an archived job succeeds; only a new run can refuse
+      // the retry.
+      if (await jobStillRunning(authority, row.job_id)) {
+        throw new AppError('The session is still running. Stop it before deleting it.', { code: 'SESSION_WORKTREE_RUNNING', statusCode: 409 });
+      }
+      try {
+        await jobs.archive({ jobId: row.job_id });
+      } catch (retryError) {
+        const retryCode = retryError instanceof GjcJobsClientError ? retryError.code : undefined;
+        if (retryCode === 'not_found') return { released: false, branchRetained: false };
+        if (retryCode === 'invalid_transition') {
+          throw new AppError('The session is still running. Stop it before deleting it.', { code: 'SESSION_WORKTREE_RUNNING', statusCode: 409 });
+        }
+        throw retryError;
+      }
+    } else {
+      throw error;
     }
-    throw error;
   }
   // A caller-confirmed discard clears the exact dirty-check git itself runs
   // (status --porcelain -z --untracked-files=all --ignored=matching), scoped

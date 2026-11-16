@@ -12,6 +12,7 @@ import type { WebSocket } from 'ws';
 
 import type { GjcWorkerOutcome, GjcWorkerSpawnRun } from '../gjc-worker-client.js';
 import { closeConnection, initializeDatabase, projectPermissionsDb, projectsDb, sessionsDb, sessionWorktreesDb } from '../modules/database/index.js';
+import type { SessionWorktreeRow } from '../modules/database/repositories/session-worktrees.db.js';
 import { configureSessionWorktrees, createWorktreeSession } from '../modules/providers/services/session-worktrees.service.js';
 import providerRoutes from '../modules/providers/provider.routes.js';
 import { createProviderCommandsService, providerCommandsService } from '../modules/providers/services/provider-commands.service.js';
@@ -25,7 +26,7 @@ import { connectedClients } from '../modules/websocket/services/websocket-state.
 import { GjcGitClient } from './gjc-git-client.js';
 import { DesktopRestartAuthority } from './desktop-restart-authority.js';
 import { createGjcJobOrchestratorDesktopRestartReader, JobOrchestrator, type GitWorktrees, type JobSupervisor } from './gjc-job-orchestrator.js';
-import { GjcJobsClient } from './gjc-jobs-client.js';
+import { GjcJobsClient, GjcJobsClientError } from './gjc-jobs-client.js';
 import { readSessionLocation, releaseSessionWorktree, resolveSessionWorkspacePath, validateSessionRepository } from './session-worktree-paths.js';
 import { abortSessionWorktreeRun, configureSessionWorktreeDesktopAdmission, createSessionWorktreeDesktopRestartReader, prepareSessionWorktreeRun, sessionWorktreeWorkerHandle } from './session-worktree-runtime.js';
 
@@ -716,4 +717,50 @@ test('permanent deletion of a worktree session that was never prepared releases 
   assert.equal(result.action, 'deleted');
   assert.equal(sessionsDb.getSessionById(f.created.sessionId), null);
   assert.deepEqual(await branches(f.repository), []);
+});
+
+type ReleaseAuthority = { archive(params: { jobId: string }): Promise<unknown>; unarchive(params: { jobId: string }): Promise<unknown>; get?(params: { jobId: string }): Promise<unknown> };
+
+function releaseWith(authority: ReleaseAuthority, calls: string[]) {
+  const row: SessionWorktreeRow = { session_id: 'session-1', job_id: 'job-1', repository_root: '/repository', worktree_path: '/repository/.gjc-worktrees/job-1' };
+  const git = { prune: async () => { calls.push('prune'); return { branchRetained: false }; } };
+  return releaseSessionWorktree(row, { jobs: authority, git: () => git });
+}
+
+test('an archive refusal from a job that already stopped continues the teardown', async () => {
+  const calls: string[] = [];
+  let attempts = 0;
+  const authority: ReleaseAuthority = {
+    archive: async () => {
+      calls.push('archive');
+      attempts += 1;
+      // The refusal raced the finished run; the retry finds the job stopped.
+      if (attempts === 1) throw new GjcJobsClientError('The job is still active.', 'invalid_transition');
+      return {};
+    },
+    unarchive: async () => { calls.push('unarchive'); return {}; },
+    get: async () => { calls.push('get'); return { jobId: 'job-1', state: 'ready' }; },
+  };
+
+  assert.deepEqual(await releaseWith(authority, calls), { released: true, branchRetained: false });
+  assert.deepEqual(calls, ['archive', 'get', 'archive', 'prune']);
+});
+
+test('an archive refusal while the job runs, or with no readable state, refuses the teardown', async () => {
+  const unreadable = [
+    async () => ({ jobId: 'job-1', state: 'running' }),
+    async () => { throw new Error('authority unavailable'); },
+    undefined,
+  ];
+  for (const get of unreadable) {
+    const calls: string[] = [];
+    const authority: ReleaseAuthority = {
+      archive: async () => { calls.push('archive'); throw new GjcJobsClientError('The job is still active.', 'invalid_transition'); },
+      unarchive: async () => { calls.push('unarchive'); return {}; },
+      ...(get ? { get } : {}),
+    };
+
+    await assert.rejects(releaseWith(authority, calls), { code: 'SESSION_WORKTREE_RUNNING' });
+    assert.deepEqual(calls, ['archive'], 'nothing is torn down while the job may still run');
+  }
 });

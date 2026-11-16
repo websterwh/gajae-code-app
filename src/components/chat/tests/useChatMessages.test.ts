@@ -244,3 +244,61 @@ test('an omitted auto-approval notice does not split consecutive tool work into 
   assert.equal(blocks.length, 1);
   assert.deepEqual(blocks[0].messages.map((message) => message.toolName), ['read', 'bash']);
 });
+
+test('one reply split around its reasoning renders as one answer', () => {
+  const messages = normalizedToChatMessages([
+    row({ id: '7d22e374:0:text', role: 'user', content: 'hi' }),
+    row({ id: 'ef60e958:1:text', role: 'assistant', content: 'Hi' }),
+    row({ kind: 'thinking', id: 'ef60e958:2:thinking', content: ' I can help.' }),
+    row({ id: 'ef60e958:3:text', role: 'assistant', content: '! How can I help you today?' }),
+  ]);
+
+  const answers = messages.filter((message) => message.type === 'assistant' && !message.isThinking);
+  assert.deepEqual(answers.map((message) => message.content), ['Hi! How can I help you today?']);
+  // The reasoning row survives; only the answer was joined.
+  assert.equal(messages.filter((message) => message.isThinking).length, 1);
+});
+
+test('separate assistant messages and turns keep their own bubbles', () => {
+  const messages = normalizedToChatMessages([
+    row({ id: '7d22e374:0:text', role: 'user', content: 'hi' }),
+    row({ id: 'ef60e958:1:text', role: 'assistant', content: 'First answer.' }),
+    row({ id: 'aa11bb22:1:text', role: 'assistant', content: 'Second answer.' }),
+    row({ id: '7d22e374:0:text:2', role: 'user', content: 'again' }),
+    row({ id: 'ef60e958:1:text:2', role: 'assistant', content: 'Third answer.' }),
+  ]);
+
+  const answers = messages.filter((message) => message.type === 'assistant');
+  assert.deepEqual(answers.map((message) => message.content), ['First answer.', 'Second answer.', 'Third answer.']);
+});
+
+test('a tool call between two parts of one message ends the run', () => {
+  const messages = normalizedToChatMessages([
+    row({ id: 'ef60e958:1:text', role: 'assistant', content: 'Reading' }),
+    row({ kind: 'tool_use', id: 'ef60e958:2:tool_use', toolName: 'Read', toolId: 'tool-1', toolInput: '{}' }),
+    row({ id: 'ef60e958:3:text', role: 'assistant', content: 'the file.' }),
+  ]);
+
+  const texts = messages.filter((message) => message.type === 'assistant' && !message.isToolUse);
+  assert.deepEqual(texts.map((message) => message.content), ['Reading', 'the file.']);
+});
+
+test('joined parts keep one bubble with stable identity across passes', () => {
+  const parts = [
+    row({ id: 'x:1:text', role: 'assistant', content: 'Hi' }),
+    row({ kind: 'thinking', id: 'x:2:thinking', content: 'reasoning' }),
+    row({ id: 'x:3:text', role: 'assistant', content: '! there' }),
+  ];
+  const first = normalizedToChatMessages(parts);
+  const again = normalizedToChatMessages(parts);
+
+  assert.deepEqual(first.map((message) => message.content), ['Hi! there', 'reasoning']);
+  assert.equal(again[0], first[0], 'a joined bubble is the same object while its parts are');
+  assert.equal(again[1], first[1]);
+
+  // A further part joins the same bubble, which then has new content and identity.
+  const extended = normalizedToChatMessages([...parts, row({ id: 'x:4:text', role: 'assistant', content: '?' })]);
+  assert.equal(extended[0].content, 'Hi! there?');
+  assert.notEqual(extended[0], first[0]);
+  assert.equal(extended.length, 2);
+});

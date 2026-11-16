@@ -114,6 +114,10 @@ export function prepareSessionWorktreeRun(sessionId: string, orchestratorFactory
         };
         const runOptions = {
           ...options, projectPath: row.repository_root, permissions: resolveProjectRunPermissions(row.repository_root), writer: durableWriter, signal,
+          // A job that never bound a provider session (its first turn failed
+          // before the transcript existed) continues the session's own
+          // transcript rather than opening a new one in the same worktree.
+          sessionId: session.provider_session_id ?? options.sessionId ?? null,
           retainWorkspaceOnFailure: true,
           cap: 4,
           onRun: (run: GjcWorkerRun) => {
@@ -144,7 +148,12 @@ export function prepareSessionWorktreeRun(sessionId: string, orchestratorFactory
             },
           }));
         } else {
-          if (binding.jobId !== row.job_id || (session.provider_session_id && binding.providerSessionId !== session.provider_session_id)) throw new AppError('Worktree ownership does not match this session.', { code: 'SESSION_WORKTREE_BINDING_MISMATCH', statusCode: 409 });
+          // Only a conflicting identity is a mismatch. A binding that never
+          // recorded a provider session (a first turn that failed before the
+          // transcript was bound) is an absence, not a conflict: the job below
+          // runs the session's own transcript instead of refusing forever.
+          if (binding.jobId !== row.job_id) throw new AppError('Worktree ownership does not match this session.', { code: 'SESSION_WORKTREE_BINDING_MISMATCH', statusCode: 409 });
+          if (binding.providerSessionId && session.provider_session_id && binding.providerSessionId !== session.provider_session_id) throw new AppError('Worktree ownership does not match this session.', { code: 'SESSION_WORKTREE_BINDING_MISMATCH', statusCode: 409 });
           if (binding.providerSessionId && !session.provider_session_id) {
             // Recover a crash between native provider binding and app upsert.
             sessionsDb.assignProviderSessionId(sessionId, 'gjc', binding.providerSessionId);

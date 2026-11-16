@@ -477,17 +477,21 @@ export class GjcProviderModels implements IProviderModels {
   /**
    * The preset catalog comes from `config.yml` and `models.yml`, while runtime
    * availability comes from the shared credential database. SQLite may keep a
-   * live write in its WAL, so all three auth files participate in the revision.
-   * This lets a terminal login/logout immediately invalidate the app cache.
+   * live write in its WAL, so the database and its write-ahead log both
+   * participate in the revision. This lets a terminal login/logout immediately
+   * invalidate the app cache.
    */
   async getCatalogRevision(): Promise<number | null> {
     const agentDir = path.join(this.homeDir, '.gjc', 'agent');
+    // `agent.db-shm` is SQLite's shared-memory index: its mtime moves on reads
+    // as well as writes, so including it threw away a warm catalog for traffic
+    // that touched no credential. The database and its write-ahead log still
+    // carry every sign-in, sign-out and token refresh.
     const stamps = await Promise.all([
       'config.yml',
       'models.yml',
       'agent.db',
       'agent.db-wal',
-      'agent.db-shm',
     ].map(
       (name) => stat(path.join(agentDir, name)).then((info) => info.mtimeMs).catch(() => 0),
     ));

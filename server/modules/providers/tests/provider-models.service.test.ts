@@ -198,6 +198,34 @@ test('provider model cache is persisted across service instances', async () => {
   }
 });
 
+test('the default catalog cache lives beside the app database', async () => {
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'provider-model-cache-database-'));
+  const previous = process.env.DATABASE_PATH;
+  process.env.DATABASE_PATH = path.join(tempRoot, 'data', 'auth.db');
+
+  try {
+    const service = createProviderModelsService({
+      resolveProvider: () => ({
+        models: {
+          getSupportedModels: async () => createModels('beside-database'),
+          getCurrentActiveModel: async () => createCurrentActiveModel('gjc-active'),
+          changeActiveModel: async (input) => createSessionActiveModelChange('gjc', input),
+        },
+      }),
+    });
+    await service.getProviderModels('gjc');
+
+    // A container recreate resets $HOME but keeps the mounted database volume,
+    // so the cache has to live with the database, not with the home directory.
+    const persisted = JSON.parse(await readFile(path.join(tempRoot, 'data', 'provider-models-cache.json'), 'utf8'));
+    assert.equal(persisted.entries.gjc.models.DEFAULT, 'beside-database');
+  } finally {
+    if (previous === undefined) delete process.env.DATABASE_PATH;
+    else process.env.DATABASE_PATH = previous;
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
 test('provider model cache rebuilds the prior schema and persists provider variants and the default', async () => {
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'provider-model-cache-version-'));
   const cachePath = path.join(tempRoot, 'models-cache.json');

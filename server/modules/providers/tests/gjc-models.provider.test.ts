@@ -258,6 +258,37 @@ test('credential database WAL changes invalidate the model catalog revision', as
   assert.equal(await models.getCatalogRevision(), 30_000);
 });
 
+test('the SQLite shared-memory index does not invalidate the model catalog revision', async (t) => {
+  const homeDir = await mkdtemp(path.join(os.tmpdir(), 'gajae-model-auth-shm-'));
+  t.after(() => rm(homeDir, { recursive: true, force: true }));
+  const agentDir = path.join(homeDir, '.gjc', 'agent');
+  await mkdir(agentDir, { recursive: true });
+  const configPath = path.join(agentDir, 'config.yml');
+  const databasePath = path.join(agentDir, 'agent.db');
+  const walPath = path.join(agentDir, 'agent.db-wal');
+  const shmPath = path.join(agentDir, 'agent.db-shm');
+  await Promise.all([
+    writeFile(configPath, '', 'utf8'),
+    writeFile(databasePath, '', 'utf8'),
+    writeFile(walPath, '', 'utf8'),
+    writeFile(shmPath, '', 'utf8'),
+  ]);
+  await utimes(configPath, 10, 10);
+  await utimes(databasePath, 10, 10);
+  await utimes(walPath, 20, 20);
+  await utimes(shmPath, 40, 40);
+
+  const models = new GjcProviderModels(homeDir);
+
+  // A read moves the shared-memory index's mtime; that is not a credential
+  // change and must not throw the warm catalog away.
+  assert.equal(await models.getCatalogRevision(), 20_000);
+  await utimes(shmPath, 50, 50);
+  assert.equal(await models.getCatalogRevision(), 20_000);
+  await utimes(walPath, 60, 60);
+  assert.equal(await models.getCatalogRevision(), 60_000);
+});
+
 test('a runtime that answers with no available model reports an empty MODELS; an unreachable one reports none', async (t) => {
   const homeDir = await mkdtemp(path.join(os.tmpdir(), 'gajae-model-availability-'));
   t.after(() => rm(homeDir, { recursive: true, force: true }));

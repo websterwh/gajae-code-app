@@ -1,8 +1,8 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 
 import { providerRegistry } from '@/modules/providers/provider.registry.js';
+import { getDatabasePath } from '@/modules/database/index.js';
 import type { IProvider } from '@/shared/interfaces.js';
 import type {
   LLMProvider,
@@ -23,7 +23,16 @@ type ProviderModelsOptions = { bypassCache?: boolean };
 type ProviderModelsCacheEntry = { updatedAt: number; expiresAt: number; models: ProviderModelsDefinition };
 type ProviderModelsCacheFile = { version: number; entries: Record<string, ProviderModelsCacheEntry> };
 
-const defaultCacheLocation = (): string => path.join(os.homedir(), '.gajae-app', 'provider-models-cache.json');
+/**
+ * The catalog cache sits beside the app database rather than under `$HOME`.
+ * Container recreates reset the home directory but keep the mounted data
+ * volume, so a restart opens on the catalog it last fetched instead of
+ * spawning a cold runtime to rebuild one.
+ */
+const defaultCacheLocation = (): string => path.join(path.dirname(getDatabasePath()), 'provider-models-cache.json');
+
+// `~/.gajae-app/provider-models-cache.json` was this file's old home, and
+// removing the reference here does not remove it from an existing install.
 
 const hasModelOptionShape = (candidate: unknown): candidate is ProviderModelsDefinition['OPTIONS'][number] => {
   if (!candidate || typeof candidate !== 'object') return false;

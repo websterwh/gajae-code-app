@@ -44,7 +44,8 @@ class Jobs implements JobAuthority {
   reserveStart(p: Record<string, unknown>) { return this.reserve(p); }
   turnAdmit(p: Record<string, unknown>) { return this.admit(p); }
   runFinalize(p: Record<string, unknown>) { const event = this.event('runFinalize', p); this.state = { ...this.state, state: String(p.terminalRunState), lease: { owner: '', generation: 0 } }; return event.then(() => this.state); }
-  bindingResolve(p: Record<string, unknown>) { return Promise.resolve({ jobId: this.state.jobId, state: this.state.state, providerSessionId: 'provider-1', ...p }); }
+  bindingProviderSessionId: string | null = 'provider-1';
+  bindingResolve(p: Record<string, unknown>) { return Promise.resolve({ jobId: this.state.jobId, state: this.state.state, providerSessionId: this.bindingProviderSessionId, ...p }); }
   bindingRelease(p: Record<string, unknown>) { return this.call('bindingRelease', p); }
   interruptForShutdown() { this.state = { ...this.state, state: 'interrupted' }; return this.call('interruptForShutdown', {}); }
 }
@@ -262,6 +263,20 @@ test('resume derives the repository root from its stored worktree and never crea
   const orchestrator = new JobOrchestrator({ jobs, gitForProject: (root) => (requestedRoot = root, git), supervisor, owner: 'owner', createId: () => 'next' });
   await orchestrator.resume('job-abc', 'app-1', 'resume', options);
   assert.equal(requestedRoot, '/project'); assert.deepEqual(git.calls, ['list', 'status']); assert.equal(supervisor.input?.options?.sessionId, 'provider-1'); assert.equal(supervisor.input?.options?.cwd, '/project/.gjc-worktrees/job-abc');
+});
+
+test('turn start adopts the caller provider session when the job never bound one', async () => {
+  const jobs = new Jobs();
+  jobs.state = { jobId: 'job-abc', state: 'ready', lease: { owner: 'owner', generation: 1 }, worktreeId: '/project/.gjc-worktrees/job-abc', repositoryRoot: '/project', branch: 'job/job-abc' };
+  jobs.bindingProviderSessionId = null;
+  const git = new Git(); const supervisor = new Supervisor();
+  const orchestrator = new JobOrchestrator({ jobs, gitForProject: () => git, supervisor, owner: 'owner', createId: () => 'next' });
+
+  // Without adoption the worker would open a second transcript in the same
+  // worktree, orphaning the session's existing one.
+  await orchestrator.turnStart('gjc', 'app-1', 'hello', { ...options, sessionId: 'provider-2' });
+
+  assert.equal(supervisor.input?.options?.sessionId, 'provider-2');
 });
 
 test('an abort acknowledgement without terminal completion does not finalize the durable lease', async () => {

@@ -471,7 +471,10 @@ export class JobOrchestrator {
         // pointer and repository ownership just as interrupted resume does.
         await git.status({ jobId: bound.jobId, branch: current.branch, path: cwd });
         dispatched = true;
-        return await this.dispatch(bound.jobId, current, runId, appSessionId, message, options, cwd, bound.providerSessionId);
+        // A job whose provider session was never bound adopts the one the
+        // caller knows (a session whose first turn died before the transcript
+        // was bound) instead of silently opening a second conversation.
+        return await this.dispatch(bound.jobId, current, runId, appSessionId, message, options, cwd, bound.providerSessionId ?? options.sessionId ?? null);
       } catch (error) {
         if (!dispatched) await this.cancelAdmission(bound.jobId, current, error);
         throw error;
@@ -503,7 +506,7 @@ export class JobOrchestrator {
       let dispatched = false;
       try {
         dispatched = true;
-        return await this.dispatch(jobId, admitted, runId, appSessionId, message, options, cwd, bound.providerSessionId);
+        return await this.dispatch(jobId, admitted, runId, appSessionId, message, options, cwd, bound.providerSessionId ?? options.sessionId ?? null);
       } catch (error) {
         if (!dispatched) await this.cancelAdmission(jobId, admitted, error);
         throw error;

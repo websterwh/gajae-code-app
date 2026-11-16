@@ -97,6 +97,61 @@ export function normalizedToChatMessages(messages: NormalizedMessage[]): ChatMes
     output.push(...converted);
   }
 
+  return mergeAssistantTextParts(output);
+}
+
+/** The provider message a text part belongs to, from an id like `<id>:3:text`. */
+const splitMessageKey = (message: ChatMessage): string | null => {
+  const id = typeof message.id === 'string' ? message.id : '';
+  return message.type === 'assistant' && id && !message.isThinking && !message.isToolUse
+    && !message.isSystemNotice && !message.isTaskNotification && !message.isInteractivePrompt
+    && !message.isStreaming
+    ? /^(.*):\d+:text$/u.exec(id)?.[1] ?? null
+    : null;
+};
+
+type MergedText = { head: ChatMessage; previous: MergedText | null; message: ChatMessage };
+
+/**
+ * A joined bubble is memoised on the parts that built it, so a transcript that
+ * did not change converts to the same objects on the next pass; the row-level
+ * cache above cannot cover an object assembled here.
+ */
+const mergedText = new WeakMap<ChatMessage, MergedText>();
+
+/**
+ * One assistant message can arrive as several text parts with its reasoning
+ * between them (`<id>:1:text`, `<id>:2:thinking`, `<id>:3:text`), which the
+ * transcript stores as separate rows. Rendering each row on its own split one
+ * answer into two bubbles cut mid-sentence, so the parts of one message are
+ * joined back into the bubble the first of them opened. Only reasoning may sit
+ * between them; a tool call, another message or a user turn ends the run.
+ */
+function mergeAssistantTextParts(messages: ChatMessage[]): ChatMessage[] {
+  const output: ChatMessage[] = [];
+  const open = new Map<string, { index: number; merged: MergedText | null }>();
+  for (const message of messages) {
+    const key = splitMessageKey(message);
+    if (!key) {
+      if (!(message.type === 'assistant' && (message.isThinking || message.isStreaming))) open.clear();
+      output.push(message);
+      continue;
+    }
+    const current = open.get(key);
+    if (!current) {
+      open.set(key, { index: output.length, merged: null });
+      output.push(message);
+      continue;
+    }
+    const head = output[current.index];
+    const cached = mergedText.get(message);
+    const merged = cached && cached.head === head && cached.previous === current.merged
+      ? cached
+      : { head, previous: current.merged, message: { ...head, content: `${head.content}${message.content}` } };
+    if (merged !== cached) mergedText.set(message, merged);
+    output[current.index] = merged.message;
+    current.merged = merged;
+  }
   return output;
 }
 
