@@ -127,6 +127,7 @@ import {
 } from './modules/automation/index.js';
 import { hostControlRoutes } from './modules/host-control/index.js';
 import { statsRoutes } from './modules/stats/index.js';
+import { shellRunRoutes } from './modules/shell/index.js';
 import { validateApiKey, authenticateToken, authenticateWebSocket } from './middleware/auth.js';
 import { c } from './utils/colors.js';
 import { evaluateExposure } from './utils/exposure-guard.js';
@@ -350,6 +351,11 @@ app.use('/api/packages', authenticateToken, packagesRoutes);
 
 // Lifetime usage across the transcripts on this machine (stats page).
 app.use('/api/stats', authenticateToken, statsRoutes);
+
+// One-shot shell execution behind `/run` in the chat composer. The same shell
+// is already reachable through the authenticated PTY socket; this only makes a
+// single command's output land in a message.
+app.use('/api/shell', authenticateToken, shellRunRoutes);
 
 // Host control (protected). Inert unless GAJAE_HOST_CONTROL is set, and then
 // only the capabilities switched on in Settings: the module owns the Docker

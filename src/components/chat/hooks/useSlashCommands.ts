@@ -46,7 +46,12 @@ const getHistory = (projectId: string): Record<string, number> => {
   }
 };
 const saveHistory = (projectId: string, history: Record<string, number>) => safeLocalStorage.setItem(historyKey(projectId), JSON.stringify(history));
-const needsInsertion = (command: SlashCommand) => command.type === 'skill' || command.type === 'provider' || command.metadata?.type === 'skill';
+const needsInsertion = (command: SlashCommand) => command.type === 'skill'
+  || command.type === 'provider'
+  || command.metadata?.type === 'skill'
+  // `/run` does nothing bare: selecting it hands the user the command to type
+  // their arguments into.
+  || command.requiresArguments === true;
 const isLogin = (command: SlashCommand) => command.name === '/login';
 
 const skillCommands = (skills: ProviderSkill[]) => {
@@ -198,14 +203,14 @@ export function useSlashCommands({ selectedProject, sessionId, executionCwd, pro
       return;
     }
     if (countUsage) recordUse(command);
+    if (needsInsertion(command)) {
+      placeCommand(command);
+      return;
+    }
     if (isAppUiCommand(command)) {
       removeTypedCommand();
       resetCommandMenuState();
       onAppCommand?.(command);
-      return;
-    }
-    if (needsInsertion(command)) {
-      placeCommand(command);
       return;
     }
     resetCommandMenuState();

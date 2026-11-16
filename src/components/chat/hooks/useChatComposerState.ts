@@ -20,6 +20,7 @@ import type { ComposerDraftRepository, ComposerRoute, DurableQueuedDraft } from 
 import { decideQueueFlush } from '../utils/queueFlush';
 import type { ComposerAttachmentRejection } from '../utils/composerAttachmentIntake';
 import { MAX_COMPOSER_IMAGES, MAX_COMPOSER_IMAGE_BYTES, chooseComposerAttachments, composerFilesFromEvent, partitionComposerAttachments } from '../utils/composerAttachmentIntake';
+import { formatShellRun, type ShellRunOutput } from '../utils/shellRunFormat';
 
 import { useFileMentions } from './useFileMentions';
 import { useSlashCommands } from './useSlashCommands';
@@ -146,7 +147,31 @@ export function useChatComposerState(args: UseChatComposerStateArgs) {
       })
       .catch(() => undefined);
   }, [conversation, palette]);
-  const applyAppCommand = useCallback((command: AppUiCommand) => { if (isComposerSealed()) return; return runAppUiCommand(command, { openSessionPicker: palette.openSessionPicker, startNewChat: palette.startNewChat, openSettings: () => onShowSettings ? onShowSettings() : palette.openSettings(), openModelPicker: () => setModelPickerTrigger((n) => n + 1), openCostModal: showCostModal, forkSession }); }, [forkSession, onShowSettings, palette, showCostModal]);
+  // `/run` is the one app command whose effect happens on the server: it posts
+  // the command and renders the answer as the next message, so the transcript
+  // keeps the command and its output together.
+  const runShellCommand = useCallback((command: string) => {
+    if (isComposerSealed()) return;
+    const trimmed = command.trim();
+    if (!trimmed) {
+      addMessage({ type: 'assistant', content: 'Usage: `/run <shell command>` — for example `/run adb connect 127.0.0.1:5555`.', timestamp: Date.now() });
+      return;
+    }
+    const cwd = selectedProject?.fullPath || selectedProject?.path;
+    addMessage({ type: 'user', content: `/run ${trimmed}`, timestamp: new Date() });
+    void authenticatedFetch('/api/shell/run', { method: 'POST', headers: {}, body: JSON.stringify({ command: trimmed, ...(cwd ? { cwd } : {}) }) })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => ({})) as { data?: unknown; error?: unknown };
+        if (!response.ok) throw new Error(typeof payload.error === 'string' ? payload.error : `Request failed (${response.status})`);
+        const result = payload.data as ShellRunOutput | undefined;
+        if (!result || typeof result.output !== 'string') throw new Error('The server did not return a result.');
+        addMessage({ type: 'assistant', content: formatShellRun(result), timestamp: Date.now() });
+      })
+      .catch((error: unknown) => {
+        addMessage({ type: 'error', content: `/run failed: ${error instanceof Error ? error.message : 'unknown error'}`, timestamp: Date.now() });
+      });
+  }, [addMessage, selectedProject]);
+  const applyAppCommand = useCallback((command: AppUiCommand, commandArgs = '') => { if (isComposerSealed()) return; return runAppUiCommand(command, { openSessionPicker: palette.openSessionPicker, startNewChat: palette.startNewChat, openSettings: () => onShowSettings ? onShowSettings() : palette.openSettings(), openModelPicker: () => setModelPickerTrigger((n) => n + 1), openCostModal: showCostModal, forkSession, runShellCommand }, commandArgs); }, [forkSession, onShowSettings, palette, runShellCommand, showCostModal]);
 
   const { slashCommands, slashCommandsCount, filteredCommands, frequentCommands, commandQuery, showCommandMenu, selectedCommandIndex, resetCommandMenuState, handleCommandSelect, handleToggleCommandMenu, handleCommandInputChange, handleCommandMenuKeyDown } = useSlashCommands({ selectedProject, executionCwd, provider: 'gjc', sessionId: conversation, input, setInput, textareaRef, onLoginCommand: login, onAppCommand: (command) => { const app = findAppUiCommand(command.name); if (app) applyAppCommand(app); } });
   const { showFileDropdown, filteredFiles, selectedFileIndex, renderInputWithMentions, selectFile, setCursorPosition, handleFileMentionsKeyDown } = useFileMentions({ selectedProject, executionCwd, sessionId: conversation, input, setInput, textareaRef });
@@ -198,7 +223,7 @@ export function useChatComposerState(args: UseChatComposerStateArgs) {
     const signIn = /^\/login(?:\s+(.*))?$/.exec(text.trim()); if (signIn) { login(signIn[1]?.trim() || undefined); resetCommandMenuState(); return; }
     if (isLoading) { queueOwner.current = composerOwner; setQueuedDrafts((q) => [...q, { id: newQueuedDraftId(), content: text, images: files, options: sendOptions }]); clearComposer(); eraseDraft(); return; }
     const candidate = text.trimEnd(); const help = candidate.trim().toLowerCase() === 'help';
-    if (candidate.startsWith('/') || help) { const gap = candidate.indexOf(' '); const name = help ? '/help' : gap > 0 ? candidate.slice(0, gap) : candidate; const commandArgs = gap > 0 ? candidate.slice(gap).trim() : ''; const app = findAppUiCommand(resolveCommandAlias(name)); if (app && (app.interceptWithArgs !== false || !commandArgs)) { clearComposer(); applyAppCommand(app); return; } const notice = getLocalCommandNotice(name, commandArgs); if (notice) { clearComposer(); addMessage({ type: 'assistant', content: notice, timestamp: Date.now() }); return; } 
+    if (candidate.startsWith('/') || help) { const gap = candidate.indexOf(' '); const name = help ? '/help' : gap > 0 ? candidate.slice(0, gap) : candidate; const commandArgs = gap > 0 ? candidate.slice(gap).trim() : ''; const app = findAppUiCommand(resolveCommandAlias(name)); if (app && (app.interceptWithArgs !== false || !commandArgs)) { clearComposer(); applyAppCommand(app, commandArgs); return; } const notice = getLocalCommandNotice(name, commandArgs); if (notice) { clearComposer(); addMessage({ type: 'assistant', content: notice, timestamp: Date.now() }); return; } 
       // Runtime slash commands run at once, as in the GJC CLI. A handoff moves
       // the runtime to a fresh session; the next session_upserted for a new id
       // in this project is it, and the app follows instead of staying on the

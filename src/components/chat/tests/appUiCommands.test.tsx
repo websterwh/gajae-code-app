@@ -70,6 +70,7 @@ test('runAppUiCommand dispatches each action id to its action', () => {
     openModelPicker: () => { calls.push('open-model-picker'); },
     openCostModal: () => { calls.push('open-cost-modal'); },
     forkSession: () => { calls.push('fork-session'); },
+    runShellCommand: () => { calls.push('run-shell-command'); },
   };
 
   for (const command of APP_UI_COMMANDS) {
@@ -148,6 +149,48 @@ test('typed /cost is an app command and does not fetch', async () => {
   assert.equal(fetchCalls, 0);
   assert.deepEqual(sentMessages, []);
   assert.deepEqual(addedMessages, []);
+});
+
+test('typed /run asks the server and renders the output, never the model', async () => {
+  const sentMessages: unknown[] = [];
+  const addedMessages: unknown[] = [];
+  const composer = captureComposer(sentMessages, addedMessages);
+  const originalFetch = globalThis.fetch;
+  const requests: Array<{ url: string; body: unknown }> = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    requests.push({ url: String(input), body: init?.body ? JSON.parse(String(init.body)) : null });
+    return new Response(JSON.stringify({
+      success: true,
+      data: {
+        command: 'adb connect 127.0.0.1:5555',
+        cwd: '/repos/project-one',
+        exitCode: 0,
+        signal: null,
+        output: 'connected to 127.0.0.1:5555\n',
+        truncated: false,
+        timedOut: false,
+        durationMs: 120,
+      },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  }) as typeof fetch;
+
+  try {
+    composer.handleVoiceTranscript('/run adb connect 127.0.0.1:5555');
+    await composer.handleSubmit(submitEvent);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.deepEqual(sentMessages, [], 'a /run command must not reach the model');
+  assert.deepEqual(requests.map((request) => request.url), ['/api/shell/run']);
+  assert.deepEqual(requests[0]?.body, { command: 'adb connect 127.0.0.1:5555', cwd: '/repos/project-one' });
+  assert.equal((addedMessages[0] as { type: string }).type, 'user');
+  assert.equal((addedMessages[0] as { content: string }).content, '/run adb connect 127.0.0.1:5555');
+  const result = addedMessages[1] as { type: string; content: string };
+  assert.equal(result.type, 'assistant');
+  assert.match(result.content, /exit 0/u);
+  assert.match(result.content, /connected to 127\.0\.0\.1:5555/u);
 });
 
 test('typed TUI-only command gets a local notice instead of a model prompt', async () => {

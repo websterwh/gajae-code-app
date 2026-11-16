@@ -24,7 +24,8 @@ type AppUiCommandActionId =
   | 'open-settings'
   | 'open-model-picker'
   | 'open-cost-modal'
-  | 'fork-session';
+  | 'fork-session'
+  | 'run-shell-command';
 
 export type AppUiCommand = {
   name: string;
@@ -39,6 +40,11 @@ export type AppUiCommand = {
    * directly.
    */
   interceptWithArgs?: boolean;
+  /**
+   * When true, the command is meaningless without arguments (e.g. `/run`), so
+   * choosing it from the menu inserts it for typing instead of running it bare.
+   */
+  requiresArguments?: boolean;
 };
 
 export type AppUiCommandActions = {
@@ -48,6 +54,8 @@ export type AppUiCommandActions = {
   openModelPicker: () => void;
   openCostModal: () => void;
   forkSession: () => void;
+  /** Runs one shell command in the session's project and reports the result. */
+  runShellCommand: (command: string) => void;
 };
 
 export const APP_UI_COMMANDS: readonly AppUiCommand[] = [
@@ -102,6 +110,14 @@ export const APP_UI_COMMANDS: readonly AppUiCommand[] = [
     actionId: 'fork-session',
     interceptWithArgs: false,
   },
+  {
+    name: '/run',
+    description: 'Run a shell command here and show its output',
+    namespace: 'app',
+    type: 'app',
+    actionId: 'run-shell-command',
+    requiresArguments: true,
+  },
 ];
 
 const APP_UI_COMMANDS_BY_NAME = new Map(
@@ -114,7 +130,7 @@ export const findAppUiCommand = (commandName: string): AppUiCommand | undefined 
 export const isAppUiCommand = (command: { type?: unknown }): boolean =>
   command.type === 'app';
 
-export function runAppUiCommand(command: AppUiCommand, actions: AppUiCommandActions): void {
+export function runAppUiCommand(command: AppUiCommand, actions: AppUiCommandActions, args = ''): void {
   switch (command.actionId) {
     case 'open-session-picker':
       actions.openSessionPicker();
@@ -133,6 +149,9 @@ export function runAppUiCommand(command: AppUiCommand, actions: AppUiCommandActi
       break;
     case 'fork-session':
       actions.forkSession();
+      break;
+    case 'run-shell-command':
+      actions.runShellCommand(args);
       break;
   }
 }
