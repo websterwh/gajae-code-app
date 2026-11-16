@@ -66,6 +66,7 @@ export default function AuthenticationSettingsTab() {
   const [secret, setSecret] = useState('');
   /** Text as typed, so a trailing comma survives until the next entry lands. */
   const [groupsText, setGroupsText] = useState('');
+  const [ipsText, setIpsText] = useState('');
   const [discovery, setDiscovery] = useState<Discovery | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [saveState, setSaveState] = useState<SaveState>('idle');
@@ -88,6 +89,7 @@ export default function AuthenticationSettingsTab() {
         if (body.data) {
           setConfig(body.data);
           setGroupsText(body.data.allowedGroups.join(', '));
+          setIpsText(body.data.allowedIps.join(', '));
         }
         setLoadFailed(false);
       } else {
@@ -115,7 +117,7 @@ export default function AuthenticationSettingsTab() {
         redirectUri: config.redirectUri,
         allowedGroups: parseList(groupsText),
         allowLocal: config.allowLocal,
-        allowedIps: config.allowedIps,
+        allowedIps: parseList(ipsText),
         ...(secret ? { clientSecret: secret } : {}),
         ...changes,
       }),
@@ -124,11 +126,16 @@ export default function AuthenticationSettingsTab() {
     if (!response.ok || !body.success) {
       setSaveState('error');
       setError(body.error?.message ?? t('authentication.saveFailed'));
+      // The toggle flipped optimistically; a refused save must put it back so
+      // the switch never shows a state the server did not accept.
+      if (changes.enabled !== undefined) patch({ enabled: !changes.enabled });
+      if (changes.allowLocal !== undefined) patch({ allowLocal: !changes.allowLocal });
       return;
     }
     if (body.data) {
       setConfig(body.data);
       setGroupsText(body.data.allowedGroups.join(', '));
+      setIpsText(body.data.allowedIps.join(', '));
     }
     setSecret('');
     setSaveState('saved');
@@ -249,8 +256,8 @@ export default function AuthenticationSettingsTab() {
             />
           </SettingsRow>
           <SettingsRow label={t('authentication.allowedIps')} description={t('authentication.allowedIpsHint')} className="flex-col items-stretch gap-2">
-            <input className={inputClass} value={config.allowedIps.join(', ')} placeholder="192.168.1.0/24, 10.0.0.5"
-              onChange={(event) => patch({ allowedIps: event.target.value.split(',').map((value) => value.trim()).filter(Boolean) })} />
+            <input className={inputClass} value={ipsText} placeholder="192.168.1.0/24, 10.0.0.5"
+              onChange={(event) => setIpsText(event.target.value)} />
           </SettingsRow>
           {config.allowLocal && (
             <p className="border-t border-border px-4 py-3 text-xs text-muted-foreground">
