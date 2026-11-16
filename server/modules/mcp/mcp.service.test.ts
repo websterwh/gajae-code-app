@@ -139,6 +139,59 @@ test('add → list → toggle → pin → verify → remove against a temporary 
   assert.deepEqual(await service.list('global'), []);
 });
 
+test('an installed package is found from a launcher spec, an installed binary, or the catalog', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'mcp-package-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const ledgerFile = join(root, 'provision-ledger.json');
+  await writeFile(ledgerFile, JSON.stringify({
+    version: 1,
+    packages: {
+      uv: { mempalace: { spec: 'mempalace', version: '0.4.2', status: 'installed' } },
+      pip: {},
+      npm: {
+        // The ledger is keyed by the bare name the installer resolved.
+        '@playwright/mcp': { spec: '@playwright/mcp@latest', version: '2.1.0', status: 'installed' },
+        'api-anything': { spec: 'api-anything', version: '1.9.0', status: 'installed' },
+      },
+      aqua: {},
+    },
+  }));
+  await writeFile(join(root, 'mcp.json'), JSON.stringify({
+    mcpServers: {
+      mempalace: { type: 'stdio', command: '/root/.gjc/app/bin/mempalace-mcp', args: [] },
+      'api-anything': { type: 'stdio', command: '/data/npm-global/bin/api-anything', args: [] },
+      playwright: { type: 'stdio', command: 'npx', args: ['-y', '@playwright/mcp@latest'] },
+      canvas: { type: 'http', url: 'https://canvas.example/mcp' },
+    },
+  }));
+  const service = new McpService({ agentDir: root, ledgerPath: ledgerFile });
+
+  const rows = await service.list('global');
+  const row = (name: string) => rows.find((server) => server.name === name);
+
+  // `npx -y pkg@latest`: the tag is not part of the package name the ledger holds.
+  assert.equal(row('playwright')?.packageName, '@playwright/mcp');
+  assert.equal(row('playwright')?.install?.version, '2.1.0');
+
+  // A command that is the installed binary, not a launcher, is still a package.
+  assert.equal(row('api-anything')?.pinnable, true);
+  assert.equal(row('api-anything')?.packageName, 'api-anything');
+  assert.equal(row('api-anything')?.install?.version, '1.9.0');
+
+  // MemPalace's binary name differs from its package, so the catalog names it.
+  assert.equal(row('mempalace')?.pinnable, true);
+  assert.equal(row('mempalace')?.packageName, 'mempalace');
+  assert.equal(row('mempalace')?.install?.version, '0.4.2');
+
+  // A remote server is not a package and stays unpinnable.
+  assert.equal(row('canvas')?.pinnable, false);
+
+  const pinned = await service.pin('global', 'mempalace', '0.4.0');
+  assert.equal(pinned.pin, '0.4.0');
+  const ledger = JSON.parse(await readFile(ledgerFile, 'utf8')) as { packages: { uv: Record<string, { pin?: string }> } };
+  assert.equal(ledger.packages.uv.mempalace?.pin, '0.4.0');
+});
+
 test('remote servers are not pinnable, and duplicate names are rejected', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'mcp-remote-'));
   t.after(() => rm(root, { recursive: true, force: true }));

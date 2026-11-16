@@ -18,6 +18,8 @@ import {
   ledgerFilePath,
   readLedger,
   writeLedger,
+  type InstallManager,
+  type Ledger,
   type LedgerEntry,
 } from './ledger.js';
 import {
@@ -33,7 +35,7 @@ import {
   type McpServerEntry,
   type PublicMcpServer,
 } from './mcp.config.js';
-import { isDowngrade, normalizePin } from './pins.js';
+import { isDowngrade, normalizePin, parsePackageSpec } from './pins.js';
 import { tailLines } from './provision.js';
 import { provisionStateIsLive, provisionStatePath, readProvisionState } from './provision-state.js';
 import { createRegistryClient, type RegistryClient } from './registry-client.js';
@@ -53,6 +55,27 @@ function parseNpmVersion(stdout: string): string | null {
   } catch {
     return /^v?(\S+)$/u.exec(text)?.[1] ?? null;
   }
+}
+
+/** The ledger keyed by package name, with the manager that recorded it. */
+type LedgerIndex = Record<string, { manager: InstallManager; entry: LedgerEntry }>;
+
+/** npm is applied last: its bin directory leads PATH, so it is the binary a shell finds. */
+function indexLedger(ledger: Ledger): LedgerIndex {
+  const index: LedgerIndex = {};
+  for (const manager of ['uv', 'pip', 'aqua', 'npm'] as const) {
+    for (const [name, entry] of Object.entries(ledger.packages[manager])) {
+      index[name] = { manager, entry };
+    }
+  }
+  return index;
+}
+
+/** Only the two managers a pin can address; an aqua release is not a package version. */
+function installedPackage(manager: InstallManager, name: string): { manager: 'npm' | 'pypi'; name: string } | null {
+  if (manager === 'npm') return { manager: 'npm', name };
+  if (manager === 'uv' || manager === 'pip') return { manager: 'pypi', name };
+  return null;
 }
 
 function spawnCommand(command: string, args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
@@ -305,15 +328,47 @@ export class McpService {
     return version;
   }
 
-  private view(name: string, entry: McpServerEntry, scope: McpScope, ledgerEntries: Record<string, LedgerEntry>): McpServerView {
-    const pkg = transportOf(entry) === 'stdio' ? packageNameFromEntry(entry) : null;
-    const install = pkg ? ledgerEntries[pkg.name] ?? null : null;
-    return { ...publicServer(name, entry, scope), install };
+  /**
+   * The package a stdio server runs.
+   *
+   * A config can point at the binary the installer linked instead of the
+   * launcher: `command: /root/.gjc/app/bin/mempalace-mcp` rather than
+   * `uvx --from mempalace mempalace-mcp`. That argv carries no package name, so
+   * the row printed the filesystem path and offered no version or pin even
+   * though the package was installed and on PATH. The ledger knows it, so a
+   * binary named after a ledger entry, or a catalog entry carrying this
+   * server's name, identifies the package.
+   */
+  private packageFor(name: string, entry: McpServerEntry, ledger: LedgerIndex): { manager: 'npm' | 'pypi'; name: string } | null {
+    if (transportOf(entry) !== 'stdio') return null;
+    const direct = packageNameFromEntry(entry);
+    if (direct) return direct;
+    const executable = path.basename(String(entry.command ?? '').trim());
+    if (!executable) return null;
+    const byBinary = ledger[executable];
+    if (byBinary) return installedPackage(byBinary.manager, executable);
+    const packaged = bundledCatalog().find((candidate) => candidate.name === name)?.package;
+    if (!packaged) return null;
+    const spec = parsePackageSpec(packaged.name).name;
+    const known = ledger[spec];
+    return known ? installedPackage(known.manager, spec) : null;
   }
 
-  private async allLedgerEntries(): Promise<Record<string, LedgerEntry>> {
-    const ledger = await readLedger(this.ledgerFile());
-    return { ...ledger.packages.uv, ...ledger.packages.pip, ...ledger.packages.npm, ...ledger.packages.aqua };
+  private view(name: string, entry: McpServerEntry, scope: McpScope, ledger: LedgerIndex): McpServerView {
+    const pkg = this.packageFor(name, entry, ledger);
+    const install = pkg ? ledger[pkg.name]?.entry ?? null : null;
+    const server: McpServerView = { ...publicServer(name, entry, scope), install };
+    // publicServer reads the package from the command alone; one recovered from
+    // the ledger is what gives a binary-path entry its version chip and pin.
+    if (pkg) {
+      server.pinnable = true;
+      server.packageName = pkg.name;
+    }
+    return server;
+  }
+
+  private async allLedgerEntries(): Promise<LedgerIndex> {
+    return indexLedger(await readLedger(this.ledgerFile()));
   }
 
   async list(scope: McpScope | 'all' = 'global', projectPath?: string): Promise<McpServerView[]> {
@@ -417,7 +472,7 @@ export class McpService {
     // Re-read so the returned view is what actually landed on disk.
     const reread = await this.read(scope, resolvedProject);
     if (!reread.mcpServers[name]) throw new Error('The MCP config write did not persist.');
-    if ('pin' in patch) await this.recordPin(reread.mcpServers[name]);
+    if ('pin' in patch) await this.recordPin(name, reread.mcpServers[name]);
     return this.view(name, reread.mcpServers[name], scope, await this.allLedgerEntries());
   }
 
@@ -446,13 +501,14 @@ export class McpService {
     const resolvedProject = scope === 'project' ? this.requireProject(projectPath) : undefined;
     const file = await this.read(scope, resolvedProject);
     const entry = file.mcpServers[name];
-    if (!entry) throw new Error('MCP server was not found.');
-    const pkg = transportOf(entry) === 'stdio' ? packageNameFromEntry(entry) : null;
+    if (!entry) throw new Error('MCP server was not found.');    const currentLedger = await readLedger(this.ledgerFile());
+    const index = indexLedger(currentLedger);
+    const pkg = this.packageFor(name, entry, index);
     if (!pkg) throw new Error('This server has no package version to pin.');
 
-    const currentLedger = await readLedger(this.ledgerFile());
-    const bucket = pkg.manager === 'npm' ? currentLedger.packages.npm : currentLedger.packages.pip;
-    const current = bucket[pkg.name]?.version ?? null;
+    // Read the entry the installer recorded: a uv tool is a pypi package, so a
+    // bucket chosen from the manager name would miss its uv entry.
+    const current = index[pkg.name]?.entry.version ?? null;
     const normalized = normalizePin(version);
     // An explicit older version is a pin by definition; normalizePin already
     // keeps exactly that version, and isDowngrade documents the intent.
@@ -464,16 +520,16 @@ export class McpService {
     await this.write(scope, resolvedProject, file);
     const reread = await this.read(scope, resolvedProject);
     if (!reread.mcpServers[name]) throw new Error('The MCP config write did not persist.');
-    await this.recordPin(reread.mcpServers[name]);
+    await this.recordPin(name, reread.mcpServers[name]);
     return this.view(name, reread.mcpServers[name], scope, await this.allLedgerEntries());
   }
 
-  private async recordPin(entry: McpServerEntry): Promise<void> {
-    const pkg = transportOf(entry) === 'stdio' ? packageNameFromEntry(entry) : null;
-    if (!pkg) return;
+  private async recordPin(name: string, entry: McpServerEntry): Promise<void> {
     const ledger = await readLedger(this.ledgerFile());
-    const bucket = pkg.manager === 'npm' ? ledger.packages.npm : ledger.packages.pip;
-    const current = bucket[pkg.name];
+    const index = indexLedger(ledger);
+    const pkg = this.packageFor(name, entry, index);
+    if (!pkg) return;
+    const current = index[pkg.name]?.entry;
     if (!current) return;
     if (entry.pin) current.pin = entry.pin;
     else delete current.pin;

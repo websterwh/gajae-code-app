@@ -2,7 +2,7 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 
-import { isPinnableTransport } from './pins.js';
+import { isPinnableTransport, parsePackageSpec } from './pins.js';
 
 export const REDACTED = '${REDACTED}';
 export const MCP_SCOPES = ['global', 'project'] as const;
@@ -136,8 +136,13 @@ export function packageNameFromEntry(entry: McpServerEntry): { manager: 'npm' | 
   const args = Array.isArray(entry.args) ? entry.args : [];
   const firstValue = args.find((arg) => !arg.startsWith('-'));
   if (!firstValue) return null;
-  if (command === 'npx' || command === 'npm') return { manager: 'npm', name: firstValue };
-  if (command === 'uvx' || command === 'uv') return { manager: 'pypi', name: firstValue };
+  // The argument is a package spec, not a bare name: `@playwright/mcp@latest`,
+  // `git+https://github.com/oraios/serena`, `serena==0.4.1`. The ledger and the
+  // pins are keyed by the bare name, so a raw spec never matched an installed
+  // package and the row reported no version.
+  const name = parsePackageSpec(firstValue).name || firstValue;
+  if (command === 'npx' || command === 'npm') return { manager: 'npm', name };
+  if (command === 'uvx' || command === 'uv') return { manager: 'pypi', name };
   return null;
 }
 
