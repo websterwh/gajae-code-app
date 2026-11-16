@@ -11,7 +11,7 @@ import { adoptSeeds, desiredPackagesPath, envSeeds, readDesired, writeDesired } 
 import { ledgerFilePath, readLedger, writeLedger, type InstallManager } from './ledger.js';
 import { packageNameFromEntry, readMcpConfig } from './mcp.config.js';
 import { parsePackageSpec } from './pins.js';
-import { autoUpdatePackages, provisionPackages, spawnCommandRunner } from './provision.js';
+import { autoUpdatePackages, provisionPackages, serverPackages, spawnCommandRunner } from './provision.js';
 import { provisionStatePath, writeProvisionState, type ProvisionState } from './provision-state.js';
 
 async function pinsFromConfigAndLedger(ledger: Awaited<ReturnType<typeof readLedger>>): Promise<Record<string, string | null>> {
@@ -67,6 +67,22 @@ async function main(): Promise<void> {
       if (!group.packages.some((spec) => parsePackageSpec(spec).name === name)) group.packages.push(entry.spec);
       if (entry.pin) pins[name] = entry.pin;
     }
+  }
+
+  // The MCP config is the third source: a server that runs a package gets that
+  // package installed on the mount and upgraded on later boots, so its row has
+  // a version to pin and the launcher cannot sit on a stale cache.
+  try {
+    const config = await readMcpConfig('global');
+    const fromServers = serverPackages(config.mcpServers);
+    for (const pkg of fromServers) {
+      const group = groups.find((candidate) => candidate.manager === pkg.manager);
+      if (group && !group.packages.some((spec) => parsePackageSpec(spec).name === pkg.name)) group.packages.push(pkg.spec);
+      if (pkg.pin) pins[pkg.name] = pkg.pin;
+    }
+    if (fromServers.length > 0) console.log(`[provision] ${fromServers.length} package(s) from the MCP config.`);
+  } catch (error) {
+    console.error(`[provision] could not read the MCP config: ${error instanceof Error ? error.message : error}`);
   }
 
   const state: ProvisionState = {

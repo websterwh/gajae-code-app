@@ -1,5 +1,25 @@
 [
   {
+    "name": "api-anything",
+    "title": "API Anything",
+    "description": "Learn reusable operations from a website's browser traffic and call them from a CLI, library or MCP server.",
+    "transport": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "api-anything@latest"
+    ],
+    "package": {
+      "manager": "npm",
+      "name": "api-anything"
+    },
+    "repository": {
+      "url": "https://github.com/goodnight000/api-anything",
+      "source": "curated"
+    },
+    "origin": "curated"
+  },
+  {
     "name": "atlas-docs",
     "title": "Atlas Docs",
     "description": "Provide LLMs hosted, clean markdown documentation of libraries and frameworks",
@@ -1014,6 +1034,26 @@
     "origin": "curated"
   },
   {
+    "name": "mobile-mcp",
+    "title": "Mobile MCP",
+    "description": "Drive Android and iOS devices and emulators through their accessibility trees.",
+    "transport": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@mobilenext/mobile-mcp@latest"
+    ],
+    "package": {
+      "manager": "npm",
+      "name": "@mobilenext/mobile-mcp"
+    },
+    "repository": {
+      "url": "https://github.com/mobile-next/mobile-mcp",
+      "source": "curated"
+    },
+    "origin": "curated"
+  },
+  {
     "name": "mongodb",
     "title": "MongoDB",
     "description": "Query and manage MongoDB databases and collections.",
@@ -1543,6 +1583,28 @@
     "popularity": 441839,
     "homepage": "https://hub.docker.com/r/mcp/sequentialthinking",
     "origin": "marketplace"
+  },
+  {
+    "name": "serena",
+    "title": "Serena",
+    "description": "Semantic code retrieval and editing through language-server tools.",
+    "transport": "stdio",
+    "command": "uvx",
+    "args": [
+      "--from",
+      "git+https://github.com/oraios/serena",
+      "serena",
+      "start-mcp-server"
+    ],
+    "package": {
+      "manager": "git",
+      "name": "git+https://github.com/oraios/serena"
+    },
+    "repository": {
+      "url": "https://github.com/oraios/serena",
+      "source": "curated"
+    },
+    "origin": "curated"
   },
   {
     "name": "slack",

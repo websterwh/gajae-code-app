@@ -307,7 +307,10 @@ test('the generator refuses to write fewer than 60 entries and writes mirrored, 
   const deployText = await readFile(join(output, 'deploy/mcp/catalog.json'), 'utf8');
   assert.equal(deployText, bundledText);
   const entries = JSON.parse(bundledText) as CatalogEntry[];
-  assert.equal(entries.length, 60);
+  // 37 marketplace fixtures survive (the namespaced one does not) and every
+  // curated entry is merged last, so the curated file is the only growing part.
+  const curatedCount = (JSON.parse(await readFile(new URL('../../../data/catalog.curated.json', import.meta.url), 'utf8')) as unknown[]).length;
+  assert.equal(entries.length, 37 + curatedCount);
   assert.ok(entries.every((entry) => entry.name !== 'ai.junk'));
   assert.equal(entries.find((entry) => entry.name === 'fixture-remote')?.url, 'https://mcp.example.test/mcp');
   assert.equal(entries.find((entry) => entry.name === 'fixture-remote')?.command, undefined);

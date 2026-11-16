@@ -12,7 +12,8 @@ import {
   recordInstalled,
   writeLedger,
 } from './ledger.js';
-import { autoUpdatePackages, provisionPackages, uvToolVersion, type CommandRunner } from './provision.js';
+import { normalizeCatalogEntry } from './catalog.js';
+import { autoUpdatePackages, provisionPackages, serverPackages, uvToolVersion, type CommandRunner } from './provision.js';
 import { provisionStateIsLive } from './provision-state.js';
 
 type Reply = { code: number; stdout?: string; stderr?: string };
@@ -25,6 +26,33 @@ function scripted(replies: Record<string, Reply>, calls: string[]): CommandRunne
     return { code: reply.code, stdout: reply.stdout ?? '', stderr: reply.stderr ?? '' };
   };
 }
+
+test('every configured server with a package is installed, including one that runs a binary', () => {
+  const catalog = [
+    normalizeCatalogEntry({
+      name: 'mempalace', transport: 'stdio', command: 'uvx', args: ['--from', 'mempalace', 'mempalace-mcp'],
+    }, 'bundled')!,
+  ];
+  const packages = serverPackages({
+    playwright: { command: 'npx', args: ['-y', '@playwright/mcp@latest'] },
+    serena: { command: 'uvx', args: ['--from', 'git+https://github.com/oraios/serena', 'serena', 'start-mcp-server'], pin: '0.4.1' },
+    mempalace: { command: '/root/.gjc/app/bin/mempalace-mcp' },
+    canvas: { type: 'http', url: 'https://canvas.example/mcp' },
+    off: { command: 'npx', args: ['-y', 'ghost'], disabled: true },
+  }, catalog);
+
+  assert.deepEqual(packages.map((pkg) => `${pkg.manager}:${pkg.name}`).sort(), ['npm:@playwright/mcp', 'uv:mempalace', 'uv:serena']);
+  const playwright = packages.find((pkg) => pkg.server === 'playwright');
+  // The spec as written, so a tagged launcher installs the tag the server runs.
+  assert.equal(playwright?.spec, '@playwright/mcp@latest');
+  assert.equal(playwright?.pin, null);
+  const serena = packages.find((pkg) => pkg.server === 'serena');
+  assert.equal(serena?.spec, 'git+https://github.com/oraios/serena');
+  // A pin in mcp.json reaches the installer, which is what auto-update reads.
+  assert.equal(serena?.pin, '0.4.1');
+  // The binary path says nothing; the catalog entry of the same name does.
+  assert.equal(packages.find((pkg) => pkg.server === 'mempalace')?.spec, 'mempalace');
+});
 
 test('the ledger survives a round trip and a failure never erases a good install', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'mcp-ledger-'));

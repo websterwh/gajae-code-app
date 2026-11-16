@@ -254,5 +254,35 @@
     "transport": "http",
     "url": "https://mcp.grep.app",
     "homepage": "https://grep.app"
+  },
+  {
+    "name": "api-anything",
+    "title": "API Anything",
+    "description": "Learn reusable operations from a website's browser traffic and call them from a CLI, library or MCP server.",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "api-anything@latest"],
+    "package": { "manager": "npm", "name": "api-anything" },
+    "repository": { "url": "https://github.com/goodnight000/api-anything", "source": "curated" }
+  },
+  {
+    "name": "mobile-mcp",
+    "title": "Mobile MCP",
+    "description": "Drive Android and iOS devices and emulators through their accessibility trees.",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@mobilenext/mobile-mcp@latest"],
+    "package": { "manager": "npm", "name": "@mobilenext/mobile-mcp" },
+    "repository": { "url": "https://github.com/mobile-next/mobile-mcp", "source": "curated" }
+  },
+  {
+    "name": "serena",
+    "title": "Serena",
+    "description": "Semantic code retrieval and editing through language-server tools.",
+    "transport": "stdio",
+    "command": "uvx",
+    "args": ["--from", "git+https://github.com/oraios/serena", "serena", "start-mcp-server"],
+    "package": { "manager": "git", "name": "git+https://github.com/oraios/serena" },
+    "repository": { "url": "https://github.com/oraios/serena", "source": "curated" }
   }
 ]

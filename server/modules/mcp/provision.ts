@@ -2,7 +2,9 @@ import { spawn } from 'node:child_process';
 import { homedir } from 'node:os';
 import path from 'node:path';
 
+import { bundledCatalog, type CatalogEntry } from './catalog.js';
 import { recordFailure, recordInstalled, type InstallManager, type Ledger, type LedgerEntry } from './ledger.js';
+import { packageSpecFromEntry, type McpServerEntry } from './mcp.config.js';
 import { normalizePin, parsePackageSpec, pinnedSpec } from './pins.js';
 
 export type CommandResult = { code: number; stdout: string; stderr: string };
@@ -406,6 +408,47 @@ export async function autoUpdatePackages(options: {
   }
 
   return outcomes;
+}
+
+export type ServerPackage = {
+  /** The mcp.json server the package belongs to. */
+  server: string;
+  manager: InstallManager;
+  spec: string;
+  name: string;
+  pin: string | null;
+};
+
+/**
+ * The packages the configured MCP servers run.
+ *
+ * `npx` and `uvx` resolve a spec against a cache and never move an existing
+ * copy forward, so a launcher server drifts behind its release on its own.
+ * Reading mcp.json puts those servers on the same install-and-upgrade path as
+ * a package added from Settings. A config that runs the installed binary
+ * instead of the launcher carries no spec, so the bundled catalog entry with
+ * the same server name supplies the package.
+ */
+export function serverPackages(
+  servers: Record<string, McpServerEntry>,
+  catalog: readonly CatalogEntry[] = bundledCatalog(),
+): ServerPackage[] {
+  const packages: ServerPackage[] = [];
+  for (const [server, entry] of Object.entries(servers)) {
+    if (entry.disabled === true || !entry.command) continue;
+    const direct = packageSpecFromEntry(entry);
+    const known = direct ? null : catalog.find((candidate) => candidate.name === server && candidate.command);
+    const pkg = direct ?? (known ? packageSpecFromEntry({ command: known.command, args: known.args }) : null);
+    if (!pkg) continue;
+    packages.push({
+      server,
+      manager: pkg.manager === 'npm' ? 'npm' : 'uv',
+      spec: pkg.spec,
+      name: pkg.name,
+      pin: entry.pin ?? null,
+    });
+  }
+  return packages;
 }
 
 function upgradeCommand(manager: InstallManager, parsed: ReturnType<typeof parsePackageSpec>): { command: string; args: string[] } {

@@ -130,20 +130,32 @@ export function transportOf(entry: McpServerEntry): McpTransport {
   return 'stdio';
 }
 
-/** The package a stdio server runs, when the command is a known launcher. */
-export function packageNameFromEntry(entry: McpServerEntry): { manager: 'npm' | 'pypi'; name: string } | null {
-  const command = path.basename(String(entry.command ?? ''));
+/**
+ * The package a stdio server runs, when the command is a known launcher.
+ *
+ * `spec` is the argument as written, so a versioned or git spec installs what
+ * the server actually runs. `name` is the bare package name, which is the key
+ * the ledger and the pins use: `@playwright/mcp@latest` and
+ * `git+https://github.com/oraios/serena` are both recorded under the bare name.
+ */
+export type EntryPackage = { manager: 'npm' | 'pypi'; spec: string; name: string };
+
+export function packageSpecFromEntry(entry: McpServerEntry): EntryPackage | null {
+  const command = path.basename(String(entry.command ?? '')).replace(/\.(?:cmd|exe)$/iu, '');
   const args = Array.isArray(entry.args) ? entry.args : [];
+  // Only an argv token can be a package. A path is the binary the installer
+  // linked, not something to install.
   const firstValue = args.find((arg) => !arg.startsWith('-'));
-  if (!firstValue) return null;
-  // The argument is a package spec, not a bare name: `@playwright/mcp@latest`,
-  // `git+https://github.com/oraios/serena`, `serena==0.4.1`. The ledger and the
-  // pins are keyed by the bare name, so a raw spec never matched an installed
-  // package and the row reported no version.
+  if (!firstValue || path.isAbsolute(firstValue)) return null;
   const name = parsePackageSpec(firstValue).name || firstValue;
-  if (command === 'npx' || command === 'npm') return { manager: 'npm', name };
-  if (command === 'uvx' || command === 'uv') return { manager: 'pypi', name };
+  if (command === 'npx' || command === 'npm') return { manager: 'npm', spec: firstValue, name };
+  if (command === 'uvx' || command === 'uv') return { manager: 'pypi', spec: firstValue, name };
   return null;
+}
+
+export function packageNameFromEntry(entry: McpServerEntry): { manager: 'npm' | 'pypi'; name: string } | null {
+  const pkg = packageSpecFromEntry(entry);
+  return pkg ? { manager: pkg.manager, name: pkg.name } : null;
 }
 
 function publicValues(record: Record<string, string> | undefined): { values: Record<string, string>; isSet: Record<string, boolean> } {
