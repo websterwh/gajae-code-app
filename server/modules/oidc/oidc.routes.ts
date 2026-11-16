@@ -5,6 +5,7 @@ import { asyncHandler } from '@/shared/utils.js';
 
 import {
   OIDC_REDIRECT_PATH,
+  mergeOidcConfig,
   oidcEnforcing,
   publicOidcConfig,
   readOidcConfig,
@@ -146,7 +147,7 @@ export function createOidcRouter() {
   router.put('/config', asyncHandler((request, response) => {
     if (!requireOwnerWhenEnforced(request, response)) return;
     const body = (request.body ?? {}) as Record<string, unknown>;
-    const next = writeOidcConfig({
+    const next = mergeOidcConfig({
       enabled: typeof body.enabled === 'boolean' ? body.enabled : undefined,
       issuer: body.issuer === undefined ? undefined : text(body.issuer, 512),
       clientId: body.clientId === undefined ? undefined : text(body.clientId, 512),
@@ -160,6 +161,7 @@ export function createOidcRouter() {
     });
     const problem = validateOidcConfig(next);
     if (problem) return fail(response, 400, 'OIDC_CONFIG_INVALID', problem);
+    writeOidcConfig(next);
     ok(response, publicOidcConfig(next));
   }));
 

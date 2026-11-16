@@ -363,7 +363,7 @@
     "redirectUri": "リダイレクト URI",
     "redirectUriHint": "空のままにするとリクエストから導出します: /api/auth/oidc/callback",
     "allowedGroups": "許可するグループ",
-    "allowedGroupsHint": "プロバイダーが groups クレームで示す名前をカンマ区切りで指定します。空ならプロバイダーがサインインさせる任意のアカウントを許可し、groups スコープは自動的に要求されます。",
+    "allowedGroupsHint": "プロバイダーが groups クレームで示す名前をカンマ区切りで指定します。サインインを有効にするには 1 つ以上必要です。groups スコープは自動的に要求されます。",
     "localTitle": "ローカルアクセス",
     "localIntro": "外部にはサインインを求めつつ、自分のネットワーク内のマシンはそのまま通します。",
     "localAccess": "ローカルネットワークをサインインなしで許可",

@@ -154,13 +154,14 @@ test('the authorize URL carries PKCE, state and nonce', () => {
   assert.ok(url.searchParams.get('code_challenge'));
 });
 
-test('without an allowed group, any identity the provider signed in is accepted', () => {
+test('an empty allowed-group list admits nobody, and the provider flag is still not the gate', () => {
   const base = configFor('https://auth.example.com');
-  const identity = { sub: 's', email: 'owner@example.com', emailVerified: true, groups: [] };
-  assert.equal(identityAllowed(base, identity), true);
+  const identity = { sub: 's', email: 'owner@example.com', emailVerified: true, groups: ['gajae-admins'] };
+  assert.equal(identityAllowed(base, identity), false);
+  assert.match(String(identityRejection(base, identity)), /allowed group/u);
   // The provider's flag is reported, not decisive: Pocket ID leaves it unset for
-  // accounts it creates, which locked the owner out of an app nobody else used.
-  assert.equal(identityAllowed(base, { ...identity, emailVerified: false }), true);
+  // accounts it creates, and the group is what decides.
+  assert.equal(identityAllowed({ ...base, allowedGroups: ['gajae-admins'] }, { ...identity, emailVerified: false }), true);
 });
 
 test('groups gate sign-in and every configured list has to pass', () => {
@@ -172,7 +173,7 @@ test('groups gate sign-in and every configured list has to pass', () => {
 });
 
 test('a rejection names the gate that refused the identity', () => {
-  const base = configFor('https://auth.example.com');
+  const base = { ...configFor('https://auth.example.com'), allowedGroups: ['staff'] };
   const identity = { sub: 's', email: 'owner@example.com', emailVerified: true, groups: ['staff'] };
   assert.equal(identityRejection(base, identity), null);
   assert.match(String(identityRejection({ ...base, allowedGroups: ['admins'] }, identity)), /staff/u);
@@ -236,9 +237,11 @@ test('local access is granted per address, and defaults to private ranges', () =
   assert.equal(clientAddressAllowed('8.8.8.8', ['192.168.1.0/24']), false);
   assert.equal(clientAddressAllowed('192.168.1.40', ['0.0.0.0/0']), true);
 
-  assert.match(String(validateOidcConfig({ ...configFor('https://a.example'), allowedIps: ['999.1.1.1'] })), /not an IP/u);
-  assert.equal(validateOidcConfig({ ...configFor('https://a.example'), allowedIps: ['192.168.1.0/24'] }), null);
-  assert.equal(validateOidcConfig({ ...configFor('https://a.example'), allowedIps: ['fc00::/7'] }), null);
+  assert.match(String(validateOidcConfig({ ...configFor('https://a.example'), allowedGroups: ['admins'], allowedIps: ['999.1.1.1'] })), /not an IP/u);
+  assert.equal(validateOidcConfig({ ...configFor('https://a.example'), allowedGroups: ['admins'], allowedIps: ['192.168.1.0/24'] }), null);
+  assert.equal(validateOidcConfig({ ...configFor('https://a.example'), allowedGroups: ['admins'], allowedIps: ['fc00::/7'] }), null);
+  // Sign-in with no group list would admit every account the provider signs in.
+  assert.match(String(validateOidcConfig(configFor('https://a.example'))), /allowed group/u);
 });
 
 test('the local bypass reports the ranges it actually grants', () => {
@@ -259,7 +262,7 @@ test('the gate is inert until the config is complete, and the exemption list is 
   assert.equal(oidcEnforcing({ ...configFor('https://a.example'), clientSecret: '' }), false);
   assert.equal(oidcEnforcing(configFor('https://a.example')), true);
   assert.equal(validateOidcConfig({ ...configFor('http://insecure.example') }), 'The issuer must use https.');
-  assert.equal(validateOidcConfig(configFor('http://localhost:8080')), null);
+  assert.equal(validateOidcConfig({ ...configFor('http://localhost:8080'), allowedGroups: ['admins'] }), null);
 
   for (const path of ['/health', '/api/auth/oidc/start', '/api/gjc/jobs', '/ws', '/.well-known/openid-configuration', '/assets/index-abc.js']) {
     assert.equal(isExemptPath(path), true, `${path} must stay reachable`);

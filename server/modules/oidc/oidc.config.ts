@@ -82,7 +82,8 @@ export function readOidcConfig(): OidcConfig {
   }
 }
 
-export function writeOidcConfig(patch: Partial<OidcConfig>): OidcConfig {
+/** Merge a patch without persisting it, so a rejected save changes nothing. */
+export function mergeOidcConfig(patch: Partial<OidcConfig>): OidcConfig {
   const current = readOidcConfig();
   const next: OidcConfig = {
     enabled: patch.enabled ?? current.enabled,
@@ -100,6 +101,12 @@ export function writeOidcConfig(patch: Partial<OidcConfig>): OidcConfig {
     allowLocal: patch.allowLocal ?? current.allowLocal,
     allowedIps: patch.allowedIps === undefined ? current.allowedIps : exactListOf(patch.allowedIps),
   };
+  return next;
+}
+
+/** Validate first, then persist: an invalid patch must not reach the database. */
+export function writeOidcConfig(patch: Partial<OidcConfig>): OidcConfig {
+  const next = mergeOidcConfig(patch);
   appConfigDb.set(CONFIG_KEY, JSON.stringify(next));
   return next;
 }
@@ -147,6 +154,9 @@ export function validateOidcConfig(config: OidcConfig): string | null {
   if (parsed.protocol !== 'https:' && !local) return 'The issuer must use https.';
   if (!config.clientId) return 'A client id is required.';
   if (!config.clientSecret) return 'A client secret is required.';
+  if (!config.allowedGroups.length) {
+    return 'Add at least one allowed group; otherwise every account the provider signs in would get full access.';
+  }
   for (const entry of config.allowedIps) {
     const [address, prefix] = entry.split('/');
     const family = isIP(address ?? '');

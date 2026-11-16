@@ -262,7 +262,9 @@ export async function completeSignIn(
  * locked the owner out of an app nobody else could reach.
  */
 export function identityRejection(config: OidcConfig, identity: OidcIdentity): string | null {
-  if (!config.allowedGroups.length) return null;
+  if (!config.allowedGroups.length) {
+    return 'No allowed group is configured, so sign-in is closed until an operator adds one.';
+  }
   const owned = new Set(identity.groups.map((group) => group.toLowerCase()));
   if (config.allowedGroups.some((group) => owned.has(group.toLowerCase()))) return null;
   return identity.groups.length

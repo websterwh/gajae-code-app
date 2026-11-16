@@ -17,6 +17,7 @@ export {
 export {
   DEFAULT_LOCAL_RANGES,
   OIDC_REDIRECT_PATH,
+  mergeOidcConfig,
   oidcEnforcing,
   readOidcConfig,
   publicOidcConfig,

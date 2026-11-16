@@ -363,7 +363,7 @@
     "redirectUri": "URI de redirection",
     "redirectUriHint": "Laissez vide pour la déduire de la requête : /api/auth/oidc/callback",
     "allowedGroups": "Groupes autorisés",
-    "allowedGroupsHint": "Noms séparés par des virgules que le fournisseur atteste dans sa revendication groups. Vide accepte tout compte que le fournisseur connecte ; la portée groups est demandée automatiquement.",
+    "allowedGroupsHint": "Noms séparés par des virgules que le fournisseur atteste dans sa revendication groups. Au moins un est requis lorsque la connexion est activée ; la portée groups est demandée automatiquement.",
     "localTitle": "Accès local",
     "localIntro": "Gardez la connexion pour l’extérieur pendant que les machines de votre réseau entrent directement.",
     "localAccess": "Autoriser les réseaux locaux sans connexion",

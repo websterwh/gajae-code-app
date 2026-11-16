@@ -363,7 +363,7 @@
     "redirectUri": "Weiterleitungs-URI",
     "redirectUriHint": "Leer lassen, um sie aus der Anfrage abzuleiten: /api/auth/oidc/callback",
     "allowedGroups": "Erlaubte Gruppen",
-    "allowedGroupsHint": "Komma-getrennte Namen, die der Anbieter in seinem groups-Anspruch bestätigt. Leer akzeptiert jedes Konto, bei dem der Anbieter eine Anmeldung durchführt; der groups-Scope wird automatisch angefordert.",
+    "allowedGroupsHint": "Komma-getrennte Namen, die der Anbieter in seinem groups-Anspruch bestätigt. Mindestens einer ist erforderlich, wenn die Anmeldung aktiviert ist; der groups-Scope wird automatisch angefordert.",
     "localTitle": "Lokaler Zugang",
     "localIntro": "Behalten Sie die Anmeldung für die Außenwelt, während Rechner in Ihrem eigenen Netz direkt hereinkommen.",
     "localAccess": "Lokale Netzwerke ohne Anmeldung zulassen",

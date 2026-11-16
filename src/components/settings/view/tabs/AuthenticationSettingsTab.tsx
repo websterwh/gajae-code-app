@@ -42,6 +42,11 @@ const normalizeIssuerInput = (value: string): string => value
   .replace(/\/+$/u, '')
   .replace(/\/\.well-known\/openid-configuration$/u, '');
 
+const parseList = (value: string): string[] => value
+  .split(',')
+  .map((entry) => entry.trim())
+  .filter(Boolean);
+
 const emptyConfig: OidcConfig = {
   enabled: false,
   issuer: '',
@@ -59,6 +64,8 @@ export default function AuthenticationSettingsTab() {
   const { t } = useTranslation('settings');
   const [config, setConfig] = useState<OidcConfig>(emptyConfig);
   const [secret, setSecret] = useState('');
+  /** Text as typed, so a trailing comma survives until the next entry lands. */
+  const [groupsText, setGroupsText] = useState('');
   const [discovery, setDiscovery] = useState<Discovery | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [saveState, setSaveState] = useState<SaveState>('idle');
@@ -78,7 +85,10 @@ export default function AuthenticationSettingsTab() {
       const response = await authenticatedFetch('/api/auth/oidc/config');
       if (response.ok) {
         const body = await response.json() as { data?: OidcConfig };
-        if (body.data) setConfig(body.data);
+        if (body.data) {
+          setConfig(body.data);
+          setGroupsText(body.data.allowedGroups.join(', '));
+        }
         setLoadFailed(false);
       } else {
         // Rendering empty defaults after a refused read is worse than showing
@@ -103,7 +113,7 @@ export default function AuthenticationSettingsTab() {
         clientId: config.clientId,
         scopes: config.scopes,
         redirectUri: config.redirectUri,
-        allowedGroups: config.allowedGroups,
+        allowedGroups: parseList(groupsText),
         allowLocal: config.allowLocal,
         allowedIps: config.allowedIps,
         ...(secret ? { clientSecret: secret } : {}),
@@ -116,7 +126,10 @@ export default function AuthenticationSettingsTab() {
       setError(body.error?.message ?? t('authentication.saveFailed'));
       return;
     }
-    if (body.data) setConfig(body.data);
+    if (body.data) {
+      setConfig(body.data);
+      setGroupsText(body.data.allowedGroups.join(', '));
+    }
     setSecret('');
     setSaveState('saved');
   };
@@ -198,8 +211,8 @@ export default function AuthenticationSettingsTab() {
               onChange={(event) => patch({ redirectUri: event.target.value })} />
           </SettingsRow>
           <SettingsRow label={t('authentication.allowedGroups')} description={t('authentication.allowedGroupsHint')} className="flex-col items-stretch gap-2">
-            <input className={inputClass} value={config.allowedGroups.join(', ')} placeholder="admins"
-              onChange={(event) => patch({ allowedGroups: event.target.value.split(',').map((value) => value.trim()).filter(Boolean) })} />
+            <input className={inputClass} value={groupsText} placeholder="default"
+              onChange={(event) => setGroupsText(event.target.value)} />
           </SettingsRow>
           <div className="flex flex-wrap items-center gap-2 border-t border-border px-4 py-3">
             <button type="button" onClick={() => void discover()} disabled={busy || !config.issuer}

@@ -363,7 +363,7 @@
     "redirectUri": "리디렉션 URI",
     "redirectUriHint": "비워 두면 요청에서 도출합니다: /api/auth/oidc/callback",
     "allowedGroups": "허용된 그룹",
-    "allowedGroupsHint": "공급자가 groups 클레임에서 주장하는 이름을 쉼표로 구분해 지정합니다. 비어 있으면 공급자가 로그인시키는 모든 계정을 허용하며 groups 스코프는 자동으로 요청됩니다.",
+    "allowedGroupsHint": "공급자가 groups 클레임에서 주장하는 이름을 쉼표로 구분해 지정합니다. 로그인을 사용하도록 설정하려면 하나 이상 필요하며 groups 스코프는 자동으로 요청됩니다.",
     "localTitle": "로컬 접근",
     "localIntro": "외부에는 로그인을 유지하면서 내 네트워크의 머신은 바로 들어오게 합니다.",
     "localAccess": "로그인 없이 로컬 네트워크 허용",

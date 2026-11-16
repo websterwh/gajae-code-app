@@ -363,7 +363,7 @@
     "redirectUri": "URI di reindirizzamento",
     "redirectUriHint": "Lascia vuoto per ricavarlo dalla richiesta: /api/auth/oidc/callback",
     "allowedGroups": "Gruppi consentiti",
-    "allowedGroupsHint": "Nomi separati da virgole che il provider attesta nel claim groups. Vuoto accetta qualsiasi account che il provider fa accedere; lo scope groups viene richiesto automaticamente.",
+    "allowedGroupsHint": "Nomi separati da virgole che il provider attesta nel claim groups. Almeno uno è richiesto quando l'accesso è attivo; lo scope groups viene richiesto automaticamente.",
     "localTitle": "Accesso locale",
     "localIntro": "Mantieni l’accesso per il mondo esterno mentre le macchine della tua rete entrano direttamente.",
     "localAccess": "Consenti le reti locali senza accesso",

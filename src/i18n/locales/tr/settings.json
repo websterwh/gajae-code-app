@@ -363,7 +363,7 @@
     "redirectUri": "Yönlendirme URI’si",
     "redirectUriHint": "İstekten türetmek için boş bırakın: /api/auth/oidc/callback",
     "allowedGroups": "İzin verilen gruplar",
-    "allowedGroupsHint": "Sağlayıcının groups iddiasında belirttiği, virgülle ayrılmış adlar. Boş, sağlayıcının oturum açtırdığı her hesabı kabul eder; groups kapsamı otomatik istenir.",
+    "allowedGroupsHint": "Sağlayıcının groups iddiasında belirttiği, virgülle ayrılmış adlar. Oturum açma etkinleştirildiğinde en az bir tane gerekir; groups kapsamı otomatik istenir.",
     "localTitle": "Yerel erişim",
     "localIntro": "Dış dünya için oturum açmayı korurken kendi ağınızdaki makineler doğrudan girsin.",
     "localAccess": "Yerel ağlara oturum açmadan izin ver",

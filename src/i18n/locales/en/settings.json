@@ -363,7 +363,7 @@
     "redirectUri": "Redirect URI",
     "redirectUriHint": "Leave empty to derive it from the request: /api/auth/oidc/callback",
     "allowedGroups": "Allowed groups",
-    "allowedGroupsHint": "Comma separated names the provider asserts in its groups claim. Empty accepts any account the provider signs in; the groups scope is requested automatically.",
+    "allowedGroupsHint": "Comma separated names the provider asserts in its groups claim. At least one is required when sign-in is enabled; the groups scope is requested automatically.",
     "localTitle": "Local access",
     "localIntro": "Keep sign-in for the outside world while machines on your own network come straight in.",
     "localAccess": "Allow local networks without sign-in",

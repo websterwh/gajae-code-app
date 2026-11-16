@@ -363,7 +363,7 @@
     "redirectUri": "重定向 URI",
     "redirectUriHint": "留空则从请求推导：/api/auth/oidc/callback",
     "allowedGroups": "允许的群组",
-    "allowedGroupsHint": "提供方在 groups 声明中确认的名称，以逗号分隔。留空则接受提供方允许登录的任何账户；groups 作用域会自动请求。",
+    "allowedGroupsHint": "提供方在 groups 声明中确认的名称，以逗号分隔。启用登录时至少需要一个；groups 作用域会自动请求。",
     "localTitle": "本地访问",
     "localIntro": "对外部保留登录，同时让你自己网络中的机器直接进入。",
     "localAccess": "允许本地网络免登录",
