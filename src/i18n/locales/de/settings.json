@@ -422,7 +422,6 @@
     "argsHint": "Ein Argument pro Zeile.",
     "url": "URL",
     "env": "Umgebungsvariablen",
-    "envKeep": "Vorhandene Secrets bleiben, solange kein neuer Wert eingegeben wird.",
     "headers": "Header",
     "name": "Name",
     "nameHint": "Buchstaben, Ziffern, Punkt, Bindestrich oder Unterstrich.",

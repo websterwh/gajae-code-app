@@ -62,6 +62,23 @@ test('a block with nothing to run is refused with the reason', () => {
   assert.deepEqual(parseMcpBlock('not a block'), { ok: false, error: 'shape' });
 });
 
+test('a stored value is written into the block as it is, so the form is not blank', () => {
+  const block = formatMcpBlock({
+    name: 'canvas',
+    transport: 'http',
+    url: 'https://canvas.example/mcp',
+    headers: { Authorization: 'Bearer abc' },
+  }, ['CANVAS_URL', 'CANVAS_TOKEN']);
+  assert.match(block, /^ {2}url: https:\/\/canvas\.example\/mcp$/mu);
+  assert.match(block, /^ {4}Authorization: "Bearer abc"$/mu);
+  // A catalog variable the entry does not set stays empty, which means "keep".
+  assert.match(block, /^ {4}CANVAS_TOKEN: ""$/mu);
+
+  const parsed = parseMcpBlock(block);
+  assert.equal(parsed.ok, true);
+  assert.deepEqual(parsed.ok ? parsed.value.headers : null, { Authorization: 'Bearer abc' });
+});
+
 test('an empty args list stays an empty list instead of becoming one argument', () => {
   const parsed = parseMcpBlock('mempalace:\n  type: stdio\n  command: /root/.gjc/app/bin/mempalace-mcp\n  args: []\n');
   assert.equal(parsed.ok, true);

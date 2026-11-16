@@ -811,7 +811,6 @@ export default function McpSettingsTab() {
                         onChange={(event) => setEditDraft({ block: event.target.value })}
                       />
                       <span className="mt-1 block font-normal">{t('mcp.configBlockHint')}</span>
-                      <span className="mt-1 block font-normal">{t('mcp.envKeep')}</span>
                     </label>
                     {!editBlock.ok && (
                       <p role="alert" className="text-xs text-destructive">{t('mcp.blockInvalid')}</p>

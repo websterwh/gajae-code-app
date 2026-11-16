@@ -52,9 +52,10 @@ function unquote(value: string): string {
 }
 
 /**
- * Values never come back from the API, so every variable is emitted empty: an
- * empty value means "keep what is stored". Catalog variables the row still
- * needs are added the same way, so the block says what the server expects.
+ * The block carries the stored values, so the form opens on what the server
+ * actually runs instead of a column of blanks. A catalog variable the entry
+ * does not set yet is emitted empty, and an empty value means "keep what is
+ * stored", so leaving one alone never clears it.
  */
 export function formatMcpBlock(server: McpBlockSource, knownEnv: string[] = []): string {
   const lines = [`${server.name}:`, `  type: ${server.transport}`];
@@ -70,16 +71,18 @@ export function formatMcpBlock(server: McpBlockSource, knownEnv: string[] = []):
   } else if (server.url) {
     lines.push(`  url: ${quote(server.url)}`);
   }
-  const envKeys = [...new Set([...Object.keys(server.env ?? {}), ...knownEnv])];
+  const env = server.env ?? {};
+  const envKeys = [...new Set([...Object.keys(env), ...knownEnv])];
   if (envKeys.length) {
     lines.push('  env:');
-    for (const key of envKeys) lines.push(`    ${key}: ""`);
+    for (const key of envKeys) lines.push(`    ${key}: ${key in env ? quote(env[key] ?? '') : '""'}`);
   }
   if (server.transport !== 'stdio') {
-    const headerKeys = Object.keys(server.headers ?? {});
+    const headers = server.headers ?? {};
+    const headerKeys = Object.keys(headers);
     if (headerKeys.length) {
       lines.push('  headers:');
-      for (const key of headerKeys) lines.push(`    ${key}: ""`);
+      for (const key of headerKeys) lines.push(`    ${key}: ${quote(headers[key] ?? '')}`);
     }
   }
   return `${lines.join('\n')}\n`;

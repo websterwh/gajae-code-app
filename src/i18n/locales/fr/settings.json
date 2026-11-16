@@ -422,7 +422,6 @@
     "argsHint": "Un argument par ligne.",
     "url": "URL",
     "env": "Variables d’environnement",
-    "envKeep": "Les secrets existants restent tant qu’aucune nouvelle valeur n’est saisie.",
     "headers": "En-têtes",
     "name": "Nom",
     "nameHint": "Lettres, chiffres, point, tiret ou souligné.",

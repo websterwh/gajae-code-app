@@ -93,10 +93,9 @@ test('add → list → toggle → pin → verify → remove against a temporary 
   const added = await service.add({
     name: 'custom', transport: 'stdio', command: 'npx', args: ['-y', 'custom-mcp'], env: { API_TOKEN: 'super-secret' },
   });
-  // No secret ever leaves via list/get; only the placeholder and isSet.
-  assert.equal(added.env.API_TOKEN, REDACTED);
+  // The configure form edits the stored entry, so its values come back as they are.
+  assert.equal(added.env.API_TOKEN, 'super-secret');
   assert.equal(added.envIsSet.API_TOKEN, true);
-  assert.equal(JSON.stringify(added).includes('super-secret'), false);
   // Spawning is argv-only: the secret is one argument, never a shell string.
   assert.deepEqual(calls[0]?.slice(0, 2), ['mcp', 'add']);
   assert.ok(calls[0]?.includes('--env=API_TOKEN=super-secret'));
@@ -150,7 +149,7 @@ test('remote servers are not pinnable, and duplicate names are rejected', async 
   });
   assert.equal(remote.pinnable, false);
   assert.equal(remote.pin, null);
-  assert.equal(remote.headers.Authorization, REDACTED);
+  assert.equal(remote.headers.Authorization, 'Bearer abc');
   await assert.rejects(service.pin('global', 'home-assistant', '1.0.0'), /no package version to pin/u);
 
   await assert.rejects(

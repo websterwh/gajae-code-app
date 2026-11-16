@@ -163,7 +163,7 @@ test('configure opens on the block the server runs and saves what that block say
   const block = screen.getByLabelText(`${english.mcp.configBlock} context7`) as HTMLTextAreaElement;
   assert.match(block.value, /^context7:\n {2}type: stdio\n {2}command: npx\n {2}args:\n/u);
   assert.match(block.value, /@modelcontextprotocol\/server-github/u);
-  assert.match(block.value, /GITHUB_PERSONAL_ACCESS_TOKEN: ""/u, 'a stored secret stays empty so it is kept');
+  assert.match(block.value, /GITHUB_PERSONAL_ACCESS_TOKEN: "\*\*\*"/u, 'the stored value is shown instead of a blank');
 
   fireEvent.change(block, {
     target: {

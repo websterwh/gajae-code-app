@@ -422,7 +422,6 @@
     "argsHint": "Her satıra bir bağımsız değişken.",
     "url": "URL",
     "env": "Ortam değişkenleri",
-    "envKeep": "Yeni bir değer girilmedikçe mevcut gizli değerler korunur.",
     "headers": "Başlıklar",
     "name": "Ad",
     "nameHint": "Harf, rakam, nokta, tire veya alt çizgi.",

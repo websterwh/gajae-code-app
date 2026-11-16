@@ -422,7 +422,6 @@
     "argsHint": "Un argomento per riga.",
     "url": "URL",
     "env": "Variabili d’ambiente",
-    "envKeep": "I segreti esistenti restano finché non viene inserito un nuovo valore.",
     "headers": "Intestazioni",
     "name": "Nome",
     "nameHint": "Lettere, cifre, punto, trattino o underscore.",

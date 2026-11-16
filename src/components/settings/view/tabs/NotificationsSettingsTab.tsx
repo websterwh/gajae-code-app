@@ -45,6 +45,7 @@ type GjcSettings = {
 };
 
 const inputClass = 'w-full touch-manipulation rounded-lg border border-input bg-card p-2.5 text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary';
+const TOKEN_MASK = '••••••••••••••••••••';
 const selectClass = `${inputClass} py-2`;
 
 const emptyGjcSettings: GjcSettings = {
@@ -152,6 +153,16 @@ function PushAndSoundCard({ webPush, preferences, onPreferencesChange, onSubscri
             />
           </div>
         </SettingsRow>
+        {/* The events are what a push is sent for, so they belong to the same
+            card: a separate section read as a second notification channel. */}
+        <div className="border-t border-border px-4 py-3">
+          <p className="text-xs font-medium text-foreground">{t('notifications.events.title')}</p>
+          <div className="mt-2 grid gap-2 sm:grid-cols-3">
+            <EventCheckbox event="actionRequired" label={t('notifications.events.actionRequired')} preferences={preferences} onChange={onPreferencesChange} />
+            <EventCheckbox event="stop" label={t('notifications.events.stop')} preferences={preferences} onChange={onPreferencesChange} />
+            <EventCheckbox event="error" label={t('notifications.events.error')} preferences={preferences} onChange={onPreferencesChange} />
+          </div>
+        </div>
       </SettingsCard>
     </SettingsSection>
   );
@@ -170,6 +181,10 @@ function GjcNotificationsCard() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
   const [botToken, setBotToken] = useState('');
+  // The stored token is never sent back, so the empty field looked unset. A
+  // mask fills it until the field is focused; typing replaces it, and leaving
+  // it untouched keeps the stored value.
+  const [tokenFocused, setTokenFocused] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -252,9 +267,11 @@ function GjcNotificationsCard() {
               <input
                 type="password"
                 autoComplete="off"
-                value={botToken}
+                value={botToken || (telegram.hasBotToken && !tokenFocused ? TOKEN_MASK : '')}
                 placeholder={t('notifications.gjc.botTokenPlaceholder')}
                 aria-label={t('notifications.gjc.botToken')}
+                onFocus={() => setTokenFocused(true)}
+                onBlur={() => setTokenFocused(false)}
                 onChange={(event) => { setSaved(false); setBotToken(event.target.value); }}
                 className={inputClass}
               />
@@ -403,14 +420,6 @@ export default function NotificationsSettingsTab(props: NotificationsSettingsTab
       />
 
       <GjcNotificationsCard />
-
-      <SettingsSection title={t('notifications.events.title')}>
-        <div className="grid gap-2 sm:grid-cols-3">
-          <EventCheckbox event="actionRequired" label={t('notifications.events.actionRequired')} preferences={preferences} onChange={changePreferences} />
-          <EventCheckbox event="stop" label={t('notifications.events.stop')} preferences={preferences} onChange={changePreferences} />
-          <EventCheckbox event="error" label={t('notifications.events.error')} preferences={preferences} onChange={changePreferences} />
-        </div>
-      </SettingsSection>
     </div>
   );
 }

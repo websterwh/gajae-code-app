@@ -141,25 +141,26 @@ export function packageNameFromEntry(entry: McpServerEntry): { manager: 'npm' | 
   return null;
 }
 
-function redacted(record: Record<string, string> | undefined): { values: Record<string, string>; isSet: Record<string, boolean> } {
+function publicValues(record: Record<string, string> | undefined): { values: Record<string, string>; isSet: Record<string, boolean> } {
   const values: Record<string, string> = {};
   const isSet: Record<string, boolean> = {};
-  for (const key of Object.keys(record ?? {})) {
-    values[key] = REDACTED;
+  for (const [key, value] of Object.entries(record ?? {})) {
+    values[key] = String(value);
     isSet[key] = true;
   }
   return { values, isSet };
 }
 
 /**
- * Secrets never leave the API. List/get return placeholders plus `isSet`
- * booleans; a write only replaces a value the client actually sends.
+ * Values come back as stored: the configure form is the entry mcp.json holds,
+ * and a blanked-out token only asks the user for something already saved.
+ * `envIsSet`/`headersIsSet` stay, since a row needs to know a value exists.
  */
 export function publicServer(name: string, entry: McpServerEntry, scope: McpScope): PublicMcpServer {
   const transport = transportOf(entry);
   const pkg = transport === 'stdio' ? packageNameFromEntry(entry) : null;
-  const env = redacted(entry.env);
-  const headers = redacted(entry.headers);
+  const env = publicValues(entry.env);
+  const headers = publicValues(entry.headers);
   return {
     name,
     transport,
