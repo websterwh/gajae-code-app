@@ -778,16 +778,22 @@ export default function McpSettingsTab() {
                         </button>
                       </div>
                     )}
-                    {confirmRemove === removeKey ? (
-                      <button type="button" className={`${buttonClass} border-destructive text-destructive`}
-                        disabled={busy === `remove:${server.name}`} onClick={() => void remove(server)}>
-                        <Trash2 className="h-3.5 w-3.5" aria-hidden />{t('mcp.confirmRemove')}
-                      </button>
-                    ) : (
-                      <button type="button" className={buttonClass} onClick={() => setConfirmRemove(removeKey)}>
-                        <Trash2 className="h-3.5 w-3.5" aria-hidden />{t('mcp.remove')}
-                      </button>
-                    )}
+                    {/* Remove is anchored to the right edge of the bar. Left in
+                        the flow it landed next to Configure on a remote row and
+                        past the pin controls on a package row, so the same
+                        button sat in a different column per server. */}
+                    <div className="ml-auto flex items-center gap-2">
+                      {confirmRemove === removeKey ? (
+                        <button type="button" className={`${buttonClass} border-destructive text-destructive`}
+                          disabled={busy === `remove:${server.name}`} onClick={() => void remove(server)}>
+                          <Trash2 className="h-3.5 w-3.5" aria-hidden />{t('mcp.confirmRemove')}
+                        </button>
+                      ) : (
+                        <button type="button" className={buttonClass} onClick={() => setConfirmRemove(removeKey)}>
+                          <Trash2 className="h-3.5 w-3.5" aria-hidden />{t('mcp.remove')}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
                 {result && (

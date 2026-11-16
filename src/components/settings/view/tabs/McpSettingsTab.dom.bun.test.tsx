@@ -372,3 +372,38 @@ test('every row opens with its switch instead of ending with it', async () => {
   assert.equal(bars.length, 2);
   for (const bar of bars) assert.equal(bar?.querySelector('[role="switch"]'), null, 'the buttons no longer hold the switch');
 });
+
+// A remote row has no pin controls, so a remove button flowing after Configure
+// sat in a different column than on a package row. It is anchored right, which
+// keeps every row's bar the same shape however many servers are listed and
+// whatever transport each one uses.
+test('every row keeps the same action bar, with remove anchored to the right edge', async () => {
+  fakeApi([
+    installedServer(),
+    installedServer({
+      name: 'home-assistant',
+      transport: 'http',
+      url: 'http://192.168.1.9:9583/api/mcp',
+      command: undefined,
+      args: undefined,
+      pinnable: false,
+      packageName: null,
+      install: null,
+    }),
+  ]);
+  await mount();
+
+  const verifies = await screen.findAllByRole('button', { name: english.mcp.verify });
+  assert.equal(verifies.length, 2);
+  const bars = verifies.map((button) => button.parentElement);
+  for (const bar of bars) {
+    assert.ok(bar?.className.includes('w-full'), 'the bar is its own full-width line on every row');
+    assert.equal(bar?.firstElementChild?.textContent, english.mcp.verify, 'every bar starts with the same control');
+    const remove = bar?.lastElementChild as HTMLElement | null;
+    assert.ok(remove?.className.includes('ml-auto'), 'the remove control is pushed to the right edge');
+    assert.equal(remove?.textContent, english.mcp.remove);
+  }
+  // Only a row with a package version to lock carries the pin controls; the
+  // anchored remove means that gap does not move anything else.
+  assert.equal(bars[1]?.querySelector(`[aria-label^="${english.mcp.pin}"]`), null);
+});
