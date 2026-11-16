@@ -198,7 +198,7 @@ export default function PackagesSettingsTab() {
                 : t('packages.statusMissing');
             // Rows that can be pinned carry the version on the control itself;
             // the rest keep it in the status line.
-            const versionControl = row.desired && row.manager !== 'aqua';
+            const versionControl = row.desired;
             const version = row.pin ?? row.version;
             return (
               <div key={key} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">

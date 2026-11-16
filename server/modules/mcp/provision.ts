@@ -64,7 +64,9 @@ function aquaBinary(name: string): string {
  * binary the installer linked into PATH first, then the aqua config.
  */
 const AQUA_VERIFY = [
-  'bin=$(command -v "$1" 2>/dev/null) && { printf "%s\\n" "$bin"; exit 0; }',
+  // The installer records the release tag it fetched; without it an aqua
+  // package has a binary but no version to show or pin.
+  'bin=$(command -v "$1" 2>/dev/null) && { printf "%s\\n" "$bin"; cat "${GITHUB_APPS_STATE:-/data/share/github-apps.json}" 2>/dev/null; exit 0; }',
   'cfg="${AQUA_ROOT_DIR:-/data/aqua}/aqua.yaml"',
   '[ -f "$cfg" ] && aqua list -c "$cfg" 2>/dev/null | grep -F -- "$2"',
 ].join('; ');
@@ -207,8 +209,12 @@ export function parseInstalledVersion(manager: InstallManager, name: string, out
         return null;
       }
     }
-    case 'aqua':
-      return null;
+    case 'aqua': {
+      // The verify output carries the installer's state file, which prints each
+      // release as `"skylot/jadx": "1.5.1"`.
+      const match = new RegExp(`"${escapeRegExp(name)}"\\s*:\\s*"([^"]+)"`, 'u').exec(output);
+      return match?.[1] ?? null;
+    }
   }
 }
 

@@ -43,13 +43,47 @@ export type McpCliRunner = (
   options: { cwd?: string },
 ) => Promise<{ code: number; stdout: string; stderr: string }>;
 
-export type McpServerView = PublicMcpServer & { install: LedgerEntry | null };
+/** `npm view --json` prints the version as a JSON string; older npm prints it bare. */
+function parseNpmVersion(stdout: string): string | null {
+  const text = stdout.trim();
+  if (!text) return null;
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    return typeof parsed === 'string' ? parsed : null;
+  } catch {
+    return /^v?(\S+)$/u.exec(text)?.[1] ?? null;
+  }
+}
+
+function spawnCommand(command: string, args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, { shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    child.stdout?.on('data', (chunk) => { stdout += String(chunk); });
+    child.stderr?.on('data', (chunk) => { stderr += String(chunk); });
+    child.once('error', (error) => resolve({ code: 127, stdout, stderr: error.message }));
+    child.once('close', (code) => resolve({ code: code ?? 1, stdout, stderr }));
+  });
+}
+
+export type McpServerView = PublicMcpServer & {
+  install: LedgerEntry | null;
+  /** What the package resolves to when this app never installed it. */
+  availableVersion?: string | null;
+};
 export type VerifyResult = { ok: boolean; toolCount?: number; tools?: string[]; error?: string };
 export type CatalogSort = 'name' | 'relevance' | 'popularity';
+
+export type McpCommandRunner = (
+  command: string,
+  args: string[],
+) => Promise<{ code: number; stdout: string; stderr: string }>;
 
 export type McpServiceOptions = {
   agentDir?: string;
   runCli?: McpCliRunner;
+  runCommand?: McpCommandRunner;
   fetchImpl?: typeof fetch;
   registryClient?: RegistryClient;
   now?: () => number;
@@ -209,6 +243,7 @@ export class McpService {
   private readonly env: NodeJS.ProcessEnv;
   private readonly runCli: McpCliRunner;
   private readonly verifyTimeoutMs: number;
+  private readonly versionCache = new Map<string, { version: string | null; at: number }>();
 
   constructor(private readonly options: McpServiceOptions = {}) {
     this.env = options.agentDir
@@ -246,6 +281,30 @@ export class McpService {
     return projectPath;
   }
 
+  /**
+   * A server running `npx -y pkg@latest` from someone else's config has no
+   * ledger entry, so its row showed no version and nothing could be pinned.
+   * Ask npm what that spec resolves to now; the answer is cached, since every
+   * list call would otherwise pay for it again.
+   */
+  private async resolveVersion(server: McpServerView): Promise<string | null> {
+    const name = server.packageName;
+    const command = path.basename(String(server.command ?? ''));
+    if (!name || (command !== 'npx' && command !== 'npm')) return null;
+    const cached = this.versionCache.get(name);
+    const at = Date.now();
+    if (cached && at - cached.at < 10 * 60_000) return cached.version;
+    let version: string | null = null;
+    try {
+      const result = await (this.options.runCommand ?? spawnCommand)('npm', ['view', name, 'version', '--json']);
+      if (result.code === 0) version = parseNpmVersion(result.stdout);
+    } catch {
+      version = null;
+    }
+    this.versionCache.set(name, { version, at });
+    return version;
+  }
+
   private view(name: string, entry: McpServerEntry, scope: McpScope, ledgerEntries: Record<string, LedgerEntry>): McpServerView {
     const pkg = transportOf(entry) === 'stdio' ? packageNameFromEntry(entry) : null;
     const install = pkg ? ledgerEntries[pkg.name] ?? null : null;
@@ -269,7 +328,14 @@ export class McpService {
         servers.push(this.view(name, entry, current, entries));
       }
     }
-    return servers.sort((a, b) => a.name.localeCompare(b.name));
+    const sorted = servers.sort((a, b) => a.name.localeCompare(b.name));
+    // The ledger is the truth for anything this app installed; the registry is
+    // only asked about servers that were configured somewhere else.
+    await Promise.all(sorted.map(async (server) => {
+      if (server.install?.version || !server.pinnable) return;
+      server.availableVersion = await this.resolveVersion(server);
+    }));
+    return sorted;
   }
 
   async get(scope: McpScope, name: string, projectPath?: string): Promise<McpServerView | null> {

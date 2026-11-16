@@ -67,6 +67,8 @@ export function pinnedSpec(
   if (!version) return parsed.raw;
   // A git checkout has no package version to pin.
   if (parsed.manager === 'git') return parsed.raw;
+  // A GitHub release is pinned by the tag it was fetched at: `skylot/jadx@v1.5.1`.
+  if (manager === 'aqua') return `${parsed.name}@${version}`;
   if (manager === 'npm' || (manager === undefined && parsed.manager === 'npm')) return `${parsed.name}@${version}`;
   if (manager === 'uv' || manager === 'pip' || parsed.manager === 'pypi') return `${parsed.name}==${version}`;
   // A git checkout has no package version to pin.

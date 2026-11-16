@@ -6,8 +6,50 @@ import urllib.request
 import zipfile
 import stat
 
-def install_github_app(repo, target_bin="/data/bin", target_share="/data/share"):
-    repo = repo.strip()
+STATE_FILE = os.environ.get("GITHUB_APPS_STATE", "/data/share/github-apps.json")
+
+
+def split_spec(spec):
+    """`skylot/jadx` is the latest release; `skylot/jadx@v1.5.1` is that tag."""
+    spec = spec.strip()
+    if "@" in spec:
+        repo, tag = spec.rsplit("@", 1)
+        return repo, (tag or None)
+    return spec, None
+
+
+def record_tag(repo, tag):
+    """The verify step reports versions from this file, so it is written on
+    every successful lookup - including the already-installed path, where the
+    tag is known but nothing is fetched."""
+    try:
+        os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
+        state = {}
+        if os.path.exists(STATE_FILE):
+            with open(STATE_FILE) as f:
+                state = json.load(f)
+        if not isinstance(state, dict):
+            state = {}
+        state[repo] = tag
+        tmp = f"{STATE_FILE}.tmp"
+        with open(tmp, "w") as f:
+            json.dump(state, f, indent=2, sort_keys=True)
+            f.write("\n")
+        os.replace(tmp, STATE_FILE)
+    except Exception as e:
+        print(f"==> [WARN] Could not record {repo} at {tag}: {e}")
+
+
+def fetch_release(repo, tag, headers):
+    api_url = (f"https://api.github.com/repos/{repo}/releases/tags/{tag}" if tag
+               else f"https://api.github.com/repos/{repo}/releases/latest")
+    req = urllib.request.Request(api_url, headers=headers)
+    with urllib.request.urlopen(req) as resp:
+        return json.loads(resp.read().decode())
+
+
+def install_github_app(spec, target_bin="/data/bin", target_share="/data/share"):
+    repo, requested = split_spec(spec)
     if not repo:
         return True
     headers = {"User-Agent": "GitHub-App-Installer"}
@@ -15,16 +57,13 @@ def install_github_app(repo, target_bin="/data/bin", target_share="/data/share")
     if token:
         headers["Authorization"] = f"Bearer {token}"
 
-    api_url = f"https://api.github.com/repos/{repo}/releases/latest"
     try:
-        req = urllib.request.Request(api_url, headers=headers)
-        with urllib.request.urlopen(req) as resp:
-            data = json.loads(resp.read().decode())
+        data = fetch_release(repo, requested, headers)
     except Exception as e:
         print(f"==> [ERROR] Could not fetch release info for {repo}: {e}")
         return False
 
-    tag = data.get("tag_name", "latest")
+    tag = data.get("tag_name", requested or "latest")
     assets = data.get("assets", [])
 
     os.makedirs(target_bin, exist_ok=True)
@@ -37,9 +76,10 @@ def install_github_app(repo, target_bin="/data/bin", target_share="/data/share")
         link_path = os.path.join(target_bin, "jadx")
         if os.path.exists(os.path.join(dest_dir, "bin", "jadx")) and (os.path.exists(link_path) or os.path.islink(link_path)):
             print(f"==> [GitHub App] jadx {tag} is already installed.")
+            record_tag(repo, tag)
             return True
 
-        print(f"==> [GitHub App] Installing {repo}...")
+        print(f"==> [GitHub App] Installing {repo} ({tag})...")
         asset = next((a for a in assets if a["name"].endswith(".zip") and "win" not in a["name"]), None)
         if not asset:
             print(f"==> [ERROR] {repo} has no release zip for this platform (release {tag}).")
@@ -59,7 +99,8 @@ def install_github_app(repo, target_bin="/data/bin", target_share="/data/share")
         if os.path.islink(link_path) or os.path.exists(link_path):
             os.remove(link_path)
         os.symlink(jadx_bin, link_path)
-        print(f"==> [GitHub App] Successfully installed jadx -> {link_path}")
+        record_tag(repo, tag)
+        print(f"==> [GitHub App] Successfully installed jadx {tag} -> {link_path}")
         return True
 
     # Special handler: apktool
@@ -68,9 +109,10 @@ def install_github_app(repo, target_bin="/data/bin", target_share="/data/share")
         wrapper_path = os.path.join(target_bin, "apktool")
         if os.path.exists(jar_dest) and os.path.exists(wrapper_path):
             print(f"==> [GitHub App] apktool {tag} is already installed.")
+            record_tag(repo, tag)
             return True
 
-        print(f"==> [GitHub App] Installing {repo}...")
+        print(f"==> [GitHub App] Installing {repo} ({tag})...")
         asset = next((a for a in assets if a["name"].endswith(".jar")), None)
         if not asset:
             print(f"==> [ERROR] {repo} has no release jar (release {tag}).")
@@ -80,12 +122,13 @@ def install_github_app(repo, target_bin="/data/bin", target_share="/data/share")
         with open(wrapper_path, "w") as f:
             f.write(f'#!/bin/sh\nexec java -Xmx1024M -Dfile.encoding=UTF-8 -jar "{jar_dest}" "$@"\n')
         os.chmod(wrapper_path, 0o755)
-        print(f"==> [GitHub App] Successfully installed apktool wrapper -> {wrapper_path}")
+        record_tag(repo, tag)
+        print(f"==> [GitHub App] Successfully installed apktool {tag} -> {wrapper_path}")
         return True
 
     # Fallback to aqua if it's a standard aqua package
     import subprocess
-    pkg_entry = f"{repo}@{tag}" if "@" not in repo else repo
+    pkg_entry = f"{repo}@{tag}"
     print(f"==> [Aqua] Attempting aqua install for {pkg_entry}...")
     yaml_path = "/data/aqua/aqua.yaml"
     os.makedirs(os.path.dirname(yaml_path), exist_ok=True)
@@ -103,8 +146,10 @@ def install_github_app(repo, target_bin="/data/bin", target_share="/data/share")
             if os.path.islink(dst) or os.path.exists(dst):
                 os.remove(dst)
             os.symlink(src, dst)
+    record_tag(repo, tag)
     print(f"==> [Aqua] Successfully installed {pkg_entry}")
     return True
+
 
 if __name__ == "__main__":
     ok = True

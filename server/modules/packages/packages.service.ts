@@ -55,11 +55,6 @@ function managerOf(value: unknown): InstallManager {
   return value as InstallManager;
 }
 
-/** GitHub release assets have no version syntax the installer can pin. */
-function assertPinnable(manager: InstallManager, pin: string | null): void {
-  if (pin && manager === 'aqua') throw new Error('GitHub release packages cannot be pinned to a version.');
-}
-
 function observed(entry: LedgerEntry): { status: PackageStatus; error?: string; updatedAt?: string } {
   const failed = entry.status === 'failed' || entry.lastAttempt?.status === 'failed';
   const updatedAt = entry.lastAttempt?.at ?? entry.installedAt;
@@ -188,7 +183,6 @@ export class PackagesService {
     const parsed = parsePackageSpec(spec);
     if (!parsed.name) throw new Error('The package spec has no name.');
     const pin = normalizePin(input.pin);
-    assertPinnable(manager, pin);
 
     return this.serialize(async () => {
       const desired = await readDesired(this.desiredFile());
@@ -202,7 +196,6 @@ export class PackagesService {
   async setPin(managerValue: unknown, name: string, value: unknown): Promise<PackageRow> {
     const manager = managerOf(managerValue);
     const pin = normalizePin(value);
-    assertPinnable(manager, pin);
 
     return this.serialize(async () => {
       const desired = await readDesired(this.desiredFile());

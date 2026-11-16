@@ -14,9 +14,8 @@ test('the packages router maps validation errors to 400 and conflicts to 409', a
       throw new Error('manager must be one of uv, pip, npm or aqua.');
     },
     setPin: async (manager: string) => {
-      // An aqua package cannot be pinned at all, so this is bad input, not a
-      // conflict with the current state.
-      if (manager === 'aqua') throw new Error('GitHub release packages cannot be pinned to a version.');
+      // An unknown manager is bad input, not a conflict with the current state.
+      if (manager === 'brew') throw new Error('manager must be one of uv, pip, npm or aqua.');
       throw new Error('Package provisioning is already running. Try again when it finishes.');
     },
     upgrade: async () => {
@@ -46,12 +45,12 @@ test('the packages router maps validation errors to 400 and conflicts to 409', a
   });
   assert.equal(badManager.status, 400);
 
-  const aquaPin = await fetch(`${base}/aqua/skylot%2Fjadx`, {
+  const badManagerPin = await fetch(`${base}/brew/wget`, {
     method: 'PATCH',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ pin: '1.4.7' }),
   });
-  assert.equal(aquaPin.status, 400, 'an unpinnable package is a bad request, not a conflict');
+  assert.equal(badManagerPin.status, 400, 'an unknown manager is a bad request, not a conflict');
 
   const busy = await fetch(`${base}/npm/cowsay`, {
     method: 'PATCH',

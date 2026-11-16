@@ -140,10 +140,23 @@ test('a pinned package refuses to upgrade', async (t) => {
   await assert.rejects(service.upgrade('uv', 'serena'), /pinned/u);
 });
 
-test('GitHub release packages refuse a version pin', async (t) => {
+test('a GitHub release package pins to a release tag', async (t) => {
   const root = await workspace(t);
-  const service = serviceFor(root, scripted({}, []));
-  await assert.rejects(service.add({ manager: 'aqua', spec: 'skylot/jadx', pin: '1.0.0' }), /cannot be pinned/u);
+  const calls: string[] = [];
+  const runner: CommandRunner = async (command, args) => {
+    const line = [command, ...args].join(' ');
+    calls.push(line);
+    if (command === 'install-github-app') return { code: 0, stdout: '==> [GitHub App] Successfully installed jadx', stderr: '' };
+    // The aqua check prints the binary and the tag the installer recorded.
+    if (command === 'sh') return { code: 0, stdout: '/data/bin/jadx\n{\n  "skylot/jadx": "v1.5.0"\n}\n', stderr: '' };
+    return { code: 1, stdout: '', stderr: `unexpected command: ${line}` };
+  };
+  const service = serviceFor(root, runner);
+
+  const row = await service.add({ manager: 'aqua', spec: 'skylot/jadx', pin: 'v1.5.1' });
+  assert.equal(row.pin, 'v1.5.1');
+  assert.equal(row.version, 'v1.5.0', 'the release tag the installer recorded is reported as the version');
+  assert.ok(calls.includes('install-github-app skylot/jadx@v1.5.1'), 'the pin is the tag the installer fetches');
 });
 
 test('a boot provision in flight blocks a second install', async (t) => {
