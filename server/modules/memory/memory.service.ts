@@ -13,25 +13,25 @@ import {
   writeMemoryConfigText,
   writeMemoryProviderMarker,
   type MemoryBackend,
-  type MemoryProvider,
   type YamlBlock,
 } from './memory.config.js';
 import {
+  installMempalace,
   installMempalaceHook,
   mempalaceCommand,
   MEMPALACE_SERVER,
+  mempalaceProjectInitialized,
   mempalaceVersion,
   probeMempalaceFiles,
   runMempalace,
 } from './mempalace.js';
 
-const PROVIDERS: readonly MemoryProvider[] = ['off', 'local', 'hindsight', 'mempalace'];
+const BACKENDS: readonly MemoryBackend[] = ['off', 'local', 'hindsight'];
 const SCOPINGS = ['global', 'per-project', 'per-project-tagged'] as const;
 type HindsightScoping = (typeof SCOPINGS)[number];
 
 export type MemoryView = {
-  provider: MemoryProvider;
-  /** The backend `config.yml` actually carries; MemPalace runs outside it. */
+  /** The backend `config.yml` carries; MemPalace runs beside it, not instead of it. */
   backend: MemoryBackend;
   local: { directory: string; projects: number };
   hindsight: {
@@ -55,6 +55,7 @@ export type MemoryView = {
 
 export type MemoryPatch = {
   provider?: unknown;
+  mempalace?: unknown;
   hindsight?: {
     apiUrl?: unknown;
     apiToken?: unknown;
@@ -124,18 +125,13 @@ export class MemoryService {
       : 'missing';
 
     // An instance that enabled MemPalace before this page existed has the MCP
-    // entry and the hook but no marker, so report what is actually running
-    // instead of calling it the CLI's local pipeline.
-    const provider: MemoryProvider = marker?.provider === 'mempalace'
-      ? 'mempalace'
-      : !marker && mcpServer === 'enabled' && probe.hookInstalled
-        ? 'mempalace'
-        : backend;
+    // entry and the hook but no marker, so read what is actually running.
+    const enabled = marker?.provider === 'mempalace'
+      || (!marker && mcpServer === 'enabled' && probe.hookInstalled);
 
     const version = probe.installed ? await mempalaceVersion(probe.binary) : null;
 
     return {
-      provider,
       backend,
       local: {
         directory: path.join(agentDir(this.env), 'memories'),
@@ -150,7 +146,7 @@ export class MemoryService {
         hasToken: textOf(blocks.hindsight, 'apiToken').length > 0,
       },
       mempalace: {
-        enabled: provider === 'mempalace',
+        enabled,
         installed: probe.installed,
         version,
         palacePath: probe.palacePath,
@@ -162,14 +158,15 @@ export class MemoryService {
   }
 
   /**
-   * Selecting MemPalace turns the CLI's own pipeline off — the palace is the
-   * memory — and leaves the backend field at `off` so the two never both run.
-   * The MCP entry and the hook are what make it reachable and automatic.
+   * MemPalace is an MCP server plus an autosave hook, so it can run beside the
+   * CLI's own backend. Turning it on wires those two pieces and never rewrites
+   * the `memory` block, which is what makes local/Hindsight recall still work.
    */
   private async enableMempalace(): Promise<void> {
-    const blocks = readMemoryBlocks(await this.configText());
-    const nextMemory: YamlBlock = { ...blocks.memory, backend: 'off' };
-    await writeMemoryConfigText(writeMemoryBlocks(await this.configText(), { memory: nextMemory }), this.env);
+    const install = await installMempalace(this.env);
+    if (install.attempted && !install.installed) {
+      throw new Error(`mempalace install failed: ${install.output || 'the installer produced no binary'}`);
+    }
 
     const file = await this.mcpFile();
     file.mcpServers[MEMPALACE_SERVER] = {
@@ -200,30 +197,38 @@ export class MemoryService {
   }
 
   async update(patch: MemoryPatch): Promise<MemoryView> {
-    if (patch.provider === undefined) {
+    if (patch.provider === undefined && patch.mempalace === undefined) {
       if (patch.hindsight) return this.updateHindsight(patch.hindsight);
-      throw new Error('provider is required.');
+      throw new Error('provider or mempalace is required.');
     }
-    if (!PROVIDERS.includes(patch.provider as MemoryProvider)) {
-      throw new Error('provider must be off, local, hindsight or mempalace.');
-    }
-    const provider = patch.provider as MemoryProvider;
-
-    if (provider === 'mempalace') {
-      await this.enableMempalace();
-      return this.status();
+    if (patch.mempalace !== undefined && typeof patch.mempalace !== 'boolean') {
+      throw new Error('mempalace must be true or false.');
     }
 
-    await this.disableMempalace();
+    if (patch.provider !== undefined) {
+      // `mempalace` was the provider value before it became an independent
+      // toggle; keep accepting it so an older client still works.
+      if (patch.provider === 'mempalace') {
+        await this.enableMempalace();
+      } else if (!BACKENDS.includes(patch.provider as MemoryBackend)) {
+        throw new Error('provider must be off, local or hindsight.');
+      } else {
+        await this.setBackend(patch.provider as MemoryBackend, patch.hindsight);
+      }
+    }
+
+    if (patch.mempalace === true) await this.enableMempalace();
+    else if (patch.mempalace === false) await this.disableMempalace();
+
+    return this.status();
+  }
+
+  private async setBackend(provider: MemoryBackend, hindsight?: MemoryPatch['hindsight']): Promise<void> {
     const blocks = readMemoryBlocks(await this.configText());
     const nextMemory: YamlBlock = { ...blocks.memory, backend: provider };
     const nextBlocks: Partial<Record<'memory' | 'hindsight', YamlBlock>> = { memory: nextMemory };
-    if (provider === 'hindsight' && patch.hindsight) {
-      nextBlocks.hindsight = this.applyHindsight(blocks.hindsight, patch.hindsight);
-    }
-    const text = await this.configText();
-    await writeMemoryConfigText(writeMemoryBlocks(text, nextBlocks), this.env);
-    return this.status();
+    if (provider === 'hindsight' && hindsight) nextBlocks.hindsight = this.applyHindsight(blocks.hindsight, hindsight);
+    await writeMemoryConfigText(writeMemoryBlocks(await this.configText(), nextBlocks), this.env);
   }
 
   /** A blank token means "keep the stored one", exactly like the notify form. */
@@ -244,9 +249,8 @@ export class MemoryService {
 
   private async updateHindsight(patch: NonNullable<MemoryPatch['hindsight']>): Promise<MemoryView> {
     const blocks = readMemoryBlocks(await this.configText());
-    const text = await this.configText();
     await writeMemoryConfigText(
-      writeMemoryBlocks(text, { hindsight: this.applyHindsight(blocks.hindsight, patch) }),
+      writeMemoryBlocks(await this.configText(), { hindsight: this.applyHindsight(blocks.hindsight, patch) }),
       this.env,
     );
     return this.status();
@@ -263,24 +267,53 @@ export class MemoryService {
       throw new Error('projectPath does not exist or is not a directory.');
     }
     await this.enableMempalace();
-    const result = await runMempalace(['init', projectPath], { env: this.env, cwd: projectPath });
+    // --yes accepts the detected rooms without a prompt; stdin is ignored here,
+    // so an interactive question would otherwise stall until the timeout.
+    const result = await runMempalace(['init', projectPath, '--yes'], {
+      env: this.env,
+      cwd: projectPath,
+      timeoutMs: 180_000,
+    });
     if (result.code !== 0) {
       throw new Error(`mempalace init failed: ${(result.stderr || result.stdout).trim() || `exit ${result.code}`}`);
     }
     return { output: (result.stdout || result.stderr).trim() };
   }
 
+  /** Which of the picker's project folders already carry a `mempalace.yaml`. */
+  async projectStatus(input: { paths?: unknown } = {}): Promise<{
+    projects: Array<{ path: string; initialized: boolean }>;
+    initialized: string[];
+  }> {
+    const values = Array.isArray(input.paths) ? input.paths : [];
+    const paths = [...new Set(
+      values.filter((value): value is string => typeof value === 'string' && path.isAbsolute(value)),
+    )];
+    const projects = paths.map((projectPath) => ({
+      path: projectPath,
+      initialized: mempalaceProjectInitialized(projectPath),
+    }));
+    return { projects, initialized: projects.filter((row) => row.initialized).map((row) => row.path) };
+  }
+
   /**
-   * Mines a markdown file or directory into the palace. The CLI defaults to
-   * docs mode, which is what memory notes and MEMORY.md exports are.
+   * Mines a markdown file or directory into the palace. With no `--mode` the
+   * CLI uses projects mode, which already ingests code and markdown notes, so
+   * "docs" is accepted as the blank/default spelling rather than forwarding a
+   * value the CLI would reject.
    */
   async importPath(input: MemoryActionInput): Promise<{ output: string }> {
     const target = text(input.path);
     if (!path.isAbsolute(target)) throw new Error('path must be an absolute path.');
     if (!existsSync(target)) throw new Error('path does not exist.');
     const args = ['mine', target];
-    const mode = text(input.mode);
-    if (mode) args.push('--mode', mode);
+    const mode = text(input.mode).toLowerCase();
+    if (mode && mode !== 'docs' && mode !== 'documentation') {
+      if (!['projects', 'convos', 'extract'].includes(mode)) {
+        throw new Error('mode must be projects, convos or extract.');
+      }
+      args.push('--mode', mode);
+    }
     const result = await runMempalace(args, { env: this.env, cwd: path.dirname(target) });
     if (result.code !== 0) {
       throw new Error(`mempalace mine failed: ${(result.stderr || result.stdout).trim() || `exit ${result.code}`}`);

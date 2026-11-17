@@ -39,6 +39,16 @@ export function createMemoryRouter(service: MemoryService = memoryService): Rout
     }
   }));
 
+  // The picker already knows its project paths, so the read-only marker check
+  // runs on exactly those instead of listing every project on the machine.
+  router.post('/mempalace/check', asyncHandler(async (request, response) => {
+    try {
+      response.json({ success: true, data: await service.projectStatus(request.body ?? {}) });
+    } catch (error) {
+      fail(response, error);
+    }
+  }));
+
   router.post('/mempalace/import', asyncHandler(async (request, response) => {
     try {
       response.json({ success: true, data: await service.importPath(request.body ?? {}) });

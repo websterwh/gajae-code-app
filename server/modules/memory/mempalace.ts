@@ -15,6 +15,12 @@ import { agentDir } from '../mcp/index.js';
 
 export const MEMPALACE_SERVER = 'mempalace';
 export const MEMPALACE_HOOK_PATH = ['hooks', 'post', 'mempalace-autosave.ts'] as const;
+/** `mempalace init` writes this at the project root, so its presence is the record of setup. */
+export const MEMPALACE_PROJECT_FILE = 'mempalace.yaml';
+
+export function mempalaceProjectInitialized(projectPath: string): boolean {
+  return existsSync(path.join(projectPath, MEMPALACE_PROJECT_FILE));
+}
 
 export function mempalaceBinDir(env: NodeJS.ProcessEnv = process.env): string {
   return env.MEMPALACE_BIN_DIR || path.join(env.HOME || homedir(), '.gjc', 'app', 'bin');
@@ -98,12 +104,12 @@ export function mempalaceVersion(binary: string, timeoutMs = 4000): Promise<stri
 
 export type MempalaceRun = { code: number; stdout: string; stderr: string };
 
-export function runMempalace(
+function runProcess(
+  command: string,
   args: string[],
-  options: { env?: NodeJS.ProcessEnv; cwd?: string; timeoutMs?: number } = {},
+  options: { env?: NodeJS.ProcessEnv; cwd?: string; timeoutMs?: number; timeoutMessage?: string } = {},
 ): Promise<MempalaceRun> {
   const env = options.env ?? process.env;
-  const binary = mempalaceCommand('mempalace', env);
   return new Promise((resolve) => {
     let settled = false;
     const finish = (result: MempalaceRun) => {
@@ -112,14 +118,14 @@ export function runMempalace(
       clearTimeout(timer);
       resolve(result);
     };
-    const child = spawn(binary, args, {
+    const child = spawn(command, args, {
       cwd: options.cwd,
       env,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     const timer = setTimeout(() => {
       child.kill('SIGKILL');
-      finish({ code: 124, stdout: '', stderr: 'mempalace timed out.' });
+      finish({ code: 124, stdout: '', stderr: options.timeoutMessage ?? 'command timed out.' });
     }, options.timeoutMs ?? 120_000);
     let stdout = '';
     let stderr = '';
@@ -128,6 +134,59 @@ export function runMempalace(
     child.on('error', (error) => finish({ code: 127, stdout, stderr: error.message }));
     child.on('close', (code) => finish({ code: code ?? 1, stdout, stderr }));
   });
+}
+
+export function runMempalace(
+  args: string[],
+  options: { env?: NodeJS.ProcessEnv; cwd?: string; timeoutMs?: number } = {},
+): Promise<MempalaceRun> {
+  const env = options.env ?? process.env;
+  return runProcess(mempalaceCommand('mempalace', env), args, {
+    ...options,
+    env,
+    timeoutMessage: 'mempalace timed out.',
+  });
+}
+
+export type MempalaceInstall = { installed: boolean; attempted: boolean; output: string };
+
+/**
+ * Selecting MemPalace has to work on a host that never ran the image, so the
+ * app installs the tool itself when the binary is missing. uv installs into the
+ * mounted tool directory the MCP entry points at; pip --user is the fallback
+ * for hosts without uv. Tests and stripped-down environments get no installer,
+ * in which case nothing is attempted and the status simply reports missing.
+ */
+export async function installMempalace(env: NodeJS.ProcessEnv = process.env): Promise<MempalaceInstall> {
+  if (probeMempalaceFiles(env).installed) return { installed: true, attempted: false, output: '' };
+
+  const binDir = mempalaceBinDir(env);
+  const installEnv: NodeJS.ProcessEnv = {
+    ...env,
+    UV_TOOL_BIN_DIR: env.UV_TOOL_BIN_DIR || binDir,
+    UV_TOOL_DIR: env.UV_TOOL_DIR || path.join(path.dirname(binDir), 'uv'),
+  };
+  const attempts: Array<{ command: string; args: string[] }> = [];
+  if (onPath('uv', env)) attempts.push({ command: 'uv', args: ['tool', 'install', 'mempalace'] });
+  for (const python of ['python3', 'python'] as const) {
+    if (onPath(python, env)) {
+      attempts.push({ command: python, args: ['-m', 'pip', 'install', '--user', 'mempalace'] });
+      break;
+    }
+  }
+
+  let output = '';
+  for (const attempt of attempts) {
+    const result = await runProcess(attempt.command, attempt.args, {
+      env: installEnv,
+      timeoutMs: 300_000,
+      timeoutMessage: `${attempt.command} install timed out.`,
+    });
+    output = (result.stderr || result.stdout).trim();
+    if (probeMempalaceFiles(env).installed) return { installed: true, attempted: true, output };
+    if (result.code !== 0) break;
+  }
+  return { installed: false, attempted: attempts.length > 0, output };
 }
 
 /**

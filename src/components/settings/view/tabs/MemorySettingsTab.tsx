@@ -6,12 +6,11 @@ import { authenticatedFetch } from '../../../../utils/api';
 import SettingsCard from '../SettingsCard';
 import SettingsSection from '../SettingsSection';
 
-type Provider = 'off' | 'local' | 'hindsight' | 'mempalace';
+type Backend = 'off' | 'local' | 'hindsight';
 type Scoping = 'global' | 'per-project' | 'per-project-tagged';
 
 type MemoryView = {
-  provider: Provider;
-  backend: 'off' | 'local' | 'hindsight';
+  backend: Backend;
   local: { directory: string; projects: number };
   hindsight: {
     apiUrl: string;
@@ -35,7 +34,7 @@ type MemoryView = {
 type ProjectSummary = { projectId: string; path: string; displayName: string };
 type ApiEnvelope<T> = { success?: boolean; data?: T; error?: { message?: string } };
 
-const PROVIDERS: Provider[] = ['off', 'local', 'hindsight', 'mempalace'];
+const BACKENDS: Backend[] = ['off', 'local', 'hindsight'];
 const SCOPINGS: Scoping[] = ['global', 'per-project', 'per-project-tagged'];
 
 const inputClass = 'w-full touch-manipulation rounded-lg border border-input bg-card p-2 text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary';
@@ -60,6 +59,7 @@ export default function MemorySettingsTab() {
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
+  const [initialized, setInitialized] = useState<Record<string, boolean>>({});
   const [projectPath, setProjectPath] = useState('');
   const [draft, setDraft] = useState({ apiUrl: '', apiToken: '', bankId: '', scoping: 'per-project-tagged' as Scoping, autoRecall: true, autoRetain: true });
   const [importPath, setImportPath] = useState('');
@@ -92,9 +92,24 @@ export default function MemorySettingsTab() {
   useEffect(() => { void load(); }, [load]);
 
   useEffect(() => {
+    let active = true;
     void request<{ projects: ProjectSummary[] }>('/api/projects?summary=1')
-      .then((result) => setProjects(result.projects.filter((project) => Boolean(project.path?.trim()))))
-      .catch(() => setProjects([]));
+      .then(async (result) => {
+        if (!active) return;
+        const list = result.projects.filter((project) => Boolean(project.path?.trim()));
+        setProjects(list);
+        if (!list.length) return;
+        // `mempalace init` leaves mempalace.yaml in the project, so the picker
+        // can show which folders are already set up instead of guessing.
+        const checked = await request<{ initialized: string[] }>('/api/memory/mempalace/check', {
+          method: 'POST',
+          body: JSON.stringify({ paths: list.map((project) => project.path) }),
+        }).catch(() => ({ initialized: [] as string[] }));
+        if (!active) return;
+        setInitialized(Object.fromEntries(checked.initialized.map((path) => [path, true])));
+      })
+      .catch(() => { if (active) setProjects([]); });
+    return () => { active = false; };
   }, []);
 
   const run = async (key: string, action: () => Promise<unknown>, done?: string) => {
@@ -103,7 +118,7 @@ export default function MemorySettingsTab() {
     setNotice('');
     try {
       const result = await action();
-      if (result && typeof result === 'object' && 'provider' in result) apply(result as MemoryView);
+      if (result && typeof result === 'object' && 'backend' in result) apply(result as MemoryView);
       else await load();
       if (done) setNotice(done);
     } catch (actionError) {
@@ -113,11 +128,19 @@ export default function MemorySettingsTab() {
     }
   };
 
-  const choose = (provider: Provider) => {
+  const choose = (backend: Backend) => {
     if (busy) return;
-    void run(`provider:${provider}`, () => request<MemoryView>('/api/memory', {
+    void run(`backend:${backend}`, () => request<MemoryView>('/api/memory', {
       method: 'PUT',
-      body: JSON.stringify({ provider }),
+      body: JSON.stringify({ provider: backend }),
+    }));
+  };
+
+  const toggleMempalace = (enabled: boolean) => {
+    if (busy) return;
+    void run(`mempalace:${enabled ? 'on' : 'off'}`, () => request<MemoryView>('/api/memory', {
+      method: 'PUT',
+      body: JSON.stringify({ mempalace: enabled }),
     }));
   };
 
@@ -143,10 +166,14 @@ export default function MemorySettingsTab() {
       setError(t('memory.requiresProject'));
       return;
     }
-    void run('init', () => request<{ output: string }>('/api/memory/mempalace/init', {
-      method: 'POST',
-      body: JSON.stringify({ projectPath }),
-    }), t('memory.initDone'));
+    void run('init', async () => {
+      const result = await request<{ output: string }>('/api/memory/mempalace/init', {
+        method: 'POST',
+        body: JSON.stringify({ projectPath }),
+      });
+      setInitialized((current) => ({ ...current, [projectPath]: true }));
+      return result;
+    }, t('memory.initDone'));
   };
 
   const importFiles = () => {
@@ -159,9 +186,10 @@ export default function MemorySettingsTab() {
   };
 
   const mempalace = view?.mempalace;
-  const providerLabel = (provider: Provider): { title: string; description: string } => ({
-    title: t(`memory.${provider}`),
-    description: t(`memory.${provider}Description`),
+  const selectedInitialized = Boolean(projectPath && initialized[projectPath]);
+  const providerLabel = (backend: Backend): { title: string; description: string } => ({
+    title: t(`memory.${backend}`),
+    description: t(`memory.${backend}Description`),
   });
 
   return (
@@ -184,17 +212,17 @@ export default function MemorySettingsTab() {
           ) : null}
           {!loading && view ? (
             <div className="grid gap-2 p-4 sm:grid-cols-2" role="radiogroup" aria-label={t('memory.backend')}>
-              {PROVIDERS.map((provider) => {
-                const label = providerLabel(provider);
-                const selected = view.provider === provider;
+              {BACKENDS.map((backend) => {
+                const label = providerLabel(backend);
+                const selected = view.backend === backend;
                 return (
                   <button
-                    key={provider}
+                    key={backend}
                     type="button"
                     role="radio"
                     aria-checked={selected}
                     disabled={busy !== null}
-                    onClick={() => choose(provider)}
+                    onClick={() => choose(backend)}
                     className={`flex items-start gap-2 rounded-lg border p-3 text-left transition-colors ${
                       selected ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/40'
                     }`}
@@ -206,9 +234,8 @@ export default function MemorySettingsTab() {
                     </span>
                     <span className="min-w-0">
                       <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-                        {provider === 'mempalace' ? <Brain className="h-3.5 w-3.5" aria-hidden /> : null}
                         {label.title}
-                        {selected && busy === `provider:${provider}` ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : null}
+                        {selected && busy === `backend:${backend}` ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : null}
                       </span>
                       <span className="mt-0.5 block text-xs text-muted-foreground">{label.description}</span>
                     </span>
@@ -219,7 +246,35 @@ export default function MemorySettingsTab() {
           ) : null}
         </SettingsCard>
 
-        {view?.provider === 'local' ? (
+        {view ? (
+          <SettingsCard divided>
+            <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <p className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                  <Brain className="h-3.5 w-3.5" aria-hidden />
+                  {t('memory.mempalace')}
+                  {mempalace?.enabled ? <CheckCircle2 className="h-3.5 w-3.5 text-primary" aria-hidden /> : null}
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">{t('memory.mempalaceIndependent')}</p>
+                <p className="mt-1 text-[11px] text-muted-foreground">{t('memory.mempalaceInstalledOnSelect')}</p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={Boolean(mempalace?.enabled)}
+                aria-label={t('memory.mempalace')}
+                className={buttonClass}
+                disabled={busy !== null}
+                onClick={() => toggleMempalace(!mempalace?.enabled)}
+              >
+                {busy === 'mempalace:on' || busy === 'mempalace:off' ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : null}
+                {mempalace?.enabled ? t('memory.mempalaceDisable') : t('memory.mempalaceEnable')}
+              </button>
+            </div>
+          </SettingsCard>
+        ) : null}
+
+        {view?.backend === 'local' ? (
           <SettingsCard>
             <div className="space-y-1 p-4 text-xs text-muted-foreground">
               <p className="font-medium text-foreground">{t('memory.local')}</p>
@@ -229,7 +284,7 @@ export default function MemorySettingsTab() {
           </SettingsCard>
         ) : null}
 
-        {view?.provider === 'hindsight' ? (
+        {view?.backend === 'hindsight' ? (
           <SettingsCard divided>
             <div className="grid gap-3 p-4 sm:grid-cols-2">
               <label className="text-xs font-medium text-muted-foreground">
@@ -269,7 +324,7 @@ export default function MemorySettingsTab() {
           </SettingsCard>
         ) : null}
 
-        {view?.provider === 'mempalace' && mempalace ? (
+        {mempalace?.enabled && mempalace ? (
           <>
             <SettingsCard divided>
               <div className="flex flex-wrap gap-2 p-4" role="status" aria-label={t('memory.status')}>
@@ -310,12 +365,17 @@ export default function MemorySettingsTab() {
                     {t('memory.project')}
                     <select className={`mt-1 ${inputClass}`} value={projectPath} onChange={(event) => setProjectPath(event.target.value)}>
                       <option value="">{t('memory.selectProject')}</option>
-                      {projects.map((project) => <option key={project.projectId} value={project.path}>{project.displayName}</option>)}
+                      {projects.map((project) => (
+                        <option key={project.projectId} value={project.path}>
+                          {project.displayName}{initialized[project.path] ? ` · ${t('memory.mempalaceInitialized')}` : ''}
+                        </option>
+                      ))}
                     </select>
+                    <span className="mt-1 block text-[11px] font-normal">{t('memory.mempalaceAutoDetect')}</span>
                   </label>
                   <button type="button" className={primaryButtonClass} disabled={busy !== null || !projectPath} onClick={initPalace}>
                     {busy === 'init' ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : null}
-                    {busy === 'init' ? t('memory.initializing') : t('memory.init')}
+                    {busy === 'init' ? t('memory.initializing') : selectedInitialized ? t('memory.mempalaceReinit') : t('memory.init')}
                   </button>
                 </div>
               </SettingsCard>
@@ -330,7 +390,7 @@ export default function MemorySettingsTab() {
                   </label>
                   <label className="w-full text-xs font-medium text-muted-foreground sm:w-36">
                     {t('memory.importMode')}
-                    <input className={`mt-1 ${inputClass}`} placeholder="docs" value={importMode} onChange={(event) => setImportMode(event.target.value)} />
+                    <input className={`mt-1 ${inputClass}`} placeholder="projects" value={importMode} onChange={(event) => setImportMode(event.target.value)} />
                   </label>
                   <button type="button" className={primaryButtonClass} disabled={busy !== null || !importPath.trim()} onClick={importFiles}>
                     {busy === 'import' ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : null}
