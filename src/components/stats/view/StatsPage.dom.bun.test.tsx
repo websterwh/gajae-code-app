@@ -1,8 +1,8 @@
 /**
- * The activity card as a browser sees it: the calendar is the default view,
- * both views cover the whole 30-day window (including days without usage), and
- * a day's tokens appear on mouseenter rather than through a delayed native
- * tooltip, so moving straight to the next day replaces the number at once.
+ * The activity card as a browser sees it: a six-month calendar that fills the
+ * card and, under it, the last-30-days bars — both always visible, with no view
+ * switch. A day's tokens appear on mouseenter rather than through a delayed
+ * native tooltip, so moving straight to the next day replaces the number at once.
  */
 
 import assert from 'node:assert/strict';
@@ -20,6 +20,7 @@ const integer = new Intl.NumberFormat();
 const DAY_MS = 24 * 60 * 60 * 1000;
 const BUSY = 400_000;
 const QUIET = 100_000;
+const CALENDAR_WEEKS = 26;
 
 const i18n = createInstance();
 void i18n.use(initReactI18next).init({
@@ -36,13 +37,16 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-/** A UTC day offset from today, which is the window the page builds locally. */
-const day = (offset: number) => {
+const utcToday = () => {
   const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) - offset * DAY_MS)
-    .toISOString()
-    .slice(0, 10);
+  return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
 };
+
+/** The calendar runs week-aligned from Sunday, so its day count depends on today. */
+const calendarDays = () => (CALENDAR_WEEKS - 1) * 7 + new Date(utcToday()).getUTCDay() + 1;
+
+/** A UTC day offset from today, which is the window the page builds locally. */
+const day = (offset: number) => new Date(utcToday() - offset * DAY_MS).toISOString().slice(0, 10);
 
 function overview() {
   return {
@@ -78,30 +82,25 @@ async function mount() {
       </MemoryRouter>
     </I18nextProvider>,
   );
-  await screen.findByRole('button', { name: 'Bar view' });
+  const charts = await screen.findAllByRole('img', { name: 'Daily token usage' });
+  assert.equal(charts.length, 2, 'the calendar and the bars are both on the page');
 }
 
-const cells = (root: ParentNode = document) => [...root.querySelectorAll<HTMLElement>('[data-date]')];
+const cells = (view: 'grid' | 'bars') => [...document.querySelectorAll<HTMLElement>(`[data-view="${view}"] [data-date]`)];
 const cell = (view: 'grid' | 'bars', offset: number) =>
   document.querySelector<HTMLElement>(`[data-view="${view}"] [data-date="${day(offset)}"]`);
 
-test('the calendar is the default view and both views cover all 30 days', async () => {
+test('both charts stay on the page, and the calendar spans far more than 30 days', async () => {
   await mount();
 
-  assert.equal(screen.getByRole('button', { name: 'Calendar view' }).getAttribute('aria-pressed'), 'true');
-  assert.equal(screen.getByRole('button', { name: 'Bar view' }).getAttribute('aria-pressed'), 'false');
-  assert.ok(document.querySelector('[data-view="grid"]'), 'the calendar is shown first');
-  assert.equal(document.querySelector('[data-view="bars"]'), null);
-  assert.equal(cells().length, 30, 'inactive days are drawn, not skipped');
+  assert.equal(document.querySelector('[data-view="grid"]') !== null, true);
+  assert.equal(document.querySelector('[data-view="bars"]') !== null, true);
+  assert.equal(screen.queryByRole('button', { name: 'Calendar view' }), null, 'no view toggle is offered');
+  assert.equal(screen.queryByRole('button', { name: 'Bar view' }), null);
 
-  fireEvent.click(screen.getByRole('button', { name: 'Bar view' }));
-  assert.ok(document.querySelector('[data-view="bars"]'));
-  assert.equal(document.querySelector('[data-view="grid"]'), null);
-  assert.equal(screen.getByRole('button', { name: 'Bar view' }).getAttribute('aria-pressed'), 'true');
-  assert.equal(cells().length, 30);
-
-  fireEvent.click(screen.getByRole('button', { name: 'Calendar view' }));
-  assert.ok(document.querySelector('[data-view="grid"]'));
+  assert.equal(cells('grid').length, calendarDays(), 'inactive days are drawn, not skipped');
+  assert.ok(cells('grid').length > 170, 'the calendar covers about six months');
+  assert.equal(cells('bars').length, 30, 'the bars keep the 30-day window');
 });
 
 test('square intensity follows the day total, from empty to full', async () => {
@@ -134,7 +133,6 @@ test('hovering shows that day’s tokens at once, and the next day replaces them
   fireEvent.mouseLeave(document.querySelector('[data-view="grid"]')!);
   assert.equal(screen.queryByText(new RegExp(`${integer.format(QUIET)} tokens`)), null, 'leaving the chart clears it');
 
-  fireEvent.click(screen.getByRole('button', { name: 'Bar view' }));
   fireEvent.mouseEnter(cell('bars', 0)!);
-  assert.ok(screen.getByText(new RegExp(`${integer.format(BUSY)} tokens`)), 'the bar view shares the same hover readout');
+  assert.ok(screen.getByText(new RegExp(`${integer.format(BUSY)} tokens`)), 'the bars share the same hover readout');
 });

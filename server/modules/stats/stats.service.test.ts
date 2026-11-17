@@ -8,7 +8,7 @@ import { collectUsageOverview } from '@/modules/stats/stats.service.js';
 
 type Usage = { input: number; output: number; cacheRead: number; cacheWrite: number; totalTokens: number; cost?: number };
 
-// The daily series only keeps the last 30 days, so fixtures have to be recent.
+// The daily series only keeps roughly six months, so fixtures have to be recent.
 const ACTIVITY = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 const ACTIVITY_DAY = ACTIVITY.slice(0, 10);
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, BarChart3, Boxes, Coins, LayoutGrid, MessageSquareText, RefreshCw, TriangleAlert } from 'lucide-react';
+import { ArrowLeft, BarChart3, Boxes, Coins, MessageSquareText, RefreshCw, TriangleAlert } from 'lucide-react';
 
 import { Button } from '../../../shared/view/ui';
 import { api } from '../../../utils/api';
@@ -42,30 +42,43 @@ const dateLabel = (iso: string) => {
   return Number.isNaN(parsed.getTime()) ? iso : parsed.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 };
 
-const ACTIVITY_DAYS = 30;
+const BAR_DAYS = 30;
+const CALENDAR_WEEKS = 26;
 const DAY_MS = 24 * 60 * 60 * 1000;
+const WEEKDAY_LABELS = ['', 'Mon', '', 'Wed', '', 'Fri', ''];
 const ACTIVITY_TONES = ['bg-muted/60', 'bg-primary/20', 'bg-primary/40', 'bg-primary/65', 'bg-primary'];
 
 /**
  * The API only returns days that saw traffic, so inactive days would silently
- * compress a calendar. The window is rebuilt here with zero-total days.
+ * compress a chart. The window is rebuilt here with zero-total days.
  */
-function activityWindow(daily: DayRow[]): DayRow[] {
+function lastDays(daily: DayRow[], count: number): DayRow[] {
   const byDate = new Map(daily.map((day) => [day.date, day]));
   const now = new Date();
   const end = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  return Array.from({ length: ACTIVITY_DAYS }, (_, index) => {
-    const date = new Date(end - (ACTIVITY_DAYS - 1 - index) * DAY_MS).toISOString().slice(0, 10);
+  return Array.from({ length: count }, (_, index) => {
+    const date = new Date(end - (count - 1 - index) * DAY_MS).toISOString().slice(0, 10);
     return byDate.get(date) ?? { date, total: 0, cost: 0 };
   });
 }
 
-/** Columns are weeks and rows are weekdays, Sunday first, padded so the grid lines up like GitHub's. */
-function activityWeeks(days: DayRow[]): (DayRow | null)[][] {
-  const lead = new Date(`${days[0].date}T00:00:00Z`).getUTCDay();
-  const cells: (DayRow | null)[] = [...Array.from({ length: lead }, () => null), ...days];
-  while (cells.length % 7 !== 0) cells.push(null);
-  return Array.from({ length: cells.length / 7 }, (_, week) => cells.slice(week * 7, week * 7 + 7));
+/**
+ * Columns are weeks and rows are weekdays, Sunday first. Starting on the Sunday
+ * 25 weeks back keeps every column full so the squares span the card; days after
+ * today are padded blank.
+ */
+function calendarWeeks(daily: DayRow[]): (DayRow | null)[][] {
+  const byDate = new Map(daily.map((day) => [day.date, day]));
+  const now = new Date();
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const weekday = new Date(today).getUTCDay();
+  const start = today - (weekday + (CALENDAR_WEEKS - 1) * 7) * DAY_MS;
+  return Array.from({ length: CALENDAR_WEEKS }, (_, week) => Array.from({ length: 7 }, (_, day): DayRow | null => {
+    const time = start + (week * 7 + day) * DAY_MS;
+    if (time > today) return null;
+    const date = new Date(time).toISOString().slice(0, 10);
+    return byDate.get(date) ?? { date, total: 0, cost: 0 };
+  }));
 }
 
 function activityLevel(total: number, busiest: number): number {
@@ -113,7 +126,7 @@ function BreakdownRow({ label, value, total, tone }: { label: string; value: num
   );
 }
 
-function Section({ title, subtitle, action, children }: { title: string; subtitle?: string; action?: ReactNode; children: ReactNode }) {
+function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
   return (
     <section className="mt-4 rounded-xl border border-border/70 bg-card">
       <header className="flex items-start justify-between gap-3 border-b border-border/60 px-4 py-3">
@@ -121,7 +134,6 @@ function Section({ title, subtitle, action, children }: { title: string; subtitl
           <h2 className="text-sm font-medium text-foreground">{title}</h2>
           {subtitle && <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>}
         </div>
-        {action}
       </header>
       <div className="p-4">{children}</div>
     </section>
@@ -133,13 +145,15 @@ export default function StatsPage() {
   const navigate = useNavigate();
   const [overview, setOverview] = useState<Overview | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
-  const [activityView, setActivityView] = useState<'grid' | 'bars'>('grid');
   const [hoveredDay, setHoveredDay] = useState<DayHover | null>(null);
   const [hoverTipLeft, setHoverTipLeft] = useState(0);
   const hoverTip = useRef<HTMLDivElement | null>(null);
-  const activityDays = useMemo(() => activityWindow(overview?.daily ?? []), [overview?.daily]);
-  const weeks = useMemo(() => activityWeeks(activityDays), [activityDays]);
-  const busiestDay = useMemo(() => Math.max(0, ...activityDays.map((day) => day.total)), [activityDays]);
+  const daily = overview?.daily;
+  const activityDays = useMemo(() => lastDays(daily ?? [], BAR_DAYS), [daily]);
+  const weeks = useMemo(() => calendarWeeks(daily ?? []), [daily]);
+  const calendarDays = useMemo(() => weeks.flat().filter((day): day is DayRow => day !== null), [weeks]);
+  const calendarBusiest = useMemo(() => Math.max(0, ...calendarDays.map((day) => day.total)), [calendarDays]);
+  const barBusiest = useMemo(() => Math.max(0, ...activityDays.map((day) => day.total)), [activityDays]);
 
   const load = useCallback(async (refresh: boolean) => {
     setStatus((previous) => (previous === 'ready' ? previous : 'loading'));
@@ -284,69 +298,52 @@ export default function StatsPage() {
             </Section>
 
             {overview.daily.length > 0 && (
-              <Section
-                title={t('stats.activity', 'Last 30 days')}
-                subtitle={activityView === 'grid'
-                  ? t('stats.activityGridHint', 'One square per day; darker squares mean more tokens.')
-                  : t('stats.activityHint', 'Tokens per day, newest on the right.')}
-                action={(
+              <>
+                <Section
+                  title={t('stats.activityCalendar', 'Last 6 months')}
+                  subtitle={t('stats.activityGridHint', 'One square per day; darker squares mean more tokens.')}
+                >
                   <div
-                    className="flex shrink-0 items-center gap-0.5 rounded-lg border border-border/70 bg-muted/40 p-0.5"
-                    role="group"
-                    aria-label={t('stats.activityView', 'Activity view')}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setActivityView('grid')}
-                      aria-pressed={activityView === 'grid'}
-                      aria-label={t('stats.viewGrid', 'Calendar view')}
-                      title={t('stats.viewGrid', 'Calendar view')}
-                      className={`rounded-md p-1.5 transition-colors ${activityView === 'grid' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-                    >
-                      <LayoutGrid className="size-3.5" aria-hidden />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActivityView('bars')}
-                      aria-pressed={activityView === 'bars'}
-                      aria-label={t('stats.viewBars', 'Bar view')}
-                      title={t('stats.viewBars', 'Bar view')}
-                      className={`rounded-md p-1.5 transition-colors ${activityView === 'bars' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-                    >
-                      <BarChart3 className="size-3.5" aria-hidden />
-                    </button>
-                  </div>
-                )}
-              >
-                {activityView === 'grid' ? (
-                  <div
-                    className="flex items-start gap-2"
                     role="img"
                     aria-label={t('stats.activityAria', 'Daily token usage')}
                     data-view="grid"
                     onMouseLeave={() => setHoveredDay(null)}
                   >
-                    <div className="grid grid-rows-7 gap-1.5 text-[10px] text-muted-foreground" aria-hidden>
-                      {['', 'Mon', '', 'Wed', '', 'Fri', ''].map((label, index) => (
-                        <span key={index} className="flex h-6 items-center">{label}</span>
+                    <div
+                      className="grid grid-flow-col grid-rows-7 gap-0.5 sm:gap-1"
+                      style={{ gridTemplateColumns: `auto repeat(${CALENDAR_WEEKS}, minmax(0, 1fr))` }}
+                    >
+                      {WEEKDAY_LABELS.map((label, index) => (
+                        <span
+                          key={`weekday-${index}`}
+                          className="flex items-center justify-end pr-1.5 text-[10px] leading-none text-muted-foreground"
+                          aria-hidden
+                        >
+                          {label}
+                        </span>
                       ))}
+                      {weeks.map((week, weekIndex) => week.map((day, dayIndex) => (day ? (
+                        <div
+                          key={day.date}
+                          data-date={day.date}
+                          onMouseEnter={showDay(day)}
+                          className={`aspect-square w-full rounded-[3px] border border-border/40 transition-colors hover:border-foreground/30 ${ACTIVITY_TONES[activityLevel(day.total, calendarBusiest)]}`}
+                        />
+                      ) : (
+                        <div key={`empty-${weekIndex}-${dayIndex}`} className="aspect-square w-full" aria-hidden />
+                      ))))}
                     </div>
-                    {weeks.map((week, weekIndex) => (
-                      <div key={weekIndex} className="grid grid-rows-7 gap-1.5">
-                        {week.map((day, dayIndex) => (day ? (
-                          <div
-                            key={day.date}
-                            data-date={day.date}
-                            onMouseEnter={showDay(day)}
-                            className={`size-6 rounded-[3px] border border-border/40 transition-colors hover:border-foreground/30 ${ACTIVITY_TONES[activityLevel(day.total, busiestDay)]}`}
-                          />
-                        ) : (
-                          <div key={`empty-${weekIndex}-${dayIndex}`} className="size-6" aria-hidden />
-                        )))}
-                      </div>
-                    ))}
+                    <div className="mt-2 flex justify-between text-[11px] text-muted-foreground">
+                      <span>{dateLabel(calendarDays[0].date)}</span>
+                      <span>{dateLabel(calendarDays[calendarDays.length - 1].date)}</span>
+                    </div>
                   </div>
-                ) : (
+                </Section>
+
+                <Section
+                  title={t('stats.activity', 'Last 30 days')}
+                  subtitle={t('stats.activityHint', 'Tokens per day, newest on the right.')}
+                >
                   <div
                     className="flex h-28 items-end gap-1"
                     role="img"
@@ -358,17 +355,17 @@ export default function StatsPage() {
                       <div key={day.date} data-date={day.date} className="group flex h-full min-w-0 flex-1 items-end" onMouseEnter={showDay(day)}>
                         <div
                           className={`w-full rounded-t-sm transition-colors ${day.total > 0 ? 'bg-primary/70 group-hover:bg-primary' : 'bg-muted/70'}`}
-                          style={{ height: `${busiestDay > 0 ? Math.max(3, (day.total / busiestDay) * 100) : 3}%` }}
+                          style={{ height: `${barBusiest > 0 ? Math.max(3, (day.total / barBusiest) * 100) : 3}%` }}
                         />
                       </div>
                     ))}
                   </div>
-                )}
-                <div className="mt-2 flex justify-between text-[11px] text-muted-foreground">
-                  <span>{dateLabel(activityDays[0].date)}</span>
-                  <span>{dateLabel(activityDays[activityDays.length - 1].date)}</span>
-                </div>
-              </Section>
+                  <div className="mt-2 flex justify-between text-[11px] text-muted-foreground">
+                    <span>{dateLabel(activityDays[0].date)}</span>
+                    <span>{dateLabel(activityDays[activityDays.length - 1].date)}</span>
+                  </div>
+                </Section>
+              </>
             )}
 
             {overview.models.length > 0 && (

@@ -45,7 +45,7 @@ const MAX_FILES = 4_000;
 const MAX_BYTES = 256 * 1024 * 1024;
 const MAX_DEPTH = 4;
 const MAX_MODELS = 12;
-const DAILY_WINDOW_DAYS = 30;
+const DAILY_WINDOW_DAYS = 183;
 const CACHE_MS = 30_000;
 const FILE_CONCURRENCY = 4;
 
