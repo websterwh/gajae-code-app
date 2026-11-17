@@ -168,14 +168,17 @@ export function clientAddressAllowed(address: string, entries: string[]): boolea
 
 /**
  * Addresses whose `x-forwarded-for` is believed. Loopback is the proxy on this
- * host. Any other peer has to be named in `GAJAE_TRUSTED_PROXIES` (or
- * `TRUSTED_PROXIES`), because "on a private network" describes the client as
- * often as it describes the proxy: a LAN client that reaches the port directly
- * can write any header it likes, and treating that header as its address let it
- * claim a loopback or allow-listed value and skip the sign-in challenge.
+ * host. Any other peer has to be named in `TRUSTED_PROXIES`, because "on a
+ * private network" describes the client as often as it describes the proxy: a
+ * LAN client that reaches the port directly can write any header it likes, and
+ * treating that header as its address let it claim a loopback or allow-listed
+ * value and skip the sign-in challenge.
  */
 export function trustedProxyEntries(env: NodeJS.ProcessEnv = process.env): string[] {
-  const configured = env.GAJAE_TRUSTED_PROXIES ?? env.TRUSTED_PROXIES ?? '';
+  // `TRUSTED_PROXIES` is the name to document. The prefixed spelling is what
+  // the variable shipped as, so an existing deployment keeps working without
+  // an edit, and a deployment that sets both gets the unprefixed one.
+  const configured = env.TRUSTED_PROXIES ?? env.GAJAE_TRUSTED_PROXIES ?? '';
   return configured.split(/[\s,]+/u).map((entry) => entry.trim()).filter(Boolean);
 }
 

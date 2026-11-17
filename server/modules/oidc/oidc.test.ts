@@ -211,13 +211,15 @@ test('NO_AUTH is the deliberate break-glass switch, and the bind-guard var is no
 });
 
 test('a forwarded header is believed only from a proxy we actually trust', () => {
-  const saved = process.env.GAJAE_TRUSTED_PROXIES;
+  const saved = process.env.TRUSTED_PROXIES;
+  const savedLegacy = process.env.GAJAE_TRUSTED_PROXIES;
   const request = (socket: string, forwarded?: string, ip?: string) => ({
     socket: { remoteAddress: socket },
     headers: forwarded === undefined ? {} : { 'x-forwarded-for': forwarded },
     ip,
   });
   try {
+    delete process.env.TRUSTED_PROXIES;
     delete process.env.GAJAE_TRUSTED_PROXIES;
     // A proxy on this host is the default and speaks for the client.
     assert.equal(clientAddress(request('127.0.0.1', '192.168.1.40', '192.168.1.40')), '192.168.1.40');
@@ -227,13 +229,20 @@ test('a forwarded header is believed only from a proxy we actually trust', () =>
     assert.equal(clientAddress(request('172.18.0.2', '8.8.8.8', '8.8.8.8')), '172.18.0.2');
     assert.equal(clientAddress(request('192.168.1.9', '127.0.0.1', '127.0.0.1')), '192.168.1.9');
     // A proxy in another container or host is named explicitly.
-    process.env.GAJAE_TRUSTED_PROXIES = '172.18.0.0/16, 10.1.2.3';
+    process.env.TRUSTED_PROXIES = '172.18.0.0/16, 10.1.2.3';
     assert.equal(clientAddress(request('172.18.0.2', '8.8.8.8', '8.8.8.8')), '8.8.8.8');
     assert.equal(clientAddress(request('10.1.2.3', '8.8.8.8', '8.8.8.8')), '8.8.8.8');
     assert.equal(clientAddress(request('172.19.0.2', '8.8.8.8', '8.8.8.8')), '172.19.0.2');
+    // The prefixed name the variable shipped under still works, alone.
+    delete process.env.TRUSTED_PROXIES;
+    process.env.GAJAE_TRUSTED_PROXIES = '10.1.2.3';
+    assert.equal(clientAddress(request('10.1.2.3', '8.8.8.8', '8.8.8.8')), '8.8.8.8');
+    assert.equal(clientAddress(request('172.18.0.2', '8.8.8.8', '8.8.8.8')), '172.18.0.2');
   } finally {
-    if (saved === undefined) delete process.env.GAJAE_TRUSTED_PROXIES;
-    else process.env.GAJAE_TRUSTED_PROXIES = saved;
+    if (saved === undefined) delete process.env.TRUSTED_PROXIES;
+    else process.env.TRUSTED_PROXIES = saved;
+    if (savedLegacy === undefined) delete process.env.GAJAE_TRUSTED_PROXIES;
+    else process.env.GAJAE_TRUSTED_PROXIES = savedLegacy;
   }
   // A direct connection to the published port can write any header it likes.
   assert.equal(clientAddress(request('203.0.113.9', '192.168.1.40', '192.168.1.40')), '203.0.113.9');

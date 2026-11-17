@@ -102,7 +102,7 @@ revision is required.
 | `NO_AUTH` | `false` | Set to `true` to disable sign-in entirely as a break-glass. Saved OIDC settings are kept and apply again once it is unset. |
 | `API_KEY` | *(empty)* | Shared key for non-desktop deployments. Required for a non-loopback bind unless OIDC sign-in is configured. Send it as `x-api-key`; per-user `ck_...` keys from Settings are also accepted. |
 | `ALLOWED_HOSTS` | `localhost,127.0.0.1` | Extra DNS names admitted by the host/origin check, comma separated. Literal IPs and localhost are always admitted; `*` disables the check. |
-| `GAJAE_TRUSTED_PROXIES` | *(empty)* | Peers whose `X-Forwarded-For` is believed, comma separated IPs or CIDRs. Loopback is always trusted; another container or a proxy on another machine has to be listed, or the app judges the proxy's address instead of the browser's. Never list a client subnet. |
+| `TRUSTED_PROXIES` | *(empty)* | Peers whose `X-Forwarded-For` is believed, comma separated IPs or CIDRs. Loopback is always trusted; another container or a proxy on another machine has to be listed, or the app judges the proxy's address instead of the browser's. Never list a client subnet. The older name `GAJAE_TRUSTED_PROXIES` is still read. |
 | `DATABASE_PATH` | `/data/auth.db` | Path to persistent SQLite database. |
 | `WORKSPACES_ROOT` | `/workspace` | Default directory root for GJC agent projects. |
 | `GJC_WORKER_AGENT_DIR` | `/root/.gjc/agent` | Storage directory for agent sessions and custom skills. |

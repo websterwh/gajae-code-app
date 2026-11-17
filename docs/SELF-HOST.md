@@ -122,8 +122,9 @@ keep the existing loopback/VPN/tunnel or authenticated-proxy access boundary.
 `X-Forwarded-For` decides who the sign-in gate thinks a request is, so it is
 believed only from a peer that is really the proxy: loopback by default. If
 your proxy is another container or a separate machine on a private network,
-list its address or CIDR in `GAJAE_TRUSTED_PROXIES` (comma-separated, for
-example `172.18.0.0/16`). Without that entry the proxy's own address is judged:
+list its address or CIDR in `TRUSTED_PROXIES` (comma-separated, for example
+`172.18.0.0/16`; the older name `GAJAE_TRUSTED_PROXIES` is still read). Without
+that entry the proxy's own address is judged:
 the app stays safe, but the local-access list and the per-client sign-in limit
 see the proxy instead of the browser. A client that reaches the published port
 directly can write any header it likes, which is why being on the private
