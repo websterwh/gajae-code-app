@@ -160,7 +160,6 @@ ENV PATH="/data/npm-global/bin:/data/bin:/root/.local/share/aquaproj-aqua/bin:/u
     GJC_WORKER_AGENT_DIR=/root/.gjc/agent \
     NODE_ENV=production \
     AUTO_UPDATE_PACKAGES=true \
-    CHECK_PACKAGE_UPDATES=true \
     POST_COMMANDS="" \
     GAJAE_COMPANION_DOWNLOAD_TEMPLATE="" \
     INSTALL_GJC_CLI=true \

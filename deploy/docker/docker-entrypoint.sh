@@ -30,7 +30,6 @@ export PIP_PACKAGES="${PIP_PACKAGES:-}"
 export NPM_PACKAGES="${NPM_PACKAGES:-}"
 export GITHUB_APPS="${GITHUB_APPS:-}"
 export AUTO_UPDATE_PACKAGES="${AUTO_UPDATE_PACKAGES:-true}"
-export CHECK_PACKAGE_UPDATES="${CHECK_PACKAGE_UPDATES:-true}"
 export POST_COMMANDS="${POST_COMMANDS:-}"
 # SSH Configuration
 export SSH_ENABLE="${SSH_ENABLE:-false}"
@@ -61,10 +60,14 @@ mkdir -p "${UV_TOOL_DIR}" "${UV_TOOL_BIN_DIR}"
 # found without a second launcher.
 case ":${PATH}:" in *":${UV_TOOL_BIN_DIR}:"*) ;; *) export PATH="${UV_TOOL_BIN_DIR}:${PATH}" ;; esac
 # mempalace stores its palace on the mount but looks for it under $HOME, so the
-# link has to be recreated on every fresh container.
+# link has to be recreated on every fresh container. Newer releases resolve the
+# config dir through XDG when ~/.mempalace holds nothing yet, which would put the
+# palace on the container layer; naming the mounted directory directly keeps the
+# palace (and the downloaded embedding model) across a recreate either way.
 mempalace_root="${gjc_config_root}/mempalace"
 mkdir -p "${mempalace_root}"
 ln -sfn "${mempalace_root}" /root/.mempalace
+export MEMPALACE_CONFIG_DIR="${MEMPALACE_CONFIG_DIR:-${mempalace_root}}"
 # ==============================================================================
 # Directory & Cache Preparation
 # ==============================================================================

@@ -54,7 +54,6 @@ services:
       - NPM_PACKAGES=${NPM_PACKAGES:-}
       - GITHUB_APPS=${GITHUB_APPS:-}
       - AUTO_UPDATE_PACKAGES=${AUTO_UPDATE_PACKAGES:-true}
-      - CHECK_PACKAGE_UPDATES=${CHECK_PACKAGE_UPDATES:-true}
       - POST_COMMANDS=${POST_COMMANDS:-}
       # Direct Container SSH & CLI Access
       - SSH_ENABLE=${SSH_ENABLE:-false}
