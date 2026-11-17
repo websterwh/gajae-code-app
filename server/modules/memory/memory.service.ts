@@ -123,9 +123,14 @@ export class MemoryService {
         : 'enabled'
       : 'missing';
 
+    // An instance that enabled MemPalace before this page existed has the MCP
+    // entry and the hook but no marker, so report what is actually running
+    // instead of calling it the CLI's local pipeline.
     const provider: MemoryProvider = marker?.provider === 'mempalace'
       ? 'mempalace'
-      : backend;
+      : !marker && mcpServer === 'enabled' && probe.hookInstalled
+        ? 'mempalace'
+        : backend;
 
     const version = probe.installed ? await mempalaceVersion(probe.binary) : null;
 

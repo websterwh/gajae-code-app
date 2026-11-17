@@ -51,6 +51,11 @@ test('switching to MemPalace wires the MCP server and hook; switching away disab
   assert.equal(mcp.mcpServers.mempalace?.enabled, true);
   assert.equal(mcp.mcpServers.context7?.command, 'npx');
 
+  // A MemPalace enabled before the page existed has no marker file; the MCP
+  // entry plus the hook still identify the provider that is running.
+  await rm(path.join(agent, 'memory-provider.json'), { force: true });
+  assert.equal((await service.status()).provider, 'mempalace');
+
   const hook = await readFile(path.join(agent, 'hooks', 'post', 'mempalace-autosave.ts'), 'utf8');
   assert.match(hook, /MEMPALACE_BIN/);
   assert.match(hook, /session_shutdown/);
