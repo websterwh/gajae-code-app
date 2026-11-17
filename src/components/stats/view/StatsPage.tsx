@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, BarChart3, Boxes, Coins, MessageSquareText, RefreshCw, TriangleAlert } from 'lucide-react';
+import { ArrowLeft, BarChart3, Boxes, Coins, LayoutGrid, MessageSquareText, RefreshCw, TriangleAlert } from 'lucide-react';
 
 import { Button } from '../../../shared/view/ui';
 import { api } from '../../../utils/api';
@@ -42,6 +42,39 @@ const dateLabel = (iso: string) => {
   return Number.isNaN(parsed.getTime()) ? iso : parsed.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 };
 
+const ACTIVITY_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const ACTIVITY_TONES = ['bg-muted/60', 'bg-primary/20', 'bg-primary/40', 'bg-primary/65', 'bg-primary'];
+
+/**
+ * The API only returns days that saw traffic, so inactive days would silently
+ * compress a calendar. The window is rebuilt here with zero-total days.
+ */
+function activityWindow(daily: DayRow[]): DayRow[] {
+  const byDate = new Map(daily.map((day) => [day.date, day]));
+  const now = new Date();
+  const end = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return Array.from({ length: ACTIVITY_DAYS }, (_, index) => {
+    const date = new Date(end - (ACTIVITY_DAYS - 1 - index) * DAY_MS).toISOString().slice(0, 10);
+    return byDate.get(date) ?? { date, total: 0, cost: 0 };
+  });
+}
+
+/** Columns are weeks and rows are weekdays, Sunday first, padded so the grid lines up like GitHub's. */
+function activityWeeks(days: DayRow[]): (DayRow | null)[][] {
+  const lead = new Date(`${days[0].date}T00:00:00Z`).getUTCDay();
+  const cells: (DayRow | null)[] = [...Array.from({ length: lead }, () => null), ...days];
+  while (cells.length % 7 !== 0) cells.push(null);
+  return Array.from({ length: cells.length / 7 }, (_, week) => cells.slice(week * 7, week * 7 + 7));
+}
+
+function activityLevel(total: number, busiest: number): number {
+  if (total <= 0 || busiest <= 0) return 0;
+  return Math.min(ACTIVITY_TONES.length - 1, Math.ceil((total / busiest) * (ACTIVITY_TONES.length - 1)));
+}
+
+type DayHover = { date: string; total: number; x: number; y: number };
+
 function MetricCard({ icon: Icon, label, value, hint }: {
   icon: typeof BarChart3;
   label: string;
@@ -80,12 +113,15 @@ function BreakdownRow({ label, value, total, tone }: { label: string; value: num
   );
 }
 
-function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
+function Section({ title, subtitle, action, children }: { title: string; subtitle?: string; action?: ReactNode; children: ReactNode }) {
   return (
     <section className="mt-4 rounded-xl border border-border/70 bg-card">
-      <header className="border-b border-border/60 px-4 py-3">
-        <h2 className="text-sm font-medium text-foreground">{title}</h2>
-        {subtitle && <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>}
+      <header className="flex items-start justify-between gap-3 border-b border-border/60 px-4 py-3">
+        <div className="min-w-0">
+          <h2 className="text-sm font-medium text-foreground">{title}</h2>
+          {subtitle && <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>}
+        </div>
+        {action}
       </header>
       <div className="p-4">{children}</div>
     </section>
@@ -97,6 +133,13 @@ export default function StatsPage() {
   const navigate = useNavigate();
   const [overview, setOverview] = useState<Overview | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [activityView, setActivityView] = useState<'grid' | 'bars'>('grid');
+  const [hoveredDay, setHoveredDay] = useState<DayHover | null>(null);
+  const [hoverTipLeft, setHoverTipLeft] = useState(0);
+  const hoverTip = useRef<HTMLDivElement | null>(null);
+  const activityDays = useMemo(() => activityWindow(overview?.daily ?? []), [overview?.daily]);
+  const weeks = useMemo(() => activityWeeks(activityDays), [activityDays]);
+  const busiestDay = useMemo(() => Math.max(0, ...activityDays.map((day) => day.total)), [activityDays]);
 
   const load = useCallback(async (refresh: boolean) => {
     setStatus((previous) => (previous === 'ready' ? previous : 'loading'));
@@ -115,8 +158,23 @@ export default function StatsPage() {
 
   useEffect(() => { void load(false); }, [load]);
 
+  const showDay = (day: DayRow) => (event: ReactMouseEvent<HTMLElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    setHoveredDay({ date: day.date, total: day.total, x: rect.left + rect.width / 2, y: rect.top - 8 });
+  };
+
+  // The tooltip is measured before paint so an edge cell's box is nudged inward
+  // without ever appearing half off screen first.
+  useLayoutEffect(() => {
+    if (!hoveredDay || !hoverTip.current) return;
+    const width = hoverTip.current.offsetWidth;
+    const margin = 8;
+    setHoverTipLeft(width + margin * 2 >= window.innerWidth
+      ? window.innerWidth / 2
+      : Math.min(Math.max(hoveredDay.x, margin + width / 2), window.innerWidth - margin - width / 2));
+  }, [hoveredDay]);
+
   const totals = overview?.totals;
-  const busiestDay = overview ? Math.max(0, ...overview.daily.map((day) => day.total)) : 0;
   const pinnedCost = overview && overview.totals.cost > 0;
 
   return (
@@ -228,21 +286,87 @@ export default function StatsPage() {
             {overview.daily.length > 0 && (
               <Section
                 title={t('stats.activity', 'Last 30 days')}
-                subtitle={t('stats.activityHint', 'Tokens per day, newest on the right.')}
+                subtitle={activityView === 'grid'
+                  ? t('stats.activityGridHint', 'One square per day; darker squares mean more tokens.')
+                  : t('stats.activityHint', 'Tokens per day, newest on the right.')}
+                action={(
+                  <div
+                    className="flex shrink-0 items-center gap-0.5 rounded-lg border border-border/70 bg-muted/40 p-0.5"
+                    role="group"
+                    aria-label={t('stats.activityView', 'Activity view')}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setActivityView('grid')}
+                      aria-pressed={activityView === 'grid'}
+                      aria-label={t('stats.viewGrid', 'Calendar view')}
+                      title={t('stats.viewGrid', 'Calendar view')}
+                      className={`rounded-md p-1.5 transition-colors ${activityView === 'grid' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                    >
+                      <LayoutGrid className="size-3.5" aria-hidden />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActivityView('bars')}
+                      aria-pressed={activityView === 'bars'}
+                      aria-label={t('stats.viewBars', 'Bar view')}
+                      title={t('stats.viewBars', 'Bar view')}
+                      className={`rounded-md p-1.5 transition-colors ${activityView === 'bars' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                    >
+                      <BarChart3 className="size-3.5" aria-hidden />
+                    </button>
+                  </div>
+                )}
               >
-                <div className="flex h-28 items-end gap-1" role="img" aria-label={t('stats.activityAria', 'Daily token usage')}>
-                  {overview.daily.map((day) => (
-                    <div
-                      key={day.date}
-                      className="min-w-0 flex-1 rounded-t-sm bg-primary/70 transition-colors hover:bg-primary"
-                      style={{ height: `${busiestDay > 0 ? Math.max(3, (day.total / busiestDay) * 100) : 3}%` }}
-                      title={`${dateLabel(day.date)} · ${integer.format(day.total)}`}
-                    />
-                  ))}
-                </div>
+                {activityView === 'grid' ? (
+                  <div
+                    className="flex items-start gap-2"
+                    role="img"
+                    aria-label={t('stats.activityAria', 'Daily token usage')}
+                    data-view="grid"
+                    onMouseLeave={() => setHoveredDay(null)}
+                  >
+                    <div className="grid grid-rows-7 gap-1.5 text-[10px] text-muted-foreground" aria-hidden>
+                      {['', 'Mon', '', 'Wed', '', 'Fri', ''].map((label, index) => (
+                        <span key={index} className="flex h-6 items-center">{label}</span>
+                      ))}
+                    </div>
+                    {weeks.map((week, weekIndex) => (
+                      <div key={weekIndex} className="grid grid-rows-7 gap-1.5">
+                        {week.map((day, dayIndex) => (day ? (
+                          <div
+                            key={day.date}
+                            data-date={day.date}
+                            onMouseEnter={showDay(day)}
+                            className={`size-6 rounded-[3px] border border-border/40 transition-colors hover:border-foreground/30 ${ACTIVITY_TONES[activityLevel(day.total, busiestDay)]}`}
+                          />
+                        ) : (
+                          <div key={`empty-${weekIndex}-${dayIndex}`} className="size-6" aria-hidden />
+                        )))}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div
+                    className="flex h-28 items-end gap-1"
+                    role="img"
+                    aria-label={t('stats.activityAria', 'Daily token usage')}
+                    data-view="bars"
+                    onMouseLeave={() => setHoveredDay(null)}
+                  >
+                    {activityDays.map((day) => (
+                      <div key={day.date} data-date={day.date} className="group flex h-full min-w-0 flex-1 items-end" onMouseEnter={showDay(day)}>
+                        <div
+                          className={`w-full rounded-t-sm transition-colors ${day.total > 0 ? 'bg-primary/70 group-hover:bg-primary' : 'bg-muted/70'}`}
+                          style={{ height: `${busiestDay > 0 ? Math.max(3, (day.total / busiestDay) * 100) : 3}%` }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div className="mt-2 flex justify-between text-[11px] text-muted-foreground">
-                  <span>{dateLabel(overview.daily[0].date)}</span>
-                  <span>{dateLabel(overview.daily[overview.daily.length - 1].date)}</span>
+                  <span>{dateLabel(activityDays[0].date)}</span>
+                  <span>{dateLabel(activityDays[activityDays.length - 1].date)}</span>
                 </div>
               </Section>
             )}
@@ -297,6 +421,16 @@ export default function StatsPage() {
           </>
         )}
       </div>
+
+      {hoveredDay && (
+        <div
+          ref={hoverTip}
+          style={{ left: hoverTipLeft, top: hoveredDay.y }}
+          className="pointer-events-none fixed z-50 -translate-x-1/2 -translate-y-full rounded-md border border-border bg-popover px-2 py-1 text-[11px] font-medium whitespace-nowrap text-popover-foreground shadow-lg"
+        >
+          {dateLabel(hoveredDay.date)} · {integer.format(hoveredDay.total)} {t('stats.tokens', 'tokens')}
+        </div>
+      )}
     </div>
   );
 }
