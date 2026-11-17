@@ -26,7 +26,7 @@ A pairing token is a convenience, not a requirement: running with only `--server
 ./gajae-agent-desktop-companion --server=gajae.example
 ```
 
-`--server` accepts a bare domain; `wss://` and the `/remote-cua` path are filled in automatically. Pass a full URL instead (e.g. with a non-default port or path, or explicit `ws://` for local development) and it is used as given. Pass `--executable=/path/to/agent-desktop` if the `agent-desktop` CLI is not on `PATH`.
+`--server` accepts a bare domain; `wss://` and the `/remote` path are filled in automatically. Pass a full URL instead (e.g. with a non-default port or path, or explicit `ws://` for local development) and it is used as given. Pass `--executable=/path/to/agent-desktop` if the `agent-desktop` CLI is not on `PATH`.
 
 The companion stores its device credential under its OS config directory (`device.json`, mode `0600` on Unix). A pairing token's approval is implicit: it had to be copied out of this server's own Settings page, so a token-paired device is trusted and ready to use immediately. A device registered with only `--server` (no `--pair`) has proven nothing, so it shows up in Settings as "Needs approval" instead - click **Trust** before it can run anything. In that pending state the companion authenticates and reconnects fine (the terminal prints `Connected but not yet approved - check the web UI's Settings > Automation > Remote devices page and Trust this device.`) but never even starts `agent-desktop` or triggers an OS permission prompt - that only happens once this device is actually approved. **Untrust** pauses a device without deleting it (toggle **Trust** again to resume); **Remove** deletes the device outright and disconnects any live companion session using its credential - the companion is not blocked from reconnecting afterward either way: run it again and it registers as a new device needing approval again, the same as a first-time pairing. A `--pair=<token>` is retried on every connection attempt, even one with an existing stored credential, so passing a fresh token after a device was removed or untrusted for too long always works, not just on the very first run.
 
@@ -36,17 +36,17 @@ Expect `automation: unknown` (the System Events permission, used for macOS autom
 
 Run with `--help` to see every flag.
 
-Production servers must expose `wss://` (TLS). Plain `ws://` is accepted only for explicit non-production localhost development. LAN, VPN, and reverse-tunnel deployments still require TLS and device credentials; network location is not authentication.
+Production servers must expose `wss://` (TLS). Plain `ws://` is accepted only when the connection itself arrives over the loopback interface in a non-production process, which is a development client on the same machine; a `Host: localhost` header from anywhere else does not count. LAN, VPN, and reverse-tunnel deployments still require TLS and device credentials; network location is not authentication.
 
 A reverse proxy (nginx, godoxy, Caddy, etc.) that terminates TLS and forwards plain HTTP to this server is a normal, secure setup, and needs no configuration: the proxy's `X-Forwarded-Proto: https` header is honored when the connection carrying it comes from loopback or a private address - which is what a proxy on this host or its container network is. The same header from a public address is ignored, because a client that reaches this process directly can write anything it likes, so nothing has to be switched on (or remembered) per deployment.
 
-If the public hostname sits behind SSO/OIDC middleware (Pocket ID, Authelia, Authentik, etc.), exclude the `/remote-cua` path from it. The companion authenticates with its own pairing token or device credential in the first protocol frame; it has no browser to complete a login redirect, so the middleware's rejection (401/403) looks identical to a misconfigured server and the companion now exits immediately instead of retrying forever. For godoxy specifically, add a path-scoped bypass, e.g. in the route's labels:
+If the public hostname sits behind SSO/OIDC middleware (Pocket ID, Authelia, Authentik, etc.), exclude the `/remote` path from it. The companion authenticates with its own pairing token or device credential in the first protocol frame; it has no browser to complete a login redirect, so the middleware's rejection (401/403) looks identical to a misconfigured server and the companion now exits immediately instead of retrying forever. For godoxy specifically, add a path-scoped bypass, e.g. in the route's labels:
 
 ```yaml
-proxy.gjc.middlewares.auth.exclude: /remote-cua
+proxy.gjc.middlewares.auth.exclude: /remote
 ```
 
-(the exact label name depends on your godoxy OIDC middleware config - the requirement is only that `/remote-cua` reaches the app without the SSO challenge).
+(the exact label name depends on your godoxy OIDC middleware config - the requirement is only that `/remote` reaches the app without the SSO challenge).
 
 The Settings download button's URL is baked into the Docker image at build
 time, derived from the `APP_REPOSITORY` build argument used to build it (see

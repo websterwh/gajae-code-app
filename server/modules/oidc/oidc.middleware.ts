@@ -1,11 +1,11 @@
 import type { NextFunction, Request, Response } from 'express';
 
 import { isDesktopMode } from '@/middleware/desktop-auth.js';
-import { isPrivateAddress, stripMappedV4 } from '@/shared/peer-address.js';
+import { isLoopbackAddress, isPrivateAddress, stripMappedV4 } from '@/shared/peer-address.js';
 
 import { hostControlAvailable } from '../host-control/index.js';
 
-import { oidcEnforcing, readOidcConfig } from './oidc.config.js';
+import { oidcEnforcing, readOidcConfig, type OidcConfig } from './oidc.config.js';
 import { readSession } from './oidc.sessions.js';
 
 /**
@@ -167,13 +167,29 @@ export function clientAddressAllowed(address: string, entries: string[]): boolea
 }
 
 /**
- * The address to judge. `x-forwarded-for` is believed only when the peer that
- * sent it is itself local - a reverse proxy on the host or the container
- * network. Anywhere else the header is a value the client typed, and `trust
- * proxy` would happily adopt it: a direct request to the published port could
- * claim `192.168.1.50` and be treated as a LAN client. Everything that makes an
- * access decision goes through here so the gate and the settings guard cannot
- * drift apart.
+ * Addresses whose `x-forwarded-for` is believed. Loopback is the proxy on this
+ * host. Any other peer has to be named in `GAJAE_TRUSTED_PROXIES` (or
+ * `TRUSTED_PROXIES`), because "on a private network" describes the client as
+ * often as it describes the proxy: a LAN client that reaches the port directly
+ * can write any header it likes, and treating that header as its address let it
+ * claim a loopback or allow-listed value and skip the sign-in challenge.
+ */
+export function trustedProxyEntries(env: NodeJS.ProcessEnv = process.env): string[] {
+  const configured = env.GAJAE_TRUSTED_PROXIES ?? env.TRUSTED_PROXIES ?? '';
+  return configured.split(/[\s,]+/u).map((entry) => entry.trim()).filter(Boolean);
+}
+
+export function isTrustedProxy(address: string, env: NodeJS.ProcessEnv = process.env): boolean {
+  const value = stripMappedV4(String(address ?? '').trim());
+  if (!value) return false;
+  if (isLoopbackAddress(value)) return true;
+  return trustedProxyEntries(env).some((entry) => matchesEntry(value, entry));
+}
+
+/**
+ * The address to judge. Everything that makes an access decision goes through
+ * here, so the gate, the settings guard and the automation middleware cannot
+ * disagree about who a request is.
  */
 export function clientAddress(request: {
   socket?: { remoteAddress?: string };
@@ -181,10 +197,23 @@ export function clientAddress(request: {
   ip?: string;
 }): string {
   const socket = stripMappedV4(String(request.socket?.remoteAddress ?? '').trim());
-  if (request.headers['x-forwarded-for'] !== undefined && isPrivateAddress(socket)) {
+  if (request.headers['x-forwarded-for'] !== undefined && isTrustedProxy(socket)) {
     return stripMappedV4(String(request.ip ?? socket).trim());
   }
   return socket;
+}
+
+/**
+ * Whether the local-access toggle alone admits a request. The settings guard
+ * uses exactly this rule rather than a wider one: with the toggle off, sharing
+ * a network with the app is not a grant, so changing authentication settings
+ * needs a session.
+ */
+export function localAccessAdmits(
+  request: { socket?: { remoteAddress?: string }; headers: Record<string, unknown>; ip?: string },
+  config: Pick<OidcConfig, 'allowLocal' | 'allowedIps'>,
+): boolean {
+  return Boolean(config.allowLocal && clientAddressAllowed(clientAddress(request), config.allowedIps));
 }
 
 /**
@@ -249,7 +278,7 @@ export function createOidcGate(options: OidcGateOptions = {}) {
     if (isDesktopMode() || !oidcEnforcing(config) || isExemptPath(request.path)) return next();
     if (noAuthEnabled()) return next();
 
-    if (config.allowLocal && coversLocalBypass(request.path) && clientAddressAllowed(clientAddress(request), config.allowedIps)) return next();
+    if (coversLocalBypass(request.path) && localAccessAdmits(request, config)) return next();
 
     const session = readSession(request.headers.cookie);
     if (session) return next();

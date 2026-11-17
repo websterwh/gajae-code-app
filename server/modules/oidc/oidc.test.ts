@@ -10,6 +10,7 @@ import {
   clientAddressAllowed,
   coversLocalBypass,
   isExemptPath,
+  localAccessAdmits,
   noAuthEnabled,
   requiresSession,
 } from './oidc.middleware.js';
@@ -209,19 +210,54 @@ test('NO_AUTH is the deliberate break-glass switch, and the bind-guard var is no
   }
 });
 
-test('a forwarded header is believed only when the peer that sent it is local', () => {
+test('a forwarded header is believed only from a proxy we actually trust', () => {
+  const saved = process.env.GAJAE_TRUSTED_PROXIES;
   const request = (socket: string, forwarded?: string, ip?: string) => ({
     socket: { remoteAddress: socket },
     headers: forwarded === undefined ? {} : { 'x-forwarded-for': forwarded },
     ip,
   });
-  // A proxy on the host or the container network speaks for the client.
-  assert.equal(clientAddress(request('172.18.0.2', '8.8.8.8', '8.8.8.8')), '8.8.8.8');
-  assert.equal(clientAddress(request('127.0.0.1', '192.168.1.40', '192.168.1.40')), '192.168.1.40');
+  try {
+    delete process.env.GAJAE_TRUSTED_PROXIES;
+    // A proxy on this host is the default and speaks for the client.
+    assert.equal(clientAddress(request('127.0.0.1', '192.168.1.40', '192.168.1.40')), '192.168.1.40');
+    assert.equal(clientAddress(request('::1', '192.168.1.40', '192.168.1.40')), '192.168.1.40');
+    // Sharing a private network does not make a peer a proxy: a LAN client can
+    // write the header too, and believing it let the client claim loopback.
+    assert.equal(clientAddress(request('172.18.0.2', '8.8.8.8', '8.8.8.8')), '172.18.0.2');
+    assert.equal(clientAddress(request('192.168.1.9', '127.0.0.1', '127.0.0.1')), '192.168.1.9');
+    // A proxy in another container or host is named explicitly.
+    process.env.GAJAE_TRUSTED_PROXIES = '172.18.0.0/16, 10.1.2.3';
+    assert.equal(clientAddress(request('172.18.0.2', '8.8.8.8', '8.8.8.8')), '8.8.8.8');
+    assert.equal(clientAddress(request('10.1.2.3', '8.8.8.8', '8.8.8.8')), '8.8.8.8');
+    assert.equal(clientAddress(request('172.19.0.2', '8.8.8.8', '8.8.8.8')), '172.19.0.2');
+  } finally {
+    if (saved === undefined) delete process.env.GAJAE_TRUSTED_PROXIES;
+    else process.env.GAJAE_TRUSTED_PROXIES = saved;
+  }
   // A direct connection to the published port can write any header it likes.
   assert.equal(clientAddress(request('203.0.113.9', '192.168.1.40', '192.168.1.40')), '203.0.113.9');
   assert.equal(clientAddress(request('192.168.1.9')), '192.168.1.9');
   assert.equal(clientAddress(request('::ffff:192.168.1.9')), '192.168.1.9');
+});
+
+test('with the local toggle off, a private address is not a grant for settings writes', () => {
+  const request = (socket: string, forwarded?: string) => ({
+    socket: { remoteAddress: socket },
+    headers: forwarded === undefined ? {} : { 'x-forwarded-for': forwarded },
+    ip: forwarded,
+  });
+  const enforcing = { ...configFor('https://a.example'), allowedGroups: ['admins'] };
+  const off = { ...enforcing, allowLocal: false };
+  const on = { ...enforcing, allowLocal: true };
+  // The toggle is what grants local access, not the network the caller is on.
+  assert.equal(localAccessAdmits(request('192.168.1.40'), off), false);
+  assert.equal(localAccessAdmits(request('127.0.0.1'), off), false);
+  assert.equal(localAccessAdmits(request('192.168.1.40'), on), true);
+  assert.equal(localAccessAdmits(request('8.8.8.8'), on), false);
+  // A direct client cannot become local by writing the forwarded header.
+  assert.equal(localAccessAdmits(request('203.0.113.9', '192.168.1.40'), off), false);
+  assert.equal(localAccessAdmits(request('203.0.113.9', '192.168.1.40'), on), false);
 });
 
 test('local access is granted per address, and defaults to private ranges', () => {

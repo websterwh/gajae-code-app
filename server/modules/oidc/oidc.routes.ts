@@ -13,7 +13,7 @@ import {
   writeOidcConfig,
   type OidcConfig,
 } from './oidc.config.js';
-import { clientAddress, clientAddressAllowed, createOidcGate, noAuthEnabled } from './oidc.middleware.js';
+import { clientAddress, createOidcGate, localAccessAdmits, noAuthEnabled } from './oidc.middleware.js';
 import {
   buildAuthorizeUrl,
   completeSignIn,
@@ -101,11 +101,17 @@ function ensureOwner(identity: { email: string; name?: string }): { id: number; 
 
 /**
  * Settings are readable and writable by exactly the clients the sign-in gate
- * already admits without a session: the local-access list (which is how a LAN
- * deployment uses the app at all), loopback, or any session holder. Anything
- * else - including a request that arrives through a proxy from an address the
- * gate would have challenged - needs a session, so this can never be a way in
+ * already admits without a session: a session holder, or an address the
+ * local-access toggle is switched on for (which is how a LAN deployment uses
+ * the app at all). Anything else needs a session, so this can never be a way in
  * from outside.
+ *
+ * The toggle, not the address, is what grants the exception. An earlier version
+ * also accepted any private socket here while the gate was challenging it, so a
+ * host on the same network could post `{"enabled":false}` and switch sign-in
+ * off for everyone without ever signing in. With the toggle off, that private
+ * address branch is gone and only a session writes settings; with it on, local
+ * clients keep the same access they have to the rest of the app.
  *
  * Mirroring the gate matters for more than convenience: a stricter rule here
  * answered 401 to the Settings tab of a client the app had just let in, and the
@@ -116,11 +122,7 @@ function requireOwnerWhenEnforced(request: Request, response: Response): boolean
   const config = readOidcConfig();
   if (!oidcEnforcing(config) || noAuthEnabled()) return true;
   if (readSession(request.headers.cookie)) return true;
-  // Same resolver the gate uses, so the two can never disagree about an address.
-  const address = clientAddress(request);
-  if (config.allowLocal && clientAddressAllowed(address, config.allowedIps)) return true;
-  const proxied = request.headers['x-forwarded-for'] !== undefined;
-  if (!proxied && clientAddressAllowed(request.socket.remoteAddress ?? '', [])) return true;
+  if (localAccessAdmits(request, config)) return true;
   fail(response, 401, 'SIGN_IN_REQUIRED', 'Sign in to change authentication settings.');
   return false;
 }

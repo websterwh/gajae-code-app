@@ -286,7 +286,7 @@ frame changes; the policy travels inside existing payloads:
 
 The `computer` tool is never offered to a run. This server has no local
 desktop driver, and a paired companion is reached over its own credential
-path (`/remote-cua`) rather than by handing the model a `computer` tool. The
+path (`/remote`) rather than by handing the model a `computer` tool. The
 adapter drops both the app transport and the SDK builtin name, and
 `AutomationService.callComputer` refuses every unreviewed computer call from
 its bridge or HTTP callers.

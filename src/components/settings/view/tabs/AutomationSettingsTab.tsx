@@ -269,7 +269,7 @@ export default function AutomationSettingsTab() {
     const response = await fetch('/api/automation/remote-computers/pairings', { method: 'POST' });
     if (!response.ok) return;
     const pairing = await response.json() as { token: string };
-    const server = `${window.location.origin.replace(/^http/u, 'ws')}/remote-cua`;
+    const server = `${window.location.origin.replace(/^http/u, 'ws')}/remote`;
     // No OS protocol handler is registered by the Rust companion rewrite
     // (the old --register-protocol flag was never ported), so this link
     // only ever does anything once that ships; kept so the control exists

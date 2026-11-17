@@ -29,6 +29,12 @@ services:
       # Host admission: literal IPs and localhost always work. Add public DNS
       # names (comma separated) when the app sits behind a reverse proxy.
       - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1}
+      # Which peers may vouch for the client address with X-Forwarded-For.
+      # Loopback (a proxy on this host) is always trusted, so nothing is needed
+      # here for the common case. Name a container network or a separate proxy
+      # host by IP or CIDR - never a client subnet, because anything in it could
+      # then claim any address, including one on the local-access list.
+      - GAJAE_TRUSTED_PROXIES=${GAJAE_TRUSTED_PROXIES:-}
       
       # Host control (opt-in, default off). Without GAJAE_HOST_CONTROL=true the
       # /api/host routes answer "not available" whatever the settings say.

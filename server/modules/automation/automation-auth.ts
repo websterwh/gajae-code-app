@@ -2,10 +2,9 @@ import type { NextFunction, Request, Response } from 'express';
 
 import { isDesktopMode } from '@/middleware/desktop-auth.js';
 import {
-  clientAddress,
-  clientAddressAllowed,
   coversLocalBypass,
   hasSessionCookie,
+  localAccessAdmits,
   noAuthEnabled,
   oidcEnforcing,
   readOidcConfig,
@@ -82,8 +81,7 @@ export function createAutomationAuth(dependencies: AutomationAuthDependencies = 
     const config = readConfig();
     if (desktop() || !oidcEnforcing(config) || breakGlass()) return next();
     if (sessionPresent(request.headers.cookie)) return next();
-    if (config.allowLocal && coversLocalBypass(request.path)
-      && clientAddressAllowed(clientAddress(request), config.allowedIps)) return next();
+    if (coversLocalBypass(request.path) && localAccessAdmits(request, config)) return next();
     if (credentialIsLive(request)) return next();
     return response.status(401).json({
       success: false,

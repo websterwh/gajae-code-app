@@ -7,7 +7,7 @@ import { automationService } from '@/modules/automation/index.js';
 import { handleChatConnection } from '@/modules/websocket/services/chat-websocket.service.js';
 import { handleShellConnection } from '@/modules/websocket/services/shell-websocket.service.js';
 import { verifyWebSocketClient } from '@/modules/websocket/services/websocket-auth.service.js';
-import { isPrivateAddress } from '@/shared/peer-address.js';
+import { isLoopbackAddress, isPrivateAddress, stripMappedV4 } from '@/shared/peer-address.js';
 import type { AuthenticatedWebSocketRequest } from '@/shared/types.js';
 
 type UpgradeVerifier = Parameters<typeof verifyWebSocketClient>[1];
@@ -47,8 +47,15 @@ function connectionPath(request: AuthenticatedWebSocketRequest): string {
   return upgradePath(request.url) ?? '';
 }
 
+/** The companion's WebSocket route. */
+const REMOTE_COMPUTER_PATH = '/remote';
+
+export function isRemoteComputerPath(path: string | null): boolean {
+  return path === REMOTE_COMPUTER_PATH;
+}
+
 /**
- * Whether a `/remote-cua` upgrade arrived over an actually-encrypted
+ * Whether a remote-computer upgrade arrived over an actually-encrypted
  * transport, either directly or through a reverse proxy that terminates TLS.
  *
  * `x-forwarded-proto` is attacker-controllable on any request that reaches
@@ -59,6 +66,11 @@ function connectionPath(request: AuthenticatedWebSocketRequest): string {
  * the same rule the sign-in gate uses to decide who a request is, so there is
  * no separate switch to set, and no opt-in that stays forgotten on a
  * deployment that needs it.
+ *
+ * Plaintext is a development affordance only, and only for a client on this
+ * machine: the peer socket decides it. The `Host` header cannot, because it is
+ * whatever the caller typed - `Host: localhost` from a remote client used to
+ * pass this check in any process that was not in production.
  */
 export function isEncryptedRemoteCuaUpgrade(
   info: {
@@ -69,11 +81,11 @@ export function isEncryptedRemoteCuaUpgrade(
   },
   env: { nodeEnv?: string } = { nodeEnv: process.env.NODE_ENV },
 ): boolean {
-  const host = String(info.req.headers.host ?? '').split(':', 1)[0];
-  const localhost = host === 'localhost' || host === '127.0.0.1' || host === '::1';
-  const forwardedHttps = isPrivateAddress(String(info.req.socket.remoteAddress ?? ''))
+  const peer = stripMappedV4(String(info.req.socket.remoteAddress ?? '').trim());
+  const forwardedHttps = isPrivateAddress(peer)
     && String(info.req.headers['x-forwarded-proto'] ?? '').split(',', 1)[0].trim() === 'https';
-  return Boolean(info.req.socket.encrypted) || forwardedHttps || (localhost && env.nodeEnv !== 'production');
+  const plaintextDevelopment = isLoopbackAddress(peer) && env.nodeEnv !== 'production';
+  return Boolean(info.req.socket.encrypted) || forwardedHttps || plaintextDevelopment;
 }
 
 export function createWebSocketServer(server: HttpServer, dependencies: GatewayDependencies): WebSocketServer {
@@ -82,7 +94,7 @@ export function createWebSocketServer(server: HttpServer, dependencies: GatewayD
     // the first protocol frame; this exception is deliberately path-scoped.
     verifyClient: (info: Parameters<VerifyClientCallbackSync<AuthenticatedWebSocketRequest>>[0]) => {
       const path = upgradePath(info.req.url);
-      if (path !== '/remote-cua') return verifyWebSocketClient(info, dependencies.verifyClient);
+      if (!isRemoteComputerPath(path)) return verifyWebSocketClient(info, dependencies.verifyClient);
       return isEncryptedRemoteCuaUpgrade(info as never);
     },
   };
@@ -92,6 +104,10 @@ export function createWebSocketServer(server: HttpServer, dependencies: GatewayD
     startHeartbeat(socket);
     const request = rawRequest as AuthenticatedWebSocketRequest;
     const pathname = connectionPath(request);
+    const handleRemoteComputer = () => {
+      automationService.remoteComputerHub.handle(socket);
+      return true;
+    };
     const routeHandlers: Record<string, () => boolean> = {
       '/shell': () => {
         handleShellConnection(socket, dependencies.shell);
@@ -105,10 +121,7 @@ export function createWebSocketServer(server: HttpServer, dependencies: GatewayD
         handleDesktopNotificationsConnection(socket, request);
         return true;
       },
-      '/remote-cua': () => {
-        automationService.remoteComputerHub.handle(socket);
-        return true;
-      },
+      [REMOTE_COMPUTER_PATH]: handleRemoteComputer,
     };
     if (routeHandlers[pathname]?.()) return;
 

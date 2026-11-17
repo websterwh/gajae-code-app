@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { isEncryptedRemoteCuaUpgrade } from '@/modules/websocket/services/websocket-server.service.js';
+import { isEncryptedRemoteCuaUpgrade, isRemoteComputerPath } from '@/modules/websocket/services/websocket-server.service.js';
 
 /*
- * The /remote-cua upgrade exchanges a device's long-lived credential, so it
+ * The /remote upgrade exchanges a device's long-lived credential, so it
  * must run over an actually-encrypted transport. A reverse proxy terminating
  * TLS and forwarding plain HTTP is a normal, secure deployment shape and must
  * still be accepted - but x-forwarded-proto is attacker-controllable on any
@@ -19,6 +19,12 @@ const upgrade = (headers: Record<string, string>, encrypted = false, remoteAddre
   req: { headers, socket: { encrypted, remoteAddress } },
 });
 
+test('the companion routes only on /remote', () => {
+  assert.equal(isRemoteComputerPath('/remote'), true);
+  assert.equal(isRemoteComputerPath('/remote-host'), false);
+  assert.equal(isRemoteComputerPath(null), false);
+});
+
 test('a directly encrypted socket is accepted with no configuration', () => {
   assert.equal(isEncryptedRemoteCuaUpgrade(upgrade({ host: 'gjc.example' }, true), {}), true);
 });
@@ -27,9 +33,17 @@ test('plain HTTP in production is rejected', () => {
   assert.equal(isEncryptedRemoteCuaUpgrade(upgrade({ host: 'gjc.example' }), { nodeEnv: 'production' }), false);
 });
 
-test('localhost plain HTTP is accepted outside production only', () => {
-  assert.equal(isEncryptedRemoteCuaUpgrade(upgrade({ host: 'localhost' }), {}), true);
-  assert.equal(isEncryptedRemoteCuaUpgrade(upgrade({ host: '127.0.0.1' }), { nodeEnv: 'production' }), false);
+test('plaintext is accepted from a client on this machine, outside production only', () => {
+  assert.equal(isEncryptedRemoteCuaUpgrade(upgrade({ host: 'localhost' }, false, '127.0.0.1'), {}), true);
+  assert.equal(isEncryptedRemoteCuaUpgrade(upgrade({ host: 'localhost' }, false, '::1'), {}), true);
+  assert.equal(isEncryptedRemoteCuaUpgrade(upgrade({ host: '::ffff:127.0.0.1' }, false, '::ffff:127.0.0.1'), {}), true);
+  assert.equal(isEncryptedRemoteCuaUpgrade(upgrade({ host: '127.0.0.1' }, false, '127.0.0.1'), { nodeEnv: 'production' }), false);
+});
+
+test('a Host header cannot make a remote plaintext upgrade look local', () => {
+  assert.equal(isEncryptedRemoteCuaUpgrade(upgrade({ host: 'localhost' }), {}), false);
+  assert.equal(isEncryptedRemoteCuaUpgrade(upgrade({ host: '127.0.0.1' }, false, '192.168.1.20'), {}), false);
+  assert.equal(isEncryptedRemoteCuaUpgrade(upgrade({ host: 'localhost' }, false, '203.0.113.9'), {}), false);
 });
 
 test('a TLS-terminating proxy on this network may vouch for https', () => {

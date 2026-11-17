@@ -117,6 +117,18 @@ health checks using a permitted Host.
 this DNS host protection. Host admission does not authenticate remote clients;
 keep the existing loopback/VPN/tunnel or authenticated-proxy access boundary.
 
+### Which client the app judges
+
+`X-Forwarded-For` decides who the sign-in gate thinks a request is, so it is
+believed only from a peer that is really the proxy: loopback by default. If
+your proxy is another container or a separate machine on a private network,
+list its address or CIDR in `GAJAE_TRUSTED_PROXIES` (comma-separated, for
+example `172.18.0.0/16`). Without that entry the proxy's own address is judged:
+the app stays safe, but the local-access list and the per-client sign-in limit
+see the proxy instead of the browser. A client that reaches the published port
+directly can write any header it likes, which is why being on the private
+network does not by itself make a peer a proxy.
+
 ## Who web mode is for
 
 Web mode is a single-owner tool. `HOST` decides the interface: loopback keeps it

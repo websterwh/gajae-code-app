@@ -4,9 +4,10 @@
  * This protocol deliberately transports only already-reviewed `computer`
  * calls. It is not a general MCP tunnel.
  *
- * The `cua` name and the `/remote-cua` route are kept deliberately: paired
- * companions and already-deployed devices speak this version, so renaming the
- * constants would break them. The retired local driver is unrelated.
+ * The `cua` names are kept deliberately: paired companions and
+ * already-deployed devices speak this version, so renaming the constants
+ * would break them. The WebSocket route is `/remote`. The retired local
+ * driver is unrelated.
  */
 export const REMOTE_CUA_PROTOCOL_VERSION = 1;
 

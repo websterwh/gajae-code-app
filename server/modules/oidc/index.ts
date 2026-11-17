@@ -11,6 +11,7 @@ export {
   coversLocalBypass,
   createOidcGate,
   isExemptPath,
+  localAccessAdmits,
   noAuthEnabled,
   type OidcGateOptions,
 } from './oidc.middleware.js';

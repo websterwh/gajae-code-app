@@ -50,7 +50,7 @@ USAGE:
 
 OPTIONS:
   --server=<host>        Required to connect. Bare domain (e.g. gjc.example.com) is
-                          expanded to wss://<host>/remote-cua automatically. Pass a full
+                          expanded to wss://<host>/remote automatically. Pass a full
                           ws://... or wss://... URL instead for a non-default port/path,
                           or ws://localhost for local development (plain ws:// is refused
                           for any other host).
@@ -173,7 +173,7 @@ fn os_label() -> String {
     format!("{} {}", std::env::consts::OS, std::env::consts::ARCH)
 }
 
-/// `--server` accepts a bare domain; `wss://` and the `/remote-cua` path are
+/// `--server` accepts a bare domain; `wss://` and the `/remote` path are
 /// filled in automatically so the user never has to know the wire shape.
 /// Pass a full URL instead (non-default port/path, or explicit `ws://` for
 /// local development) and it is used as given. Mirrors the equivalent logic
@@ -186,7 +186,7 @@ fn normalize_server_url(server: &str) -> Result<url::Url, String> {
     };
     let mut parsed = url::Url::parse(&candidate).map_err(|cause| format!("invalid --server value: {cause}"))?;
     if parsed.path() == "/" || parsed.path().is_empty() {
-        parsed.set_path("/remote-cua");
+        parsed.set_path("/remote");
     }
     if parsed.scheme() == "ws" {
         let host = parsed.host_str().unwrap_or("");
