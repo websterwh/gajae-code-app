@@ -512,6 +512,96 @@ export default function AutomationSettingsTab() {
         </SettingsSection>
       ) : null}
 
+      <SettingsSection title={t('automation.title')} description={t('automation.description')}>
+        <SettingsCard divided>
+          <div className="flex items-center justify-between gap-4 p-4">
+            <div>
+              <p className="text-sm font-medium text-foreground">Remote devices</p>
+              <p className="mt-1 text-xs text-muted-foreground">Pair a device running the agent-desktop companion, or run it with only --server and no token at all - either way a new device needs to be Trusted below before it can be selected, and only a trusted, currently connected device with a valid readiness report can actually run anything. Untrust pauses a device without deleting it; Remove deletes it outright (it can always reconnect and register again afterward).</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {companionDownloadTemplate ? <a href={companionDownloadTemplate.replace('{platform}', companionPlatform())} className="rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted">Download companion</a> : null}
+              {companionDownloadTemplate && navigator.userAgent.includes('Mac')
+                ? <a href={companionDownloadTemplate.replace('{platform}', companionMacCliPlatform())} className="rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted">Download CLI</a>
+                : null}
+              <button type="button" onClick={() => void pairRemoteComputer()} className="rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted">Pair this computer</button>
+            </div>
+          </div>
+          {pairingToken ? (
+            <div className="border-t border-border p-4">
+              <p className="mb-3 text-xs text-muted-foreground">This token expires in ten minutes and is shown only now. Run the companion with it on the device you want to pair:</p>
+              <div className="flex flex-wrap items-center gap-2">
+                {pairingDeepLink ? <a href={pairingDeepLink} className="inline-flex items-center gap-1 rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted"><ExternalLink className="h-3.5 w-3.5" />Open in companion</a> : null}
+                <button type="button" onClick={() => void copyPairingToken()} className="rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted">{tokenCopied ? 'Token copied' : 'Copy token'}</button>
+                <button type="button" onClick={() => void copyPairingCommand()} className="rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted">{commandCopied ? 'Command copied' : 'Copy command'}</button>
+              </div>
+              <code className="mt-2 block overflow-x-auto rounded bg-muted px-2 py-1.5 text-xs text-foreground">{companionPairCommand(pairingToken)}</code>
+              <p className="mt-2 text-xs text-muted-foreground">"Open in companion" requires an OS protocol handler the companion does not register yet - use the token or command for now. The device will appear below once it connects, and needs to be Trusted here before it can run anything.</p>
+            </div>
+          ) : null}
+          <div className="border-t border-border p-4">
+            <label className="block text-xs text-muted-foreground" htmlFor="remote-computer-target">Computer target</label>
+            <select id="remote-computer-target" className={`mt-2 w-full ${selectClass}`} value={selectedRemoteDeviceId ?? ''} onChange={(event) => void selectRemoteDevice(event.target.value || undefined)}>
+              <option value="">No computer</option>
+              {remoteDevices.filter((device) => device.enabled).map((device) => (
+                <option key={device.id} value={device.id}>{device.name}</option>
+              ))}
+            </select>
+          </div>
+          {remoteDevices.length === 0 ? <p className="border-t border-border p-4 text-xs text-muted-foreground">No paired remote devices.</p> : remoteDevices.map((device) => {
+            // `connected` is the live socket state and is what "online" means.
+            // `lastSeenAt` only moves when a readiness report arrives, so
+            // reading it as the liveness signal showed a freshly connected but
+            // still probing companion as "Offline" - the state the user then
+            // had to refresh the page to clear.
+            const state = !device.enabled
+              ? (device.connected ? 'Connected - needs approval' : 'Needs approval')
+              : !device.connected
+                ? 'Offline'
+                : device.readiness?.schemaSupported === true
+                  ? 'Ready'
+                  : device.readiness
+                    ? 'agent-desktop unsupported or permissions missing'
+                    : 'Connected - checking agent-desktop';
+            return (
+              <div key={device.id} className="border-t border-border p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="flex items-center gap-2 truncate text-sm font-medium text-foreground">
+                      <span
+                        className={`inline-block h-2 w-2 shrink-0 rounded-full ${device.connected ? 'bg-emerald-500' : 'bg-destructive'}`}
+                        role="img"
+                        aria-label={device.connected ? 'Companion online' : 'Companion offline'}
+                        title={device.connected ? 'Companion online' : 'Companion offline'}
+                      />
+                      <span className="truncate">{device.name}</span>
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">{device.os} · {state}{device.readiness?.driverVersion ? ` · agent-desktop ${device.readiness.driverVersion}` : ''}</p>
+                  </div>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    {/* Same two verbs always mean the same thing: Trust/
+                       Untrust is the one toggle, Remove is the one delete -
+                       it never relabels itself to Decline depending on
+                       whether the device happened to be trusted yet, which
+                       was confusing (the delete action is identical either
+                       way: it deletes the record outright). */}
+                    <button type="button" onClick={() => void updateRemoteDevice(device.id, { enabled: !device.enabled })} className={`rounded border px-2 py-1 text-xs hover:bg-muted ${device.enabled ? 'border-input text-foreground' : 'border-emerald-600 text-emerald-600'}`}>{device.enabled ? 'Untrust' : 'Trust'}</button>
+                    <button type="button" onClick={() => {
+                      const name = window.prompt('Remote device name', device.name);
+                      if (name) void updateRemoteDevice(device.id, { name });
+                    }} className="rounded border border-input px-2 py-1 text-xs text-foreground hover:bg-muted">Rename</button>
+                    <button type="button" onClick={() => void removeRemoteDevice(device.id)} className="rounded border border-destructive px-2 py-1 text-xs text-destructive hover:bg-destructive/10">Remove</button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </SettingsCard>
+        <button type="button" onClick={() => void refresh()} disabled={loading} className="mt-3 inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs text-foreground hover:bg-muted disabled:opacity-50">
+          <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} /> {t('automation.refresh')}
+        </button>
+      </SettingsSection>
+
       {/* Its own section, not a row buried in the browser card: host control
          is the one switch here that reaches the machine the app runs on.
          It renders even when /api/host/status could not be read, because a
@@ -624,96 +714,6 @@ export default function AutomationSettingsTab() {
             </>
           ) : null}
         </SettingsCard>
-      </SettingsSection>
-
-      <SettingsSection title={t('automation.title')} description={t('automation.description')}>
-        <SettingsCard divided>
-          <div className="flex items-center justify-between gap-4 p-4">
-            <div>
-              <p className="text-sm font-medium text-foreground">Remote devices</p>
-              <p className="mt-1 text-xs text-muted-foreground">Pair a device running the agent-desktop companion, or run it with only --server and no token at all - either way a new device needs to be Trusted below before it can be selected, and only a trusted, currently connected device with a valid readiness report can actually run anything. Untrust pauses a device without deleting it; Remove deletes it outright (it can always reconnect and register again afterward).</p>
-            </div>
-            <div className="flex items-center gap-2">
-              {companionDownloadTemplate ? <a href={companionDownloadTemplate.replace('{platform}', companionPlatform())} className="rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted">Download companion</a> : null}
-              {companionDownloadTemplate && navigator.userAgent.includes('Mac')
-                ? <a href={companionDownloadTemplate.replace('{platform}', companionMacCliPlatform())} className="rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted">Download CLI</a>
-                : null}
-              <button type="button" onClick={() => void pairRemoteComputer()} className="rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted">Pair this computer</button>
-            </div>
-          </div>
-          {pairingToken ? (
-            <div className="border-t border-border p-4">
-              <p className="mb-3 text-xs text-muted-foreground">This token expires in ten minutes and is shown only now. Run the companion with it on the device you want to pair:</p>
-              <div className="flex flex-wrap items-center gap-2">
-                {pairingDeepLink ? <a href={pairingDeepLink} className="inline-flex items-center gap-1 rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted"><ExternalLink className="h-3.5 w-3.5" />Open in companion</a> : null}
-                <button type="button" onClick={() => void copyPairingToken()} className="rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted">{tokenCopied ? 'Token copied' : 'Copy token'}</button>
-                <button type="button" onClick={() => void copyPairingCommand()} className="rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted">{commandCopied ? 'Command copied' : 'Copy command'}</button>
-              </div>
-              <code className="mt-2 block overflow-x-auto rounded bg-muted px-2 py-1.5 text-xs text-foreground">{companionPairCommand(pairingToken)}</code>
-              <p className="mt-2 text-xs text-muted-foreground">"Open in companion" requires an OS protocol handler the companion does not register yet - use the token or command for now. The device will appear below once it connects, and needs to be Trusted here before it can run anything.</p>
-            </div>
-          ) : null}
-          <div className="border-t border-border p-4">
-            <label className="block text-xs text-muted-foreground" htmlFor="remote-computer-target">Computer target</label>
-            <select id="remote-computer-target" className={`mt-2 w-full ${selectClass}`} value={selectedRemoteDeviceId ?? ''} onChange={(event) => void selectRemoteDevice(event.target.value || undefined)}>
-              <option value="">No computer</option>
-              {remoteDevices.filter((device) => device.enabled).map((device) => (
-                <option key={device.id} value={device.id}>{device.name}</option>
-              ))}
-            </select>
-          </div>
-          {remoteDevices.length === 0 ? <p className="border-t border-border p-4 text-xs text-muted-foreground">No paired remote devices.</p> : remoteDevices.map((device) => {
-            // `connected` is the live socket state and is what "online" means.
-            // `lastSeenAt` only moves when a readiness report arrives, so
-            // reading it as the liveness signal showed a freshly connected but
-            // still probing companion as "Offline" - the state the user then
-            // had to refresh the page to clear.
-            const state = !device.enabled
-              ? (device.connected ? 'Connected - needs approval' : 'Needs approval')
-              : !device.connected
-                ? 'Offline'
-                : device.readiness?.schemaSupported === true
-                  ? 'Ready'
-                  : device.readiness
-                    ? 'agent-desktop unsupported or permissions missing'
-                    : 'Connected - checking agent-desktop';
-            return (
-              <div key={device.id} className="border-t border-border p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="flex items-center gap-2 truncate text-sm font-medium text-foreground">
-                      <span
-                        className={`inline-block h-2 w-2 shrink-0 rounded-full ${device.connected ? 'bg-emerald-500' : 'bg-destructive'}`}
-                        role="img"
-                        aria-label={device.connected ? 'Companion online' : 'Companion offline'}
-                        title={device.connected ? 'Companion online' : 'Companion offline'}
-                      />
-                      <span className="truncate">{device.name}</span>
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">{device.os} · {state}{device.readiness?.driverVersion ? ` · agent-desktop ${device.readiness.driverVersion}` : ''}</p>
-                  </div>
-                  <div className="flex flex-wrap justify-end gap-2">
-                    {/* Same two verbs always mean the same thing: Trust/
-                       Untrust is the one toggle, Remove is the one delete -
-                       it never relabels itself to Decline depending on
-                       whether the device happened to be trusted yet, which
-                       was confusing (the delete action is identical either
-                       way: it deletes the record outright). */}
-                    <button type="button" onClick={() => void updateRemoteDevice(device.id, { enabled: !device.enabled })} className={`rounded border px-2 py-1 text-xs hover:bg-muted ${device.enabled ? 'border-input text-foreground' : 'border-emerald-600 text-emerald-600'}`}>{device.enabled ? 'Untrust' : 'Trust'}</button>
-                    <button type="button" onClick={() => {
-                      const name = window.prompt('Remote device name', device.name);
-                      if (name) void updateRemoteDevice(device.id, { name });
-                    }} className="rounded border border-input px-2 py-1 text-xs text-foreground hover:bg-muted">Rename</button>
-                    <button type="button" onClick={() => void removeRemoteDevice(device.id)} className="rounded border border-destructive px-2 py-1 text-xs text-destructive hover:bg-destructive/10">Remove</button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </SettingsCard>
-        <button type="button" onClick={() => void refresh()} disabled={loading} className="mt-3 inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs text-foreground hover:bg-muted disabled:opacity-50">
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} /> {t('automation.refresh')}
-        </button>
       </SettingsSection>
 
       <SettingsSection title={t('automation.grants')} description={t('automation.grantsDescription')}>
