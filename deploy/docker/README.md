@@ -187,9 +187,9 @@ declared in the compose file.
 
 | Container Path | Host Path (Compose) | Purpose |
 |---|---|---|
-| `/data` | `./data` | Persistent SQLite database (`auth.db`), logs, caches (`apt`, `uv`, `pip`, `aqua`, `npm`), host SSH keys, installed CLI binaries (`/data/bin`), and (via entrypoint-created symlinks) `~/.gajae-app` and `~/.claude` - chat transcripts and images, which `auth.db` only indexes by path and does not itself contain. |
+| `/data` | `./data` | Persistent SQLite database (`auth.db`), logs, caches (`apt`, `uv`, `pip`, `aqua`, `npm`), host SSH keys, installed CLI binaries (`/data/bin`), and (via entrypoint-created symlinks) `~/.gajae-app` and `~/.claude` - chat transcripts and per-provider session state, which `auth.db` only indexes by path and does not itself contain. |
 | `/workspace` | `./workspace` | Projects directory where the coding agent inspects and edits code. |
-| `/root/.gjc` | `./gjc-config` | Agent configurations, credentials, and custom skills. |
+| `/root/.gjc` | `./gjc-config` | Agent configurations, credentials, custom skills, and chat image assets (`/root/.gjc/assets`, which the entrypoint symlinks to `~/.gajae-app/assets`). |
 
 ---
 

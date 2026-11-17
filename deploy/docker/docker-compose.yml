@@ -79,14 +79,16 @@ services:
     volumes:
       # Persistent app data: auth.db, logs, caches, ssh keys, installed apps,
       # and (via symlinks the entrypoint creates) ~/.gajae-app and ~/.claude -
-      # chat transcripts, chat images, and per-provider session state. auth.db
+      # chat transcripts and per-provider session state. auth.db
       # only stores session *rows*; their actual content lives under those two
       # directories, so both must stay under this one volume or chats reappear
       # empty after every recreate.
       - ./data:/data
       # Workspace directory containing projects for GJC agent
       - ${HOST_WORKSPACE_DIR:-./workspace}:/workspace
-      # Persistent GJC agent configuration and credentials
+      # Persistent GJC agent configuration, credentials and chat images: the
+      # entrypoint points ~/.gajae-app/assets here, so images need no mount of
+      # their own.
       - ./gjc-config:/root/.gjc
       # Host control only. Mount the daemon socket when GAJAE_HOST_CONTROL=true,
       # and prefer a socket proxy that exposes nothing but /info and

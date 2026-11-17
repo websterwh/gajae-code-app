@@ -132,6 +132,25 @@ for mapping in "/root/.gajae-app:/data/gajae-app" "/root/.claude:/data/claude"; 
     fi
 done
 
+# Chat image assets live on the config volume instead of a mount of their own:
+# /root/.gjc is already bind-mounted for credentials and skills, so one mount
+# carries images too. The server still writes to ~/.gajae-app/assets, and this
+# symlink means no code has to know where the bytes really are.
+assets_store="/root/.gjc/assets"
+assets_path="/root/.gajae-app/assets"
+mkdir -p "${assets_store}" "$(dirname "${assets_path}")"
+if [ -d "${assets_path}" ] && [ ! -L "${assets_path}" ]; then
+    # First boot after the move keeps the images uploaded before it. If the
+    # copy fails the old directory stays in place, so nothing is ever deleted
+    # before it has been copied.
+    if cp -an "${assets_path}/." "${assets_store}/"; then
+        rm -rf "${assets_path}"
+    fi
+fi
+if [ ! -e "${assets_path}" ] || [ -L "${assets_path}" ]; then
+    ln -sfn "${assets_store}" "${assets_path}"
+fi
+
 # Ensure bun is in PATH if present in dist-native
 if [ -f "/opt/gajae-app/dist-native/bun" ] && [ ! -f "/usr/local/bin/bun" ]; then
     ln -sf /opt/gajae-app/dist-native/bun /usr/local/bin/bun
