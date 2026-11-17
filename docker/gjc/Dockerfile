@@ -4,7 +4,7 @@ FROM docker/sandbox-templates:gajae-code
 
 USER root
 WORKDIR /opt/gajae-app
-COPY --chown=agent:agent package.json package-lock.json LICENSE NOTICE ./
+COPY --chown=agent:agent package.json LICENSE NOTICE ./
 COPY --chown=agent:agent dist ./dist
 COPY --chown=agent:agent dist-server ./dist-server
 COPY --chown=agent:agent public ./public

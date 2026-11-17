@@ -62,7 +62,7 @@ Every variable, volume and provisioning option: [deploy/docker/README.md](deploy
 ```bash
 git clone https://github.com/websterwh/gajae-code-app.git
 cd gajae-code-app
-npm ci
+npm install
 node scripts/fetch-bun.mjs          # the pinned Bun the GJC worker runs on
 npm run dev                         # server :3001, client :5173
 ```

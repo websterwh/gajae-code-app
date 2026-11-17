@@ -12,7 +12,7 @@
 # The ref (default HEAD) is resolved here and must already be on an origin
 # branch. The checkout is disposable: it is force-checked-out to that commit
 # and cleaned of untracked files (ignored build outputs are kept, so builds
-# stay incremental), and `npm ci` runs again whenever package-lock.json
+# stay incremental), and `npm install` runs again whenever package.json
 # differs from its last install.
 # The command runs in a zsh login shell from the checkout root, e.g.
 #   scripts/macos-remote.sh -- 'npm run server:payload:macos && cargo test --locked --manifest-path src-tauri/Cargo.toml'
@@ -47,9 +47,9 @@ git checkout --quiet --force --detach "$GAJAE_SHA"
 # Untracked leftovers go; ignored build outputs (node_modules, cargo target,
 # the server payload) stay so builds remain incremental.
 git clean -fdq
-lock="$(shasum -a 256 package-lock.json | cut -d' ' -f1)"
+lock="$(shasum -a 256 package.json | cut -d' ' -f1)"
 if [ "$(cat node_modules/.macos-remote-lock 2>/dev/null)" != "$lock" ]; then
-  npm ci --no-audit --no-fund
+  npm install --no-audit --no-fund
   print -r -- "$lock" > node_modules/.macos-remote-lock
 fi
 print -r -- "macos-remote: $(git log --oneline -1) on $(hostname -s)"

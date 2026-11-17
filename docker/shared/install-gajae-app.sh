@@ -10,7 +10,6 @@ fail() {
 
 for required_path in \
   package.json \
-  package-lock.json \
   dist/index.html \
   dist-server/server/cli.js \
   public \

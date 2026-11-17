@@ -8,7 +8,6 @@ on:
       - scripts/build-agent-desktop-companion.mjs
       - scripts/stage-agent-desktop-bundle.mjs
       - package.json
-      - package-lock.json
       - .github/workflows/companion-release.yml
   workflow_dispatch:
     inputs:

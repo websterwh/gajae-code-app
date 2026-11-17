@@ -343,7 +343,7 @@ build_deployment() {
   warn_missing_bun "$app_root"
   (
     cd "$app_root"
-    npm ci >&2
+    npm install >&2
     npm run build >&2
   ) || return 1
   [[ -f "$app_root/dist-server/server/index.js" ]] || return 1
