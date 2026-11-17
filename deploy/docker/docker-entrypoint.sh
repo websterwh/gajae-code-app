@@ -197,32 +197,37 @@ provision_gjc_cli() {
     fi
 
     local standalone_bin="/data/bin/gjc-standalone"
-    local needs_download="false"
-
-    if [ ! -f "$standalone_bin" ]; then
-        needs_download="true"
+    local latest_release
+    latest_release="$(curl -fsSL -H "User-Agent: GJC-Installer" "https://api.github.com/repos/Yeachan-Heo/gajae-code/releases/latest" 2>/dev/null || true)"
+    local download_url
+    download_url="$(echo "$latest_release" | jq -r '.assets[] | select(.name == "gjc-linux-x64") | .browser_download_url' 2>/dev/null || true)"
+    local tag
+    tag="$(echo "$latest_release" | jq -r '.tag_name // empty' 2>/dev/null || true)"
+    local current_ver=""
+    if [ -f "/data/bin/.gjc_version" ]; then
+        current_ver="$(cat /data/bin/.gjc_version)"
     fi
 
-    if [ "$needs_download" = "true" ]; then
-        local latest_release
-        latest_release="$(curl -fsSL -H "User-Agent: GJC-Installer" "https://api.github.com/repos/Yeachan-Heo/gajae-code/releases/latest" 2>/dev/null || true)"
-        local download_url
-        download_url="$(echo "$latest_release" | jq -r '.assets[] | select(.name == "gjc-linux-x64") | .browser_download_url' 2>/dev/null || true)"
-        local tag
-        tag="$(echo "$latest_release" | jq -r '.tag_name // empty' 2>/dev/null || true)"
-
-        if [ -n "$download_url" ] && [ "$download_url" != "null" ]; then
-            local current_ver=""
-            [ -f "/data/bin/.gjc_version" ] && current_ver="$(cat /data/bin/.gjc_version)"
-            if [ "$current_ver" != "$tag" ] || [ ! -f "$standalone_bin" ]; then
-                echo "==> [GJC CLI] Downloading latest standalone gjc binary (${tag:-latest})..."
-                curl -fsSL -o "${standalone_bin}.tmp" "$download_url" && \
-                    mv "${standalone_bin}.tmp" "$standalone_bin" && \
+    # The binary lives on the mounted /data volume, so it survives a recreate.
+    # Checking only whether the file exists froze every existing install on its
+    # first download; the release tag has to be compared on every boot.
+    if [ -n "$tag" ] && [ -n "$download_url" ] && [ "$download_url" != "null" ]; then
+        if [ "$current_ver" != "$tag" ] || [ ! -f "$standalone_bin" ]; then
+            echo "==> [GJC CLI] Updating standalone gjc ${current_ver:-missing} -> ${tag}..."
+            if curl -fsSL --retry 2 -o "${standalone_bin}.tmp" "$download_url"; then
+                mv "${standalone_bin}.tmp" "$standalone_bin" && \
                     chmod 0755 "$standalone_bin" && \
                     echo "$tag" > /data/bin/.gjc_version
                 echo "==> [GJC CLI] Standalone gjc updated to ${tag}."
+            else
+                rm -f "${standalone_bin}.tmp"
+                echo "==> [GJC CLI] Download failed; keeping ${current_ver:-the existing binary}."
             fi
+        else
+            echo "==> [GJC CLI] Standalone gjc ${current_ver} is current."
         fi
+    else
+        echo "==> [GJC CLI] Could not resolve the latest release; keeping ${current_ver:-the existing binary}."
     fi
 
     # Create /data/bin/gjc wrapper that runs standalone or fallback

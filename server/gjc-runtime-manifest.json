@@ -188,12 +188,12 @@
       {
         "package": "@gajae-code/ai",
         "path": "src/providers/google-gemini-cli.ts",
-        "sha256": "2633bb86bd494a57e6af806f275a6e6c9c262a424cb31126f1bf39c5f2f6acb1"
+        "sha256": "9b8b26ddd9b14c766986989a81ea12e02c635e9d01c6bfcdbab3ba73a42ce44b"
       },
       {
         "package": "@gajae-code/ai",
         "path": "src/providers/google-shared.ts",
-        "sha256": "a48c96e577ee46ac98d79d13717bf340fe087018a16ffeb35bce9671040da436"
+        "sha256": "2b02fbc8541097894e912bab7585f27a486917496afffb0c5948846829d0e411"
       },
       {
         "package": "@gajae-code/ai",

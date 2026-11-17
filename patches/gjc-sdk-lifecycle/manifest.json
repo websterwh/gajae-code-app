@@ -627,7 +627,7 @@
       "package": "@gajae-code/ai",
       "path": "src/providers/google-gemini-cli.ts",
       "beforeSha256": "bbc4bc0d47fb4f981576bb2dc86eed592b38614d1dc2e9898e841447033e0399",
-      "afterSha256": "2633bb86bd494a57e6af806f275a6e6c9c262a424cb31126f1bf39c5f2f6acb1",
+      "afterSha256": "9b8b26ddd9b14c766986989a81ea12e02c635e9d01c6bfcdbab3ba73a42ce44b",
       "replacements": [
         {
           "before": "/**\n * Google Gemini CLI / Antigravity provider.\n * Shared implementation for both google-gemini-cli and google-antigravity providers.\n * Uses the Cloud Code Assist API endpoint to access Gemini and Anthropic model models.\n */\nimport { createHash, randomBytes, randomUUID } from \"node:crypto\";\n",
@@ -640,6 +640,14 @@
         {
           "before": "\t\t\t);\n\t\t\toutput.duration = Date.now() - startTime;\n\t\t\tif (firstTokenTime) output.ttft = firstTokenTime - startTime;\n\t\t\tstream.push({ type: \"error\", reason: output.stopReason, error: output });\n\t\t\tstream.end();\n\t\t}\n\t})();\n\n\treturn stream;\n};\n\nconst INT63_MASK = (1n << 63n) - 1n;\nconst ANTIGRAVITY_RANDOM_BOUND = 9_000_000_000_000_000_000n;\n",
           "after": "\t\t\t);\n\t\t\toutput.duration = Date.now() - startTime;\n\t\t\tif (firstTokenTime) output.ttft = firstTokenTime - startTime;\n\t\t\tstream.push({ type: \"error\", reason: output.stopReason, error: output });\n\t\t\tstream.end();\n\t\t}\n\t});\n\n\treturn stream;\n};\n\nconst INT63_MASK = (1n << 63n) - 1n;\nconst ANTIGRAVITY_RANDOM_BOUND = 9_000_000_000_000_000_000n;\n"
+        },
+        {
+          "before": "import { normalizeSchemaForCCA } from \"../utils/schema\";",
+          "after": "import { normalizeSchemaForCCA } from \"../utils/schema\";\nimport { stripVendorSchemaKeys } from \"./google-shared\";"
+        },
+        {
+          "before": "normalizeSchemaForCCA(parametersJsonSchema)",
+          "after": "normalizeSchemaForCCA(stripVendorSchemaKeys(parametersJsonSchema))"
         }
       ]
     },
@@ -647,7 +655,7 @@
       "package": "@gajae-code/ai",
       "path": "src/providers/google-shared.ts",
       "beforeSha256": "127b447c690b7964692a07844f1f8acfe02ebffebed8d5ad9fcdc25a822cecac",
-      "afterSha256": "a48c96e577ee46ac98d79d13717bf340fe087018a16ffeb35bce9671040da436",
+      "afterSha256": "2b02fbc8541097894e912bab7585f27a486917496afffb0c5948846829d0e411",
       "replacements": [
         {
           "before": "/**\n * Shared utilities for Google Generative AI and Google Cloud Code Assist providers.\n */\n\nimport { extractHttpStatusFromError, readJsonl, readSseJson } from \"@gajae-code/utils\";\nimport type { ProviderSafetyStopAdapterInvocation } from \"../adapter-internals/provider-safety-stop\";\n",
@@ -660,6 +668,18 @@
         {
           "before": "\t\t\toutput.errorMessage = await finalizeErrorMessage(error, rawRequestDump);\n\t\t\toutput.duration = Date.now() - startTime;\n\t\t\tif (firstTokenTime) output.ttft = firstTokenTime - startTime;\n\t\t\tstream.push({ type: \"error\", reason: output.stopReason, error: output });\n\t\t\tstream.end();\n\t\t}\n\t})();\n\n\treturn stream;\n}\n\n/**\n * Lift the SDK's `params.config` fields out of `config` and place them where the\n",
           "after": "\t\t\toutput.errorMessage = await finalizeErrorMessage(error, rawRequestDump);\n\t\t\toutput.duration = Date.now() - startTime;\n\t\t\tif (firstTokenTime) output.ttft = firstTokenTime - startTime;\n\t\t\tstream.push({ type: \"error\", reason: output.stopReason, error: output });\n\t\t\tstream.end();\n\t\t}\n\t});\n\n\treturn stream;\n}\n\n/**\n * Lift the SDK's `params.config` fields out of `config` and place them where the\n"
+        },
+        {
+          "before": "export function convertTools(",
+          "after": "/**\n * Gemini rejects JSON-Schema keywords it does not know, and MCP servers attach\n * vendor annotations such as mempalace's `x-mempalace-strict` to their tool\n * schemas. Those keys are meaningful only to the server, so drop every `x-`\n * keyword before the schema goes on the wire; property names are left alone.\n */\nexport function stripVendorSchemaKeys(value: unknown, isSchema = true): unknown {\n\tif (Array.isArray(value)) return value.map(item => stripVendorSchemaKeys(item, isSchema));\n\tif (!value || typeof value !== \"object\") return value;\n\tconst result: Record<string, unknown> = {};\n\tfor (const [key, child] of Object.entries(value as Record<string, unknown>)) {\n\t\tif (isSchema && key.startsWith(\"x-\")) continue;\n\t\tconst map = key === \"properties\" || key === \"patternProperties\" || key === \"$defs\"\n\t\t\t|| key === \"definitions\" || key === \"dependentSchemas\" || key === \"dependencies\";\n\t\tconst data = key === \"default\" || key === \"const\" || key === \"enum\" || key === \"examples\";\n\t\tresult[key] = stripVendorSchemaKeys(child, data ? false : !map);\n\t}\n\treturn result;\n}\n\nexport function convertTools("
+        },
+        {
+          "before": "normalizeSchemaForCCA(toolWireSchema(tool))",
+          "after": "normalizeSchemaForCCA(stripVendorSchemaKeys(toolWireSchema(tool)))"
+        },
+        {
+          "before": "parametersJsonSchema: toolWireSchema(tool)",
+          "after": "parametersJsonSchema: stripVendorSchemaKeys(toolWireSchema(tool))"
         }
       ]
     },
