@@ -3,12 +3,16 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-// The root lockfile is generated, not tracked, so this cache contract names the
-// version it was verified against instead of reading it from a lockfile that
-// may not exist yet (CI seeds this cache before installing dependencies).
-const ripgrepPackageVersion = '1.17.1';
+const rootDir = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
+const packageLock = JSON.parse(await readFile(join(rootDir, 'package-lock.json'), 'utf8'));
+const ripgrepPackageVersion = packageLock.packages?.['node_modules/@vscode/ripgrep']?.version;
+
+if (ripgrepPackageVersion !== '1.17.1') {
+  throw new Error(`Update the verified ripgrep cache contract for @vscode/ripgrep ${ripgrepPackageVersion ?? 'missing'}.`);
+}
 
 const releaseVersion = 'v15.0.1';
 const targets = new Map([
