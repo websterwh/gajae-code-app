@@ -59,7 +59,7 @@ test('the bundled catalog is a real, valid, deduplicated index with the named se
   }
 
   const curated = JSON.parse(await readFile(new URL('../../../data/catalog.curated.json', import.meta.url), 'utf8')) as Array<Record<string, unknown>>;
-  for (const name of ['context7', 'mempalace']) {
+  for (const name of ['context7']) {
     const expected = curated.find((entry) => entry.name === name);
     const actual = entries.find((entry) => entry.name === name);
     assert.ok(expected, `${name} must stay curated`);

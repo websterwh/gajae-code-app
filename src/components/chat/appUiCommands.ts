@@ -22,6 +22,8 @@ type AppUiCommandActionId =
   | 'open-session-picker'
   | 'start-new-chat'
   | 'open-settings'
+  | 'open-memory-settings'
+  | 'run-mempalace'
   | 'open-model-picker'
   | 'open-cost-modal'
   | 'fork-session'
@@ -51,11 +53,14 @@ export type AppUiCommandActions = {
   openSessionPicker: () => void;
   startNewChat: () => void;
   openSettings: () => void;
+  openMemorySettings: () => void;
   openModelPicker: () => void;
   openCostModal: () => void;
   forkSession: () => void;
   /** Runs one shell command in the session's project and reports the result. */
   runShellCommand: (command: string) => void;
+  /** Runs a MemPalace command in the session's project. */
+  runMempalace: (args: string) => void;
 };
 
 export const APP_UI_COMMANDS: readonly AppUiCommand[] = [
@@ -86,6 +91,24 @@ export const APP_UI_COMMANDS: readonly AppUiCommand[] = [
     namespace: 'app',
     type: 'app',
     actionId: 'open-settings',
+  },
+  {
+    name: '/memory',
+    description: 'Set up memory: local markdown, Hindsight or MemPalace',
+    namespace: 'app',
+    type: 'app',
+    actionId: 'open-memory-settings',
+    // Bare `/memory` opens the page; `/memory mm list` and the other forms are
+    // the runtime's own memory subcommands and must keep reaching it.
+    interceptWithArgs: false,
+  },
+  {
+    name: '/mempalace',
+    description: 'Run a MemPalace command here, e.g. /mempalace init',
+    namespace: 'app',
+    type: 'app',
+    actionId: 'run-mempalace',
+    requiresArguments: true,
   },
   {
     name: '/model',
@@ -140,6 +163,12 @@ export function runAppUiCommand(command: AppUiCommand, actions: AppUiCommandActi
       break;
     case 'open-settings':
       actions.openSettings();
+      break;
+    case 'open-memory-settings':
+      actions.openMemorySettings();
+      break;
+    case 'run-mempalace':
+      actions.runMempalace(args);
       break;
     case 'open-model-picker':
       actions.openModelPicker();

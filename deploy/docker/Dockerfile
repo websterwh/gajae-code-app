@@ -160,6 +160,7 @@ ENV PATH="/data/npm-global/bin:/data/bin:/root/.local/share/aquaproj-aqua/bin:/u
     GJC_WORKER_AGENT_DIR=/root/.gjc/agent \
     NODE_ENV=production \
     AUTO_UPDATE_PACKAGES=true \
+    INSTALL_MEMPALACE=true \
     POST_COMMANDS="" \
     GAJAE_COMPANION_DOWNLOAD_TEMPLATE="" \
     INSTALL_GJC_CLI=true \
@@ -173,6 +174,8 @@ ENV PATH="/data/npm-global/bin:/data/bin:/root/.local/share/aquaproj-aqua/bin:/u
 EXPOSE 3001 2222
 
 VOLUME ["/data", "/workspace", "/root/.gjc"]
+
+COPY mempalace-autosave.ts /usr/local/share/gajae-app/mempalace-autosave.ts
 
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh

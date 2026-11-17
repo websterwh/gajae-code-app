@@ -1003,37 +1003,7 @@
     },
     "origin": "curated"
   },
-  {
-    "name": "mempalace",
-    "title": "MemPalace",
-    "description": "A persistent memory palace for notes, documents and long-term recall.",
-    "transport": "stdio",
-    "command": "uvx",
-    "args": [
-      "--from",
-      "mempalace",
-      "mempalace-mcp"
-    ],
-    "package": {
-      "manager": "pypi",
-      "name": "mempalace"
-    },
-    "homepage": "https://mempalaceofficial.com",
-    "repository": {
-      "url": "https://github.com/MemPalace/mempalace",
-      "source": "curated"
-    },
-    "env": [
-      {
-        "name": "MEMPALACE_PALACE_PATH",
-        "required": false,
-        "secret": false,
-        "description": "Optional palace directory; defaults to the home directory."
-      }
-    ],
-    "origin": "curated"
-  },
-  {
+    {
     "name": "mobile-mcp",
     "title": "Mobile MCP",
     "description": "Drive Android and iOS devices and emulators through their accessibility trees.",

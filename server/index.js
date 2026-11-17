@@ -111,6 +111,7 @@ import userRoutes from './routes/user.js';
 import systemRoutes from './routes/system.js';
 import providerRoutes from './modules/providers/provider.routes.js';
 import { mcpRoutes } from './modules/mcp/index.js';
+import { memoryRoutes } from './modules/memory/index.js';
 import { packagesRoutes } from './modules/packages/index.js';
 import voiceRoutes from './voice-proxy.js';
 import { assetsRoutes } from './modules/assets/index.js';
@@ -369,6 +370,7 @@ app.use('/api/browser', authenticateAutomation, authenticateToken, createBrowser
 
 // MCP manager (protected by the sign-in gate and the token middleware). It
 // reads and writes the agent's own mcp.json; it is deliberately not exempt.
+app.use('/api/memory', authenticateToken, memoryRoutes);
 app.use('/api/mcp', authenticateToken, mcpRoutes);
 app.use('/api/packages', authenticateToken, packagesRoutes);
 

@@ -111,6 +111,10 @@ const GROUP_C: readonly Row[] = [
   ['C18', '/model all-role-agents e2e-model', 'command'],
   ['C19', '/model all-targets e2e-model', 'command'],
   ['C20', '/model planner e2e-not-a-model', 'command'],
+  // MemPalace is app-managed; a bare `/mempalace` runs its CLI in the session
+  // project, and arguments are the CLI's own subcommands.
+  ['C21', '/mempalace', 'app-action'],
+  ['C22', '/mempalace init', 'app-action'],
 ];
 
 const GROUP_D: readonly Row[] = [
@@ -190,7 +194,7 @@ const GROUP_D: readonly Row[] = [
   ['D67', '/ssh remove e2e-host --bogus x', 'command'],
   ['D68', '/ssh remove e2e-host --scope', 'command'],
   ['D69', '/ssh remove e2e-host --scope e2e-bogus', 'command'],
-  ['D70', '/memory', 'command'],
+  ['D70', '/memory', 'app-action'],
   ['D71', '/memory view', 'command'],
   ['D72', '/memory e2e-bogus', 'command'],
   ['D73', '/memory mm', 'command'],
@@ -313,10 +317,10 @@ test('runtime forms, skills and forms the app has never seen all reach the runti
 test('the matrix has not silently shrunk', () => {
   assert.equal(GROUP_A.length, 15);
   assert.equal(GROUP_B.length, 26);
-  assert.equal(GROUP_C.length, 20);
+  assert.equal(GROUP_C.length, 22);
   assert.equal(GROUP_D.length, 87);
   assert.equal(GROUP_E.length, 24);
   assert.equal(GROUP_F.length, 4);
   assert.equal(GROUP_G.length, 2);
-  assert.equal(MATRIX.length, 178);
+  assert.equal(MATRIX.length, 180);
 });

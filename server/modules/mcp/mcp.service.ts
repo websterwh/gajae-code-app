@@ -78,6 +78,17 @@ function indexLedger(ledger: Ledger): LedgerIndex {
   return index;
 }
 
+/**
+ * Packages the image owns rather than the catalog.
+ *
+ * MemPalace is a built-in memory provider now, so it is no longer an MCP store
+ * entry, but an mcp.json row written by the memory tab still runs its binary
+ * and has to keep naming the package for the version and pin controls.
+ */
+const BUILTIN_PACKAGES: Record<string, { manager: InstallManager; name: string }> = {
+  mempalace: { manager: 'uv', name: 'mempalace' },
+};
+
 /** A pin addresses a package version; an aqua release is a tag, not one. */
 function pinnableManager(manager: InstallManager): boolean {
   return manager === 'npm' || manager === 'uv' || manager === 'pip';
@@ -406,6 +417,8 @@ export class McpService {
     const owner = owningPackageName(command);
     const owned = owner ? ledger[owner] : undefined;
     if (owned) return { manager: owned.manager, name: owned.name };
+    const builtin = BUILTIN_PACKAGES[name] ?? BUILTIN_PACKAGES[executable.replace(/-mcp$/u, '')];
+    if (builtin) return builtin;
     const packaged = bundledCatalog().find((candidate) => candidate.name === name)?.package;
     if (!packaged || packaged.manager === 'other') return null;
     const spec = parsePackageSpec(packaged.name).name;

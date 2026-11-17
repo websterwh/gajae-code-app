@@ -68,6 +68,26 @@ mempalace_root="${gjc_config_root}/mempalace"
 mkdir -p "${mempalace_root}"
 ln -sfn "${mempalace_root}" /root/.mempalace
 export MEMPALACE_CONFIG_DIR="${MEMPALACE_CONFIG_DIR:-${mempalace_root}}"
+# MemPalace is a built-in memory provider now, not an MCP catalog entry, so the
+# image installs it itself. uv reuses the cached wheel on later boots.
+if [ "${INSTALL_MEMPALACE:-true}" = "true" ] && command -v uv >/dev/null 2>&1; then
+    if [ ! -x "${UV_TOOL_BIN_DIR}/mempalace" ]; then
+        if uv tool install -q mempalace; then
+            echo "[mempalace] Installed the built-in memory provider."
+        else
+            echo "[mempalace] Install failed; Settings > Memory can retry on the next boot." >&2
+        fi
+    elif [ "${AUTO_UPDATE_PACKAGES:-true}" = "true" ]; then
+        uv tool upgrade -q mempalace >/dev/null 2>&1 || true
+    fi
+fi
+# The autosave hook lives beside the agent's sessions. An existing file is kept
+# as-is so a local edit is never overwritten by a redeploy.
+agent_root="${GJC_WORKER_AGENT_DIR:-${gjc_config_root}/agent}"
+if [ ! -f "${agent_root}/hooks/post/mempalace-autosave.ts" ] && [ -f /usr/local/share/gajae-app/mempalace-autosave.ts ]; then
+    mkdir -p "${agent_root}/hooks/post"
+    cp /usr/local/share/gajae-app/mempalace-autosave.ts "${agent_root}/hooks/post/mempalace-autosave.ts"
+fi
 # ==============================================================================
 # Directory & Cache Preparation
 # ==============================================================================

@@ -139,21 +139,7 @@
       { "name": "CONTEXT7_API_KEY", "required": false, "secret": true, "description": "Optional key for higher rate limits." }
     ]
   },
-  {
-    "name": "mempalace",
-    "title": "MemPalace",
-    "description": "A persistent memory palace for notes, documents and long-term recall.",
-    "transport": "stdio",
-    "command": "uvx",
-    "args": ["--from", "mempalace", "mempalace-mcp"],
-    "package": { "manager": "pypi", "name": "mempalace" },
-    "homepage": "https://mempalaceofficial.com",
-    "repository": { "url": "https://github.com/MemPalace/mempalace", "source": "curated" },
-    "env": [
-      { "name": "MEMPALACE_PALACE_PATH", "required": false, "secret": false, "description": "Optional palace directory; defaults to the home directory." }
-    ]
-  },
-  {
+    {
     "name": "redis",
     "title": "Redis",
     "description": "Read, write and inspect data in a Redis database.",

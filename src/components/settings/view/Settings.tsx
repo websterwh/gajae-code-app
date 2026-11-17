@@ -14,6 +14,7 @@ import AuthenticationSettingsTab from './tabs/AuthenticationSettingsTab';
 import AutomationSettingsTab from './tabs/AutomationSettingsTab';
 import GitSettingsTab from './tabs/git-settings/GitSettingsTab';
 import McpSettingsTab from './tabs/McpSettingsTab';
+import MemorySettingsTab from './tabs/MemorySettingsTab';
 import PackagesSettingsTab from './tabs/PackagesSettingsTab';
 import NotificationsSettingsTab from './tabs/NotificationsSettingsTab';
 import PermissionsSettingsTab from './tabs/PermissionsSettingsTab';
@@ -151,6 +152,7 @@ function Settings({ isOpen, onClose, initialTab = 'appearance' }: SettingsProps)
               )}
               {activeTab === 'voice' && <VoiceSettingsTab />}
               {activeTab === 'automation' && <AutomationSettingsTab />}
+              {activeTab === 'memory' && <MemorySettingsTab />}
               {activeTab === 'mcp' && <McpSettingsTab />}
               {activeTab === 'packages' && <PackagesSettingsTab />}
               {activeTab === 'authentication' && <AuthenticationSettingsTab />}
