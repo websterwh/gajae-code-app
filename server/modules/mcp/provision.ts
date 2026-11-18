@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { existsSync, lstatSync, unlinkSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 
@@ -172,6 +173,34 @@ function alreadyGone(output: string, code: number): boolean {
   return /not installed|isn't installed|not currently installed|not found|no such package/iu.test(output);
 }
 
+/**
+ * An uninstall removes the binary but not always the PATH entry the installer
+ * put there, and a dangling link shadows the working one further down PATH:
+ * `zoxide` answered "No such file or directory" from a dead /data/bin shim
+ * while apt's /usr/bin/zoxide was installed. Only links whose target is gone
+ * are touched, one level deep, and never a real file.
+ */
+export function pruneDanglingLinks(names: string[], pathValue: string = process.env.PATH ?? ''): string[] {
+  const removed: string[] = [];
+  const visited = new Set<string>();
+  for (const directory of pathValue.split(path.delimiter)) {
+    if (!directory || visited.has(directory)) continue;
+    visited.add(directory);
+    for (const name of names) {
+      if (!name) continue;
+      const link = path.join(directory, name);
+      try {
+        if (!lstatSync(link).isSymbolicLink() || existsSync(link)) continue;
+        unlinkSync(link);
+        removed.push(link);
+      } catch {
+        // Absent, or not ours to remove.
+      }
+    }
+  }
+  return removed;
+}
+
 export async function uninstallPackage(options: {
   manager: InstallManager;
   /** The stored spec: `serena`, `serena==1.2.3`, `skylot/jadx@v1.5.1`. */
@@ -191,6 +220,7 @@ export async function uninstallPackage(options: {
       error: `exit ${result.code}: ${tailLines(result.stderr || result.stdout)}`,
     };
   }
+  pruneDanglingLinks([parsed.name]);
   return { status: 'removed', command: printable };
 }
 

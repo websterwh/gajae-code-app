@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { lstat, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -13,7 +13,7 @@ import {
   writeLedger,
 } from './ledger.js';
 import { normalizeCatalogEntry } from './catalog.js';
-import { autoUpdatePackages, provisionPackages, serverPackages, uvToolVersion, type CommandRunner } from './provision.js';
+import { autoUpdatePackages, provisionPackages, pruneDanglingLinks, serverPackages, uvToolVersion, type CommandRunner } from './provision.js';
 import { provisionStateIsLive } from './provision-state.js';
 
 type Reply = { code: number; stdout?: string; stderr?: string };
@@ -26,6 +26,25 @@ function scripted(replies: Record<string, Reply>, calls: string[]): CommandRunne
     return { code: reply.code, stdout: reply.stdout ?? '', stderr: reply.stderr ?? '' };
   };
 }
+
+test('an uninstall leaves no dangling PATH link behind', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'gajae-shims-'));
+  try {
+    // What a removed aqua package left: a link whose binary is gone, ahead of
+    // the working one in PATH, so `zoxide` reads "No such file or directory".
+    const dead = join(dir, 'zoxide');
+    await symlink(join(dir, 'gone-binary'), dead);
+    const live = join(dir, 'kept');
+    await writeFile(join(dir, 'real-binary'), '');
+    await symlink(join(dir, 'real-binary'), live);
+
+    assert.deepEqual(pruneDanglingLinks(['zoxide', 'kept'], dir), [dead]);
+    await assert.rejects(lstat(dead));
+    assert.ok(await lstat(live));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
 
 test('every configured server with a package is installed, including one that runs a binary', () => {
   const catalog = [

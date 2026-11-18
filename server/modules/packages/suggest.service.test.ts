@@ -7,12 +7,37 @@ import { PackageSuggestService } from './suggest.service.js';
 
 const offline = async (): Promise<never> => { throw new Error('offline'); };
 
-const aptRunner = (calls: string[] = []): CommandRunner => async (command, args) => {
+type AptPackage = { name: string; description: string };
+
+/**
+ * A stand-in for the real index: apt is only fast when descriptions are read
+ * from `dumpavail` once instead of scanned per query, and these fakes mirror
+ * both commands so a test never depends on which one answered.
+ */
+const APT_PACKAGES: AptPackage[] = [
+  { name: 'zoxide', description: 'A smarter cd command' },
+  { name: 'zoxide-doc', description: 'Documentation for zoxide' },
+  { name: 'vim-zoxide', description: 'zoxide integration for Vim' },
+  { name: 'gh', description: 'GitHub CLI, GitHub’s official command line tool' },
+  { name: 'golang-github-dgraph-io-badger-dev', description: 'Fast key-value DB in Go' },
+];
+
+const dumpavailOf = (packages: AptPackage[]): string => packages
+  .map((pkg) => `Package: ${pkg.name}\nDescription: ${pkg.description}\nDescription-md5: 0000\n`)
+  .join('\n');
+
+const namesOnlyOf = (packages: AptPackage[], query: string): string => packages
+  .filter((pkg) => pkg.name.toLowerCase().includes(query.toLowerCase()))
+  .map((pkg) => `${pkg.name} - ${pkg.description}`)
+  .join('\n');
+
+const aptRunner = (calls: string[] = [], packages = APT_PACKAGES): CommandRunner => async (command, args) => {
   calls.push([command, ...args].join(' '));
+  if (command === 'apt-get') return { code: 0, stdout: '', stderr: '' };
   if (command !== 'apt-cache') return { code: 1, stdout: '', stderr: 'not found' };
-  // Not `--names-only`: descriptions count, or `github` can never find `gh`.
-  assert.deepEqual(args, ['search', 'zox']);
-  return { code: 0, stdout: 'fzf - fuzzy finder\nzoxide - A smarter cd command\nzoxide-doc - docs\n', stderr: '' };
+  if (args[0] === 'dumpavail') return { code: 0, stdout: dumpavailOf(packages), stderr: '' };
+  const query = args[1] === '--names-only' ? args[2] ?? '' : args[1] ?? '';
+  return { code: 0, stdout: namesOnlyOf(packages, query), stderr: '' };
 };
 
 describe('package suggestions', () => {
@@ -29,40 +54,46 @@ describe('package suggestions', () => {
 
     const suggestions = await service.suggest('zox');
 
-    // Prefix matches first; the unrelated apt hit (fzf) sorts last.
+    // Prefix matches first; a name that merely embeds the query sorts last.
     assert.deepEqual(suggestions.map((suggestion) => `${suggestion.manager}:${suggestion.name}`), [
       'apt:zoxide',
       'npm:zoxide',
       'pip:zoxide',
       'apt:zoxide-doc',
-      'apt:fzf',
+      'apt:vim-zoxide',
     ]);
   });
 
   test('apt finds a package whose description names the query', async () => {
     const calls: string[] = [];
-    const service = new PackageSuggestService({
-      runner: async (command, args) => {
-        calls.push([command, ...args].join(' '));
-        assert.deepEqual(args, ['search', 'github']);
-        return {
-          code: 0,
-          stdout: [
-            'giggle - GTK+ frontend for libgig',
-            'gh - GitHub CLI, cli.github.com',
-            'gitleaks - Protect and discover secrets using Gitleaks',
-          ].join('\n'),
-          stderr: '',
-        };
-      },
-      fetchImpl: offline,
-    });
+    const service = new PackageSuggestService({ runner: aptRunner(calls), fetchImpl: offline });
 
-    const suggestions = await service.suggest('github');
+    // The table loads behind the first answer, so the second query is the one
+    // that can read descriptions.
+    await service.suggest('githu', 'apt');
+    await service.whenAptIndexSettled();
+    const suggestions = await service.suggest('github', 'apt');
 
     // `gh` is not named github; its description is what makes it the answer.
     assert.equal(suggestions[0]?.name, 'gh');
-    assert.equal(calls.length, 1);
+    // The full description scan took 68-73s; dumpavail replaced it entirely.
+    assert.equal(calls.some((call) => /apt-cache search github$/u.test(call)), false, calls.join(', '));
+  });
+
+  test('the apt table is loaded once and every later query reads memory', async () => {
+    const calls: string[] = [];
+    const service = new PackageSuggestService({ runner: aptRunner(calls), fetchImpl: offline });
+
+    await service.suggest('zox', 'apt');
+    await service.whenAptIndexSettled();
+    assert.equal(calls.filter((call) => call === 'apt-cache dumpavail').length, 1);
+
+    calls.length = 0;
+    await service.suggest('gh', 'apt');
+    await service.suggest('vim', 'apt');
+
+    // No subprocess per keystroke: the table answers both.
+    assert.deepEqual(calls, []);
   });
 
   test('a source that is offline does not empty the whole list', async () => {
@@ -188,7 +219,12 @@ describe('package suggestions', () => {
 
     assert.deepEqual(await service.suggest('github', 'apt'), []);
     await service.whenAptIndexSettled();
-    assert.deepEqual(calls, ['apt-cache search github', 'apt-get update -qq']);
+    assert.deepEqual(calls, [
+      'apt-cache dumpavail',
+      'apt-cache search --names-only github',
+      'apt-get update -qq',
+      'apt-cache dumpavail',
+    ]);
 
     const suggestions = await service.suggest('gh', 'apt');
     assert.equal(suggestions[0]?.name, 'gh');
@@ -196,7 +232,7 @@ describe('package suggestions', () => {
     // The rebuild happens once; later searches read the index directly.
     calls.length = 0;
     await service.suggest('git', 'apt');
-    assert.deepEqual(calls, ['apt-cache search git']);
+    assert.deepEqual(calls, ['apt-cache search --names-only git']);
   });
 
   test('a hung apt search does not hold back the sources that answered', async () => {

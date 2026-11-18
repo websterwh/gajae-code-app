@@ -1,5 +1,7 @@
 import { spawnCommandRunner, type CommandRunner, type InstallManager } from '../mcp/index.js';
 
+import { parseDumpavail, type AptEntry } from './apt-index.js';
+
 /**
  * "Autodetect" is four existing endpoints, not a scraper of our own:
  * apt ships its index locally, npm runs a registry search API, PyPI has a
@@ -52,11 +54,12 @@ const TOTAL_LIMIT = 12;
  */
 const APT_SCAN_LIMIT = 20_000;
 /**
- * apt decompresses its whole index per search, which on a cold or loaded
- * machine has been measured in tens of seconds. It runs beside three network
- * sources and the response waits for every one of them, so one slow local
- * lookup used to delay every suggestion by a minute. Past this budget apt
- * simply contributes nothing to this answer.
+ * apt cannot search descriptions quickly: `apt-cache search gh` scanned the
+ * index in 68-73s on a warm cache, while `apt-cache search --names-only gh`
+ * answered the same index in 1.1s. Descriptions are the cost, not the
+ * decompression. It also runs beside three network sources whose answers used
+ * to wait behind it, so the budget bounds the names-only fallback: the full
+ * table is loaded in the background and replaces that pass.
  */
 const APT_SEARCH_BUDGET_MS = 4_000;
 /**
@@ -65,10 +68,21 @@ const APT_SEARCH_BUDGET_MS = 4_000;
  * package that exists. The budget only has to stop an unbounded hang.
  */
 const APT_ONLY_BUDGET_MS = 20_000;
-/** A rebuild that failed is retried at most this often, never per keystroke. */
+/**
+ * `apt-cache dumpavail` prints every stanza of the index in 1.6s here, which is
+ * all a description search needs. The budget caps a hung dump rather than
+ * leaving a half-loaded table pending forever.
+ */
+const APT_INDEX_LOAD_BUDGET_MS = 30_000;
+/** An index rebuild or table load that failed is retried at most this often. */
 const APT_INDEX_RETRY_MS = 60_000;
-/** A refined query (zox -> zoxid -> zoxide) hits the same sources twice. */
-const CACHE_TTL_MS = 30_000;
+/**
+ * A refined query (zox -> zoxid -> zoxide) hits the same sources twice, and so
+ * does reopening the field on a name searched a moment ago. GitHub's anonymous
+ * search allows ten requests a minute, so the cache is what keeps typing from
+ * spending them.
+ */
+const CACHE_TTL_MS = 300_000;
 const CACHE_LIMIT = 50;
 
 /** A name is also the argument apt and pip will receive, so keep it to a name. */
@@ -101,6 +115,34 @@ const prefixFirst = (query: string) => (first: PackageSuggestion, second: Packag
   || first.name.localeCompare(second.name)
 );
 
+/**
+ * Every source that answered gets a place before any source gets a second one.
+ * Ranking alone buried the answer to `github`: it matches dozens of npm and
+ * GitHub packages whose names merely start with it, all of which outrank `gh`,
+ * whose name has nothing to do with the query and only its description does.
+ * Interleaving keeps that `gh` in the list instead of out of it.
+ */
+function interleave(ranked: PackageSuggestion[], limit: number): PackageSuggestion[] {
+  const byManager = new Map<string, PackageSuggestion[]>();
+  for (const suggestion of ranked) {
+    const bucket = byManager.get(suggestion.manager);
+    if (bucket) bucket.push(suggestion);
+    else byManager.set(suggestion.manager, [suggestion]);
+  }
+  const buckets = [...byManager.values()];
+  const ordered: PackageSuggestion[] = [];
+  for (let round = 0; ordered.length < limit; round += 1) {
+    const before = ordered.length;
+    for (const bucket of buckets) {
+      const next = bucket[round];
+      if (!next || ordered.length >= limit) continue;
+      ordered.push(next);
+    }
+    if (ordered.length === before) break;
+  }
+  return ordered;
+}
+
 /** Resolves to null instead of waiting longer than `ms` for `promise`. */
 async function within<T>(promise: Promise<T>, ms: number): Promise<T | null> {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -123,6 +165,11 @@ export class PackageSuggestService {
   private aptIndexBuilt = false;
   private aptIndexWarm: Promise<void> | null = null;
   private aptIndexAttemptAt = 0;
+  /** Every package apt knows, name and synopsis; null until the dump is read. */
+  private aptIndex: AptEntry[] | null = null;
+  private aptIndexLoad: Promise<void> | null = null;
+  private aptIndexReload = false;
+  private aptLoadAttemptAt = 0;
   private readonly cache = new Map<string, { at: number; suggestions: PackageSuggestion[] }>();
 
   constructor(private readonly options: SuggestOptions = {}) {
@@ -169,7 +216,12 @@ export class PackageSuggestService {
     this.aptIndexAttemptAt = Date.now();
     this.aptIndexWarm = this.runner('apt-get', ['update', '-qq'])
       .then((result) => {
-        if (result.code === 0) this.aptIndexBuilt = true;
+        if (result.code !== 0) return;
+        this.aptIndexBuilt = true;
+        // A rebuilt index is a new table: read it now instead of waiting for
+        // the next search to notice the empty one.
+        this.aptLoadAttemptAt = 0;
+        this.loadAptIndex();
       })
       .catch(() => undefined)
       .finally(() => {
@@ -178,13 +230,17 @@ export class PackageSuggestService {
     void this.aptIndexWarm;
   }
 
+  /**
+   * Searches the in-memory table once it exists. Until then a names-only query
+   * answers in about a second while that table loads behind it, so the first
+   * `github` of a session cannot see `gh`'s description and the next keystroke
+   * can; nothing ever waits on the multi-second description scan.
+   */
   private async apt(query: string, budgetMs: number): Promise<PackageSuggestion[]> {
-    // Local and offline, once the index exists. Not `--names-only`: `github` is
-    // a name nobody ships, but `gh` describes itself as the GitHub CLI, which is
-    // what the user was looking for. Bounded, because the answer must not wait
-    // on apt while three faster sources already have results.
+    if (this.aptIndex) return this.aptIndexRows(query);
+    this.loadAptIndex();
     const result = await within(
-      this.runner('apt-cache', ['search', query]),
+      this.runner('apt-cache', ['search', '--names-only', query]),
       budgetMs,
     );
     if (!result || result.code !== 0) return [];
@@ -193,6 +249,53 @@ export class PackageSuggestService {
 
     this.warmAptIndex();
     return [];
+  }
+
+  /**
+   * `--names-only` matches names alone, so the first search of a session would
+   * never find `gh` for `github`. One `dumpavail` supplies the descriptions for
+   * every later query in this process, and an empty answer means the image's
+   * pruned index needs rebuilding rather than that nothing matched.
+   */
+  private loadAptIndex(): void {
+    if (this.aptIndex) return;
+    if (this.aptIndexLoad) {
+      // A dump that started before the rebuild finished is stale; read the
+      // index again once it clears instead of losing the rebuilt one.
+      this.aptIndexReload = true;
+      return;
+    }
+    if (Date.now() - this.aptLoadAttemptAt < APT_INDEX_RETRY_MS) return;
+    this.aptLoadAttemptAt = Date.now();
+    this.aptIndexLoad = within(this.runner('apt-cache', ['dumpavail']), APT_INDEX_LOAD_BUDGET_MS)
+      .then((result) => {
+        if (!result || result.code !== 0) return;
+        const entries = parseDumpavail(result.stdout);
+        if (entries.length === 0) {
+          this.warmAptIndex();
+          return;
+        }
+        this.aptIndex = entries;
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        this.aptIndexLoad = null;
+        if (!this.aptIndexReload) return;
+        this.aptIndexReload = false;
+        this.loadAptIndex();
+      });
+    void this.aptIndexLoad;
+  }
+
+  private aptIndexRows(query: string): PackageSuggestion[] {
+    const needle = query.toLowerCase();
+    const suggestions: PackageSuggestion[] = [];
+    for (const entry of this.aptIndex ?? []) {
+      const name = entry.name.toLowerCase();
+      if (!name.includes(needle) && !entry.description.toLowerCase().includes(needle)) continue;
+      suggestions.push({ manager: 'apt', name: entry.name, spec: entry.name, description: entry.description });
+    }
+    return suggestions.sort(prefixFirst(query)).slice(0, APT_LIMIT);
   }
 
   private async npm(query: string): Promise<PackageSuggestion[]> {
@@ -251,9 +354,13 @@ export class PackageSuggestService {
    * are both PyPI, so the selected one is the manager the suggestion installs
    * through.
    */
-  /** Test seam: settle the background index rebuild, if one is running. */
+  /** Test seam: settle the background index rebuild and table load, if any. */
   async whenAptIndexSettled(): Promise<void> {
-    await this.aptIndexWarm;
+    for (;;) {
+      const pending = this.aptIndexWarm ?? this.aptIndexLoad;
+      if (!pending) return;
+      await pending;
+    }
   }
 
   async suggest(rawQuery: string, manager: SuggestManager = 'auto'): Promise<PackageSuggestion[]> {
@@ -285,7 +392,7 @@ export class PackageSuggestService {
       const key = `${suggestion.manager}:${suggestion.name.toLowerCase()}`;
       if (!unique.has(key)) unique.set(key, suggestion);
     }
-    const suggestions = [...unique.values()].sort(prefixFirst(query)).slice(0, TOTAL_LIMIT);
+    const suggestions = interleave([...unique.values()].sort(prefixFirst(query)), TOTAL_LIMIT);
     this.cache.set(cacheKey, { at: Date.now(), suggestions });
     if (this.cache.size > CACHE_LIMIT) {
       const oldest = this.cache.keys().next().value;
