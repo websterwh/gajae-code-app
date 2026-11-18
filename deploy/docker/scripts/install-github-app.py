@@ -8,6 +8,42 @@ import stat
 
 STATE_FILE = os.environ.get("GITHUB_APPS_STATE", "/data/share/github-apps.json")
 
+# A package in GITHUB_APPS - or a bare name typed into Settings - has no owner,
+# and GitHub cannot resolve api.github.com/repos/zoxide (404). The standard aqua
+# packages people ask for by name are mapped to the repository their releases
+# live in; anything else has to be given as owner/repo.
+BARE_NAME_REPOS = {
+    "age": "FiloSottile/age",
+    "apktool": "iBotPeaches/Apktool",
+    "bat": "sharkdp/bat",
+    "bottom": "ClementTsang/bottom",
+    "btm": "ClementTsang/bottom",
+    "delta": "dandavison/delta",
+    "direnv": "direnv/direnv",
+    "dust": "bootandy/dust",
+    "eza": "eza-community/eza",
+    "fd": "sharkdp/fd",
+    "fzf": "junegunn/fzf",
+    "gh": "cli/cli",
+    "helix": "helix-editor/helix",
+    "hx": "helix-editor/helix",
+    "hyperfine": "sharkdp/hyperfine",
+    "jadx": "skylot/jadx",
+    "jq": "jqlang/jq",
+    "just": "casey/just",
+    "k9s": "derailed/k9s",
+    "lazygit": "jesseduffield/lazygit",
+    "neovim": "neovim/neovim",
+    "nvim": "neovim/neovim",
+    "rg": "BurntSushi/ripgrep",
+    "ripgrep": "BurntSushi/ripgrep",
+    "sops": "getsops/sops",
+    "starship": "starship/starship",
+    "yq": "mikefarah/yq",
+    "zellij": "zellij-org/zellij",
+    "zoxide": "ajeetdsouza/zoxide",
+}
+
 
 def split_spec(spec):
     """`skylot/jadx` is the latest release; `skylot/jadx@v1.5.1` is that tag."""
@@ -40,6 +76,14 @@ def record_tag(repo, tag):
         print(f"==> [WARN] Could not record {repo} at {tag}: {e}")
 
 
+def record_tags(repo, requested, tag):
+    """The verify step looks up the name that was requested, so a bare name is
+    recorded beside the repository it resolved to."""
+    record_tag(repo, tag)
+    if requested and requested != repo:
+        record_tag(requested, tag)
+
+
 def fetch_release(repo, tag, headers):
     api_url = (f"https://api.github.com/repos/{repo}/releases/tags/{tag}" if tag
                else f"https://api.github.com/repos/{repo}/releases/latest")
@@ -52,6 +96,12 @@ def install_github_app(spec, target_bin="/data/bin", target_share="/data/share")
     repo, requested = split_spec(spec)
     if not repo:
         return True
+    requested_name = repo
+    if "/" not in repo:
+        repo = BARE_NAME_REPOS.get(repo.lower(), "")
+        if not repo:
+            print(f"==> [ERROR] {requested_name} needs an owner. Use owner/repo, for example ajeetdsouza/zoxide.")
+            return False
     headers = {"User-Agent": "GitHub-App-Installer"}
     token = os.environ.get("GITHUB_TOKEN")
     if token:
@@ -76,7 +126,7 @@ def install_github_app(spec, target_bin="/data/bin", target_share="/data/share")
         link_path = os.path.join(target_bin, "jadx")
         if os.path.exists(os.path.join(dest_dir, "bin", "jadx")) and (os.path.exists(link_path) or os.path.islink(link_path)):
             print(f"==> [GitHub App] jadx {tag} is already installed.")
-            record_tag(repo, tag)
+            record_tags(repo, requested_name, tag)
             return True
 
         print(f"==> [GitHub App] Installing {repo} ({tag})...")
@@ -99,7 +149,7 @@ def install_github_app(spec, target_bin="/data/bin", target_share="/data/share")
         if os.path.islink(link_path) or os.path.exists(link_path):
             os.remove(link_path)
         os.symlink(jadx_bin, link_path)
-        record_tag(repo, tag)
+        record_tags(repo, requested_name, tag)
         print(f"==> [GitHub App] Successfully installed jadx {tag} -> {link_path}")
         return True
 
@@ -109,7 +159,7 @@ def install_github_app(spec, target_bin="/data/bin", target_share="/data/share")
         wrapper_path = os.path.join(target_bin, "apktool")
         if os.path.exists(jar_dest) and os.path.exists(wrapper_path):
             print(f"==> [GitHub App] apktool {tag} is already installed.")
-            record_tag(repo, tag)
+            record_tags(repo, requested_name, tag)
             return True
 
         print(f"==> [GitHub App] Installing {repo} ({tag})...")
@@ -122,7 +172,7 @@ def install_github_app(spec, target_bin="/data/bin", target_share="/data/share")
         with open(wrapper_path, "w") as f:
             f.write(f'#!/bin/sh\nexec java -Xmx1024M -Dfile.encoding=UTF-8 -jar "{jar_dest}" "$@"\n')
         os.chmod(wrapper_path, 0o755)
-        record_tag(repo, tag)
+        record_tags(repo, requested_name, tag)
         print(f"==> [GitHub App] Successfully installed apktool {tag} -> {wrapper_path}")
         return True
 
@@ -146,7 +196,7 @@ def install_github_app(spec, target_bin="/data/bin", target_share="/data/share")
             if os.path.islink(dst) or os.path.exists(dst):
                 os.remove(dst)
             os.symlink(src, dst)
-    record_tag(repo, tag)
+    record_tags(repo, requested_name, tag)
     print(f"==> [Aqua] Successfully installed {pkg_entry}")
     return True
 

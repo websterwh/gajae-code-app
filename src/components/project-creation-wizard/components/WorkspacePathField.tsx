@@ -47,7 +47,7 @@ type SuggestionListProps = {
 
 function SuggestionList({ suggestions, onSelect }: SuggestionListProps) {
   return (
-    <div className="absolute z-10 mt-1 max-h-60 w-full overflow-y-auto rounded-xl border border-border bg-popover p-1.5 shadow-xl">
+    <div className="max-h-60 w-full overflow-y-auto rounded-lg border border-border bg-popover p-1.5 shadow-sm">
       {suggestions.map((suggestion) => (
         <button
           key={suggestion.path}
@@ -123,8 +123,8 @@ export default function WorkspacePathField({
 
   return (
     <>
-      <div className="relative flex gap-2">
-        <div className="relative flex-1">
+      <div className="flex items-center gap-2">
+        <div className="flex-1">
           <Input
             type="text"
             value={value}
@@ -133,9 +133,6 @@ export default function WorkspacePathField({
             className="w-full"
             disabled={disabled}
           />
-          {isSuggestionListOpen && suggestions.length > 0 ? (
-            <SuggestionList suggestions={suggestions} onSelect={chooseSuggestion} />
-          ) : null}
         </div>
         <Button
           type="button"
@@ -150,6 +147,12 @@ export default function WorkspacePathField({
           <FolderOpen className="h-4 w-4" />
         </Button>
       </div>
+      {/* In the flow, not absolutely positioned: the add-workspace dialog clips
+          a floating dropdown to its own height, which left the matches below
+          the fold and the feature looking like nothing happened. */}
+      {isSuggestionListOpen && suggestions.length > 0 ? (
+        <SuggestionList suggestions={suggestions} onSelect={chooseSuggestion} />
+      ) : null}
       <FolderBrowserModal
         isOpen={isFolderBrowserOpen}
         autoAdvanceOnSelect={false}

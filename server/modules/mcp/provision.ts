@@ -174,6 +174,36 @@ export function uvToolVersion(output: string, name: string): string | null {
   return distribution === name ? version : null;
 }
 
+/**
+ * `apt-get install android-tools-adb` installs `adb` on images where that name
+ * is only a virtual package: dpkg answers `unknown ok not-installed` for the
+ * name that was asked for while its provider sits installed, so a good install
+ * was recorded as failed with nothing in the inventory.
+ */
+export async function aptProviderVersion(runner: CommandRunner, name: string): Promise<string | null> {
+  const result = await runner('dpkg-query', ['-W', '-f=${Package}\t${Status}\t${Version}\t${Provides}\n']);
+  if (result.code !== 0) return null;
+  for (const line of String(result.stdout ?? '').split(/\r?\n/u)) {
+    const [pkg, status, version, provides] = line.split('\t');
+    if (!pkg || status?.trim() !== 'install ok installed') continue;
+    const provided = String(provides ?? '').split(',').map((entry) => entry.trim().split(/\s+/u)[0]);
+    if (pkg === name || provided.includes(name)) return version?.trim() ?? null;
+  }
+  return null;
+}
+
+/** dpkg's own answer first; an apt virtual name then falls back to a provider. */
+async function detectedOrProvided(
+  manager: InstallManager,
+  name: string,
+  output: string,
+  runner: CommandRunner,
+): Promise<string | null> {
+  const detected = detectedVersion(manager, name, output);
+  if (detected !== null || manager !== 'apt') return detected;
+  return aptProviderVersion(runner, name);
+}
+
 /** uv needs the inventory, not a bare name match, to answer with a version. */
 function detectedVersion(manager: InstallManager, name: string, output: string): string | null {
   if (manager === 'uv') return uvToolVersion(output, name) ?? parseInstalledVersion(manager, name, output);
@@ -274,7 +304,7 @@ export async function provisionPackages(options: {
     const preflight = verifyCommand(options.manager, parsed.name);
     const preflightResult = await options.runner(preflight.command, preflight.args);
     const preflightVersion = preflightResult.code === 0
-      ? detectedVersion(options.manager, parsed.name, preflightResult.stdout)
+      ? await detectedOrProvided(options.manager, parsed.name, preflightResult.stdout, options.runner)
       : null;
     const preflightHealthy = preflightResult.code === 0
       && verificationConfirms(options.manager, parsed.name, preflightResult.stdout, preflightVersion)
@@ -317,7 +347,7 @@ export async function provisionPackages(options: {
 
     // `latest` is resolved here, at install time, and the concrete version is
     // what the ledger (and the UI) records as actually running.
-    const detected = detectedVersion(options.manager, parsed.name, verified.stdout);
+    const detected = await detectedOrProvided(options.manager, parsed.name, verified.stdout, options.runner);
     if (!verificationConfirms(options.manager, parsed.name, verified.stdout, detected)) {
       const error = 'install exited 0 but the package is not present in the tool inventory';
       recordFailure(options.ledger, options.manager, parsed.name, spec, error, now());
@@ -374,7 +404,9 @@ export async function upgradePackage(options: {
       // failed row: verify the package and keep it installed when it is there.
       const verify = verifyCommand(manager, name);
       const present = await runner(verify.command, verify.args);
-      const presentVersion = present.code === 0 ? detectedVersion(manager, name, present.stdout) : null;
+      const presentVersion = present.code === 0
+        ? await detectedOrProvided(manager, name, present.stdout, runner)
+        : null;
       if (present.code === 0 && verificationConfirms(manager, name, present.stdout, presentVersion)) {
         const version = presentVersion ?? entry.version;
         recordInstalled(ledger, manager, name, { spec: entry.spec, version, pin: null, at: now() });
@@ -389,7 +421,7 @@ export async function upgradePackage(options: {
   }
   const verify = verifyCommand(manager, name);
   const verified = await runner(verify.command, verify.args);
-  const detected = verified.code === 0 ? detectedVersion(manager, name, verified.stdout) : null;
+  const detected = verified.code === 0 ? await detectedOrProvided(manager, name, verified.stdout, runner) : null;
   if (verified.code !== 0 || !verificationConfirms(manager, name, verified.stdout, detected)) {
     const error = 'update verification failed';
     recordFailure(ledger, manager, name, entry.spec, error, now());

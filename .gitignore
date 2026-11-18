@@ -177,3 +177,6 @@ electron/*.tar.gz
 # Marketing website build output
 /website/dist/
 .icon-preview/
+
+# Python bytecode
+__pycache__/
