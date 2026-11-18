@@ -1,4 +1,4 @@
-import { api } from '../../../utils/api';
+import { api, authenticatedFetch } from '../../../utils/api';
 import type {
   BrowseFilesystemResponse,
   CreateFolderResponse,
@@ -36,8 +36,9 @@ const projectErrorMessage = (payload: CreateProjectResponse): string | null => {
   return nonEmptyString(payload.message);
 };
 
-export const browseFilesystemFolders = async (pathToBrowse: string) => {
-  const response = await api.get(`/browse-filesystem?path=${encodeURIComponent(pathToBrowse)}`);
+export const browseFilesystemFolders = async (pathToBrowse: string, searchFor?: string) => {
+  const search = searchFor?.trim() ? `&q=${encodeURIComponent(searchFor.trim())}` : '';
+  const response = await api.get(`/browse-filesystem?path=${encodeURIComponent(pathToBrowse)}${search}`);
   const payload = await readResponse<BrowseFilesystemResponse>(response);
   if (!response.ok) {
     throw new Error(payload.error || 'Failed to browse filesystem');
@@ -103,4 +104,68 @@ export const createProjectRequest = async (payload: CreateProjectPayload) => {
   }
 
   throw new Error(projectErrorMessage(result) || 'Failed to create project');
+};
+
+export type GithubRepository = {
+  fullName: string;
+  name: string;
+  private: boolean;
+  description: string;
+  cloneUrl: string;
+};
+
+/** The saved Git token is used server-side; the browser never sends it. */
+export const listGithubRepositories = async (query: string): Promise<GithubRepository[]> => {
+  const response = await authenticatedFetch(`/api/user/github-repositories?q=${encodeURIComponent(query)}`);
+  const payload = await response.json().catch(() => ({})) as { success?: boolean; data?: GithubRepository[]; error?: string };
+  if (!response.ok || payload.success === false) {
+    throw new Error(payload.error || 'GitHub repositories could not be loaded.');
+  }
+  return payload.data ?? [];
+};
+
+export const startCloneRequest = async (payload: { path: string; githubUrl: string }): Promise<string> => {
+  const response = await authenticatedFetch('/api/projects/clone', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const body = await response.json().catch(() => ({})) as {
+    success?: boolean; data?: { cloneId?: string }; error?: unknown; message?: string;
+  };
+  const cloneId = body.data?.cloneId;
+  if (!response.ok || !cloneId) {
+    const message = typeof body.error === 'string' ? body.error : body.message;
+    throw new Error(message || 'The clone could not be started.');
+  }
+  return cloneId;
+};
+
+/** Follows a clone that already started; returns the unsubscribe function. */
+export const watchClone = (
+  cloneId: string,
+  handlers: {
+    onProgress: (message: string) => void;
+    onComplete: (project?: Record<string, unknown>) => void;
+    onError: (message: string) => void;
+  },
+): (() => void) => {
+  const source = new EventSource(`/api/projects/clone-progress?cloneId=${encodeURIComponent(cloneId)}`);
+  source.onmessage = (event) => {
+    let payload: { type?: string; message?: string; project?: Record<string, unknown> };
+    try {
+      payload = JSON.parse(event.data) as typeof payload;
+    } catch {
+      return;
+    }
+    if (payload.type === 'progress' && payload.message) handlers.onProgress(payload.message);
+    else if (payload.type === 'complete') handlers.onComplete(payload.project);
+    else if (payload.type === 'error') handlers.onError(payload.message || 'The clone failed.');
+  };
+  source.onerror = () => {
+    // The stream closes after a terminal event; only report a transport error
+    // while the browser is still trying to reconnect.
+    if (source.readyState === EventSource.CLOSED) source.close();
+  };
+  return () => source.close();
 };

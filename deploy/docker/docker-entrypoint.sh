@@ -380,35 +380,9 @@ EOF
         chmod 600 /root/.ssh/authorized_keys
     fi
 
-    # Configure interactive shell landing in WORKSPACES_ROOT and default command
-    # Also set /workspace as home or cd on login
-    cat > /root/.bash_profile <<EOF
-export PATH="/data/npm-global/bin:/data/bin:/root/.local/bin:/root/.local/share/aquaproj-aqua/bin:/usr/local/bin:\$PATH"
-export EDITOR="nano"
-export VISUAL="nano"
-if [ -f /root/.bashrc ]; then
-    . /root/.bashrc
-fi
-if [ -d "${WORKSPACES_ROOT}" ]; then
-    cd "${WORKSPACES_ROOT}" 2>/dev/null || true
-fi
-EOF
-
-    cat > /root/.bashrc <<EOF
-export PATH="/data/npm-global/bin:/data/bin:/root/.local/bin:/root/.local/share/aquaproj-aqua/bin:/usr/local/bin:\$PATH"
-export EDITOR="nano"
-export VISUAL="nano"
-# Set shell working directory to WORKSPACES_ROOT
-if [ -d "${WORKSPACES_ROOT}" ]; then
-    cd "${WORKSPACES_ROOT}" 2>/dev/null || true
-fi
-
-# Run custom SSH command if specified (e.g. SSH_DEFAULT_COMMAND=gjc)
-if [ -n "\${SSH_DEFAULT_COMMAND:-}" ] && [ -n "\$SSH_CONNECTION" ] && [ -t 1 ] && [ -z "\$LAUNCHED_SSH_COMMAND" ]; then
-    export LAUNCHED_SSH_COMMAND=1
-    \${SSH_DEFAULT_COMMAND} || true
-fi
-EOF
+    # ~/.bashrc and ~/.bash_profile are seeded on /data and linked into /root
+    # before this runs (see Persistent Shell Profile). They are deliberately
+    # not rewritten here: the profiles belong to the user once they exist.
     # Start sshd in background
     /usr/sbin/sshd
     echo "==> [SSH] SSH daemon running on port ${SSH_PORT}."
@@ -434,6 +408,74 @@ else
     provision_gjc_cli
     run_post_commands
 fi
+# ==============================================================================
+# Persistent Shell Profile
+# ==============================================================================
+# The shell profiles used to live in the image's writable layer, so an alias, a
+# prompt or a PATH edit vanished on the next recreate. They are kept on the
+# /data mount and linked into /root. A profile is seeded only when it is
+# missing: once it exists, it is the user's file and the entrypoint leaves it
+# alone.
+mkdir -p /data/shell
+for profile in bashrc bash_profile; do
+    live="/root/.${profile}"
+    stored="/data/shell/.${profile}"
+    # Adopt a profile an older image wrote into the writable layer, so an
+    # existing customization survives the move instead of being replaced.
+    if [ -f "${live}" ] && [ ! -L "${live}" ] && [ ! -e "${stored}" ]; then
+        if mv "${live}" "${stored}" 2>/dev/null; then :; else cp -p "${live}" "${stored}" && rm -f "${live}"; fi
+    fi
+done
+
+if [ ! -f /data/shell/.bash_profile ]; then
+    cat > /data/shell/.bash_profile <<EOF
+export PATH="/data/npm-global/bin:/data/bin:/root/.local/bin:/root/.local/share/aquaproj-aqua/bin:/usr/local/bin:\$PATH"
+export EDITOR="nano"
+export VISUAL="nano"
+if [ -f /root/.bashrc ]; then
+    . /root/.bashrc
+fi
+if [ -d "${WORKSPACES_ROOT}" ]; then
+    cd "${WORKSPACES_ROOT}" 2>/dev/null || true
+fi
+EOF
+fi
+
+if [ ! -f /data/shell/.bashrc ]; then
+    cat > /data/shell/.bashrc <<EOF
+export PATH="/data/npm-global/bin:/data/bin:/root/.local/bin:/root/.local/share/aquaproj-aqua/bin:/usr/local/bin:\$PATH"
+export EDITOR="nano"
+export VISUAL="nano"
+# Set shell working directory to WORKSPACES_ROOT
+if [ -d "${WORKSPACES_ROOT}" ]; then
+    cd "${WORKSPACES_ROOT}" 2>/dev/null || true
+fi
+
+# Run custom SSH command if specified (e.g. SSH_DEFAULT_COMMAND=gjc)
+if [ -n "\${SSH_DEFAULT_COMMAND:-}" ] && [ -n "\$SSH_CONNECTION" ] && [ -t 1 ] && [ -z "\$LAUNCHED_SSH_COMMAND" ]; then
+    export LAUNCHED_SSH_COMMAND=1
+    \${SSH_DEFAULT_COMMAND} || true
+fi
+EOF
+fi
+
+for profile in bashrc bash_profile; do
+    live="/root/.${profile}"
+    stored="/data/shell/.${profile}"
+    if [ -L "${live}" ]; then ln -sfn "${stored}" "${live}"; fi
+    if [ -f "${live}" ] && [ ! -L "${live}" ]; then rm -f "${live}"; fi
+    if [ ! -e "${live}" ] && [ ! -L "${live}" ]; then ln -s "${stored}" "${live}"; fi
+done
+
+# A GitHub token saved in Settings is written to /data/shell/github.env. Source
+# it from the persisted profiles once, so SSH shells get the same variables the
+# app process and its agents already have.
+for profile in /data/shell/.bashrc /data/shell/.bash_profile; do
+    [ -f "${profile}" ] || continue
+    grep -qF 'gajae-github-env' "${profile}" 2>/dev/null && continue
+    printf '\n# gajae-github-env\n[ -f /data/shell/github.env ] && . /data/shell/github.env\n' >> "${profile}"
+done
+
 setup_ssh
 
 # ==============================================================================

@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Button, Input } from '../../../shared/view/ui';
 import { browseFilesystemFolders } from '../data/workspaceApi';
 import type { FolderSuggestion } from '../types';
+import { fuzzyScore } from '../utils/fuzzy';
 import { getSuggestionRootPath } from '../utils/pathUtils';
 
 import FolderBrowserModal from './FolderBrowserModal';
@@ -16,19 +17,27 @@ type WorkspacePathFieldProps = {
   onAdvanceToConfirm: () => void;
 };
 
+/**
+ * A typed path keeps its prefix behaviour; the fuzzy name score is what lets a
+ * fragment find the folder without the parents in front of it. Whichever
+ * reading matches better wins, so "proj" ranks a folder named `my-proj` above
+ * an unrelated path that merely starts with those letters.
+ */
 function findSuggestions(path: string, folders: FolderSuggestion[]) {
   const normalizedPath = path.toLowerCase();
-  const suggestions: FolderSuggestion[] = [];
+  const fragment = normalizedPath.split(/[\\/]/u).pop() ?? '';
 
-  for (const folder of folders) {
-    const candidate = folder.path.toLowerCase();
-    if (candidate !== normalizedPath && candidate.startsWith(normalizedPath)) {
-      suggestions.push(folder);
-    }
-    if (suggestions.length === 5) break;
-  }
-
-  return suggestions;
+  return folders
+    .filter((folder) => folder.path.toLowerCase() !== normalizedPath)
+    .map((folder) => {
+      const byPath = folder.path.toLowerCase().startsWith(normalizedPath) ? 6 : -1;
+      const byName = fuzzyScore(fragment, folder.name) ?? -1;
+      return { folder, score: Math.max(byPath, byName) };
+    })
+    .filter(({ score }) => score >= 0)
+    .sort((first, second) => second.score - first.score)
+    .slice(0, 5)
+    .map(({ folder }) => folder);
 }
 
 type SuggestionListProps = {
@@ -75,7 +84,13 @@ export default function WorkspacePathField({
     const timer = window.setTimeout(() => {
       const loadSuggestions = async () => {
         try {
-          const response = await browseFilesystemFolders(getSuggestionRootPath(value));
+          // A bare word is a name, not a path: ask the server to search the
+          // workspace root for it so "myproj" finds the folder wherever it is.
+          const bareName = !/[\\/]/u.test(value.trim());
+          const response = await browseFilesystemFolders(
+            bareName ? '' : getSuggestionRootPath(value),
+            bareName ? value.trim() : undefined,
+          );
           const matches = findSuggestions(value, response.suggestions);
           setSuggestions(matches);
           setIsSuggestionListOpen(matches.length !== 0);

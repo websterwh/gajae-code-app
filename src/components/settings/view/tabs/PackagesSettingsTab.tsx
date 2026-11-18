@@ -8,7 +8,13 @@ import { authenticatedFetch } from '../../../../utils/api';
 import SettingsCard from '../SettingsCard';
 import SettingsSection from '../SettingsSection';
 
-type Manager = 'uv' | 'pip' | 'npm' | 'aqua';
+type Manager = 'uv' | 'pip' | 'npm' | 'aqua' | 'apt';
+type PackageSuggestion = {
+  manager: Manager;
+  name: string;
+  spec: string;
+  description: string;
+};
 type PackageRow = {
   manager: Manager;
   name: string;
@@ -24,7 +30,7 @@ type PackageRow = {
 
 type ApiEnvelope<T> = { success?: boolean; data?: T; error?: { message?: string } };
 
-const MANAGERS: Manager[] = ['uv', 'pip', 'npm', 'aqua'];
+const MANAGERS: Manager[] = ['uv', 'pip', 'npm', 'aqua', 'apt'];
 
 const inputClass = 'w-full touch-manipulation rounded-lg border border-input bg-card p-2 text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary';
 const buttonClass = 'inline-flex items-center gap-1.5 rounded-lg border border-input px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50';
@@ -64,6 +70,7 @@ export default function PackagesSettingsTab() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [form, setForm] = useState<{ manager: Manager; spec: string; pin: string }>({ manager: 'uv', spec: '', pin: '' });
+  const [suggestions, setSuggestions] = useState<PackageSuggestion[]>([]);
   const [editingVersion, setEditingVersion] = useState<string | null>(null);
   const [versionDraft, setVersionDraft] = useState('');
   const skipPinCommit = useRef(false);
@@ -83,6 +90,28 @@ export default function PackagesSettingsTab() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Suggestions come from the same sources an install would use: apt's local
+  // index, the npm registry and PyPI. Typing is debounced so a name does not
+  // become a request per keystroke.
+  useEffect(() => {
+    const query = form.spec.trim();
+    if (query.length < 2) {
+      setSuggestions([]);
+      return undefined;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      void authenticatedFetch(`/api/packages/suggest?q=${encodeURIComponent(query)}`, { signal: controller.signal })
+        .then(async (response) => (await response.json() as ApiEnvelope<PackageSuggestion[]>).data ?? [])
+        .then((next) => { if (!controller.signal.aborted) setSuggestions(next); })
+        .catch(() => undefined);
+    }, 250);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [form.spec]);
 
   const run = async (key: string, action: () => Promise<unknown>) => {
     setBusy(key);
@@ -108,6 +137,17 @@ export default function PackagesSettingsTab() {
       });
       setForm({ ...form, spec: '', pin: '' });
     });
+  };
+
+  // Clicking a suggestion is the install: the manager that recognised the
+  // name is the one that runs, so the user does not have to know which it was.
+  const installSuggestion = (suggestion: PackageSuggestion) => {
+    setForm({ ...form, manager: suggestion.manager, spec: suggestion.spec, pin: '' });
+    setSuggestions([]);
+    void run(`add:${suggestion.manager}:${suggestion.name}`, () => request('/api/packages', {
+      method: 'POST',
+      body: JSON.stringify({ manager: suggestion.manager, spec: suggestion.spec, pin: null }),
+    }));
   };
 
   const retry = (row: PackageRow) => void run(`retry:${row.manager}:${row.name}`, () => request('/api/packages', {
@@ -182,6 +222,29 @@ export default function PackagesSettingsTab() {
               {busy === 'add' ? t('packages.adding') : t('packages.add')}
             </button>
           </form>
+
+          {suggestions.length > 0 ? (
+            <div className="border-t border-border px-4 py-3">
+              <p className="mb-2 text-xs text-muted-foreground">
+                {t('packages.suggestions', { defaultValue: 'Matching packages — click one to install it, or keep typing and press Add' })}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {suggestions.map((suggestion) => (
+                  <button
+                    key={`${suggestion.manager}:${suggestion.name}`}
+                    type="button"
+                    disabled={busy !== null}
+                    onClick={() => installSuggestion(suggestion)}
+                    title={suggestion.description || suggestion.spec}
+                    className="inline-flex max-w-full items-center gap-2 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <span className="truncate font-medium">{suggestion.name}</span>
+                    <span className="text-muted-foreground">{suggestion.manager}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           {loading ? (
             <p role="status" className="flex items-center gap-2 p-4 text-xs text-muted-foreground">

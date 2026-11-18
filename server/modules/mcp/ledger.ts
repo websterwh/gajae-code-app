@@ -11,8 +11,8 @@ import path from 'node:path';
  * install and its verification both succeed. It is additive - an absent or
  * unreadable file means "nothing installed", never "remove things".
  */
-export type InstallManager = 'uv' | 'pip' | 'npm' | 'aqua';
-export const INSTALL_MANAGERS: readonly InstallManager[] = ['uv', 'pip', 'npm', 'aqua'];
+export type InstallManager = 'uv' | 'pip' | 'npm' | 'aqua' | 'apt';
+export const INSTALL_MANAGERS: readonly InstallManager[] = ['uv', 'pip', 'npm', 'aqua', 'apt'];
 
 export type LedgerStatus = 'installed' | 'failed';
 export type LedgerAttempt = { status: LedgerStatus; at: string; error?: string };
@@ -31,7 +31,7 @@ export type Ledger = {
 };
 
 const EMPTY_PACKAGES = (): Record<InstallManager, Record<string, LedgerEntry>> => ({
-  uv: {}, pip: {}, npm: {}, aqua: {},
+  uv: {}, pip: {}, npm: {}, aqua: {}, apt: {},
 });
 
 export function emptyLedger(): Ledger {

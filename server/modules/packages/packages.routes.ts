@@ -3,6 +3,7 @@ import { Router, type Response } from 'express';
 import { asyncHandler, routeParam } from '@/shared/utils.js';
 
 import { packagesService, type PackagesService } from './packages.service.js';
+import { packageSuggestService, type PackageSuggestService } from './suggest.service.js';
 
 function fail(response: Response, error: unknown): Response {
   const message = error instanceof Error ? error.message : 'Package request failed.';
@@ -13,12 +14,26 @@ function fail(response: Response, error: unknown): Response {
   return response.status(status).json({ success: false, error: { message } });
 }
 
-export function createPackagesRouter(service: PackagesService = packagesService): Router {
+export function createPackagesRouter(
+  service: PackagesService = packagesService,
+  suggestions: PackageSuggestService = packageSuggestService,
+): Router {
   const router = Router();
 
   router.get('/', asyncHandler(async (_request, response) => {
     try {
       response.json({ success: true, data: await service.list() });
+    } catch (error) {
+      fail(response, error);
+    }
+  }));
+
+  // Names, not installs: the client queries this while the user types, then
+  // installs through POST / with the manager the suggestion named.
+  router.get('/suggest', asyncHandler(async (request, response) => {
+    const query = typeof request.query.q === 'string' ? request.query.q : '';
+    try {
+      response.json({ success: true, data: await suggestions.suggest(query) });
     } catch (error) {
       fail(response, error);
     }

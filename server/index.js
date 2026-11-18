@@ -39,6 +39,7 @@ import {
 
 import { getConnectableHost } from '../shared/networkHosts.js';
 
+import { deleteProject } from './modules/projects/services/project-delete.service.js';
 import { GjcJobProjectionService } from './modules/websocket/services/gjc-job-projection.service.js';
 import { chatRunRegistry } from './modules/websocket/index.js';
 import { drainWebSocketClients } from './modules/websocket/services/websocket-drain.service.js';
@@ -113,6 +114,7 @@ import providerRoutes from './modules/providers/provider.routes.js';
 import { mcpRoutes } from './modules/mcp/index.js';
 import { memoryRoutes } from './modules/memory/index.js';
 import { packagesRoutes } from './modules/packages/index.js';
+import { restoreSavedGithubToken } from './modules/git/github-auth.service.js';
 import voiceRoutes from './voice-proxy.js';
 import { assetsRoutes } from './modules/assets/index.js';
 import { initializeDatabase, projectsDb, sessionsDb } from './modules/database/index.js';
@@ -356,6 +358,12 @@ app.use('/api/notifications', authenticateToken, notificationRoutes);
 // User API Routes (protected)
 app.use('/api/user', authenticateToken, userRoutes);
 
+// A saved GitHub token is part of the container's environment, not just a row
+// in the database: restore it so agents, git and gh work after a restart.
+void restoreSavedGithubToken().catch((error) => {
+    console.warn(`[git] could not restore the saved GitHub token: ${error instanceof Error ? error.message : error}`);
+});
+
 // Host integration (protected): open files in the user's own editor.
 app.use('/api/system', authenticateToken, systemRoutes);
 
@@ -426,11 +434,33 @@ const expandWorkspacePath = (inputPath) => {
     return inputPath;
 };
 
+// Case-insensitive subsequence match for a bare folder-name search; -1 means no
+// match. Contiguous runs and word starts rank first, so the obvious folder wins
+// over one that merely contains the letters far apart.
+const fuzzyNameScore = (query, candidate) => {
+    const needle = String(query || '').trim().toLowerCase();
+    const haystack = String(candidate || '').toLowerCase();
+    if (!needle) return 0;
+    let score = 0;
+    let cursor = 0;
+    let previous = -1;
+    for (const character of needle) {
+        const found = haystack.indexOf(character, cursor);
+        if (found === -1) return -1;
+        score += found === previous + 1 ? 3 : 1;
+        if (found === 0 || /[\s._/-]/.test(haystack.charAt(found - 1))) score += 2;
+        previous = found;
+        cursor = found + 1;
+    }
+    return score;
+};
+
 // Browse filesystem endpoint for project suggestions - uses existing getFileTree
 app.get('/api/browse-filesystem', authenticateToken, asyncHandler(async (req, res) => {
     const listing = fileTreeRequest(req, res);
     try {
         const { path: dirPath } = req.query;
+        const searchQuery = typeof req.query.q === 'string' ? req.query.q.trim() : '';
 
         console.log('[API] Browse filesystem request for path:', dirPath);
         console.log('[API] WORKSPACES_ROOT is:', WORKSPACES_ROOT);
@@ -459,6 +489,25 @@ app.get('/api/browse-filesystem', authenticateToken, asyncHandler(async (req, re
             }
         } catch (err) {
             return res.status(404).json({ error: 'Directory not accessible' });
+        }
+
+        // A bare folder name is a search, not a path: walk a bounded subtree
+        // and rank directory names fuzzily, so "myproj" finds the folder without
+        // its parents being typed first. Depth and result count are capped so a
+        // keystroke cannot turn into a full-disk walk.
+        if (searchQuery) {
+            const deep = await getFileTree(resolvedPath, {
+                maxDepth: 3, directoriesOnly: true, signal: listing.signal, withMetadata: false
+            });
+            const matches = deep
+                .filter(item => item.type === 'directory' && !item.name.startsWith('.'))
+                .map(item => ({ path: item.path, name: item.name, type: 'directory', score: fuzzyNameScore(searchQuery, item.name) }))
+                .filter(item => item.score >= 0)
+                .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
+                .slice(0, 40)
+                .map(({ score, ...entry }) => entry);
+            if (listing.signal.aborted) return;
+            return res.json({ path: resolvedPath, suggestions: matches });
         }
 
         // Suggestions need immediate directories only, never their contents.
@@ -1020,9 +1069,17 @@ app.delete('/api/projects/:projectId/files', authenticateToken, asyncHandler(asy
             throw error;
         }
 
-        // Prevent deleting the project root itself
-        if (resolvedPath === await fsPromises.realpath(projectRoot)) {
-            return res.status(403).json({ error: 'Cannot delete project root directory' });
+        // A folder that is, or contains, a registered workspace takes its
+        // workspace rows with it. A row left pointing at a deleted path is a
+        // broken entry the user would otherwise have to clean up by hand. The
+        // rows go first, because the delete also unlinks their transcripts.
+        const realTarget = await fsPromises.realpath(resolvedPath);
+        const removedWorkspaces = [];
+        for (const known of [...projectsDb.getProjectPaths(), ...projectsDb.getArchivedProjectPaths()]) {
+            const relative = path.relative(realTarget, known.project_path);
+            if (relative !== '' && (relative.startsWith('..') || path.isAbsolute(relative))) continue;
+            await deleteProject(known.project_id);
+            removedWorkspaces.push(known.project_id);
         }
 
         // Delete based on type
@@ -1036,6 +1093,7 @@ app.delete('/api/projects/:projectId/files', authenticateToken, asyncHandler(asy
             success: true,
             path: resolvedPath,
             type: stats.isDirectory() ? 'directory' : 'file',
+            removedWorkspaces,
             message: 'Deleted successfully'
         });
     } catch (error) {

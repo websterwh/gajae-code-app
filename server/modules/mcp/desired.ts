@@ -30,10 +30,11 @@ export const ENV_PACKAGE_VARIABLES: ReadonlyArray<{ manager: InstallManager; var
   { manager: 'pip', variable: 'PIP_PACKAGES' },
   { manager: 'npm', variable: 'NPM_PACKAGES' },
   { manager: 'aqua', variable: 'GITHUB_APPS' },
+  { manager: 'apt', variable: 'APT_PACKAGES' },
 ];
 
 export function emptyDesired(): DesiredState {
-  return { version: 1, packages: { uv: {}, pip: {}, npm: {}, aqua: {} } };
+  return { version: 1, packages: { uv: {}, pip: {}, npm: {}, aqua: {}, apt: {} } };
 }
 
 export function envSeeds(env: NodeJS.ProcessEnv = process.env): EnvSeed[] {

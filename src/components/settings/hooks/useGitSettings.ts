@@ -2,10 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { authenticatedFetch } from '../../../utils/api';
 
-type GitConfigResponse = { gitName?: string; gitEmail?: string; error?: string };
+type GitConfigResponse = { gitName?: string; gitEmail?: string; error?: string; success?: boolean; connected?: boolean };
 type SaveStatus = 'success' | 'error' | null;
 
 const gitConfigEndpoint = '/api/user/git-config';
+const githubTokenEndpoint = '/api/user/github-token';
 
 export function useGitSettings() {
   const [name, updateName] = useState('');
@@ -13,6 +14,10 @@ export function useGitSettings() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<SaveStatus>(null);
+  const [githubToken, setGithubToken] = useState('');
+  const [githubConnected, setGithubConnected] = useState(false);
+  const [githubSaving, setGithubSaving] = useState(false);
+  const [githubStatus, setGithubStatus] = useState<SaveStatus>(null);
   const statusTimeout = useRef<number | null>(null);
 
   const clearSaveStatus = useCallback(() => {
@@ -69,9 +74,62 @@ export function useGitSettings() {
     }
   }, [email, name]);
 
+  const loadGithubToken = useCallback(async () => {
+    try {
+      const response = await authenticatedFetch(githubTokenEndpoint);
+      if (!response.ok) return;
+      const body = await response.json() as GitConfigResponse;
+      setGithubConnected(Boolean(body.connected));
+    } catch (error) {
+      console.error('Error loading GitHub token state:', error);
+    }
+  }, []);
+
+  const saveGithubToken = useCallback(async () => {
+    const token = githubToken.trim();
+    if (!token) return;
+    setGithubSaving(true);
+    try {
+      const response = await authenticatedFetch(githubTokenEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+      if (!response.ok) {
+        setGithubStatus('error');
+        return;
+      }
+      setGithubConnected(true);
+      setGithubToken('');
+      setGithubStatus('success');
+    } catch (error) {
+      console.error('Error saving GitHub token:', error);
+      setGithubStatus('error');
+    } finally {
+      setGithubSaving(false);
+    }
+  }, [githubToken]);
+
+  const removeGithubToken = useCallback(async () => {
+    setGithubSaving(true);
+    try {
+      const response = await authenticatedFetch(githubTokenEndpoint, { method: 'DELETE' });
+      if (response.ok) {
+        setGithubConnected(false);
+        setGithubToken('');
+        setGithubStatus(null);
+      }
+    } catch (error) {
+      console.error('Error removing GitHub token:', error);
+    } finally {
+      setGithubSaving(false);
+    }
+  }, []);
+
   useEffect(() => {
     void loadGitConfig();
-  }, [loadGitConfig]);
+    void loadGithubToken();
+  }, [loadGitConfig, loadGithubToken]);
 
   useEffect(() => () => {
     const timeout = statusTimeout.current;
@@ -90,5 +148,12 @@ export function useGitSettings() {
     saveStatus: status,
     clearSaveStatus,
     saveGitConfig,
+    githubToken,
+    setGithubToken,
+    githubConnected,
+    githubSaving,
+    githubStatus,
+    saveGithubToken,
+    removeGithubToken,
   };
 }

@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Button, Input } from '../../../shared/view/ui';
 import { browseFilesystemFolders, createFolderInFilesystem } from '../data/workspaceApi';
 import type { FolderSuggestion } from '../types';
+import { fuzzyScore } from '../utils/fuzzy';
 import { getParentPath, joinFolderPath } from '../utils/pathUtils';
 
 type FolderBrowserModalProps = { isOpen: boolean; autoAdvanceOnSelect: boolean; onClose: () => void; onFolderSelected: (folderPath: string, advanceToConfirm: boolean) => void };
@@ -28,6 +29,7 @@ export default function FolderBrowserModal({
   const [newFolderName, setNewFolderName] = useState('');
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState('');
 
   const readDirectory = useCallback(async (path: string, fallback: string) => {
     setLoadingFolders(true);
@@ -45,13 +47,18 @@ export default function FolderBrowserModal({
 
   useEffect(() => {
     if (!isOpen) return undefined;
+    setFilter('');
     void readDirectory('~', t('projectWizard.folderBrowser.failedToLoad'));
     return undefined;
   }, [isOpen, readDirectory, t]);
 
-  const visibleFolders = [...folders].sort((first, second) =>
-    first.name.toLowerCase().localeCompare(second.name.toLowerCase()),
-  ).filter(({ name }) => showHiddenFolders || name.charAt(0) !== '.');
+  // Typing narrows the listing as a fuzzy match, so a folder buried in a long
+  // list is one word away instead of a scroll. The box is focused on open, so
+  // there is nothing to click first.
+  const visibleFolders = [...folders]
+    .sort((first, second) => first.name.toLowerCase().localeCompare(second.name.toLowerCase()))
+    .filter(({ name }) => showHiddenFolders || name.charAt(0) !== '.')
+    .filter(({ name }) => filter.trim() === '' || fuzzyScore(filter, name) !== null);
   const parentPath = getParentPath(currentPath);
 
   const hideNewFolderForm = () => {
@@ -188,6 +195,22 @@ export default function FolderBrowserModal({
             <p className="text-xs text-destructive">{error}</p>
           </div>
         )}
+
+        <div className="border-b border-border px-3 py-2">
+          <Input
+            type="text"
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+            placeholder={t('projectWizard.folderBrowser.search', { defaultValue: 'Search folders…' })}
+            className="h-7 text-xs"
+            autoFocus
+            onKeyDown={(event) => {
+              if (event.key !== 'Escape') return;
+              if (filter) setFilter('');
+              else dismiss();
+            }}
+          />
+        </div>
 
         <div className="flex-1 overflow-y-auto p-1.5">
           {loadingFolders ? (

@@ -2,6 +2,7 @@ import express from 'express';
 
 import { archiveProject, restoreArchivedProject } from '@/modules/projects/services/project-archive.service.js';
 import { createCloneProgressStream, readCloneProgress, type CloneProgressEvent } from '@/modules/projects/services/clone-progress-registry.service.js';
+import { githubTokensDb } from '@/modules/database/index.js';
 import { startCloneProject } from '@/modules/projects/services/project-clone.service.js';
 import { deleteProject } from '@/modules/projects/services/project-delete.service.js';
 import { createProject, promoteProjectOrigin, updateProjectDisplayName } from '@/modules/projects/services/project-management.service.js';
@@ -197,12 +198,17 @@ router.post('/clone', asyncHandler(async (request, response) => {
   if (!isHttpsCloneUrl(githubUrl)) {
     throw new AppError('githubUrl must be an https URL', { code: 'INVALID_GITHUB_URL', statusCode: 400 });
   }
+  const numericUserId = typeof userId === 'number' ? userId : Number.parseInt(String(userId), 10);
+  const savedGithubToken = Number.isNaN(numericUserId) ? null : githubTokensDb.getActiveGithubToken(numericUserId);
   const stream = createCloneProgressStream();
   const operation = await startCloneProject({
     workspacePath: bodyText(body.path),
     githubUrl,
     githubTokenId: typeof body.githubTokenId === 'number' ? body.githubTokenId : queryNumber(body.githubTokenId),
-    newGithubToken: bodyText(body.newGithubToken) || null,
+    // The saved token is the container's default, so adding a private
+    // repository does not require pasting the token into this request.
+    newGithubToken: bodyText(body.newGithubToken)
+      || (body.githubTokenId === undefined ? savedGithubToken : null),
     userId,
   }, {
     onProgress: (message) => stream.publish({ type: 'progress', message }),

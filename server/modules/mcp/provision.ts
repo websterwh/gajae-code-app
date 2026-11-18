@@ -50,6 +50,15 @@ export function installCommand(
       return { command: 'npm', args: ['install', '-g', '--no-fund', '--no-audit', spec] };
     case 'aqua':
       return { command: 'install-github-app', args: [spec] };
+    case 'apt':
+      // No shell: the spec is an argument, so a crafted name cannot become a
+      // second command. force-conf* keeps a config-file prompt from wedging a
+      // non-interactive install.
+      return {
+        command: 'apt-get',
+        args: ['install', '-y', '-qq', '--no-install-recommends',
+          '-o', 'Dpkg::Options::=--force-confdef', '-o', 'Dpkg::Options::=--force-confold', spec],
+      };
   }
 }
 
@@ -121,6 +130,8 @@ export function verifyCommand(manager: InstallManager, name: string): { command:
       return { command: 'npm', args: ['ls', '-g', '--json', '--depth=0', name] };
     case 'aqua':
       return { command: 'sh', args: ['-c', AQUA_VERIFY, 'sh', aquaBinary(name), name] };
+    case 'apt':
+      return { command: 'dpkg-query', args: ['-W', '-f=${Status}\t${Version}\n', name] };
   }
 }
 
@@ -187,9 +198,13 @@ async function registeredUvTool(runner: CommandRunner, name: string): Promise<st
 /** Exit 0 alone is not proof: `uv tool list` succeeds on an empty tool set. */
 function verificationConfirms(manager: InstallManager, name: string, output: string, version: string | null): boolean {
   if (manager === 'uv') return version !== null || output.includes(name);
-  // The aqua check is the command itself: exit 0 means the binary or the
-  // package entry was found, and it prints what it found.
-  if (manager === 'aqua') return output.trim().length > 0;
+  // A binary on PATH is not proof the installer put it there. The base image
+  // ships tools the installer also knows, so `command -v zoxide` succeeded for
+  // a package that was never installed: the row read "installed" with no
+  // version, nothing was fetched, and there was nothing to pin or upgrade.
+  // The release tag aqua wrote into its state file is the only evidence an
+  // aqua install actually happened.
+  if (manager === 'aqua') return version !== null;
   return version !== null;
 }
 
@@ -215,6 +230,12 @@ export function parseInstalledVersion(manager: InstallManager, name: string, out
       // The verify output carries the installer's state file, which prints each
       // release as `"skylot/jadx": "1.5.1"`.
       const match = new RegExp(`"${escapeRegExp(name)}"\\s*:\\s*"([^"]+)"`, 'u').exec(output);
+      return match?.[1] ?? null;
+    }
+    case 'apt': {
+      // `dpkg-query -W -f='${Status}\t${Version}'` prints `install ok installed\t1.2.3`
+      // for a known package, and exits non-zero when the name is unknown.
+      const match = /^install ok installed\s+(\S+)/mu.exec(output);
       return match?.[1] ?? null;
     }
   }
@@ -265,6 +286,11 @@ export async function provisionPackages(options: {
       outcomes.push({ manager: options.manager, name: parsed.name, spec, status: 'installed', version, action: 'verified' });
       continue;
     }
+
+    // apt resolves names against a local index the image built at build time.
+    // It ages out, so refresh it once per install; a network failure here only
+    // means apt-get install reports the stale index, which is accurate.
+    if (options.manager === 'apt') await options.runner('apt-get', ['update', '-qq']);
 
     const install = installCommand(options.manager, parsed, pin);
     const printable = [install.command, ...install.args].join(' ');
@@ -461,5 +487,7 @@ function upgradeCommand(manager: InstallManager, parsed: ReturnType<typeof parse
       return { command: 'npm', args: ['install', '-g', '--no-fund', '--no-audit', `${parsed.name}@latest`] };
     case 'aqua':
       return { command: 'install-github-app', args: [parsed.raw] };
+    case 'apt':
+      return { command: 'apt-get', args: ['install', '-y', '-qq', '--only-upgrade', parsed.name] };
   }
 }

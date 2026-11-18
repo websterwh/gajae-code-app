@@ -91,7 +91,7 @@ const BUILTIN_PACKAGES: Record<string, { manager: InstallManager; name: string }
 
 /** A pin addresses a package version; an aqua release is a tag, not one. */
 function pinnableManager(manager: InstallManager): boolean {
-  return manager === 'npm' || manager === 'uv' || manager === 'pip';
+  return manager === 'npm' || manager === 'uv' || manager === 'pip' || manager === 'apt';
 }
 
 /**

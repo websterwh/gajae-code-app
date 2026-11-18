@@ -61,12 +61,14 @@ export function normalizePin(value: unknown): string | null {
 export function pinnedSpec(
   parsed: ParsedPackageSpec,
   pin: string | null | undefined,
-  manager?: 'uv' | 'pip' | 'npm' | 'aqua',
+  manager?: 'uv' | 'pip' | 'npm' | 'aqua' | 'apt',
 ): string {
   const version = normalizePin(pin);
   if (!version) return parsed.raw;
   // A git checkout has no package version to pin.
   if (parsed.manager === 'git') return parsed.raw;
+  // apt addresses a version as `name=version`.
+  if (manager === 'apt') return `${parsed.name}=${version}`;
   // A GitHub release is pinned by the tag it was fetched at: `skylot/jadx@v1.5.1`.
   if (manager === 'aqua') return `${parsed.name}@${version}`;
   if (manager === 'npm' || (manager === undefined && parsed.manager === 'npm')) return `${parsed.name}@${version}`;

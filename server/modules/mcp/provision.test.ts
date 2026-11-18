@@ -246,7 +246,7 @@ test('aqua verification checks the installed binary, not a config-less aqua list
     if (command === 'sh') {
       assert.equal(args[0], '-c');
       assert.deepEqual(args.slice(2), ['sh', 'jadx', 'skylot/jadx']);
-      return { code: 0, stdout: '/data/bin/jadx\n', stderr: '' };
+      return { code: 0, stdout: '/data/bin/jadx\n{"skylot/jadx": "1.5.1"}\n', stderr: '' };
     }
     return { code: 1, stdout: '', stderr: `unexpected command: ${command}` };
   };
@@ -255,6 +255,23 @@ test('aqua verification checks the installed binary, not a config-less aqua list
   assert.equal(outcomes[0]?.status, 'installed');
   assert.equal(ledger.packages.aqua['skylot/jadx'].status, 'installed');
   assert.ok(calls.some((line) => line.startsWith('sh -c')));
+});
+
+test('a binary the image already ships is not reported as an aqua install', async () => {
+  const ledger = emptyLedger();
+  const calls: string[] = [];
+  const runner: CommandRunner = async (command, args) => {
+    calls.push([command, ...args].join(' '));
+    if (command === 'install-github-app') return { code: 1, stdout: '', stderr: 'unknown package: zoxide' };
+    // What the verifier sees on a machine where the tool predates the request.
+    if (command === 'sh') return { code: 0, stdout: '/usr/bin/zoxide\n', stderr: '' };
+    return { code: 1, stdout: '', stderr: `unexpected command: ${command}` };
+  };
+
+  const outcomes = await provisionPackages({ manager: 'aqua', packages: ['zoxide'], ledger, runner });
+  assert.equal(outcomes[0]?.status, 'failed', 'a PATH hit with no recorded release is not an install');
+  assert.equal(ledger.packages.aqua.zoxide.status, 'failed');
+  assert.ok(calls.some((line) => line === 'install-github-app zoxide'), 'the install is attempted instead of skipped');
 });
 
 test('a rate-limited update check leaves an installed package installed', async () => {
@@ -268,7 +285,7 @@ test('a rate-limited update check leaves an installed package installed', async 
     }
     if (command === 'sh') {
       assert.deepEqual(args.slice(2), ['sh', 'jadx', 'skylot/jadx']);
-      return { code: 0, stdout: '/data/bin/jadx\n', stderr: '' };
+      return { code: 0, stdout: '/data/bin/jadx\n{"skylot/jadx": "1.5.1"}\n', stderr: '' };
     }
     return { code: 1, stdout: '', stderr: `unexpected command: ${command}` };
   };

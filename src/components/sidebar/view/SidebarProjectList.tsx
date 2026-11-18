@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import type { TFunction } from 'i18next';
 
 import type { LoadingProgress, Project, ProjectSession, LLMProvider } from '../../../types/app';
@@ -131,9 +132,22 @@ export default function SidebarProjectList({
     <div className="pb-safe-area-inset-bottom md:space-y-1">
       {!showProjects
         ? state
-        : filteredProjects.map((project) => (
+        : filteredProjects.map((project, index) => {
             // React key + per-project state lookups all use the DB `projectId`
             // so they remain stable across renames and session changes.
+            // Pinned workspaces hold the top of the list; a hairline where they
+            // stop makes the group read as pinned rather than as an accident of
+            // sort order.
+            const pinned = isProjectStarred(project.projectId);
+            const previous = index > 0 ? filteredProjects[index - 1] : undefined;
+            const startsUnpinned = !pinned && previous !== undefined && isProjectStarred(previous.projectId);
+            return (
+            <Fragment key={project.projectId}>
+            {startsUnpinned ? (
+              <div role="separator" aria-hidden className="my-1 px-2">
+                <div className="h-px w-full bg-border/60" />
+              </div>
+            ) : null}
             <SidebarProjectItem
               key={project.projectId}
               project={project}
@@ -179,7 +193,9 @@ export default function SidebarProjectList({
               onCopyDebugInfo={onCopyDebugInfo}
               t={t}
             />
-          ))}
+            </Fragment>
+            );
+          })}
     </div>
   );
 }

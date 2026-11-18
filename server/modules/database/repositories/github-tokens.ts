@@ -26,6 +26,24 @@ const getGithubTokens = (userId: number): CredentialPublicRow[] =>
 const getActiveGithubToken = (userId: number): string | null =>
   credentialsDb.getActiveCredential(userId, GITHUB_CREDENTIAL_TYPE);
 
+/**
+ * The container has one shell and its agents inherit one environment, so on
+ * boot the most recently saved token is the one to restore even though tokens
+ * are stored per user.
+ */
+const getAnyActiveGithubToken = (): string | null => {
+  const row = getConnection()
+    .prepare(`
+      SELECT credential_value
+      FROM user_credentials
+      WHERE credential_type = ? AND is_active = 1
+      ORDER BY id DESC
+      LIMIT 1
+    `)
+    .get(GITHUB_CREDENTIAL_TYPE) as { credential_value: string } | undefined;
+  return row?.credential_value ?? null;
+};
+
 const getGithubTokenById = (
   userId: number,
   tokenId: number
@@ -66,6 +84,7 @@ export const githubTokensDb = {
   createGithubToken,
   getGithubTokens,
   getActiveGithubToken,
+  getAnyActiveGithubToken,
   getGithubTokenById,
   updateGithubToken,
   deleteGithubToken,

@@ -50,7 +50,7 @@ export type PackagesServiceOptions = {
 
 function managerOf(value: unknown): InstallManager {
   if (typeof value !== 'string' || !INSTALL_MANAGERS.includes(value as InstallManager)) {
-    throw new Error('manager must be one of uv, pip, npm or aqua.');
+    throw new Error('manager must be one of uv, pip, npm, aqua or apt.');
   }
   return value as InstallManager;
 }
