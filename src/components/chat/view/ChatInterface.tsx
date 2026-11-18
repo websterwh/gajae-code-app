@@ -145,6 +145,9 @@ function ChatInterface({
     isLoading: session.isProcessing,
     canAbortSession: session.canAbortSession,
     tokenBudget: session.tokenBudget,
+    // This session's own model, not the standing choice this browser last
+    // saved: the telemetry panel names whichever model is on screen.
+    telemetryModel: displayModelId(sessionPinnedModel, readSessionFacts(session.sessionState).modelId) ?? null,
     sendMessage,
     sendByCtrlEnter,
     onSessionProcessing,

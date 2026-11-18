@@ -63,6 +63,33 @@ afterEach(() => {
   localStorage.clear();
 });
 
+test('the telemetry panel names the session model, not the standing choice from another chat', () => {
+  const view = composer({
+    selectedSession: session('session-a'),
+    // The browser remembers the model the user picked in a different session.
+    gjcModel: 'gjc/recent-choice',
+    telemetryModel: 'gjc/session-model',
+    tokenBudget: { used: 12, inputTokens: 10, outputTokens: 2 },
+  });
+
+  act(() => { view.result.current.showCostModal(); });
+
+  const payload = view.result.current.commandModalPayload as { kind?: string; data?: { model?: string } } | null;
+  assert.equal(payload?.kind, 'cost');
+  assert.equal(payload?.data?.model, 'gjc/session-model');
+});
+
+// A chat that has not reported a model yet has no session answer to give, so
+// the standing choice is still the honest label there.
+test('a session with no reported model falls back to the standing choice', () => {
+  const view = composer({ telemetryModel: null, gjcModel: 'gjc/default-choice', tokenBudget: { used: 3 } });
+
+  act(() => { view.result.current.showCostModal(); });
+
+  const payload = view.result.current.commandModalPayload as { data?: { model?: string } } | null;
+  assert.equal(payload?.data?.model, 'gjc/default-choice');
+});
+
 test('typing in one session does not reach another session in the same project', () => {
   const view = composer({ selectedSession: session('session-a') });
 

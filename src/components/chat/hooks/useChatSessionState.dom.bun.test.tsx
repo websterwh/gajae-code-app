@@ -78,6 +78,40 @@ test('late token usage success and failure cannot update another session', async
   assert.deepEqual(view.result.current.tokenBudget, { used: 4 });
 });
 
+// The sidebar re-set the same project from its cache on every session upsert.
+// That is a new record with the same id, and the usage effect used to treat it
+// as a new scope: one request per upsert, and each failure cleared the facts
+// the websocket had just delivered.
+test('reconciling the project record does not re-request usage or drop reported facts', async () => {
+  const requests: string[] = [];
+  globalThis.fetch = ((url: string) => {
+    requests.push(String(url));
+    return new Promise<Response>(() => undefined);
+  }) as typeof fetch;
+  const store = {
+    getMessages: () => empty,
+    has: () => true,
+    isStale: () => false,
+    setActiveSession: noop,
+    fetchFromServer: () => Promise.resolve({ total: 0, hasMore: false, serverMessages: [], tokenUsage: null } as unknown as SessionSlot),
+    fetchMore: () => Promise.resolve(null),
+  } as unknown as SessionStore;
+  const statusCheckSentAtRef = { current: new Map<string, number>() };
+  const view = renderHook(({ projectRecord }: { projectRecord: Project }) => useChatSessionState({
+    selectedProject: projectRecord,
+    selectedSession: { id: 'a' } as ProjectSession,
+    ws: null, sendMessage: noop, resetStreamingState: noop,
+    sessionStore: store, statusCheckSentAtRef,
+  }), { initialProps: { projectRecord: project } });
+
+  assert.equal(requests.length, 1, 'one usage request for the session');
+  act(() => { view.result.current.setSessionState({ contextPercent: 42, contextWindow: 128_000 }); });
+  await act(async () => { view.rerender({ projectRecord: { ...project } }); });
+
+  assert.equal(requests.length, 1, 'a reconciled project record is not a new usage scope');
+  assert.equal(view.result.current.sessionState?.contextPercent, 42);
+});
+
 test('a failed token usage request keeps the facts the websocket already delivered', async () => {
   const view = mount();
   act(() => {

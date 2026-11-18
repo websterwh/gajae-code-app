@@ -519,8 +519,14 @@ export function useChatSessionState({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatMessages.length, isLoadingSessionMessages, searchTarget]);
 
+  // Keyed on the ids, not the records: a project reconciled by the sidebar's
+  // cache update is a new object with the same project, and re-running this on
+  // every reconcile re-requested the same usage several times a turn, with the
+  // request's failure clearing facts the websocket had already delivered.
+  const usageProjectId = selectedProject?.projectId;
+  const usageSessionId = selectedSession?.id;
   useEffect(() => {
-    if (!selectedProject || !selectedSession?.id) {
+    if (!usageProjectId || !usageSessionId) {
       setTokenBudget(null);
       setSessionState(null);
       return;
@@ -528,7 +534,7 @@ export function useChatSessionState({
     let cancelled = false;
     const loadUsage = async () => {
       try {
-        const response = await authenticatedFetch(`/api/projects/${selectedProject.projectId}/sessions/${selectedSession.id}/token-usage`);
+        const response = await authenticatedFetch(`/api/projects/${usageProjectId}/sessions/${usageSessionId}/token-usage`);
         if (response.ok) {
           const budget = await response.json();
           if (!cancelled) setTokenBudget(budget);
@@ -544,7 +550,7 @@ export function useChatSessionState({
     };
     void loadUsage();
     return () => { cancelled = true; };
-  }, [selectedProject, selectedSession?.id]);
+  }, [usageProjectId, usageSessionId]);
 
   const visibleMessages = useMemo(() => chatMessages.length <= visibleMessageCount ? chatMessages : chatMessages.slice(-visibleMessageCount), [chatMessages, visibleMessageCount]);
 

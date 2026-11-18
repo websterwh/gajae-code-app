@@ -27,7 +27,14 @@ import { useSlashCommands } from './useSlashCommands';
 import { useWorkspaceTarget, type WorkspaceCandidate } from './useWorkspaceTarget';
 import { newQueuedDraftId, settleRetainedComposerSteer, useDurableComposerDraft } from './useDurableComposerDraft';
 
-interface UseChatComposerStateArgs { draftRepository?: ComposerDraftRepository; executionCwd?: string | null; selectedProject: Project | null; selectedSession: ProjectSession | null; currentSessionId: string | null; gjcModel: string; reasoningEffort?: string; isLoading: boolean; canAbortSession: boolean; tokenBudget: Record<string, unknown> | null; sendMessage: (message: unknown) => boolean | void; sendByCtrlEnter?: boolean; onSessionProcessing?: MarkSessionProcessing; onSessionEstablished?: (sessionId: string, context: SessionEstablishedContext) => void; onInputFocusChange?: (focused: boolean) => void; onShowSettings?: () => void; onLogin?: (providerId?: string) => void; onRetryLastTurn?: () => void;
+interface UseChatComposerStateArgs { draftRepository?: ComposerDraftRepository; executionCwd?: string | null; selectedProject: Project | null; selectedSession: ProjectSession | null; currentSessionId: string | null; gjcModel: string; /**
+   * The model this session is actually running (its pin, or what the runtime
+   * reported). `gjcModel` is the standing choice this browser last made and
+   * follows the user into another chat, so it must not answer "which model is
+   * this session on?" - the telemetry panel read it and named a model from a
+   * different conversation.
+   */
+  telemetryModel?: string | null; reasoningEffort?: string; isLoading: boolean; canAbortSession: boolean; tokenBudget: Record<string, unknown> | null; sendMessage: (message: unknown) => boolean | void; sendByCtrlEnter?: boolean; onSessionProcessing?: MarkSessionProcessing; onSessionEstablished?: (sessionId: string, context: SessionEstablishedContext) => void; onInputFocusChange?: (focused: boolean) => void; onShowSettings?: () => void; onLogin?: (providerId?: string) => void; onRetryLastTurn?: () => void;
   /**
    * What the run-location picker shows before the user touches it.
    *
@@ -54,7 +61,7 @@ const resetBox = (setInput: (value: string) => void, value: MutableRefObject<str
 
 export function useChatComposerState(args: UseChatComposerStateArgs) {
   const { t } = useTranslation('chat');
-  const { executionCwd, selectedProject, selectedSession, currentSessionId, gjcModel, reasoningEffort = 'default', isLoading, canAbortSession, tokenBudget, sendMessage, sendByCtrlEnter, onSessionProcessing, onSessionEstablished, onInputFocusChange, onShowSettings, onLogin, onRetryLastTurn, scrollToBottom, addMessage, setIsUserScrolledUp, setPendingPermissionRequests, defaultUseWorktree = false } = args;
+  const { executionCwd, selectedProject, selectedSession, currentSessionId, gjcModel, telemetryModel, reasoningEffort = 'default', isLoading, canAbortSession, tokenBudget, sendMessage, sendByCtrlEnter, onSessionProcessing, onSessionEstablished, onInputFocusChange, onShowSettings, onLogin, onRetryLastTurn, scrollToBottom, addMessage, setIsUserScrolledUp, setPendingPermissionRequests, defaultUseWorktree = false } = args;
   const projectId = selectedProject?.projectId;
   const conversation = selectedSession?.id || currentSessionId || null;
   const drafts = useDurableComposerDraft(projectId, conversation, args.draftRepository);
@@ -133,7 +140,7 @@ export function useChatComposerState(args: UseChatComposerStateArgs) {
   }, [conversation, projectId]);
   const login = useCallback((provider?: string) => { if (isComposerSealed()) return; resetBox(setInput, inputRef, setAttachedImages, () => undefined, setExpanded, textareaRef); eraseDraft(); onLogin?.(provider); }, [eraseDraft, onLogin, setAttachedImages, setInput]);
   const palette = usePaletteOps();
-  const showCostModal = useCallback(() => { const parts = tokenBudget?.breakdown && typeof tokenBudget.breakdown === 'object' ? tokenBudget.breakdown as Record<string, unknown> : {}; const inTokens = Number(tokenBudget?.inputTokens ?? parts.input); const outTokens = Number(tokenBudget?.outputTokens ?? parts.output); const used = Number(tokenBudget?.used); const total = Number(tokenBudget?.total); setModal({ kind: 'cost', data: { tokenUsage: { used: Number.isFinite(used) ? used : (Number.isFinite(inTokens) ? inTokens : 0) + (Number.isFinite(outTokens) ? outTokens : 0), total: Number.isFinite(total) ? total : 0 }, ...(Number.isFinite(inTokens) || Number.isFinite(outTokens) ? { tokenBreakdown: { input: Number.isFinite(inTokens) ? inTokens : 0, output: Number.isFinite(outTokens) ? outTokens : 0 } } : {}), provider: typeof tokenBudget?.provider === 'string' ? tokenBudget.provider : 'gjc', model: typeof tokenBudget?.model === 'string' ? tokenBudget.model : gjcModel } }); }, [gjcModel, tokenBudget]);
+  const showCostModal = useCallback(() => { const parts = tokenBudget?.breakdown && typeof tokenBudget.breakdown === 'object' ? tokenBudget.breakdown as Record<string, unknown> : {}; const inTokens = Number(tokenBudget?.inputTokens ?? parts.input); const outTokens = Number(tokenBudget?.outputTokens ?? parts.output); const used = Number(tokenBudget?.used); const total = Number(tokenBudget?.total); const sessionModel = typeof telemetryModel === 'string' ? telemetryModel.trim() : ''; setModal({ kind: 'cost', data: { tokenUsage: { used: Number.isFinite(used) ? used : (Number.isFinite(inTokens) ? inTokens : 0) + (Number.isFinite(outTokens) ? outTokens : 0), total: Number.isFinite(total) ? total : 0 }, ...(Number.isFinite(inTokens) || Number.isFinite(outTokens) ? { tokenBreakdown: { input: Number.isFinite(inTokens) ? inTokens : 0, output: Number.isFinite(outTokens) ? outTokens : 0 } } : {}), provider: typeof tokenBudget?.provider === 'string' ? tokenBudget.provider : 'gjc', model: sessionModel || (typeof tokenBudget?.model === 'string' ? tokenBudget.model : gjcModel) } }); }, [gjcModel, telemetryModel, tokenBudget]);
   // Forking is the SDK's own fork: the server hands back the app session it
   // registered for the successor, so the picker lists it like any other. The
   // answer arrives after a round trip, hence the refresh before opening.

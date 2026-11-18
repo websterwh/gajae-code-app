@@ -180,3 +180,6 @@ electron/*.tar.gz
 
 # Python bytecode
 __pycache__/
+
+# Local planning notes
+/PLANNED_FEATURES.md
