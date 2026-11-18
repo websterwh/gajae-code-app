@@ -30,6 +30,8 @@ export interface NormalizedMessage {
   toolResultTruncated?: boolean; toolResultBytes?: number; isError?: boolean; level?: 'info' | 'warning' | 'error'; text?: string; tokens?: number;
   canInterrupt?: boolean; tokenBudget?: unknown; requestId?: string; input?: unknown; context?: unknown; newSessionId?: string; status?: string;
   summary?: string; exitCode?: number; actualSessionId?: string; parentToolUseId?: string; subagentTools?: unknown[]; isFinal?: boolean; sequence?: number; rowid?: number;
+  /** A file a local command (`/export`) wrote, so the chat can offer it. */
+  exportPath?: string;
   delegation?: DelegationSnapshot;
 }
 export type SessionStatus = 'idle' | 'loading' | 'streaming' | 'error';

@@ -17,7 +17,7 @@ interface SubagentState { childTools: SubagentChildTool[]; currentToolIndex: num
 export interface ChatMessage {
   timestamp: string | number | Date; type: string; sessionId?: string; content?: string; displayText?: string; images?: ChatImage[]; reasoning?: string; isThinking?: boolean; isStreaming?: boolean; isInteractivePrompt?: boolean; isToolUse?: boolean;
   toolName?: string; toolInput?: unknown; toolResult?: ToolResult | null; toolResultTruncated?: boolean; toolResultBytes?: number; toolId?: string; toolCallId?: string;
-  commandName?: string; commandMessage?: string; commandArgs?: string; isLocalCommand?: boolean; isLocalCommandStdout?: boolean; isCompactSummary?: boolean; isSystemNotice?: boolean; noticeLevel?: 'info' | 'warning' | 'error'; isSubagentContainer?: boolean; subagentState?: SubagentState;
+  commandName?: string; commandMessage?: string; commandArgs?: string; isLocalCommand?: boolean; isLocalCommandStdout?: boolean; isCompactSummary?: boolean; exportPath?: string; isSystemNotice?: boolean; noticeLevel?: 'info' | 'warning' | 'error'; isSubagentContainer?: boolean; subagentState?: SubagentState;
   [key: string]: unknown;
 }
 

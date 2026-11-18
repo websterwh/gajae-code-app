@@ -565,6 +565,7 @@
     "title": "Paquets",
     "description": "Installez et épinglez les paquets en ligne de commande utilisés par les serveurs MCP et les outils. Les paquets de l’environnement du conteneur apparaissent ici aussi.",
     "manager": "Gestionnaire",
+    "managerAuto": "Auto",
     "spec": "Paquet",
     "specPlaceholder": "ex. serena, @playwright/mcp, skylot/jadx",
     "pin": "Épingler une version (facultatif)",

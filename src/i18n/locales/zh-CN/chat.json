@@ -59,6 +59,11 @@
   "json": {
     "response": "JSON回复"
   },
+  "export": {
+    "download": "下载导出文件",
+    "downloading": "正在下载…",
+    "failed": "下载失败。"
+  },
   "voice": {
     "input": "口述信息",
     "stopRecording": "完成录制",

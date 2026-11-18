@@ -36,8 +36,12 @@ const CLIPBOARD_ALIASES: ReadonlySet<string> = new Set(['--copy', 'clipboard', '
 const EXPORT_COMMAND = /^\/export(?:\s+([\s\S]*))?$/;
 
 export type ExportPathResolution =
-  /** Not an /export invocation, or one this module deliberately leaves alone. */
-  | { kind: 'passthrough' }
+  /**
+   * Not an /export invocation, or one this module deliberately leaves alone.
+   * An absolute destination still names the file it writes, so the app can
+   * offer that file even though the command text needs no rewrite.
+   */
+  | { kind: 'passthrough'; outputPath?: string }
   /** Rewritten so the handler receives an absolute output path. */
   | { kind: 'resolved'; message: string; outputPath: string }
   /** The run has no project directory to resolve against; do not run the export. */
@@ -73,7 +77,7 @@ export function resolveExportCommand(
   if (CLIPBOARD_ALIASES.has(arg)) return { kind: 'passthrough' };
 
   // An absolute destination needs no resolution.
-  if (arg && path.isAbsolute(arg)) return { kind: 'passthrough' };
+  if (arg && path.isAbsolute(arg)) return { kind: 'passthrough', outputPath: arg };
 
   // Without a usable project directory a relative path would land in the
   // server's launch directory, which is not where the user's session runs.

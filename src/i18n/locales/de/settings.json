@@ -565,6 +565,7 @@
     "title": "Pakete",
     "description": "Kommandozeilen-Pakete installieren und pinnen, die MCP-Server und Tools ausführen. Pakete aus der Container-Umgebung stehen hier ebenfalls.",
     "manager": "Manager",
+    "managerAuto": "Automatisch",
     "spec": "Paket",
     "specPlaceholder": "z. B. serena, @playwright/mcp, skylot/jadx",
     "pin": "Version pinnen (optional)",

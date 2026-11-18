@@ -59,6 +59,11 @@
   "json": {
     "response": "JSON Antwort"
   },
+  "export": {
+    "download": "Export herunterladen",
+    "downloading": "Wird heruntergeladen…",
+    "failed": "Download fehlgeschlagen."
+  },
   "voice": {
     "input": "Nachricht diktieren",
     "stopRecording": "Beenden Sie die Aufnahme",

@@ -565,6 +565,7 @@
     "title": "Paketler",
     "description": "MCP sunucularının ve araçların kullandığı komut satırı paketlerini kurun ve sürümlerini sabitleyin. Kapsayıcı ortamından gelen paketler de burada görünür.",
     "manager": "Yönetici",
+    "managerAuto": "Otomatik",
     "spec": "Paket",
     "specPlaceholder": "örn. serena, @playwright/mcp, skylot/jadx",
     "pin": "Sürümü sabitle (isteğe bağlı)",

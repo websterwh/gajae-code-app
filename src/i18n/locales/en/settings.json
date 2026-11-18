@@ -565,6 +565,7 @@
     "title": "Packages",
     "description": "Install and pin the command-line packages that MCP servers and tools run. Packages from the container environment are listed here too.",
     "manager": "Manager",
+    "managerAuto": "Auto",
     "spec": "Package",
     "specPlaceholder": "e.g. serena, @playwright/mcp, skylot/jadx",
     "pin": "Pin version (optional)",

@@ -565,6 +565,7 @@
     "title": "Pacchetti",
     "description": "Installa e blocca i pacchetti da riga di comando usati dai server MCP e dagli strumenti. Anche i pacchetti dell’ambiente del container compaiono qui.",
     "manager": "Gestore",
+    "managerAuto": "Auto",
     "spec": "Pacchetto",
     "specPlaceholder": "es. serena, @playwright/mcp, skylot/jadx",
     "pin": "Blocca versione (facoltativo)",

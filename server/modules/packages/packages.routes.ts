@@ -2,8 +2,10 @@ import { Router, type Response } from 'express';
 
 import { asyncHandler, routeParam } from '@/shared/utils.js';
 
+import { INSTALL_MANAGERS, type InstallManager } from '../mcp/index.js';
+
 import { packagesService, type PackagesService } from './packages.service.js';
-import { packageSuggestService, type PackageSuggestService } from './suggest.service.js';
+import { packageSuggestService, type PackageSuggestService, type SuggestManager } from './suggest.service.js';
 
 function fail(response: Response, error: unknown): Response {
   const message = error instanceof Error ? error.message : 'Package request failed.';
@@ -32,8 +34,14 @@ export function createPackagesRouter(
   // installs through POST / with the manager the suggestion named.
   router.get('/suggest', asyncHandler(async (request, response) => {
     const query = typeof request.query.q === 'string' ? request.query.q : '';
+    // An unknown or absent manager means "search everything", never a 400: the
+    // query string is typed a character at a time and may arrive incomplete.
+    const requested = typeof request.query.manager === 'string' ? request.query.manager : '';
+    const manager: SuggestManager = INSTALL_MANAGERS.includes(requested as InstallManager)
+      ? requested as InstallManager
+      : 'auto';
     try {
-      response.json({ success: true, data: await suggestions.suggest(query) });
+      response.json({ success: true, data: await suggestions.suggest(query, manager) });
     } catch (error) {
       fail(response, error);
     }

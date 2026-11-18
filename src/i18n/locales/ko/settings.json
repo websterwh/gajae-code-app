@@ -565,6 +565,7 @@
     "title": "패키지",
     "description": "MCP 서버와 도구가 사용하는 명령줄 패키지를 설치하고 버전을 고정합니다. 컨테이너 환경의 패키지도 여기에 표시됩니다.",
     "manager": "관리자",
+    "managerAuto": "자동",
     "spec": "패키지",
     "specPlaceholder": "예: serena, @playwright/mcp, skylot/jadx",
     "pin": "버전 고정(선택)",

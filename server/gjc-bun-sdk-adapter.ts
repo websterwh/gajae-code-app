@@ -1517,6 +1517,15 @@ export class GjcBunSdkAdapter implements GjcWorkerRuntime {
         const commandName = commandMatch?.[1];
         if (commandName && GJC_APP_BUILTIN_COMMAND_NAMES.has(commandName)) {
           const requestedExportPath = commandName === 'export' ? commandMatch?.[2]?.trim() : '';
+          // Resolved before `output` so the stdout message can name the file the
+          // command wrote; the app then offers it for download. `/export`
+          // writes through a relative path resolved against the worker's process
+          // cwd, and one worker serves every session, so the destination is
+          // resolved against this run's own project directory before the handler
+          // sees it, as the CLI resolves it against its own cwd.
+          const exportPath = commandName === 'export'
+            ? resolveExportCommand(message, config.cwd, sessionManager.getSessionFile())
+            : ({ kind: 'passthrough' } as const);
           const output = (text: string) => {
             const content = normalizeBuiltinCommandStdout(text);
             // The upstream exporter can corrupt a nested relative path in its
@@ -1528,20 +1537,20 @@ export class GjcBunSdkAdapter implements GjcWorkerRuntime {
             const safeContent = corruptedExportPath
               ? `Failed to export "${requestedExportPath}"${content.includes('ENOENT') ? ': ENOENT' : ''}: the upstream export command returned a corrupted path.`
               : content;
+            // Naming the destination is what lets the app offer the file for
+            // download. A failed export wrote nothing there, and the control
+            // reports that instead of quietly disappearing.
+            const written = exportPath.kind === 'rejected'
+              ? undefined
+              : ('outputPath' in exportPath ? exportPath.outputPath : undefined);
             writer.send({
               kind: 'text',
               role: 'assistant',
               content: safeContent,
               isLocalCommandStdout: true,
+              ...(written ? { exportPath: written } : {}),
             });
           };
-          // `/export` writes through a relative path resolved against the
-          // worker's process cwd, and one worker serves every session. Resolve
-          // the destination against this run's own project directory before the
-          // handler sees it, as the CLI resolves it against its own cwd.
-          const exportPath = commandName === 'export'
-            ? resolveExportCommand(message, config.cwd, sessionManager.getSessionFile())
-            : ({ kind: 'passthrough' } as const);
           if (exportPath.kind === 'rejected') {
             output(exportPath.reason);
             promptMessage = null;

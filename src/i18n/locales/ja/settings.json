@@ -565,6 +565,7 @@
     "title": "パッケージ",
     "description": "MCP サーバーとツールが使うコマンドラインパッケージをインストールし、バージョンを固定します。コンテナ環境のパッケージもここに表示されます。",
     "manager": "マネージャー",
+    "managerAuto": "自動",
     "spec": "パッケージ",
     "specPlaceholder": "例: serena, @playwright/mcp, skylot/jadx",
     "pin": "バージョンを固定（任意）",

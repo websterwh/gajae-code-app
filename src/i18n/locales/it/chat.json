@@ -59,6 +59,11 @@
   "json": {
     "response": "Rispondi JSON"
   },
+  "export": {
+    "download": "Scarica l’esportazione",
+    "downloading": "Download in corso…",
+    "failed": "Download non riuscito."
+  },
   "voice": {
     "input": "Dettare il messaggio",
     "stopRecording": "Termina la registrazione",

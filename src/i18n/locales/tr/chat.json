@@ -59,6 +59,11 @@
   "json": {
     "response": "JSON yanıtı"
   },
+  "export": {
+    "download": "Dışa aktarımı indir",
+    "downloading": "İndiriliyor…",
+    "failed": "İndirme başarısız."
+  },
   "voice": {
     "input": "Mesajı dikte et",
     "stopRecording": "Kaydı bitir",

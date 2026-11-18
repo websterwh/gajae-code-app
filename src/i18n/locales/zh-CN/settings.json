@@ -565,6 +565,7 @@
     "title": "软件包",
     "description": "安装并锁定 MCP 服务器和工具使用的命令行软件包。来自容器环境的软件包也会显示在这里。",
     "manager": "管理器",
+    "managerAuto": "自动",
     "spec": "软件包",
     "specPlaceholder": "例如 serena、@playwright/mcp、skylot/jadx",
     "pin": "锁定版本（可选）",

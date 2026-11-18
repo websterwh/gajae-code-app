@@ -10,6 +10,8 @@ import SettingsCard from '../SettingsCard';
 import SettingsSection from '../SettingsSection';
 
 type Manager = 'uv' | 'pip' | 'npm' | 'aqua' | 'apt';
+/** `auto` searches every source and installs through whichever one matched. */
+type ManagerChoice = Manager | 'auto';
 type PackageSuggestion = {
   manager: Manager;
   name: string;
@@ -31,7 +33,7 @@ type PackageRow = {
 
 type ApiEnvelope<T> = { success?: boolean; data?: T; error?: { message?: string } };
 
-const MANAGERS: Manager[] = ['uv', 'pip', 'npm', 'aqua', 'apt'];
+const MANAGERS: ManagerChoice[] = ['auto', 'uv', 'pip', 'npm', 'aqua', 'apt'];
 
 const inputClass = 'w-full touch-manipulation rounded-lg border border-input bg-card p-2 text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary';
 const buttonClass = 'inline-flex items-center gap-1.5 rounded-lg border border-input px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50';
@@ -71,7 +73,7 @@ export default function PackagesSettingsTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
-  const [form, setForm] = useState<{ manager: Manager; spec: string; pin: string }>({ manager: 'uv', spec: '', pin: '' });
+  const [form, setForm] = useState<{ manager: ManagerChoice; spec: string; pin: string }>({ manager: 'auto', spec: '', pin: '' });
   const [suggestions, setSuggestions] = useState<PackageSuggestion[]>([]);
   const [editingVersion, setEditingVersion] = useState<string | null>(null);
   const [versionDraft, setVersionDraft] = useState('');
@@ -95,17 +97,19 @@ export default function PackagesSettingsTab() {
   }, [load]);
 
   // Suggestions come from the same sources an install would use: apt's local
-  // index, the npm registry and PyPI. Typing is debounced so a name does not
-  // become a request per keystroke.
+  // index, the npm registry, PyPI and GitHub. The selected manager narrows the
+  // sources, so "aqua" cannot answer with npm packages. Typing is debounced so
+  // a name does not become a request per keystroke.
   useEffect(() => {
     const query = form.spec.trim();
     if (query.length < 2) {
       setSuggestions([]);
       return undefined;
     }
+    const scope = form.manager === 'auto' ? '' : `&manager=${form.manager}`;
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
-      void authenticatedFetch(`/api/packages/suggest?q=${encodeURIComponent(query)}`, { signal: controller.signal })
+      void authenticatedFetch(`/api/packages/suggest?q=${encodeURIComponent(query)}${scope}`, { signal: controller.signal })
         .then(async (response) => (await response.json() as ApiEnvelope<PackageSuggestion[]>).data ?? [])
         .then((next) => { if (!controller.signal.aborted) setSuggestions(next); })
         .catch(() => undefined);
@@ -114,7 +118,7 @@ export default function PackagesSettingsTab() {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [form.spec]);
+  }, [form.spec, form.manager]);
 
   const run = async (key: string, action: () => Promise<unknown>) => {
     setBusy(key);
@@ -129,14 +133,31 @@ export default function PackagesSettingsTab() {
     }
   };
 
+  /** The manager `auto` means for a hand-typed spec that was never clicked. */
+  const resolveManager = (spec: string): Manager => {
+    if (form.manager !== 'auto') return form.manager;
+    const needle = spec.toLowerCase();
+    const exact = suggestions.find((suggestion) => (
+      suggestion.name.toLowerCase() === needle || suggestion.spec.toLowerCase() === needle
+    ));
+    if (exact) return exact.manager;
+    // `github` is not a package name anywhere, but exactly one source knows
+    // what it means: follow that source instead of guessing uv.
+    if (suggestions.length === 1) return suggestions[0].manager;
+    // A bare owner/repo has no PyPI or npm package to be confused with.
+    if (/^[^/@\s]+\/[^/@\s]+$/u.test(spec)) return 'aqua';
+    return 'uv';
+  };
+
   const add = (event: FormEvent) => {
     event.preventDefault();
     const spec = form.spec.trim();
     if (!spec) return;
+    const manager = resolveManager(spec);
     void run('add', async () => {
       await request('/api/packages', {
         method: 'POST',
-        body: JSON.stringify({ manager: form.manager, spec, pin: form.pin.trim() || null }),
+        body: JSON.stringify({ manager, spec, pin: form.pin.trim() || null }),
       });
       setForm({ ...form, spec: '', pin: '' });
     });
@@ -204,11 +225,15 @@ export default function PackagesSettingsTab() {
           <form onSubmit={add} className="grid gap-2 p-4 sm:grid-cols-[minmax(0,8rem)_minmax(0,1fr)_minmax(0,8rem)_auto]">
             <select
               value={form.manager}
-              onChange={(event) => setForm({ ...form, manager: event.target.value as Manager })}
+              onChange={(event) => setForm({ ...form, manager: event.target.value as ManagerChoice })}
               aria-label={t('packages.manager')}
               className={`${inputClass} py-2`}
             >
-              {MANAGERS.map((manager) => <option key={manager} value={manager}>{manager}</option>)}
+              {MANAGERS.map((manager) => (
+                <option key={manager} value={manager}>
+                  {manager === 'auto' ? t('packages.managerAuto') : manager}
+                </option>
+              ))}
             </select>
             <input
               value={form.spec}

@@ -1,21 +1,30 @@
 import type { CommandRunner, InstallManager } from '../mcp/index.js';
 
 /**
- * "Autodetect" is three existing endpoints, not a scraper of our own:
- * apt ships its index locally, npm runs a registry search API, and PyPI has a
- * per-project JSON API. aqua has no queryable public index (its registry is a
- * git repository of YAML files), so it is not a suggestion source; the package
- * field still accepts `owner/repo` typed by hand.
+ * "Autodetect" is four existing endpoints, not a scraper of our own:
+ * apt ships its index locally, npm runs a registry search API, PyPI has a
+ * per-project JSON API, and GitHub's repository search stands in for aqua.
+ *
+ * aqua has no queryable index of its own - its registry is a git repository of
+ * YAML - but every aqua package is a GitHub release, so the repository search
+ * answers the question the user is actually asking ("where is the GitHub CLI
+ * from?"). A repository without release assets still fails at install time;
+ * the alternative was offering nothing at all.
  */
 export type PackageSuggestion = {
-  manager: Extract<InstallManager, 'apt' | 'npm' | 'pip'>;
+  manager: InstallManager;
   name: string;
   spec: string;
   description: string;
 };
 
+export type SuggestManager = InstallManager | 'auto';
+
 type FetchResponse = { ok: boolean; json: () => Promise<unknown> };
-type FetchLike = (url: string, init?: { signal?: AbortSignal }) => Promise<FetchResponse>;
+type FetchLike = (
+  url: string,
+  init?: { signal?: AbortSignal; headers?: Record<string, string> },
+) => Promise<FetchResponse>;
 
 type SuggestOptions = {
   runner?: CommandRunner;
@@ -25,22 +34,47 @@ type SuggestOptions = {
 
 const APT_LIMIT = 6;
 const NPM_LIMIT = 6;
+const GITHUB_LIMIT = 6;
 const TOTAL_LIMIT = 12;
+/**
+ * A description search can match thousands of lines, and apt-cache prints them
+ * sorted by name. Ranking has to happen over the whole window before the best
+ * few are taken, or the winner is whichever package starts with "a".
+ */
+const APT_SCAN_LIMIT = 20_000;
 /** A refined query (zox -> zoxid -> zoxide) hits the same sources twice. */
 const CACHE_TTL_MS = 30_000;
 const CACHE_LIMIT = 50;
 
 /** A name is also the argument apt and pip will receive, so keep it to a name. */
 const PACKAGE_NAME = /^[a-z0-9][a-z0-9+._-]*$/iu;
+/** `owner/repo`, the only spec shape the GitHub-release installer accepts. */
+const REPOSITORY = /^[A-Za-z0-9][A-Za-z0-9_.-]*\/[A-Za-z0-9][A-Za-z0-9_.-]*$/u;
 
-const prefixFirst = (query: string) => (first: PackageSuggestion, second: PackageSuggestion): number => {
-  const needle = query.toLowerCase();
-  const rank = (suggestion: PackageSuggestion): number => (
-    suggestion.name.toLowerCase() === needle ? 0
-      : suggestion.name.toLowerCase().startsWith(needle) ? 1 : 2
-  );
-  return rank(first) - rank(second) || first.name.localeCompare(second.name);
+/**
+ * Name matches outrank description matches, and a description that opens with
+ * the query ("GitHub CLI" for `github`) outranks a name that merely embeds it.
+ *
+ * That middle tier is the whole point: `github` matches 1700+ packages whose
+ * names contain it (`golang-github-*-dev`), and ranking names first buried the
+ * one answer the user wanted - `gh`, the GitHub CLI, whose own name has
+ * nothing to do with GitHub.
+ */
+const rank = (suggestion: PackageSuggestion, needle: string): number => {
+  const name = suggestion.name.toLowerCase();
+  const description = suggestion.description.toLowerCase();
+  if (name === needle) return 0;
+  if (name.startsWith(needle)) return 1;
+  if (description.startsWith(needle)) return 2;
+  if (name.includes(needle)) return 3;
+  if (description.includes(` ${needle}`)) return 4;
+  return 5;
 };
+
+const prefixFirst = (query: string) => (first: PackageSuggestion, second: PackageSuggestion): number => (
+  rank(first, query.toLowerCase()) - rank(second, query.toLowerCase())
+  || first.name.localeCompare(second.name)
+);
 
 export class PackageSuggestService {
   private readonly timeoutMs: number;
@@ -57,18 +91,19 @@ export class PackageSuggestService {
   private async apt(query: string): Promise<PackageSuggestion[]> {
     if (!this.options.runner) return [];
     // Local and offline: apt-cache reads the index the image already built.
-    const result = await this.options.runner('apt-cache', ['search', '--names-only', query]);
+    // Not `--names-only`: `github` is a name nobody ships, but `gh` describes
+    // itself as the GitHub CLI, which is what the user was looking for.
+    const result = await this.options.runner('apt-cache', ['search', query]);
     if (result.code !== 0) return [];
     const suggestions: PackageSuggestion[] = [];
-    for (const line of result.stdout.split(/\r?\n/u)) {
+    for (const line of result.stdout.split(/\r?\n/u).slice(0, APT_SCAN_LIMIT)) {
       const separator = line.indexOf(' - ');
       if (separator <= 0) continue;
       const name = line.slice(0, separator).trim();
       if (!PACKAGE_NAME.test(name)) continue;
       suggestions.push({ manager: 'apt', name, spec: name, description: line.slice(separator + 3).trim() });
-      if (suggestions.length === APT_LIMIT) break;
     }
-    return suggestions;
+    return suggestions.sort(prefixFirst(query)).slice(0, APT_LIMIT);
   }
 
   private async npm(query: string): Promise<PackageSuggestion[]> {
@@ -95,21 +130,52 @@ export class PackageSuggestService {
     return [{ manager: 'pip', name, spec: name, description: body.info?.summary ?? '' }];
   }
 
-  async suggest(rawQuery: string): Promise<PackageSuggestion[]> {
+  private async github(query: string): Promise<PackageSuggestion[]> {
+    const search = encodeURIComponent(`${query} in:name`);
+    const url = `https://api.github.com/search/repositories?q=${search}&sort=stars&order=desc&per_page=${GITHUB_LIMIT}`;
+    const response = await this.fetcher()(url, {
+      signal: AbortSignal.timeout(this.timeoutMs),
+      headers: { accept: 'application/vnd.github+json', 'user-agent': 'gajae-code-app' },
+    });
+    if (!response.ok) return [];
+    const body = await response.json() as {
+      items?: Array<{ full_name?: string; description?: string | null; archived?: boolean }>;
+    };
+    return (body.items ?? []).flatMap((item) => {
+      const repo = item.full_name ?? '';
+      if (item.archived || !REPOSITORY.test(repo)) return [];
+      return [{ manager: 'aqua' as const, name: repo, spec: repo, description: item.description ?? '' }];
+    });
+  }
+
+  /**
+   * `auto` searches every source. A chosen manager searches only itself, so
+   * picking `aqua` cannot answer with npm packages; uv and pip are both PyPI,
+   * so the selected one is the manager the suggestion installs through.
+   */
+  async suggest(rawQuery: string, manager: SuggestManager = 'auto'): Promise<PackageSuggestion[]> {
     const query = rawQuery.trim();
     // One character matches half the index and costs three round trips.
     if (query.length < 2) return [];
-    const cacheKey = query.toLowerCase();
+    const cacheKey = `${manager}:${query.toLowerCase()}`;
     const cached = this.cache.get(cacheKey);
     if (cached && Date.now() - cached.at < CACHE_TTL_MS) return cached.suggestions;
-    const [apt, npm, pypi] = await Promise.all([
-      this.apt(query).catch(() => []),
-      this.npm(query).catch(() => []),
-      this.pypi(query).catch(() => []),
-    ]);
+
+    const sources: Array<Promise<PackageSuggestion[]>> = [];
+    if (manager === 'auto' || manager === 'apt') sources.push(this.apt(query).catch(() => []));
+    if (manager === 'auto' || manager === 'npm') sources.push(this.npm(query).catch(() => []));
+    if (manager === 'auto' || manager === 'uv' || manager === 'pip') {
+      const target: InstallManager = manager === 'auto' ? 'pip' : manager;
+      sources.push(this.pypi(query)
+        .then((rows) => rows.map((row) => ({ ...row, manager: target })))
+        .catch(() => []));
+    }
+    if (manager === 'aqua') sources.push(this.github(query).catch(() => []));
+
+    const collected = (await Promise.all(sources)).flat();
     const unique = new Map<string, PackageSuggestion>();
-    for (const suggestion of [...apt, ...npm, ...pypi]) {
-      const key = `${suggestion.manager}:${suggestion.name}`;
+    for (const suggestion of collected) {
+      const key = `${suggestion.manager}:${suggestion.name.toLowerCase()}`;
       if (!unique.has(key)) unique.set(key, suggestion);
     }
     const suggestions = [...unique.values()].sort(prefixFirst(query)).slice(0, TOTAL_LIMIT);

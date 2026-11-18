@@ -35,6 +35,7 @@ const sharedFields = (message: NormalizedMessage) => ({
   isLocalCommand: message.isLocalCommand,
   isLocalCommandStdout: message.isLocalCommandStdout,
   isCompactSummary: message.isCompactSummary,
+  exportPath: message.exportPath,
 });
 
 const cleanUserText = (value: string) => unescapeWithMathProtection(decodeHtmlEntities(value));

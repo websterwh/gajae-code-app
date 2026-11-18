@@ -91,6 +91,8 @@ test('a relative path that climbs out of the project lands where the CLI would w
 test('an absolute output path is deliberate and passes through', () => {
   const resolution = resolveExportCommand('/export /tmp/elsewhere.html', PROJECT, SESSION_FILE);
   assert.equal(resolution.kind, 'passthrough');
+  // The command text needs no rewrite, but the file it names is still known.
+  assert.equal(resolution.kind === 'passthrough' ? resolution.outputPath : '', '/tmp/elsewhere.html');
 });
 
 test('clipboard aliases pass through to the upstream usage message', () => {

@@ -18,6 +18,7 @@ import { Reasoning, ReasoningTrigger, ReasoningContent } from '../../../shared/v
 import { authenticatedFetch } from '../../../utils/api';
 
 import ChatMessageImages from './ChatMessageImages';
+import ExportDownloadButton from './ExportDownloadButton';
 import { Markdown } from './Markdown';
 import MessageBranchControl from './MessageBranchControl';
 import MessageCopyControl from './MessageCopyControl';
@@ -479,10 +480,20 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, d
 
                 {(() => {
                   if (message.isLocalCommandStdout) {
+                    const exportPath = typeof message.exportPath === 'string' ? message.exportPath : '';
                     return (
-                      <pre className="overflow-x-auto font-mono text-sm wrap-break-word whitespace-pre-wrap">
-                        <code>{String(message.content || '')}</code>
-                      </pre>
+                      <div className="space-y-2">
+                        <pre className="overflow-x-auto font-mono text-sm wrap-break-word whitespace-pre-wrap">
+                          <code>{String(message.content || '')}</code>
+                        </pre>
+                        {exportPath && selectedProject ? (
+                          <ExportDownloadButton
+                            path={exportPath}
+                            projectId={selectedProject.projectId}
+                            sessionId={message.sessionId}
+                          />
+                        ) : null}
+                      </div>
                     );
                   }
 

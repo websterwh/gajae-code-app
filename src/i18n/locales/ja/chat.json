@@ -59,6 +59,11 @@
   "json": {
     "response": "JSONレスポンス"
   },
+  "export": {
+    "download": "エクスポートをダウンロード",
+    "downloading": "ダウンロード中…",
+    "failed": "ダウンロードに失敗しました。"
+  },
   "voice": {
     "input": "メッセージを音声入力",
     "stopRecording": "録音を終了",

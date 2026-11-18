@@ -59,6 +59,11 @@
   "json": {
     "response": "JSON 回應"
   },
+  "export": {
+    "download": "下載匯出檔",
+    "downloading": "正在下載…",
+    "failed": "下載失敗。"
+  },
   "voice": {
     "input": "口述訊息",
     "stopRecording": "結束錄製",

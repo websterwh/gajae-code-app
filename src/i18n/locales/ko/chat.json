@@ -59,6 +59,11 @@
   "json": {
     "response": "JSON 응답"
   },
+  "export": {
+    "download": "내보내기 다운로드",
+    "downloading": "다운로드 중…",
+    "failed": "다운로드에 실패했습니다."
+  },
   "voice": {
     "input": "말씀하신 내용을 메시지로 입력합니다",
     "stopRecording": "녹음 종료",
