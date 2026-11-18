@@ -5,6 +5,7 @@ import {
 import { useTranslation } from 'react-i18next';
 
 import { authenticatedFetch } from '../../../../utils/api';
+import { Dialog, DialogContent, DialogTitle } from '../../../../shared/view/ui';
 import SettingsCard from '../SettingsCard';
 import SettingsSection from '../SettingsSection';
 
@@ -36,6 +37,7 @@ const inputClass = 'w-full touch-manipulation rounded-lg border border-input bg-
 const buttonClass = 'inline-flex items-center gap-1.5 rounded-lg border border-input px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50';
 const primaryButtonClass = 'inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50';
 const chipClass = 'inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] text-muted-foreground';
+const destructiveButtonClass = 'inline-flex items-center justify-center gap-1.5 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/20 disabled:cursor-not-allowed disabled:opacity-50';
 // w-28 rather than w-full: the version chip and the input that replaces it have
 // to occupy the same space, or the row's action bar jumps when the chip is clicked.
 const versionInputClass = 'w-28 touch-manipulation rounded-lg border border-input bg-card px-2 py-1 font-mono text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary';
@@ -73,6 +75,7 @@ export default function PackagesSettingsTab() {
   const [suggestions, setSuggestions] = useState<PackageSuggestion[]>([]);
   const [editingVersion, setEditingVersion] = useState<string | null>(null);
   const [versionDraft, setVersionDraft] = useState('');
+  const [confirming, setConfirming] = useState<PackageRow | null>(null);
   const skipPinCommit = useRef(false);
 
   const load = useCallback(async () => {
@@ -179,8 +182,12 @@ export default function PackagesSettingsTab() {
     pinVersion(row, next || null);
   };
 
-  const remove = (row: PackageRow) => {
-    if (!window.confirm(t('packages.confirmRemove', { name: row.name }))) return;
+  const remove = (row: PackageRow) => setConfirming(row);
+
+  const confirmRemove = () => {
+    const row = confirming;
+    if (!row) return;
+    setConfirming(null);
     void run(`remove:${row.manager}:${row.name}`, () => requestVoid(packagePath(row), { method: 'DELETE' }));
   };
 
@@ -353,6 +360,39 @@ export default function PackagesSettingsTab() {
         </SettingsCard>
         <p className="text-xs text-muted-foreground">{t('packages.pinnedNote')}</p>
       </SettingsSection>
+
+      {/* The removal is destructive, so it asks first - and asks in the app,
+          not in a browser confirm that ignores the theme. */}
+      <Dialog open={confirming !== null} onOpenChange={(open) => { if (!open) setConfirming(null); }}>
+        <DialogContent
+          aria-labelledby="packages-remove-title"
+          className="w-[calc(100vw-2rem)] max-w-md overflow-hidden rounded-2xl border-border/80 bg-popover p-0 shadow-2xl"
+        >
+          <DialogTitle id="packages-remove-title">
+            {confirming ? t('packages.confirmRemove', { name: confirming.name }) : ''}
+          </DialogTitle>
+          <div className="flex items-start gap-3 px-4 pt-4 pb-3">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-foreground">
+                {confirming ? t('packages.confirmRemove', { name: confirming.name }) : ''}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {confirming ? t('packages.confirmRemoveBody', { name: confirming.name, manager: confirming.manager }) : ''}
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 border-t border-border bg-muted/30 px-4 py-3">
+            <button type="button" className={buttonClass} onClick={() => setConfirming(null)}>
+              {t('packages.cancel')}
+            </button>
+            <button type="button" className={destructiveButtonClass} onClick={confirmRemove} disabled={confirming === null}>
+              <Trash2 className="h-3 w-3" aria-hidden />
+              {t('packages.uninstall')}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -12,6 +12,7 @@ import {
   readProvisionState,
   removeDesired,
   spawnCommandRunner,
+  uninstallPackage,
   upgradePackage,
   upsertDesired,
   writeDesired,
@@ -228,16 +229,23 @@ export class PackagesService {
     });
   }
 
+  /** Uninstall first, then forget: a failed removal leaves the row to retry. */
   async remove(managerValue: unknown, name: string): Promise<void> {
     const manager = managerOf(managerValue);
 
     await this.serialize(async () => {
-      const desired = await readDesired(this.desiredFile());
+      const [desired, ledger] = await Promise.all([
+        readDesired(this.desiredFile()),
+        readLedger(this.ledgerFile()),
+      ]);
+      const spec = desired.packages[manager][name]?.spec
+        ?? ledger.packages[manager][name]?.spec
+        ?? name;
+      const outcome = await uninstallPackage({ manager, spec, runner: this.runner });
+      if (outcome.status === 'failed') throw new Error(outcome.error ?? 'The uninstall failed.');
+
       removeDesired(desired, manager, name);
       await writeDesired(this.desiredFile(), desired);
-      // The binary is shared with whatever else on the machine uses it, so
-      // removal stops managing it here and uninstalls nothing.
-      const ledger = await readLedger(this.ledgerFile());
       delete ledger.packages[manager][name];
       await writeLedger(this.ledgerFile(), ledger);
     });

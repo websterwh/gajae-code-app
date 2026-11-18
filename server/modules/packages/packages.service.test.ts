@@ -114,20 +114,63 @@ test('pinning stores the version and reinstalls at it', async (t) => {
   assert.equal(stored.packages.uv.serena.pin, '1.2.3');
 });
 
-test('removing a package stops managing it and uninstalls nothing', async (t) => {
+test('removing a package uninstalls it and forgets the desire', async (t) => {
   const root = await workspace(t);
   const ledger = emptyLedger();
   recordInstalled(ledger, 'uv', 'serena', { spec: 'serena', version: '1.2.3' });
   await writeLedger(join(root, 'ledger.json'), ledger);
   const calls: string[] = [];
 
-  const service = serviceFor(root, scripted({ 'uv tool list': { code: 0, stdout: 'serena v1.2.3\n' } }, calls));
+  const service = serviceFor(root, scripted({
+    'uv tool list': { code: 0, stdout: 'serena v1.2.3\n' },
+    'uv tool uninstall serena': { code: 0 },
+  }, calls));
   await service.add({ manager: 'uv', spec: 'serena' });
   await service.remove('uv', 'serena');
 
   assert.equal((await service.list()).length, 0);
   assert.equal((await readLedger(join(root, 'ledger.json'))).packages.uv.serena, undefined);
-  assert.equal(calls.some((line) => /uninstall/u.test(line)), false);
+  assert.ok(calls.includes('uv tool uninstall serena'), 'removing the row must uninstall the package');
+});
+
+test('a package that is already gone can still be removed from the list', async (t) => {
+  const root = await workspace(t);
+  const calls: string[] = [];
+  const service = serviceFor(root, scripted({
+    'uv tool list': { code: 0, stdout: 'serena v1.2.3\n' },
+    'uv tool uninstall serena': { code: 1, stderr: "error: `serena` is not installed" },
+  }, calls));
+
+  await service.add({ manager: 'uv', spec: 'serena' });
+  await service.remove('uv', 'serena');
+  assert.equal((await service.list()).length, 0);
+});
+
+test('a failed uninstall keeps the row so it can be retried', async (t) => {
+  const root = await workspace(t);
+  const calls: string[] = [];
+  const service = serviceFor(root, scripted({
+    'uv tool list': { code: 0, stdout: 'serena v1.2.3\n' },
+    'uv tool uninstall serena': { code: 2, stderr: 'permission denied' },
+  }, calls));
+
+  await service.add({ manager: 'uv', spec: 'serena' });
+  await assert.rejects(service.remove('uv', 'serena'), /permission denied/u);
+  assert.deepEqual((await service.list()).map((row) => row.name), ['serena']);
+});
+
+test('an apt package is removed with apt-get rather than uv', async (t) => {
+  const root = await workspace(t);
+  const calls: string[] = [];
+  const service = serviceFor(root, scripted({ 'apt-get remove -y -qq -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold cowsay': { code: 0 } }, calls));
+
+  await writeFile(join(root, 'packages.json'), JSON.stringify({
+    version: 1,
+    packages: { uv: {}, pip: {}, npm: {}, aqua: {}, apt: { cowsay: { manager: 'apt', spec: 'cowsay', pin: null, addedAt: '2026-01-01T00:00:00.000Z' } } },
+  }), 'utf8');
+  await service.remove('apt', 'cowsay');
+
+  assert.ok(calls.includes('apt-get remove -y -qq -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold cowsay'));
 });
 
 test('a pinned package refuses to upgrade', async (t) => {

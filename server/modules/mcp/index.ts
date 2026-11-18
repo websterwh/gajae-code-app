@@ -31,10 +31,13 @@ export {
   parseInstalledVersion,
   provisionPackages,
   spawnCommandRunner,
+  uninstallCommand,
+  uninstallPackage,
   upgradePackage,
   verifyCommand,
   type CommandRunner,
   type ProvisionOutcome,
+  type UninstallOutcome,
 } from './provision.js';
 export { provisionStatePath, readProvisionState, writeProvisionState, type ProvisionState } from './provision-state.js';
 export {

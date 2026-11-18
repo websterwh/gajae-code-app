@@ -135,6 +135,65 @@ export function verifyCommand(manager: InstallManager, name: string): { command:
   }
 }
 
+export type UninstallOutcome = { status: 'removed' | 'failed'; command: string; error?: string };
+
+/**
+ * The reverse of installCommand. `aqua` goes back through the installer
+ * script, which is the only thing that knows where a release, the jadx and
+ * apktool layouts and the aqua cache actually put their files.
+ */
+export function uninstallCommand(manager: InstallManager, spec: string): { command: string; args: string[] } {
+  switch (manager) {
+    case 'uv':
+      return { command: 'uv', args: ['tool', 'uninstall', spec] };
+    case 'pip':
+      return { command: 'uv', args: ['pip', 'uninstall', '--system', spec] };
+    case 'npm':
+      return { command: 'npm', args: ['uninstall', '-g', spec] };
+    case 'aqua':
+      // `skylot/jadx@v1.5.1` names a release; the script looks up the repo.
+      return { command: 'install-github-app', args: ['--uninstall', spec.split('@')[0] ?? spec] };
+    case 'apt':
+      return {
+        command: 'apt-get',
+        args: ['remove', '-y', '-qq', '-o', 'Dpkg::Options::=--force-confdef',
+          '-o', 'Dpkg::Options::=--force-confold', spec],
+      };
+  }
+}
+
+/**
+ * "Nothing to remove" is not a failure to remove: a row can be listed from the
+ * ledger after the binary was already deleted by hand, and the user still
+ * wants it gone from the list.
+ */
+function alreadyGone(output: string, code: number): boolean {
+  if (code === 100) return true; // apt-get: no such package installed
+  return /not installed|isn't installed|not currently installed|not found|no such package/iu.test(output);
+}
+
+export async function uninstallPackage(options: {
+  manager: InstallManager;
+  /** The stored spec: `serena`, `serena==1.2.3`, `skylot/jadx@v1.5.1`. */
+  spec: string;
+  runner: CommandRunner;
+}): Promise<UninstallOutcome> {
+  const parsed = parsePackageSpec(options.spec);
+  const target = options.manager === 'aqua' ? options.spec : parsed.name;
+  if (!target) throw new Error('The package spec has no name.');
+  const command = uninstallCommand(options.manager, target);
+  const printable = [command.command, ...command.args].join(' ');
+  const result = await options.runner(command.command, command.args);
+  if (result.code !== 0 && !alreadyGone(`${result.stdout}\n${result.stderr}`, result.code)) {
+    return {
+      status: 'failed',
+      command: printable,
+      error: `exit ${result.code}: ${tailLines(result.stderr || result.stdout)}`,
+    };
+  }
+  return { status: 'removed', command: printable };
+}
+
 /** `uv tool list` prints each registered distribution, then its executables indented under it. */
 export function parseUvToolInventory(output: string): Array<{ name: string; executables: string[] }> {
   const tools: Array<{ name: string; executables: string[] }> = [];

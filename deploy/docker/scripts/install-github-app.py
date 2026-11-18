@@ -2,6 +2,7 @@
 import sys
 import os
 import json
+import shutil
 import urllib.request
 import zipfile
 import stat
@@ -201,9 +202,84 @@ def install_github_app(spec, target_bin="/data/bin", target_share="/data/share")
     return True
 
 
+def uninstall_github_app(spec, target_bin="/data/bin", target_share="/data/share"):
+    """Remove what install_github_app placed, including the aqua cache.
+
+    There is no `aqua uninstall`; a package is a downloaded release plus the
+    proxies that point at it, so both are deleted here by name.
+    """
+    repo, _ = split_spec(spec)
+    requested = repo
+    if "/" not in repo:
+        repo = BARE_NAME_REPOS.get(repo.lower(), "")
+    if not repo:
+        print(f"==> [ERROR] {requested} needs an owner. Use owner/repo, for example ajeetdsouza/zoxide.")
+        return False
+
+    name = repo.split("/")[-1].lower()
+    aqua_root = os.environ.get("AQUA_ROOT_DIR", "/data/aqua")
+    removed = []
+
+    def drop(target):
+        if os.path.isdir(target) and not os.path.islink(target):
+            shutil.rmtree(target)
+        elif os.path.islink(target) or os.path.exists(target):
+            os.remove(target)
+        else:
+            return
+        removed.append(target)
+
+    drop(os.path.join(target_bin, name))
+    # aqua keeps its own proxy beside the copy the installer linked into PATH.
+    drop(os.path.join(aqua_root, "bin", name))
+    drop(os.path.join(aqua_root, "pkgs", "github_release", "github.com", repo))
+
+    # jadx and apktool keep their payload under /data/share.
+    if name in ("jadx", "apktool") and os.path.isdir(target_share):
+        for entry in os.listdir(target_share):
+            if entry.startswith(f"{name}-"):
+                drop(os.path.join(target_share, entry))
+
+    yaml_path = os.path.join(aqua_root, "aqua.yaml")
+    try:
+        if os.path.exists(yaml_path):
+            with open(yaml_path) as f:
+                if repo in f.read():
+                    drop(yaml_path)
+    except OSError:
+        pass
+
+    # The verify step reads the recorded tag, so the name has to leave the
+    # state file or a reinstall would look like it is still present.
+    try:
+        if os.path.exists(STATE_FILE):
+            with open(STATE_FILE) as f:
+                state = json.load(f)
+            if isinstance(state, dict):
+                for key in {repo, requested}:
+                    state.pop(key, None)
+                with open(STATE_FILE, "w") as f:
+                    json.dump(state, f, indent=2, sort_keys=True)
+                    f.write("\n")
+    except Exception as e:
+        print(f"==> [WARN] Could not update {STATE_FILE}: {e}")
+
+    if not removed:
+        print(f"==> [GitHub App] Nothing to remove for {repo}; it was not installed here.")
+    else:
+        for target in removed:
+            print(f"==> [GitHub App] Removed {target}")
+    return True
+
+
 if __name__ == "__main__":
+    args = sys.argv[1:]
+    uninstall = bool(args) and args[0] == "--uninstall"
+    if uninstall:
+        args = args[1:]
+    action = uninstall_github_app if uninstall else install_github_app
     ok = True
-    for app in sys.argv[1:]:
-        if not install_github_app(app):
+    for app in args:
+        if not action(app):
             ok = False
     sys.exit(0 if ok else 1)
