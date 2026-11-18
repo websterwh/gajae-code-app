@@ -27,6 +27,7 @@ type AppUiCommandActionId =
   | 'open-model-picker'
   | 'open-cost-modal'
   | 'fork-session'
+  | 'retry-last-turn'
   | 'run-shell-command';
 
 export type AppUiCommand = {
@@ -57,6 +58,8 @@ export type AppUiCommandActions = {
   openModelPicker: () => void;
   openCostModal: () => void;
   forkSession: () => void;
+  /** Re-runs the turn the transcript ends on, as GJC's `/retry` does. */
+  retryLastTurn: () => void;
   /** Runs one shell command in the session's project and reports the result. */
   runShellCommand: (command: string) => void;
   /** Runs a MemPalace command in the session's project. */
@@ -134,6 +137,13 @@ export const APP_UI_COMMANDS: readonly AppUiCommand[] = [
     interceptWithArgs: false,
   },
   {
+    name: '/retry',
+    description: 'Re-run the last turn here — after an error, or on the model you just switched to',
+    namespace: 'app',
+    type: 'app',
+    actionId: 'retry-last-turn',
+  },
+  {
     name: '/run',
     description: 'Run a shell command here and show its output',
     namespace: 'app',
@@ -179,6 +189,12 @@ export function runAppUiCommand(command: AppUiCommand, actions: AppUiCommandActi
     case 'fork-session':
       actions.forkSession();
       break;
+    case 'retry-last-turn':
+      // The runtime's retry takes no operands: the turn being re-run already
+      // holds its prompt, so arguments typed after the command are ignored
+      // rather than becoming a second prompt.
+      actions.retryLastTurn();
+      break;
     case 'run-shell-command':
       actions.runShellCommand(args);
       break;
@@ -213,7 +229,6 @@ export function resolveCommandAlias(commandName: string): string {
  * Values are optional extra hints appended to the generic notice.
  */
 export const TUI_ONLY_COMMAND_HINTS: Readonly<Record<string, string>> = {
-  '/retry': 'To follow up on an interrupted run, open the session and send a new message.',
   '/goal': 'Use New goal above the chat to enter an objective. The goal badge shows tokens and Pause, Resume, and Cancel controls; Stop also pauses the goal.',
   '/agents': '',
   '/monitors': '',

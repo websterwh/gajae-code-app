@@ -58,8 +58,6 @@ const GROUP_A: readonly Row[] = [
 const GROUP_B: readonly Row[] = [
   // TUI-only commands, bare and with arguments. Arguments must not smuggle one
   // past the notice.
-  ['B01', '/retry', 'notice'],
-  ['B02', '/retry e2e-arg', 'notice'],
   ['B03', '/goal', 'notice'],
   ['B04', '/goal set e2e-arg', 'notice'],
   ['B05', '/agents', 'notice'],
@@ -115,6 +113,12 @@ const GROUP_C: readonly Row[] = [
   // project, and arguments are the CLI's own subcommands.
   ['C21', '/mempalace', 'app-action'],
   ['C22', '/mempalace init', 'app-action'],
+  // `/retry` moved here from the TUI-only group: the app runs the turn again
+  // rather than declining it, which is what lets a session continue after a
+  // provider switch. Arguments are ignored by the runtime retry, and the form
+  // is still owned locally so they cannot become a new prompt.
+  ['C23', '/retry', 'app-action'],
+  ['C24', '/retry e2e-arg', 'app-action'],
 ];
 
 const GROUP_D: readonly Row[] = [
@@ -316,8 +320,8 @@ test('runtime forms, skills and forms the app has never seen all reach the runti
 
 test('the matrix has not silently shrunk', () => {
   assert.equal(GROUP_A.length, 15);
-  assert.equal(GROUP_B.length, 26);
-  assert.equal(GROUP_C.length, 22);
+  assert.equal(GROUP_B.length, 24);
+  assert.equal(GROUP_C.length, 24);
   assert.equal(GROUP_D.length, 87);
   assert.equal(GROUP_E.length, 24);
   assert.equal(GROUP_F.length, 4);

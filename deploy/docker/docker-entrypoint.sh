@@ -41,8 +41,17 @@ export SSH_NO_AUTH="${SSH_NO_AUTH:-false}"
 export SSH_DEFAULT_COMMAND="${SSH_DEFAULT_COMMAND:-}"
 export INSTALL_GJC_CLI="${INSTALL_GJC_CLI:-true}"
 
-# Ensure PATH prioritizes /data/bin, /root/.local/bin, and aqua bin
-export PATH="/data/npm-global/bin:/data/bin:/root/.local/bin:/root/.local/share/aquaproj-aqua/bin:/usr/local/bin:$PATH"
+# Every tool root that a manager will let us move belongs on /data: a root left
+# on the container layer is gone on the next recreate, and this list is the
+# difference between "installed" and "installed again tomorrow".
+export RUSTUP_HOME="${RUSTUP_HOME:-/data/rustup}"
+export CARGO_HOME="${CARGO_HOME:-/data/cargo}"
+export GEM_HOME="${GEM_HOME:-/data/gem}"
+export GEM_PATH="${GEM_PATH:-/data/gem}"
+export PIPX_HOME="${PIPX_HOME:-/data/pipx}"
+export PIPX_BIN_DIR="${PIPX_BIN_DIR:-/root/.local/bin}"
+# Ensure PATH prioritizes the persisted tool roots, /data/bin, /root/.local/bin, and aqua bin
+export PATH="${CARGO_HOME}/bin:${GEM_HOME}/bin:/data/npm-global/bin:/data/bin:/root/.local/bin:/root/.local/share/aquaproj-aqua/bin:/usr/local/bin:$PATH"
 export UV_CACHE_DIR="/data/cache/uv"
 export PIP_CACHE_DIR="/data/cache/pip"
 export UV_LINK_MODE="copy"
@@ -105,7 +114,7 @@ fi
 # Directory & Cache Preparation
 # ==============================================================================
 mkdir -p "${DATABASE_PATH%/*}" "${WORKSPACES_ROOT}" "${GJC_WORKER_AGENT_DIR}" /data/logs /data/share
-mkdir -p /data/bin /data/cache/apt/archives /data/cache/uv /data/cache/pip /data/cache/aqua /data/cache/npm /data/npm-global /data/ssh /data/.installed_hashes
+mkdir -p /data/bin /data/cache/apt/archives /data/cache/uv /data/cache/pip /data/cache/aqua /data/cache/npm /data/npm-global /data/ssh /data/.installed_hashes /data/rustup /data/cargo /data/gem /data/pipx
 # ~/.ssh is deliberately not created here: it is linked onto /data below, and a
 # real directory would make that link step skip it.
 mkdir -p /var/run/sshd /var/lib/dbus
@@ -149,10 +158,9 @@ fi
 #   ~/.cache    browser and playwright downloads, tool scratch space
 #   ~/.bun      bun's global installs and cache
 #
-# ~/.cargo and ~/.rustup are not mapped on purpose: the image installs a
-# toolchain there at build time, and a link would hide it. Extra toolchains
-# added inside a container stay on its layer; RUSTUP_HOME/CARGO_HOME can point
-# at /data for anyone who needs those instead.
+# ~/.cargo and ~/.rustup are not mapped: they are redirected to /data with
+# RUSTUP_HOME/CARGO_HOME above instead. A symlink would hide a toolchain the
+# image ships in ~; the env override cannot.
 #
 # The image itself must not ship content in these paths, or the link would hide
 # it; the Dockerfile installs binaries into /usr/local and /opt instead.
@@ -486,7 +494,9 @@ done
 
 if [ ! -f /data/shell/.bash_profile ]; then
     cat > /data/shell/.bash_profile <<EOF
-export PATH="${UV_TOOL_BIN_DIR}:/data/npm-global/bin:/data/bin:/root/.local/bin:/root/.local/share/aquaproj-aqua/bin:/usr/local/bin:\$PATH"
+export RUSTUP_HOME=/data/rustup
+export CARGO_HOME=/data/cargo
+export PATH="${UV_TOOL_BIN_DIR}:/data/cargo/bin:/data/npm-global/bin:/data/bin:/root/.local/bin:/root/.local/share/aquaproj-aqua/bin:/usr/local/bin:\$PATH"
 export EDITOR="nano"
 export VISUAL="nano"
 if [ -f /root/.bashrc ]; then
@@ -500,7 +510,9 @@ fi
 
 if [ ! -f /data/shell/.bashrc ]; then
     cat > /data/shell/.bashrc <<EOF
-export PATH="${UV_TOOL_BIN_DIR}:/data/npm-global/bin:/data/bin:/root/.local/bin:/root/.local/share/aquaproj-aqua/bin:/usr/local/bin:\$PATH"
+export RUSTUP_HOME=/data/rustup
+export CARGO_HOME=/data/cargo
+export PATH="${UV_TOOL_BIN_DIR}:/data/cargo/bin:/data/npm-global/bin:/data/bin:/root/.local/bin:/root/.local/share/aquaproj-aqua/bin:/usr/local/bin:\$PATH"
 export EDITOR="nano"
 export VISUAL="nano"
 # Set shell working directory to WORKSPACES_ROOT

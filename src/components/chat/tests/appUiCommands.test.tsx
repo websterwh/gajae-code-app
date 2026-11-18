@@ -72,6 +72,7 @@ test('runAppUiCommand dispatches each action id to its action', () => {
     openModelPicker: () => { calls.push('open-model-picker'); },
     openCostModal: () => { calls.push('open-cost-modal'); },
     forkSession: () => { calls.push('fork-session'); },
+    retryLastTurn: () => { calls.push('retry-last-turn'); },
     runShellCommand: () => { calls.push('run-shell-command'); },
   };
 
@@ -82,13 +83,15 @@ test('runAppUiCommand dispatches each action id to its action', () => {
   assert.deepEqual(calls, APP_UI_COMMANDS.map((command) => command.actionId));
 });
 
-test('getTuiOnlyCommandNotice covers /retry and skips app/unknown commands', () => {
-  assert.match(getTuiOnlyCommandNotice('/retry') ?? '', /not available in the app/);
+test('getTuiOnlyCommandNotice covers a TUI-only key and skips app/unknown commands', () => {
+  assert.match(getTuiOnlyCommandNotice('/tree') ?? '', /not available in the app/);
+  // /retry is an app command now, so it must not get the TUI notice either.
+  assert.equal(getTuiOnlyCommandNotice('/retry'), null);
   assert.equal(getTuiOnlyCommandNotice('/resume'), null);
   assert.equal(getTuiOnlyCommandNotice('/definitely-not-a-command'), null);
 });
 
-function captureComposer(sentMessages: unknown[], addedMessages: unknown[]) {
+function captureComposer(sentMessages: unknown[], addedMessages: unknown[], onRetryLastTurn?: () => void) {
   // Each command case starts with its own empty draft; pending confirmations
   // now deliberately survive instead of clearing the previous case's text.
   storage.clear();
@@ -108,6 +111,7 @@ function captureComposer(sentMessages: unknown[], addedMessages: unknown[]) {
       addMessage: (message) => { addedMessages.push(message); },
       setIsUserScrolledUp: () => undefined,
       setPendingPermissionRequests: () => undefined,
+      ...(onRetryLastTurn ? { onRetryLastTurn } : {}),
     });
     return null;
   }
@@ -125,6 +129,23 @@ test('typed /resume is intercepted as an app command and never sent to the model
   composer.handleVoiceTranscript('/resume');
   await composer.handleSubmit(submitEvent);
 
+  assert.deepEqual(sentMessages, []);
+  assert.deepEqual(addedMessages, []);
+});
+
+test('typed /retry re-runs the last turn instead of printing a TUI notice', async () => {
+  const sentMessages: unknown[] = [];
+  const addedMessages: unknown[] = [];
+  let retried = 0;
+  const composer = captureComposer(sentMessages, addedMessages, () => { retried += 1; });
+
+  composer.handleVoiceTranscript('/retry');
+  await composer.handleSubmit(submitEvent);
+
+  // The retry rides its own chat.send (retryLastTurn), so the composer must not
+  // also send the literal text or answer with the "TUI only" notice anymore.
+  assert.equal(retried, 1);
+  assert.equal(getTuiOnlyCommandNotice('/retry'), null);
   assert.deepEqual(sentMessages, []);
   assert.deepEqual(addedMessages, []);
 });
@@ -200,14 +221,14 @@ test('typed TUI-only command gets a local notice instead of a model prompt', asy
   const addedMessages: unknown[] = [];
   const composer = captureComposer(sentMessages, addedMessages);
 
-  composer.handleVoiceTranscript('/retry');
+  composer.handleVoiceTranscript('/tree');
   await composer.handleSubmit(submitEvent);
 
   assert.deepEqual(sentMessages, []);
   assert.equal(addedMessages.length, 1);
   const notice = addedMessages[0] as { type: string; content: string };
   assert.equal(notice.type, 'assistant');
-  assert.match(notice.content, /`\/retry`/);
+  assert.match(notice.content, /`\/tree`/);
   assert.match(notice.content, /not available in the app/);
 });
 
@@ -230,7 +251,6 @@ test('a TUI command the app can already do points at how to do it', () => {
   // reads as "you cannot do this here" about something the app does fine —
   // /copy said exactly that while every message carried a copy button.
   const hasAppEquivalent: Readonly<Record<string, RegExp>> = {
-    '/retry': /open the session|send a new message/i,
     '/background': /keep running/i,
     '/theme': /command palette/i,
     '/help': /browse every command/i,

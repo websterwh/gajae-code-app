@@ -95,7 +95,7 @@ test('the bare help alias is treated as /help', () => {
 
 test('trailing whitespace does not defeat interception', () => {
   assert.equal(classifyCommandInput('/clear   ').kind, 'command');
-  assert.equal(classifyCommandInput('/retry\t').kind, 'notice');
+  assert.equal(classifyCommandInput('/retry\t').kind, 'app-action');
   assert.equal(classifyCommandInput('/dump  ').kind, 'command');
 });
 

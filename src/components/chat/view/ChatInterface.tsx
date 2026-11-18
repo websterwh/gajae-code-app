@@ -108,6 +108,29 @@ function ChatInterface({
     onNavigateToSession?.(id);
   }, [onNavigateToSession, onSessionEstablished, setCurrentSessionId]);
 
+  // GJC's own `/retry`: the runtime drops the failed tail from the resumed
+  // conversation and issues the same prompt again, so a retry re-runs the turn
+  // instead of stacking a second copy of it, and the session's pinned model
+  // still answers it. This is not limited to a transcript that ends in an
+  // error: a turn cut off when a provider ran out of usage is retried after
+  // switching models, and the last row is then an ordinary assistant message.
+  const appendSessionMessage = session.addMessage;
+  const retryFailedTurn = useCallback(() => {
+    const sessionId = session.currentSessionId ?? selectedSession?.id ?? null;
+    if (!sessionId || session.isProcessing) return;
+    const content = [...session.chatMessages]
+      .reverse()
+      .find((message) => message.type === 'user' && String(message.content ?? '').trim().length > 0)?.content;
+    if (content === undefined || content === null) return;
+    // A disconnected socket used to make this a silent no-op: the frame was
+    // dropped and nothing appeared anywhere, so the click looked broken rather
+    // than the connection. Say what actually happened.
+    const accepted = sendMessage({ type: 'chat.send', sessionId, content: String(content), options: { retryLastTurn: true } });
+    if (accepted === false) {
+      appendSessionMessage({ type: 'error', content: 'Not sent: the chat socket is not connected. Reconnect, then retry.', timestamp: new Date() });
+    }
+  }, [appendSessionMessage, selectedSession?.id, sendMessage, session.chatMessages, session.currentSessionId, session.isProcessing]);
+
   const composer = useChatComposerState({
     executionCwd: sessionLocation.data?.cwd,
     // An unattended run commits, pushes and switches branches on whatever
@@ -133,6 +156,7 @@ function ChatInterface({
     addMessage: session.addMessage,
     setIsUserScrolledUp: session.setIsUserScrolledUp,
     setPendingPermissionRequests,
+    onRetryLastTurn: retryFailedTurn,
   });
 
   // Typing with nothing focused is meant for the conversation. Without this the
@@ -255,27 +279,6 @@ function ChatInterface({
     })
     : null;
 
-  // Only the failure that ends the transcript can be retried. This is GJC's
-  // own `/retry`: the runtime drops the failed tail from the resumed
-  // conversation and issues the same prompt again, so the retry re-runs the
-  // turn instead of stacking a second copy of it, and the session's pinned
-  // model still answers it.
-  const appendSessionMessage = session.addMessage;
-  const retryFailedTurn = useCallback(() => {
-    const sessionId = session.currentSessionId ?? selectedSession?.id ?? null;
-    if (!sessionId || session.isProcessing) return;
-    const content = [...session.chatMessages]
-      .reverse()
-      .find((message) => message.type === 'user' && String(message.content ?? '').trim().length > 0)?.content;
-    if (content === undefined || content === null) return;
-    // A disconnected socket used to make this button a silent no-op: the frame
-    // was dropped and nothing appeared anywhere, so the click looked broken
-    // rather than the connection. Say what actually happened.
-    const accepted = sendMessage({ type: 'chat.send', sessionId, content: String(content), options: { retryLastTurn: true } });
-    if (accepted === false) {
-      appendSessionMessage({ type: 'error', content: 'Not sent: the chat socket is not connected. Reconnect, then retry.', timestamp: new Date() });
-    }
-  }, [appendSessionMessage, selectedSession?.id, sendMessage, session.chatMessages, session.currentSessionId, session.isProcessing]);
   const endsInFailure = session.chatMessages[session.chatMessages.length - 1]?.type === 'error';
 
   if (!selectedProject) {
