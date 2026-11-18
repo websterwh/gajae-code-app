@@ -80,6 +80,16 @@ if [ "${INSTALL_MEMPALACE:-true}" = "true" ] && command -v uv >/dev/null 2>&1; t
     elif [ "${AUTO_UPDATE_PACKAGES:-true}" = "true" ]; then
         uv tool upgrade -q mempalace >/dev/null 2>&1 || true
     fi
+    # A login shell rebuilds PATH from /etc/profile before it reads the persisted
+    # profile, and /data/bin is on every generated path. Linking the console
+    # scripts there as well makes `mempalace` resolve in /run and SSH shells
+    # without depending on how the profile was seeded.
+    mkdir -p /data/bin
+    for tool in mempalace mempalace-mcp; do
+        if [ -x "${UV_TOOL_BIN_DIR}/${tool}" ] && [ ! -e "/data/bin/${tool}" ]; then
+            ln -sfn "${UV_TOOL_BIN_DIR}/${tool}" "/data/bin/${tool}"
+        fi
+    done
 fi
 # The autosave hook lives beside the agent's sessions. An existing file is kept
 # as-is so a local edit is never overwritten by a redeploy.
@@ -330,7 +340,7 @@ UsePAM no
 X11Forwarding no
 PrintMotd no
 AcceptEnv LANG LC_*
-SetEnv PATH=/data/npm-global/bin:/data/bin:/root/.local/bin:/root/.local/share/aquaproj-aqua/bin:/usr/local/bin:/usr/bin:/bin
+SetEnv PATH=${UV_TOOL_BIN_DIR}:/data/npm-global/bin:/data/bin:/root/.local/bin:/root/.local/share/aquaproj-aqua/bin:/usr/local/bin:/usr/bin:/bin
 Subsystem sftp /usr/lib/openssh/sftp-server
 EOF
 
@@ -429,7 +439,7 @@ done
 
 if [ ! -f /data/shell/.bash_profile ]; then
     cat > /data/shell/.bash_profile <<EOF
-export PATH="/data/npm-global/bin:/data/bin:/root/.local/bin:/root/.local/share/aquaproj-aqua/bin:/usr/local/bin:\$PATH"
+export PATH="${UV_TOOL_BIN_DIR}:/data/npm-global/bin:/data/bin:/root/.local/bin:/root/.local/share/aquaproj-aqua/bin:/usr/local/bin:\$PATH"
 export EDITOR="nano"
 export VISUAL="nano"
 if [ -f /root/.bashrc ]; then
@@ -443,7 +453,7 @@ fi
 
 if [ ! -f /data/shell/.bashrc ]; then
     cat > /data/shell/.bashrc <<EOF
-export PATH="/data/npm-global/bin:/data/bin:/root/.local/bin:/root/.local/share/aquaproj-aqua/bin:/usr/local/bin:\$PATH"
+export PATH="${UV_TOOL_BIN_DIR}:/data/npm-global/bin:/data/bin:/root/.local/bin:/root/.local/share/aquaproj-aqua/bin:/usr/local/bin:\$PATH"
 export EDITOR="nano"
 export VISUAL="nano"
 # Set shell working directory to WORKSPACES_ROOT
@@ -465,6 +475,17 @@ for profile in bashrc bash_profile; do
     if [ -L "${live}" ]; then ln -sfn "${stored}" "${live}"; fi
     if [ -f "${live}" ] && [ ! -L "${live}" ]; then rm -f "${live}"; fi
     if [ ! -e "${live}" ] && [ ! -L "${live}" ]; then ln -s "${stored}" "${live}"; fi
+done
+
+# uv installs the built-in tools (mempalace, the agent CLIs) into
+# ${UV_TOOL_BIN_DIR}, and Debian's /etc/profile resets PATH before a login shell
+# reads ~/.bash_profile. A profile seeded before that directory was on the path
+# leaves `mempalace: command not found` in terminals and /run, so the directory
+# is added once instead of rewriting the user's file.
+for profile in /data/shell/.bashrc /data/shell/.bash_profile; do
+    [ -f "${profile}" ] || continue
+    grep -qF 'gajae-tool-path' "${profile}" 2>/dev/null && continue
+    printf '\n# gajae-tool-path\ncase ":$PATH:" in *":%s:"*) ;; *) export PATH="%s:$PATH" ;; esac\n' "${UV_TOOL_BIN_DIR}" "${UV_TOOL_BIN_DIR}" >> "${profile}"
 done
 
 # A GitHub token saved in Settings is written to /data/shell/github.env. Source

@@ -136,6 +136,43 @@ function runProcess(
   });
 }
 
+export type MempalaceStats = { drawers: number; wings: number; rooms: number };
+
+/**
+ * `mempalace status` prints `MemPalace Status -- N drawers`, then one `WING:`
+ * line per wing and one `ROOM:` line per room, so the counts are read from the
+ * same output the CLI shows a person.
+ */
+export function parseMempalaceStatus(output: string): MempalaceStats | null {
+  const text = String(output ?? '');
+  const drawers = /MemPalace Status\s*--\s*(\d+)\s*drawers/iu.exec(text)?.[1];
+  if (!drawers) return null;
+  const wings = text.match(/^\s*WING:/gmu)?.length ?? 0;
+  const rooms = text.match(/^\s*ROOM:/gmu)?.length ?? 0;
+  return { drawers: Number.parseInt(drawers, 10), wings, rooms };
+}
+
+const STATS_TTL_MS = 30_000;
+const statsCache = new Map<string, { at: number; value: MempalaceStats | null }>();
+
+/**
+ * Status starts a Python process, so the Memory tab's repeated loads share the
+ * last answer for a few seconds instead of paying the import cost each time.
+ */
+export async function mempalaceStats(
+  binary: string,
+  env: NodeJS.ProcessEnv = process.env,
+  now = Date.now(),
+): Promise<MempalaceStats | null> {
+  const key = `${binary}\u0000${mempalacePalacePath(env)}`;
+  const cached = statsCache.get(key);
+  if (cached && now - cached.at < STATS_TTL_MS) return cached.value;
+  const result = await runProcess(binary, ['status'], { env, timeoutMs: 8000 });
+  const value = result.code === 0 ? parseMempalaceStatus(`${result.stdout}\n${result.stderr}`) : null;
+  statsCache.set(key, { at: now, value });
+  return value;
+}
+
 export function runMempalace(
   args: string[],
   options: { env?: NodeJS.ProcessEnv; cwd?: string; timeoutMs?: number } = {},

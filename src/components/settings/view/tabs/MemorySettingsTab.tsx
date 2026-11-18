@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, Brain, Check, CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
+import { useCallback, useEffect, useState, type SelectHTMLAttributes } from 'react';
+import { AlertTriangle, Brain, Check, CheckCircle2, ChevronDown, Loader2, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { authenticatedFetch } from '../../../../utils/api';
@@ -26,6 +26,7 @@ type MemoryView = {
     version: string | null;
     palacePath: string;
     palaceInitialized: boolean;
+    stats: { drawers: number; wings: number; rooms: number } | null;
     hookInstalled: boolean;
     mcpServer: 'enabled' | 'disabled' | 'missing';
   };
@@ -41,6 +42,17 @@ const inputClass = 'w-full touch-manipulation rounded-lg border border-input bg-
 const buttonClass = 'inline-flex items-center gap-1.5 rounded-lg border border-input px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50';
 const primaryButtonClass = 'inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50';
 const chipClass = 'inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] text-muted-foreground';
+const selectClass = 'w-full touch-manipulation appearance-none rounded-lg border border-input bg-card py-2 pr-9 pl-2.5 text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary';
+
+/** The app's select look — card surface, primary focus ring, its own chevron. */
+function SelectField({ className = '', children, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <span className="relative mt-1 block">
+      <select {...props} className={`${selectClass} ${className}`}>{children}</select>
+      <ChevronDown className="pointer-events-none absolute top-1/2 right-2.5 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+    </span>
+  );
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await authenticatedFetch(path, init);
@@ -310,9 +322,9 @@ export default function MemorySettingsTab() {
               </label>
               <label className="text-xs font-medium text-muted-foreground">
                 {t('memory.hindsightScoping')}
-                <select className={`mt-1 ${inputClass}`} value={draft.scoping} onChange={(event) => setDraft({ ...draft, scoping: event.target.value as Scoping })}>
+                <SelectField value={draft.scoping} onChange={(event) => setDraft({ ...draft, scoping: event.target.value as Scoping })}>
                   {SCOPINGS.map((scoping) => <option key={scoping} value={scoping}>{t(`memory.scoping_${scoping.replace(/-/gu, '_')}`)}</option>)}
-                </select>
+                </SelectField>
               </label>
               <label className="flex items-center gap-2 text-xs text-foreground">
                 <input type="checkbox" checked={draft.autoRecall} onChange={(event) => setDraft({ ...draft, autoRecall: event.target.checked })} />
@@ -349,6 +361,13 @@ export default function MemorySettingsTab() {
                   {mempalace.palaceInitialized ? <CheckCircle2 className="h-3 w-3" aria-hidden /> : <AlertTriangle className="h-3 w-3" aria-hidden />}
                   {mempalace.palaceInitialized ? t('memory.palaceReady') : t('memory.palaceEmpty')}
                 </span>
+                {mempalace.stats ? (
+                  <>
+                    <span className={chipClass}>{t('memory.wings')} {mempalace.stats.wings}</span>
+                    <span className={chipClass}>{t('memory.rooms')} {mempalace.stats.rooms}</span>
+                    <span className={chipClass}>{t('memory.drawers')} {mempalace.stats.drawers}</span>
+                  </>
+                ) : null}
                 <span className={chipClass}>
                   {mempalace.hookInstalled ? <CheckCircle2 className="h-3 w-3" aria-hidden /> : <AlertTriangle className="h-3 w-3" aria-hidden />}
                   {mempalace.hookInstalled ? t('memory.hookReady') : t('memory.hookMissing')}
@@ -379,14 +398,14 @@ export default function MemorySettingsTab() {
                 <div className="flex flex-col gap-2 p-4 sm:flex-row sm:items-end">
                   <label className="min-w-0 flex-1 text-xs font-medium text-muted-foreground">
                     {t('memory.project')}
-                    <select className={`mt-1 ${inputClass}`} value={projectPath} onChange={(event) => setProjectPath(event.target.value)}>
+                    <SelectField value={projectPath} onChange={(event) => setProjectPath(event.target.value)}>
                       <option value="">{t('memory.selectProject')}</option>
                       {projects.map((project) => (
                         <option key={project.projectId} value={project.path}>
                           {project.displayName}{initialized[project.path] ? ` · ${t('memory.mempalaceInitialized')}` : ''}
                         </option>
                       ))}
-                    </select>
+                    </SelectField>
                     <span className="mt-1 block text-[11px] font-normal">{t('memory.mempalaceAutoDetect')}</span>
                   </label>
                   <button type="button" className={primaryButtonClass} disabled={busy !== null || !projectPath} onClick={initPalace}>
@@ -408,9 +427,13 @@ export default function MemorySettingsTab() {
                     {t('memory.importPath')}
                     <input className={`mt-1 ${inputClass} font-mono`} placeholder="/workspace/project/MEMORY.md" value={importPath} onChange={(event) => setImportPath(event.target.value)} />
                   </label>
-                  <label className="w-full text-xs font-medium text-muted-foreground sm:w-36">
+                  <label className="w-full text-xs font-medium text-muted-foreground sm:w-56">
                     {t('memory.importMode')}
-                    <input className={`mt-1 ${inputClass}`} placeholder="projects" value={importMode} onChange={(event) => setImportMode(event.target.value)} />
+                    <SelectField value={importMode} onChange={(event) => setImportMode(event.target.value)}>
+                      <option value="">{t('memory.importModeAuto')}</option>
+                      <option value="convos">{t('memory.importModeConvos')}</option>
+                      <option value="extract">{t('memory.importModeExtract')}</option>
+                    </SelectField>
                   </label>
                   <button type="button" className={primaryButtonClass} disabled={busy !== null || !importPath.trim()} onClick={importFiles}>
                     {busy === 'import' ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : null}

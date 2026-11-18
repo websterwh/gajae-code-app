@@ -6,7 +6,30 @@ import test from 'node:test';
 
 import { readMemoryBlocks, writeMemoryBlocks } from './memory.config.js';
 import { MemoryService } from './memory.service.js';
-import { mempalaceProjectInitialized } from './mempalace.js';
+import { mempalaceProjectInitialized, parseMempalaceStatus } from './mempalace.js';
+
+test('palace counts are read from the status output', () => {
+  const output = [
+    '',
+    '='.repeat(55),
+    '  MemPalace Status -- 42 drawers',
+    '  Device:  cpu',
+    '='.repeat(55),
+    '',
+    '  WING: highway',
+    '    ROOM: auth            30 drawers',
+    '    ROOM: docs            12 drawers',
+    '',
+    '  WING: misc',
+    '    ROOM: notes            1 drawer',
+    '',
+    '='.repeat(55),
+  ].join('\n');
+
+  assert.deepEqual(parseMempalaceStatus(output), { drawers: 42, wings: 2, rooms: 3 });
+  // An empty or unreadable palace prints guidance instead of a tally.
+  assert.equal(parseMempalaceStatus('No palace found. Run mempalace init <dir>.'), null);
+});
 
 test('writing the memory block leaves the rest of config.yml untouched', () => {
   const original = ['memory: ', '  backend: local', 'notifications:', '  enabled: true', ''].join('\n');

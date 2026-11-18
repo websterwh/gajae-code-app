@@ -21,6 +21,7 @@ import {
   mempalaceCommand,
   MEMPALACE_SERVER,
   mempalaceProjectInitialized,
+  mempalaceStats,
   mempalaceVersion,
   probeMempalaceFiles,
   runMempalace,
@@ -48,6 +49,8 @@ export type MemoryView = {
     version: string | null;
     palacePath: string;
     palaceInitialized: boolean;
+    /** Counts from `mempalace status`; null until the palace database exists. */
+    stats: { drawers: number; wings: number; rooms: number } | null;
     hookInstalled: boolean;
     mcpServer: 'enabled' | 'disabled' | 'missing';
   };
@@ -129,7 +132,12 @@ export class MemoryService {
     const enabled = marker?.provider === 'mempalace'
       || (!marker && mcpServer === 'enabled' && probe.hookInstalled);
 
-    const version = probe.installed ? await mempalaceVersion(probe.binary) : null;
+    // Version and counts are two CLI starts; running them together keeps the
+    // Memory tab from paying for both one after the other.
+    const [version, stats] = await Promise.all([
+      probe.installed ? mempalaceVersion(probe.binary) : Promise.resolve(null),
+      probe.installed && probe.palaceInitialized ? mempalaceStats(probe.binary, this.env) : Promise.resolve(null),
+    ]);
 
     return {
       backend,
@@ -151,6 +159,7 @@ export class MemoryService {
         version,
         palacePath: probe.palacePath,
         palaceInitialized: probe.palaceInitialized,
+        stats,
         hookInstalled: probe.hookInstalled,
         mcpServer,
       },
