@@ -89,8 +89,8 @@
     "layout": {
       "title": "侧边栏布局",
       "show": "显示 {{name}}",
-      "moveUp": "上移 {{name}}",
-      "moveDown": "下移 {{name}}"
+      "drag": "拖动以重新排序",
+      "reorder": "用方向键移动 {{name}}"
     },
     "environment": {
       "title": "环境",
@@ -122,6 +122,12 @@
       "waiting": "正在等待你的回复",
       "viewRequest": "查看请求",
       "loading": "正在加载请求…"
+    },
+    "stats": {
+      "title": "使用量",
+      "tokens": "Token",
+      "turns": "轮次",
+      "cost": "费用"
     }
   },
   "commandPalette": {

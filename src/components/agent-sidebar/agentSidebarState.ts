@@ -9,7 +9,7 @@
  */
 
 /** Every block the lane can show; the default order is this order. */
-export const AGENT_SIDEBAR_BLOCKS = ['environment', 'work', 'actionRequired', 'exports'] as const;
+export const AGENT_SIDEBAR_BLOCKS = ['environment', 'stats', 'work', 'actionRequired', 'exports'] as const;
 
 export type AgentSidebarBlock = (typeof AGENT_SIDEBAR_BLOCKS)[number];
 
@@ -48,6 +48,25 @@ export const DEFAULT_AGENT_SIDEBAR_STATE: AgentSidebarState = defaultAgentSideba
 const isBlock = (value: unknown): value is AgentSidebarBlock => (
   typeof value === 'string' && (AGENT_SIDEBAR_BLOCKS as readonly string[]).includes(value)
 );
+
+/**
+ * Moves `block` to `toIndex`, clamping to the list and returning the same array
+ * when nothing would change, so the caller can skip a write.
+ */
+export function reorderBlocks(
+  layout: AgentSidebarLayoutEntry[],
+  block: AgentSidebarBlock,
+  toIndex: number,
+): AgentSidebarLayoutEntry[] {
+  const index = layout.findIndex((entry) => entry.block === block);
+  if (index < 0) return layout;
+  const target = Math.max(0, Math.min(layout.length - 1, toIndex));
+  if (target === index) return layout;
+  const next = [...layout];
+  const [moved] = next.splice(index, 1);
+  next.splice(target, 0, moved);
+  return next;
+}
 
 /**
  * Unknown blocks and duplicate entries are dropped, and a block the stored

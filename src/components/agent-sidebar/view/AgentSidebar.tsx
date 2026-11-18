@@ -12,6 +12,7 @@ import {
 import AgentSidebarEnvironment, { type AgentSidebarEnvironmentProps } from './AgentSidebarEnvironment';
 import AgentSidebarExports from './AgentSidebarExports';
 import AgentSidebarLayoutPanel from './AgentSidebarLayoutPanel';
+import AgentSidebarStats from './AgentSidebarStats';
 import AgentSidebarWork from './AgentSidebarWork';
 import AgentSidebarActionRequired from './AgentSidebarActionRequired';
 
@@ -24,7 +25,7 @@ export type AgentSidebarProps = AgentSidebarEnvironmentProps & {
   /** Block order and visibility; defaults to every block, exports last. */
   blocks?: AgentSidebarLayoutEntry[];
   onToggleBlock?: (block: AgentSidebarBlock) => void;
-  onMoveBlock?: (block: AgentSidebarBlock, direction: -1 | 1) => void;
+  onMoveBlock?: (block: AgentSidebarBlock, toIndex: number) => void;
 };
 
 /**
@@ -32,9 +33,9 @@ export type AgentSidebarProps = AgentSidebarEnvironmentProps & {
  *
  * On desktop it is a fixed-width column with no border, background, header or
  * resize handle of its own, holding one compact card: the Environment summary,
- * the WORK block while the session has a todo list or is running, Action
- * required while a request awaits an answer, and the persistent list of
- * exports the project can hand back. The reader chooses which of those blocks
+ * what this project has spent, the WORK block while the session has a todo
+ * list or is running, Action required while a request awaits an answer, and the
+ * persistent list of exports the project can hand back. The reader chooses which of those blocks
  * are shown and in what order with the pencil in the lane's bottom-right
  * corner; that layout is theirs and is persisted with the lane's open flag.
  *
@@ -63,6 +64,7 @@ export default function AgentSidebar({
 
   const sections: Record<AgentSidebarBlock, ReactNode> = {
     environment: <AgentSidebarEnvironment projectId={projectId} projectPath={projectPath} sessionId={sessionId} />,
+    stats: <AgentSidebarStats projectId={projectId} projectPath={projectPath} />,
     work: <AgentSidebarWork sessionId={sessionId} sessionStore={sessionStore} />,
     actionRequired: <AgentSidebarActionRequired sessionId={sessionId} onRequestShown={isMobile ? onClose : undefined} />,
     exports: <AgentSidebarExports projectId={projectId} sessionId={sessionId} />,

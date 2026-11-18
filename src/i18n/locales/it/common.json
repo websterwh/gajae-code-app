@@ -89,8 +89,8 @@
     "layout": {
       "title": "Layout barra laterale",
       "show": "Mostra {{name}}",
-      "moveUp": "Sposta {{name}} su",
-      "moveDown": "Sposta {{name}} giù"
+      "drag": "Trascina per riordinare",
+      "reorder": "Sposta {{name}} con le frecce"
     },
     "environment": {
       "title": "Ambiente",
@@ -122,6 +122,12 @@
       "waiting": "In attesa della tua risposta",
       "viewRequest": "Mostra richiesta",
       "loading": "Caricamento della richiesta…"
+    },
+    "stats": {
+      "title": "Utilizzo",
+      "tokens": "Token",
+      "turns": "Turni",
+      "cost": "Costo"
     }
   },
   "commandPalette": {

@@ -89,8 +89,8 @@
     "layout": {
       "title": "Kenar çubuğu düzeni",
       "show": "{{name}} göster",
-      "moveUp": "{{name}} yukarı taşı",
-      "moveDown": "{{name}} aşağı taşı"
+      "drag": "Sıralamak için sürükleyin",
+      "reorder": "{{name}} ok tuşlarıyla taşı"
     },
     "environment": {
       "title": "Ortam",
@@ -122,6 +122,12 @@
       "waiting": "Yanıtınız bekleniyor",
       "viewRequest": "İsteği görüntüle",
       "loading": "İstek yükleniyor…"
+    },
+    "stats": {
+      "title": "Kullanım",
+      "tokens": "Token",
+      "turns": "Tur",
+      "cost": "Maliyet"
     }
   },
   "commandPalette": {

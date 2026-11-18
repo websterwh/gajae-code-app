@@ -6,6 +6,7 @@ import {
   AGENT_SIDEBAR_STORAGE_KEY,
   DEFAULT_AGENT_SIDEBAR_STATE,
   readAgentSidebarState,
+  reorderBlocks,
   writeAgentSidebarState,
   type AgentSidebarBlock,
   type AgentSidebarStorage,
@@ -31,6 +32,7 @@ test('the sidebar starts closed with every block shown, exports last', () => {
     open: false,
     blocks: [
       { block: 'environment', visible: true },
+      { block: 'stats', visible: true },
       { block: 'work', visible: true },
       { block: 'actionRequired', visible: true },
       { block: 'exports', visible: true },
@@ -65,7 +67,7 @@ test('a record from the resizable rail keeps its open state and gains the defaul
 
 test('a written state reads back unchanged, layout included', () => {
   const storage = createStorage();
-  const state = { open: true, blocks: layout([['work', true], ['exports', false], ['environment', true], ['actionRequired', true]]) };
+  const state = { open: true, blocks: layout([['work', true], ['exports', false], ['environment', true], ['actionRequired', true], ['stats', true]]) };
 
   writeAgentSidebarState(storage, state);
 
@@ -102,10 +104,29 @@ test('a stored layout keeps its order, drops unknown blocks and appends a block 
     { block: 'work', visible: false },
     { block: 'environment', visible: true },
     // The missing blocks arrive in their default order rather than vanishing.
+    { block: 'stats', visible: true },
     { block: 'actionRequired', visible: true },
     { block: 'exports', visible: true },
   ]);
   assert.deepEqual(new Set(state.blocks.map((entry) => entry.block)), new Set(AGENT_SIDEBAR_BLOCKS));
+});
+
+test('a dragged block lands where it was dropped, and impossible moves are ignored', () => {
+  const start = layout([['environment', true], ['stats', true], ['work', true], ['actionRequired', true], ['exports', true]]);
+
+  // Dragging the first block onto the third slot, and the last onto the first.
+  assert.deepEqual(reorderBlocks(start, 'environment', 2).map((entry) => entry.block), [
+    'stats', 'work', 'environment', 'actionRequired', 'exports',
+  ]);
+  assert.deepEqual(reorderBlocks(start, 'exports', 0).map((entry) => entry.block), [
+    'exports', 'environment', 'stats', 'work', 'actionRequired',
+  ]);
+  // Out-of-range drops clamp instead of throwing or dropping the block.
+  assert.deepEqual(reorderBlocks(start, 'work', 99).map((entry) => entry.block), [
+    'environment', 'stats', 'actionRequired', 'exports', 'work',
+  ]);
+  assert.equal(reorderBlocks(start, 'work', 2), start);
+  assert.equal(reorderBlocks(start, 'nonsense' as AgentSidebarBlock, 0), start);
 });
 
 test('a block whose visibility is not a boolean is shown rather than hidden by accident', () => {

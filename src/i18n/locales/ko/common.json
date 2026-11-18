@@ -89,8 +89,8 @@
     "layout": {
       "title": "사이드바 배치",
       "show": "{{name}} 표시",
-      "moveUp": "{{name}} 위로 이동",
-      "moveDown": "{{name}} 아래로 이동"
+      "drag": "끌어서 순서 변경",
+      "reorder": "{{name}}을(를) 화살표 키로 이동"
     },
     "environment": {
       "title": "환경",
@@ -122,6 +122,12 @@
       "waiting": "응답을 기다리고 있습니다",
       "viewRequest": "요청 보기",
       "loading": "요청 불러오는 중…"
+    },
+    "stats": {
+      "title": "사용량",
+      "tokens": "토큰",
+      "turns": "턴",
+      "cost": "비용"
     }
   },
   "commandPalette": {

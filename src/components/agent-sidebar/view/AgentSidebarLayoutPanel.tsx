@@ -1,28 +1,30 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowDown, ArrowUp, Pencil } from 'lucide-react';
+import { GripVertical, Pencil } from 'lucide-react';
 
 import type { AgentSidebarBlock, AgentSidebarLayoutEntry } from '../agentSidebarState';
 
 export type AgentSidebarLayoutPanelProps = {
   blocks: AgentSidebarLayoutEntry[];
   onToggleBlock: (block: AgentSidebarBlock) => void;
-  onMoveBlock: (block: AgentSidebarBlock, direction: -1 | 1) => void;
+  /** Moves a block to an absolute index, which is where a drop landed. */
+  onMoveBlock: (block: AgentSidebarBlock, toIndex: number) => void;
 };
-
-const iconButtonClass = 'rounded p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30';
 
 /**
  * The lane's one setting: which blocks it shows, and in what order.
  *
  * A pencil in the lane's bottom-right corner opens a small panel rather than a
  * dialog, because the change is live and the lane has to stay visible while it
- * is made. Reordering is two buttons per row instead of drag and drop: it works
- * with a keyboard, on touch, and without a library.
+ * is made. Rows are dragged to reorder. A focused row also moves with the arrow
+ * keys, so the gesture keeps a keyboard equivalent without putting two buttons
+ * on every line.
  */
 export default function AgentSidebarLayoutPanel({ blocks, onToggleBlock, onMoveBlock }: AgentSidebarLayoutPanelProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
+  const [dragging, setDragging] = useState<AgentSidebarBlock | null>(null);
+  const [dropTarget, setDropTarget] = useState<AgentSidebarBlock | null>(null);
   const container = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -55,39 +57,62 @@ export default function AgentSidebarLayoutPanel({ blocks, onToggleBlock, onMoveB
             {t('agentSidebar.layout.title')}
           </p>
           <ul className="space-y-0.5">
-            {blocks.map((entry, index) => (
-              <li key={entry.block} className="flex items-center gap-1.5 rounded px-1 py-1 hover:bg-muted/50">
-                <input
-                  type="checkbox"
-                  checked={entry.visible}
-                  onChange={() => onToggleBlock(entry.block)}
-                  aria-label={t('agentSidebar.layout.show', { name: nameOf(entry.block) })}
-                  className="h-3 w-3 shrink-0 accent-primary"
-                />
-                <span className="min-w-0 flex-1 truncate text-foreground">{nameOf(entry.block)}</span>
-                <button
-                  type="button"
-                  onClick={() => onMoveBlock(entry.block, -1)}
-                  disabled={index === 0}
-                  aria-label={t('agentSidebar.layout.moveUp', { name: nameOf(entry.block) })}
-                  title={t('agentSidebar.layout.moveUp', { name: nameOf(entry.block) })}
-                  className={iconButtonClass}
+            {blocks.map((entry, index) => {
+              const name = nameOf(entry.block);
+              const isTarget = dragging !== null && dragging !== entry.block && dropTarget === entry.block;
+              return (
+                <li
+                  key={entry.block}
+                  draggable
+                  tabIndex={0}
+                  aria-label={t('agentSidebar.layout.reorder', { name })}
+                  onDragStart={(event) => {
+                    setDragging(entry.block);
+                    event.dataTransfer?.setData('text/plain', entry.block);
+                    if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+                  }}
+                  onDragOver={(event) => {
+                    if (!dragging) return;
+                    event.preventDefault();
+                    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+                    setDropTarget(entry.block);
+                  }}
+                  onDragLeave={() => setDropTarget((current) => (current === entry.block ? null : current))}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    if (dragging && dragging !== entry.block) onMoveBlock(dragging, index);
+                    setDragging(null);
+                    setDropTarget(null);
+                  }}
+                  onDragEnd={() => {
+                    setDragging(null);
+                    setDropTarget(null);
+                  }}
+                  onKeyDown={(event) => {
+                    // The checkbox keeps its own arrow keys; only the row moves.
+                    if (event.target !== event.currentTarget) return;
+                    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+                    event.preventDefault();
+                    onMoveBlock(entry.block, index + (event.key === 'ArrowUp' ? -1 : 1));
+                  }}
+                  className={`flex items-center gap-1.5 rounded border-t-2 px-1 py-1 hover:bg-muted/50 ${
+                    isTarget ? 'border-primary' : 'border-transparent'
+                  } ${dragging === entry.block ? 'opacity-40' : ''}`}
                 >
-                  <ArrowUp className="h-3 w-3" aria-hidden />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onMoveBlock(entry.block, 1)}
-                  disabled={index === blocks.length - 1}
-                  aria-label={t('agentSidebar.layout.moveDown', { name: nameOf(entry.block) })}
-                  title={t('agentSidebar.layout.moveDown', { name: nameOf(entry.block) })}
-                  className={iconButtonClass}
-                >
-                  <ArrowDown className="h-3 w-3" aria-hidden />
-                </button>
-              </li>
-            ))}
+                  <GripVertical className="h-3 w-3 shrink-0 cursor-grab text-muted-foreground/70" aria-hidden />
+                  <input
+                    type="checkbox"
+                    checked={entry.visible}
+                    onChange={() => onToggleBlock(entry.block)}
+                    aria-label={t('agentSidebar.layout.show', { name })}
+                    className="h-3 w-3 shrink-0 accent-primary"
+                  />
+                  <span className="min-w-0 flex-1 truncate text-foreground">{name}</span>
+                </li>
+              );
+            })}
           </ul>
+          <p className="px-1 pt-1 text-[10px] text-muted-foreground/80">{t('agentSidebar.layout.drag')}</p>
         </div>
       )}
       <button

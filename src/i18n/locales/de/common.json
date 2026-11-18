@@ -89,8 +89,8 @@
     "layout": {
       "title": "Seitenleisten-Layout",
       "show": "{{name}} anzeigen",
-      "moveUp": "{{name}} nach oben",
-      "moveDown": "{{name}} nach unten"
+      "drag": "Zum Umsortieren ziehen",
+      "reorder": "{{name}} mit den Pfeiltasten verschieben"
     },
     "environment": {
       "title": "Umgebung",
@@ -122,6 +122,12 @@
       "waiting": "Wartet auf deine Antwort",
       "viewRequest": "Anfrage anzeigen",
       "loading": "Anfrage wird geladen…"
+    },
+    "stats": {
+      "title": "Nutzung",
+      "tokens": "Token",
+      "turns": "Züge",
+      "cost": "Kosten"
     }
   },
   "commandPalette": {

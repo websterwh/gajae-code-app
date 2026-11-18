@@ -13,6 +13,18 @@ export function leafName(path: string): string {
   return path.replace(/\/+$/, '').split('/').pop() || path;
 }
 
+/**
+ * `/repo/.gjc-worktrees/job-session-…` -> `/repo`; any other path unchanged.
+ * Usage is recorded per session directory, so the lane needs the root to sum a
+ * project whose sessions ran in its worktrees.
+ */
+export function repositoryRootOf(path: string): string {
+  const normalized = path.replace(/\/+$/, '');
+  const segments = normalized.split('/');
+  const index = segments.lastIndexOf('.gjc-worktrees');
+  return index > 0 ? segments.slice(0, index).join('/') || '/' : normalized;
+}
+
 /** `/repo/.gjc-worktrees/job-session-…` -> `{ repository: 'repo' }`; other paths -> null. */
 export function sessionWorktreeOf(path: string): { repository: string } | null {
   const segments = path.replace(/\/+$/, '').split('/');

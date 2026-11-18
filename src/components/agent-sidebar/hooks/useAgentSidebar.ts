@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import {
   readAgentSidebarState,
+  reorderBlocks,
   writeAgentSidebarState,
   type AgentSidebarBlock,
   type AgentSidebarState,
@@ -49,16 +50,11 @@ export function useAgentSidebar() {
     }));
   }, []);
 
-  const moveBlock = useCallback((block: AgentSidebarBlock, direction: -1 | 1) => {
+  /** Drag and the arrow keys both land here: a block and where it should sit. */
+  const moveBlock = useCallback((block: AgentSidebarBlock, toIndex: number) => {
     setState((previous) => {
-      const index = previous.blocks.findIndex((entry) => entry.block === block);
-      const target = index + direction;
-      if (index < 0 || target < 0 || target >= previous.blocks.length) return previous;
-      const blocks = [...previous.blocks];
-      const moved = blocks[index];
-      blocks[index] = blocks[target];
-      blocks[target] = moved;
-      return { ...previous, blocks };
+      const blocks = reorderBlocks(previous.blocks, block, toIndex);
+      return blocks === previous.blocks ? previous : { ...previous, blocks };
     });
   }, []);
 

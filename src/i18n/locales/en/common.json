@@ -89,8 +89,8 @@
     "layout": {
       "title": "Sidebar layout",
       "show": "Show {{name}}",
-      "moveUp": "Move {{name}} up",
-      "moveDown": "Move {{name}} down"
+      "drag": "Drag to reorder",
+      "reorder": "Move {{name}} with the arrow keys"
     },
     "environment": {
       "title": "Environment",
@@ -122,6 +122,12 @@
       "waiting": "Waiting for your response",
       "viewRequest": "View request",
       "loading": "Loading request…"
+    },
+    "stats": {
+      "title": "Usage",
+      "tokens": "Tokens",
+      "turns": "Turns",
+      "cost": "Cost"
     }
   },
   "commandPalette": {

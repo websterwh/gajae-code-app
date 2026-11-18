@@ -89,8 +89,8 @@
     "layout": {
       "title": "サイドバーの配置",
       "show": "{{name}}を表示",
-      "moveUp": "{{name}}を上へ",
-      "moveDown": "{{name}}を下へ"
+      "drag": "ドラッグして並べ替え",
+      "reorder": "{{name}}を矢印キーで移動"
     },
     "environment": {
       "title": "環境",
@@ -122,6 +122,12 @@
       "waiting": "応答を待っています",
       "viewRequest": "リクエストを表示",
       "loading": "リクエストを読み込み中…"
+    },
+    "stats": {
+      "title": "使用量",
+      "tokens": "トークン",
+      "turns": "ターン",
+      "cost": "コスト"
     }
   },
   "commandPalette": {

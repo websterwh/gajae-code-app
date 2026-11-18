@@ -89,8 +89,8 @@
     "layout": {
       "title": "Disposition de la barre",
       "show": "Afficher {{name}}",
-      "moveUp": "Déplacer {{name}} vers le haut",
-      "moveDown": "Déplacer {{name}} vers le bas"
+      "drag": "Glisser pour réordonner",
+      "reorder": "Déplacer {{name}} avec les flèches"
     },
     "environment": {
       "title": "Environnement",
@@ -122,6 +122,12 @@
       "waiting": "En attente de votre réponse",
       "viewRequest": "Voir la demande",
       "loading": "Chargement de la demande…"
+    },
+    "stats": {
+      "title": "Utilisation",
+      "tokens": "Jetons",
+      "turns": "Tours",
+      "cost": "Coût"
     }
   },
   "commandPalette": {
