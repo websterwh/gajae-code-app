@@ -395,7 +395,7 @@ UsePAM no
 X11Forwarding no
 PrintMotd no
 AcceptEnv LANG LC_*
-SetEnv PATH=${UV_TOOL_BIN_DIR}:/data/npm-global/bin:/data/bin:/root/.local/bin:/root/.local/share/aquaproj-aqua/bin:/usr/local/bin:/usr/bin:/bin
+SetEnv PATH=${UV_TOOL_BIN_DIR}:${CARGO_HOME}/bin:/data/npm-global/bin:/data/bin:/root/.local/bin:/root/.local/share/aquaproj-aqua/bin:/usr/local/bin:/usr/bin:/bin
 Subsystem sftp /usr/lib/openssh/sftp-server
 EOF
 
