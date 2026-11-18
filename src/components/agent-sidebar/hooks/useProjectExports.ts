@@ -11,7 +11,7 @@ export type ProjectExportFile = {
 };
 
 /**
- * The files `/export` wrote for this project.
+ * The files `/export` wrote in this session.
  *
  * The server keeps the record, so the list is the same after a reload or in a
  * fresh tab. A short poll picks up an export the moment the worker writes it;
@@ -54,5 +54,25 @@ export function useProjectExports(projectId?: string, sessionId?: string) {
     };
   }, [projectId, sessionId, reloadKey]);
 
-  return { files, refresh };
+  /**
+   * Deletes the file and its record. The row goes as soon as the server
+   * confirms; a failed request keeps it, since the file is still there and a
+   * list without a row nobody can retry would be a lie.
+   */
+  const remove = useCallback(async (file: ProjectExportFile): Promise<void> => {
+    if (!projectId) return;
+    const params = new URLSearchParams({ path: file.path });
+    if (sessionId) params.set('sessionId', sessionId);
+    const response = await authenticatedFetch(
+      `/api/projects/${encodeURIComponent(projectId)}/exports?${params.toString()}`,
+      { method: 'DELETE' },
+    );
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({})) as { error?: string };
+      throw new Error(body.error ?? `Request failed (${response.status}).`);
+    }
+    setFiles((current) => current.filter((entry) => entry.path !== file.path));
+  }, [projectId, sessionId]);
+
+  return { files, refresh, remove };
 }

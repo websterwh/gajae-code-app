@@ -379,3 +379,24 @@ test('browse sorting exposes name, provenance-first relevance, and provenance-bl
   assert.deepEqual(await names({ q: 'server', source: 'overlay', sort: 'name' }), ['aardvark', 'alpha', 'beta', 'zeta']);
   assert.deepEqual(await names({ q: 'server', source: 'overlay', sort: 'popularity' }), ['alpha', 'beta', 'aardvark', 'zeta']);
 });
+
+test('a server moves between global and project scope instead of being duplicated', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'mcp-move-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const project = join(root, 'workspace');
+  await mkdir(join(project, '.gjc'), { recursive: true });
+  const service = new McpService({ agentDir: root, runCli: fakeCli(root, []) });
+
+  await service.add({ name: 'mover', transport: 'http', url: 'https://mover.example/mcp' });
+  const moved = await service.move('global', 'mover', 'project', undefined, project);
+  assert.equal(moved.scope, 'project');
+
+  const globalFile = JSON.parse(await readFile(join(root, 'mcp.json'), 'utf8')) as StoredFile;
+  const projectFile = JSON.parse(await readFile(join(project, '.gjc', 'mcp.json'), 'utf8')) as StoredFile;
+  assert.equal(globalFile.mcpServers.mover, undefined, 'the name lives in one file only');
+  assert.equal((projectFile.mcpServers.mover as Record<string, unknown>).url, 'https://mover.example/mcp');
+
+  // A name already in the target is a refusal, not an overwrite.
+  await service.add({ name: 'mover', transport: 'http', url: 'https://other.example/mcp' });
+  await assert.rejects(() => service.move('global', 'mover', 'project', undefined, project), /already exists/u);
+});

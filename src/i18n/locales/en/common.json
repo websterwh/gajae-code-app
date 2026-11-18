@@ -84,7 +84,9 @@
     "exports": {
       "title": "Exports",
       "download": "Download",
-      "failed": "Download failed."
+      "delete": "Delete export",
+      "failed": "Download failed.",
+      "deleteFailed": "Could not delete the export."
     },
     "layout": {
       "title": "Sidebar layout",

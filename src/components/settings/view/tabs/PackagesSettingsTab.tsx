@@ -383,6 +383,12 @@ export default function PackagesSettingsTab() {
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="truncate text-sm font-medium text-foreground">{row.name}</span>
                     <span className={chipClass}>{row.manager}</span>
+                    {/* An env row has no remove control, so the chip is what
+                        explains why it is on the list and stays after an
+                        uninstall. */}
+                    {row.source === 'env' ? (
+                      <span className={chipClass}>{t('packages.fromEnv', 'From env var')}</span>
+                    ) : null}
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                     <span className="inline-flex items-center gap-1">

@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  AlertTriangle, CheckCircle2, Copy, Loader2, Pencil, Pin, Plus, RefreshCw, Search, Server, Trash2, X,
+  AlertTriangle, CheckCircle2, Copy, Loader2, Pencil, Pin, Plus, RefreshCw, Search, Server, Trash2,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { authenticatedFetch } from '../../../../utils/api';
-import { Dialog, DialogContent, DialogTitle } from '../../../../shared/view/ui';
 import SettingsCard from '../SettingsCard';
 import SettingsSection from '../SettingsSection';
 import SettingsToggle from '../SettingsToggle';
@@ -105,20 +104,6 @@ async function requestVoid(path: string, init?: RequestInit): Promise<void> {
   throw new Error(body.error?.message ?? `Request failed (${response.status}).`);
 }
 
-const parseLines = (value: string): string[] => value.split('\n').map((line) => line.trim()).filter(Boolean);
-
-function parsePairs(value: string, separator: '=' | ':'): Record<string, string> {
-  const pairs: Record<string, string> = {};
-  for (const line of parseLines(value)) {
-    const index = line.indexOf(separator);
-    if (index <= 0) continue;
-    const key = line.slice(0, index).trim();
-    const entry = line.slice(index + 1).trim();
-    if (key && entry) pairs[key] = entry;
-  }
-  return pairs;
-}
-
 const messageOf = (error: unknown): string => error instanceof Error ? error.message : 'Request failed.';
 
 const formatStars = (stars: number): string => (stars >= 1000
@@ -163,14 +148,12 @@ export default function McpSettingsTab() {
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
   const [copyNote, setCopyNote] = useState<string | null>(null);
   const [recentlyAdded, setRecentlyAdded] = useState<string | null>(null);
-  const [manualOpen, setManualOpen] = useState(false);
-  const [manualError, setManualError] = useState('');
-  const [manual, setManual] = useState({
-    name: '', transport: 'stdio' as McpTransport, command: '', args: '', url: '', env: '', headers: '',
-  });
 
   const projectQuery = scope === 'project' && projectPath ? `&projectPath=${encodeURIComponent(projectPath)}` : '';
-  const listPath = `/api/mcp/servers?scope=${scope === 'project' ? 'all' : 'global'}${projectQuery}`;
+  // One scope at a time. Listing both scopes together made the scope select
+  // look broken: switching to a project showed the same server names, because
+  // it was also showing the global ones.
+  const listPath = `/api/mcp/servers?scope=${scope}${projectQuery}`;
   const statusPath = `/api/mcp/status${projectQuery ? `?${projectQuery.slice(1)}` : ''}`;
   const projectReady = scope !== 'project' || Boolean(projectPath);
 
@@ -243,13 +226,15 @@ export default function McpSettingsTab() {
   }, [copyNote]);
 
   useEffect(() => {
-    if (scope !== 'project' || projects.length > 0) return;
+    // The per-row scope control lists every project, so the projects are read
+    // once even while the page is showing globals.
+    if (projects.length > 0) return;
     setProjectsLoading(true);
     void request<{ projects: ProjectSummary[] }>('/api/projects?summary=1')
       .then((result) => setProjects(result.projects.filter((project) => Boolean(project.path?.trim()))))
       .catch(() => setProjects([]))
       .finally(() => setProjectsLoading(false));
-  }, [projects.length, scope]);
+  }, [projects.length]);
 
   // Required variables come from the curated layer, so a reloaded installed
   // row can still say what it needs without a registry request.
@@ -479,40 +464,34 @@ export default function McpSettingsTab() {
     }
   };
 
-  const manualValid = Boolean(manual.name.trim())
-    && (manual.transport === 'stdio' ? Boolean(manual.command.trim()) : Boolean(manual.url.trim()))
-    && projectReady;
-
-  const addManual = async () => {
-    if (!manualValid) return;
-    setBusy('manual');
-    setManualError('');
+  /**
+   * Moves a server between the global config and a project's config.
+   *
+   * The scope was fixed at install time before this: the only way to change it
+   * was to add the server again somewhere else, and the add path then reported
+   * the name as already taken. This writes it to the target file and removes
+   * it from the source, so the same name lives in exactly one place.
+   */
+  const moveServer = async (server: McpServer, target: string) => {
+    const targetScope: McpScope = target === 'global' ? 'global' : 'project';
+    const targetProjectPath = targetScope === 'project' ? target.slice('project:'.length) : '';
+    if (targetScope === server.scope && (targetScope === 'global' || targetProjectPath === projectPath)) return;
+    setBusy(`move:${server.name}`);
+    setError('');
     try {
-      const env = parsePairs(manual.env, '=');
-      const headers = parsePairs(manual.headers, ':');
-      const name = manual.name.trim();
-      await request('/api/mcp/servers', {
+      await request(`/api/mcp/servers/${encodeURIComponent(server.name)}/scope`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          name,
-          transport: manual.transport,
-          ...(manual.transport === 'stdio'
-            ? { command: manual.command.trim(), args: parseLines(manual.args) }
-            : { url: manual.url.trim() }),
-          ...(Object.keys(env).length ? { env } : {}),
-          ...(Object.keys(headers).length ? { headers } : {}),
-          scope,
-          ...(scope === 'project' ? { projectPath } : {}),
+          scope: server.scope,
+          ...(server.scope === 'project' ? { projectPath } : {}),
+          targetScope,
+          ...(targetScope === 'project' ? { targetProjectPath } : {}),
         }),
       });
-      setManual({ name: '', transport: 'stdio', command: '', args: '', url: '', env: '', headers: '' });
-      setManualError('');
-      setManualOpen(false);
       await reload();
-      setRecentlyAdded(name);
-    } catch (addError) {
-      setManualError(`${t('mcp.installFailed')} ${messageOf(addError)}`);
+    } catch (moveError) {
+      setError(`${t('mcp.moveFailed')} ${messageOf(moveError)}`);
     } finally {
       setBusy(null);
     }
@@ -639,9 +618,6 @@ export default function McpSettingsTab() {
                 </select>
               </label>
             )}
-            <button type="button" className={`${buttonClass} h-9`} onClick={() => setManualOpen(true)}>
-              <Plus className="h-3.5 w-3.5" aria-hidden />{t('mcp.manuallyAdd')}
-            </button>
           </div>
           {/* The path sits under the row, not inside the label: a longer line
               inside the second box pushed its select out of line with the
@@ -717,6 +693,27 @@ export default function McpSettingsTab() {
                     )}
                   </div>
                   <div className="flex w-full flex-wrap items-center gap-2">
+                    {/* Scope belongs to the server, not to the page filter:
+                        this is how one moves between the global config and a
+                        project's instead of having to be added again. */}
+                    <select
+                      aria-label={`${t('mcp.scope')} ${server.name}`}
+                      title={t('mcp.scope')}
+                      className="rounded-lg border border-input bg-card px-2 py-1 text-xs text-foreground disabled:opacity-50"
+                      value={server.scope === 'project' ? `project:${projectPath}` : 'global'}
+                      disabled={busy !== null}
+                      onChange={(event) => void moveServer(server, event.target.value)}
+                    >
+                      <option value="global">{t('mcp.scopeGlobal')}</option>
+                      {server.scope === 'project' && !projects.some((project) => project.path === projectPath) && (
+                        <option value={`project:${projectPath}`}>
+                          {projectPath.split('/').filter(Boolean).at(-1) ?? projectPath}
+                        </option>
+                      )}
+                      {projects.map((project) => (
+                        <option key={project.projectId} value={`project:${project.path}`}>{project.displayName}</option>
+                      ))}
+                    </select>
                     {/* The label stays put while the handshake runs: swapping it
                         for the longer text made the whole bar jump. */}
                     <button type="button" className={verifyButtonClass} aria-busy={verifying === server.name}
@@ -933,95 +930,6 @@ export default function McpSettingsTab() {
         </SettingsCard>
       </SettingsSection>
 
-      <Dialog open={manualOpen} onOpenChange={(open) => { setManualOpen(open); if (!open) setManualError(''); }}>
-        <DialogContent
-          aria-labelledby="mcp-manual-dialog-title"
-          className="flex max-h-[85dvh] w-[calc(100vw-2rem)] max-w-lg flex-col overflow-hidden rounded-2xl p-0"
-        >
-          <DialogTitle id="mcp-manual-dialog-title">{t('mcp.addTitle')}</DialogTitle>
-          <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-4 py-3">
-            <div>
-              <p className="text-sm font-semibold text-foreground">{t('mcp.addTitle')}</p>
-              <p className="mt-1 text-xs text-muted-foreground">{t('mcp.addDescription')}</p>
-            </div>
-            <button type="button" className="rounded-lg p-1 text-muted-foreground hover:bg-muted"
-              aria-label={t('mcp.cancel')} onClick={() => { setManualOpen(false); setManualError(''); }}>
-              <X className="h-4 w-4" aria-hidden />
-            </button>
-          </div>
-          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
-            {manualError && (
-              <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-                {manualError}
-              </p>
-            )}
-            {!projectReady && <p className="text-xs text-muted-foreground">{t('mcp.projectRequired')}</p>}
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="text-xs font-medium text-muted-foreground">
-                {t('mcp.name')}
-                <input className={`mt-1 ${inputClass}`} value={manual.name} placeholder="home-assistant"
-                  autoFocus
-                  onChange={(event) => setManual((current) => ({ ...current, name: event.target.value }))} />
-                <span className="mt-1 block font-normal">{t('mcp.nameHint')}</span>
-              </label>
-              <label className="text-xs font-medium text-muted-foreground">
-                {t('mcp.transport')}
-                <select aria-label={t('mcp.transport')} className={`mt-1 ${inputClass}`} value={manual.transport}
-                  onChange={(event) => setManual((current) => ({ ...current, transport: event.target.value as McpTransport }))}>
-                  <option value="stdio">{t('mcp.transportStdio')}</option>
-                  <option value="http">{t('mcp.transportHttp')}</option>
-                  <option value="sse">{t('mcp.transportSse')}</option>
-                </select>
-              </label>
-              {manual.transport === 'stdio' ? (
-                <>
-                  <label className="text-xs font-medium text-muted-foreground">
-                    {t('mcp.command')}
-                    <input className={`mt-1 ${inputClass}`} value={manual.command} placeholder="npx"
-                      onChange={(event) => setManual((current) => ({ ...current, command: event.target.value }))} />
-                  </label>
-                  <label className="text-xs font-medium text-muted-foreground">
-                    {t('mcp.args')}
-                    <textarea className={`mt-1 ${inputClass}`} rows={3} value={manual.args}
-                      placeholder={'-y\nsome-mcp-server'}
-                      onChange={(event) => setManual((current) => ({ ...current, args: event.target.value }))} />
-                    <span className="mt-1 block font-normal">{t('mcp.argsHint')}</span>
-                  </label>
-                </>
-              ) : (
-                <label className="text-xs font-medium text-muted-foreground sm:col-span-2">
-                  {t('mcp.url')}
-                  <input className={`mt-1 ${inputClass}`} value={manual.url} placeholder="https://home-assistant.local/mcp"
-                    onChange={(event) => setManual((current) => ({ ...current, url: event.target.value }))} />
-                </label>
-              )}
-              <label className="text-xs font-medium text-muted-foreground">
-                {t('mcp.env')}
-                <textarea className={`mt-1 ${inputClass}`} rows={2} value={manual.env} placeholder="TOKEN=…"
-                  onChange={(event) => setManual((current) => ({ ...current, env: event.target.value }))} />
-              </label>
-              {/* Headers only apply to remote transports, the same as Configure. */}
-              {manual.transport !== 'stdio' && (
-                <label className="text-xs font-medium text-muted-foreground">
-                  {t('mcp.headers')}
-                  <textarea className={`mt-1 ${inputClass}`} rows={2} value={manual.headers} placeholder="Authorization: Bearer …"
-                    onChange={(event) => setManual((current) => ({ ...current, headers: event.target.value }))} />
-                </label>
-              )}
-            </div>
-          </div>
-          <div className="flex shrink-0 justify-end gap-2 border-t border-border px-4 py-3">
-            <button type="button" className={buttonClass} onClick={() => { setManualOpen(false); setManualError(''); }}>
-              {t('mcp.cancel')}
-            </button>
-            <button type="button" className={primaryButtonClass} disabled={!manualValid || busy === 'manual'}
-              onClick={() => void addManual()}>
-              {busy === 'manual' ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
-              {busy === 'manual' ? t('mcp.adding') : t('mcp.add')}
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

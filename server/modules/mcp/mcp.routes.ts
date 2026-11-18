@@ -83,6 +83,24 @@ export function createMcpRouter(service: McpService = mcpService): Router {
     }
   }));
 
+  // Moving a server between scopes is its own operation: a delete plus an add
+  // could leave the server in neither file when the add failed.
+  router.post('/servers/:name/scope', asyncHandler(async (request, response) => {
+    try {
+      const scope = scopeFrom(request.query.scope ?? request.body?.scope);
+      if (!scope || scope === 'all') return response.status(400).json({ success: false, error: { message: 'scope must be global or project.' } });
+      const targetScope = scopeFrom(request.body?.targetScope, 'global');
+      if (!targetScope || targetScope === 'all') return response.status(400).json({ success: false, error: { message: 'targetScope must be global or project.' } });
+      const targetProjectPath = typeof request.body?.targetProjectPath === 'string' ? request.body.targetProjectPath : undefined;
+      response.json({
+        success: true,
+        data: await service.move(scope, routeParam(request.params.name), targetScope, projectPath(request), targetProjectPath),
+      });
+    } catch (error) {
+      fail(response, error);
+    }
+  }));
+
   router.post('/servers/:name/verify', asyncHandler(async (request, response) => {
     try {
       const scope = scopeFrom(request.query.scope ?? request.body?.scope);

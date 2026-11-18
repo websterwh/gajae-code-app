@@ -1,4 +1,4 @@
-import { appendFile, mkdir, readFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 
@@ -76,27 +76,48 @@ export async function readProjectExports(file: string): Promise<ProjectExportRec
   return records;
 }
 
-const inside = (candidate: string, root: string): boolean => {
-  const normalizedRoot = path.resolve(root);
-  const normalized = path.resolve(candidate);
-  return normalized === normalizedRoot || normalized.startsWith(`${normalizedRoot}${path.sep}`);
-};
-
 /**
- * The exports one project can offer: its own session's exports (which may live
- * in a worktree elsewhere) plus anything under its directory. The same file
- * exported twice is one row, keeping the newest record.
+ * The exports one session ran.
+ *
+ * An export belongs to the conversation that wrote it, not to every tab open
+ * on the project. This used to also accept anything under the project
+ * directory, so a file exported in one session showed up in all of them; the
+ * session id is the whole scope now. A record written before the session was
+ * kept has no owner and is offered to nobody.
  */
 export function projectExportsFor(
   records: readonly ProjectExportRecord[],
-  options: { projectPath: string; sessionId?: string | null },
+  options: { sessionId?: string | null },
 ): ProjectExportRecord[] {
+  const wanted = options.sessionId ?? null;
+  if (!wanted) return [];
   const latest = new Map<string, ProjectExportRecord>();
   for (const record of records) {
-    const forSession = Boolean(options.sessionId) && record.sessionId === options.sessionId;
-    if (!forSession && !inside(record.path, options.projectPath) && record.projectPath !== options.projectPath) continue;
+    if (record.sessionId !== wanted) continue;
     const previous = latest.get(record.path);
     if (!previous || previous.at < record.at) latest.set(record.path, record);
   }
   return [...latest.values()].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
+}
+
+/**
+ * Drop every record of a file the user deleted. The file itself is removed by
+ * the route: this only keeps the list from re-listing a destination that no
+ * longer exists.
+ */
+export async function forgetProjectExport(
+  target: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<boolean> {
+  const file = projectExportsFilePath(env);
+  const records = await readProjectExports(file);
+  const resolved = path.resolve(target);
+  const kept = records.filter((record) => path.resolve(record.path) !== resolved);
+  if (kept.length === records.length) return false;
+  // Rewrite beside the record and rename over it: a crash mid-delete must not
+  // leave the export list half-written.
+  const temporary = `${file}.${process.pid}.${Date.now()}.tmp`;
+  await writeFile(temporary, kept.map((record) => `${JSON.stringify(record)}\n`).join(''), 'utf8');
+  await rename(temporary, file);
+  return true;
 }

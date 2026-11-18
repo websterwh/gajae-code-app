@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import {
+  forgetProjectExport,
   projectExportsFilePath,
   projectExportsFor,
   readProjectExports,
@@ -60,32 +61,33 @@ test('a truncated line costs that line only', async () => {
   }
 });
 
-test('a project sees its directory and its own session, never another project', () => {
+test('one session never sees another session\'s exports', () => {
   const records = [
     record(),
     record({ path: '/work/beta/out.html', projectPath: '/work/beta', sessionId: 'session-2' }),
-    // A session running in a worktree writes outside the project directory, so
-    // only that session reaches its own export.
+    // A session running in a worktree writes outside the project directory;
+    // the session id is what still reaches its own export.
     record({ path: '/work/alpha-worktrees/one/export.html', projectPath: '/work/alpha-worktrees/one', sessionId: 'session-1' }),
     record({ path: '/work/beta/secret.html', projectPath: '/work/beta', sessionId: 'session-2' }),
   ];
 
   assert.deepEqual(
-    projectExportsFor(records, { projectPath: '/work/alpha', sessionId: 'session-3' }).map((entry) => entry.path),
-    ['/work/alpha/gjc-session-one.html'],
+    projectExportsFor(records, { sessionId: 'session-3' }).map((entry) => entry.path),
+    [],
   );
   assert.deepEqual(
-    projectExportsFor(records, { projectPath: '/work/alpha', sessionId: 'session-1' }).map((entry) => entry.path),
+    projectExportsFor(records, { sessionId: 'session-1' }).map((entry) => entry.path),
     // Same timestamp, so the order is the order the records were written.
     ['/work/alpha/gjc-session-one.html', '/work/alpha-worktrees/one/export.html'],
   );
 });
 
-test('an absolute destination is still that project\'s export', () => {
+test('a record with no session belongs to no session', () => {
   assert.deepEqual(
-    projectExportsFor([record({ path: '/tmp/elsewhere.html' })], { projectPath: '/work/alpha', sessionId: null }).map((entry) => entry.path),
-    ['/tmp/elsewhere.html'],
+    projectExportsFor([record({ path: '/tmp/elsewhere.html', sessionId: null })], { sessionId: 'session-1' }).map((entry) => entry.path),
+    [],
   );
+  assert.deepEqual(projectExportsFor([record()], {}).map((entry) => entry.path), []);
 });
 
 test('exporting the same file twice is one row carrying the newest record', () => {
@@ -94,7 +96,26 @@ test('exporting the same file twice is one row carrying the newest record', () =
     record({ at: '2026-11-03T10:00:00.000Z' }),
   ];
 
-  const rows = projectExportsFor(records, { projectPath: '/work/alpha' });
+  const rows = projectExportsFor(records, { sessionId: 'session-1' });
   assert.equal(rows.length, 1);
   assert.equal(rows[0]?.at, '2026-11-03T10:00:00.000Z');
+});
+
+test('deleting an export forgets its record and keeps the rest', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'exports-'));
+  try {
+    const env = { GJC_WORKER_AGENT_DIR: path.join(root, 'agent') };
+    await recordProjectExport(record(), env);
+    await recordProjectExport(record({ path: '/work/alpha/second.html' }), env);
+
+    assert.equal(await forgetProjectExport('/work/alpha/gjc-session-one.html', env), true);
+    assert.deepEqual(
+      (await readProjectExports(projectExportsFilePath(env))).map((entry) => entry.path),
+      ['/work/alpha/second.html'],
+    );
+    // Nothing left to forget on a second call.
+    assert.equal(await forgetProjectExport('/work/alpha/gjc-session-one.html', env), false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

@@ -345,6 +345,10 @@ function OAuthLoginDialog({
                     placeholder="Search providers"
                     aria-label="Search providers"
                     autoComplete="off"
+                    // The picker is the whole point of this screen, so the
+                    // first keystroke belongs in the filter rather than in
+                    // whichever control the dialog focused by default.
+                    autoFocus
                     className="pl-9"
                   />
                 </div>

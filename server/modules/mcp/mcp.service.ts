@@ -587,6 +587,60 @@ export class McpService {
     if (reread.mcpServers[name]) throw new Error('gjc mcp remove reported success but the server is still in mcp.json.');
   }
 
+  /**
+   * Moves a server between the global config and one project's config.
+   *
+   * Scope used to be decided at install time and could not be changed, which
+   * left two ways to "move" a server and both of them broken: adding it again
+   * in the other scope failed with "already exists", and the scope select on
+   * the page only filtered the list. The entry is copied with every runtime
+   * key intact, then removed from the source, so a name lives in one place.
+   */
+  async move(
+    scope: McpScope,
+    name: string,
+    targetScope: McpScope,
+    projectPath?: string,
+    targetProjectPath?: string,
+  ): Promise<McpServerView> {
+    const sourceProject = scope === 'project' ? this.requireProject(projectPath) : undefined;
+    const targetProject = targetScope === 'project' ? this.requireProject(targetProjectPath) : undefined;
+    if (scope === targetScope && sourceProject === targetProject) {
+      const current = await this.get(scope, name, sourceProject);
+      if (!current) throw new Error('MCP server was not found.');
+      return current;
+    }
+
+    const sourceFile = await this.read(scope, sourceProject);
+    const entry = sourceFile.mcpServers[name];
+    if (!entry) throw new Error('MCP server was not found.');
+    const targetFile = await this.read(targetScope, targetProject);
+    if (targetFile.mcpServers[name]) throw new Error(`A server named "${name}" already exists.`);
+
+    targetFile.mcpServers[name] = { ...entry };
+    // A denylisted name has to stay denied where it lands, or the move would
+    // switch on a server that was stored as off.
+    const denylisted = (sourceFile.disabledServers ?? []).includes(name);
+    if (denylisted) {
+      targetFile.disabledServers = [...new Set([...(targetFile.disabledServers ?? []), name])];
+    }
+    await this.write(targetScope, targetProject, targetFile);
+
+    delete sourceFile.mcpServers[name];
+    if (denylisted) {
+      sourceFile.disabledServers = (sourceFile.disabledServers ?? []).filter((server) => server !== name);
+    }
+    await this.write(scope, sourceProject, sourceFile);
+
+    return this.view(
+      name,
+      entry,
+      targetScope,
+      await this.allLedgerEntries(),
+      new Set(targetFile.disabledServers ?? []),
+    );
+  }
+
   async verify(scope: McpScope, name: string, projectPath?: string): Promise<VerifyResult> {
     const file = await this.read(scope, scope === 'project' ? this.requireProject(projectPath) : undefined);
     const entry = file.mcpServers[name];
