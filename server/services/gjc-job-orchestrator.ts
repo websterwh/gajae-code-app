@@ -12,6 +12,7 @@ import { resolveProjectRunPermissions } from '../modules/projects/index.js';
 import type { DesktopWorkAdmission } from '../shared/interfaces.js';
 
 import { GjcGitClient } from './gjc-git-client.js';
+import { boundJobEventPayload } from './gjc-job-event-payload.js';
 import { createNativeJobsDesktopRestartReader, GjcJobsClient, GjcJobsClientError } from './gjc-jobs-client.js';
 
 type Lease = { owner: string; generation: number };
@@ -226,7 +227,9 @@ export class JobOrchestrator {
     this.trackPersistence(scope, () => this.serial(jobId, async () => {
       const fresh = snapshot(await this.deps.jobs.get({ jobId }));
       if (!sameFence(fresh, runId, expected)) return;
-      const event = await this.deps.jobs.appendEvent({ ...this.params(jobId, fresh), runId, eventId: id, payload });
+      // Worker output is unbounded; the authority frame is not. Persist a
+      // bounded preview so one large result cannot fail a finished turn.
+      const event = await this.deps.jobs.appendEvent({ ...this.params(jobId, fresh), runId, eventId: id, payload: boundJobEventPayload(payload) });
       if (!isJobProjectionEvent(event)) throw new Error('Invalid committed job event response.');
       this.publish(jobId, event, writer);
     }));
@@ -515,7 +518,7 @@ export class JobOrchestrator {
   }
   async appendAdminEvent(jobId: string, eventId: string, payload: unknown): Promise<void> {
     await this.admitted('orchestrator:admin-event', 'settling', () => this.serial(jobId, async () => {
-      const event = await this.deps.jobs.appendAdminEvent({ jobId, eventId, payload });
+      const event = await this.deps.jobs.appendAdminEvent({ jobId, eventId, payload: boundJobEventPayload(payload) });
       if (!isJobProjectionEvent(event)) throw new Error('Invalid committed job event response.');
       this.publish(jobId, event);
     }));

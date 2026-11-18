@@ -197,6 +197,35 @@ test('durability failure latches before completion and cannot be reported as suc
   assert.equal(jobs.state.state, 'failed');
 });
 
+test('an oversized worker event is persisted as a bounded preview instead of failing the turn', async () => {
+  const jobs = new Jobs(); const git = new Git();
+  let complete!: () => void;
+  const workerCompletion = new Promise<void>((resolve) => { complete = resolve; });
+  const broadcast: Array<{ payload: unknown }> = [];
+  const supervisor: JobSupervisor = {
+    spawnRun: (input) => {
+      input.writer.send({ kind: 'tool_result', content: 'x'.repeat(256 * 1024) });
+      return { started: Promise.resolve(), completion: workerCompletion, abortHandle: input.runId };
+    },
+    abort: async () => 'aborted',
+  };
+  // Same ceiling the native jobs client enforces before writing the frame.
+  jobs.appendEvent = async (params) => {
+    if (Buffer.byteLength(JSON.stringify({ ...params, protocolVersion: 1, method: 'event.append' }), 'utf8') > 64 * 1024) throw new Error('event_too_large');
+    return Jobs.prototype.appendEvent.call(jobs, params);
+  };
+  const run = await new JobOrchestrator({ jobs, git, supervisor, owner: 'owner', createId: () => 'abc', broadcast: (_jobId, event) => broadcast.push(event) }).start('gjc', 'app-1', '/project', 'hello', options);
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  complete();
+  await run.completion;
+  assert.equal(jobs.state.state, 'succeeded');
+  const persisted = jobs.events.find((event) => (event.payload as { kind?: string }).kind === 'tool_result');
+  assert.ok(persisted);
+  assert.ok(Buffer.byteLength(JSON.stringify(persisted.payload), 'utf8') <= 63 * 1024);
+  assert.match((persisted.payload as { content: string }).content, /bytes omitted/u);
+  assert.deepEqual(broadcast.find((event) => (event.payload as { kind?: string }).kind === 'tool_result')?.payload, persisted.payload);
+});
+
 test('a never-dispatched start failure atomically records and broadcasts one canonical terminal event', async () => {
   const jobs = new Jobs(); const git = new Git(); const events: unknown[] = [];
   const supervisor: JobSupervisor = { spawnRun: (input) => ({ started: Promise.reject(new Error('start failed')), completion: new Promise<void>(() => {}), outcome: Promise.resolve('not_started'), abortHandle: input.runId }), abort: async () => 'unconfirmed' };
