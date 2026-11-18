@@ -269,6 +269,14 @@ provision_apt() {
     fi
 }
 
+# The image deletes /var/lib/apt/lists to keep its layers small, which leaves
+# `apt-cache search` - the package search in Settings - answering every query
+# with nothing. Rebuild the index once here so the first search is instant; the
+# suggestion service repeats this if the archive was unreachable at boot.
+if ! ls /var/lib/apt/lists/*Packages* >/dev/null 2>&1; then
+    apt-get update -qq || true
+fi
+
 # ==============================================================================
 # Provisioning: Python, Node and GitHub packages
 # ==============================================================================

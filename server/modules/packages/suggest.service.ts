@@ -1,4 +1,4 @@
-import type { CommandRunner, InstallManager } from '../mcp/index.js';
+import { spawnCommandRunner, type CommandRunner, type InstallManager } from '../mcp/index.js';
 
 /**
  * "Autodetect" is four existing endpoints, not a scraper of our own:
@@ -83,25 +83,27 @@ const prefixFirst = (query: string) => (first: PackageSuggestion, second: Packag
 
 export class PackageSuggestService {
   private readonly timeoutMs: number;
+  private readonly runner: CommandRunner;
+  /** The index is rebuilt at most once per process; see `apt`. */
+  private aptIndexBuilt = false;
   private readonly cache = new Map<string, { at: number; suggestions: PackageSuggestion[] }>();
 
   constructor(private readonly options: SuggestOptions = {}) {
     this.timeoutMs = options.timeoutMs ?? 2500;
+    // apt is the one source read from a process, not a URL. Defaulting it to
+    // the shared runner is what makes the exported service search apt at all:
+    // with only an optional runner, the singleton had none and apt silently
+    // contributed nothing to every query.
+    this.runner = options.runner ?? spawnCommandRunner();
   }
 
   private fetcher(): FetchLike {
     return this.options.fetchImpl ?? ((url, init) => fetch(url, init));
   }
 
-  private async apt(query: string): Promise<PackageSuggestion[]> {
-    if (!this.options.runner) return [];
-    // Local and offline: apt-cache reads the index the image already built.
-    // Not `--names-only`: `github` is a name nobody ships, but `gh` describes
-    // itself as the GitHub CLI, which is what the user was looking for.
-    const result = await this.options.runner('apt-cache', ['search', query]);
-    if (result.code !== 0) return [];
+  private aptRows(stdout: string, query: string): PackageSuggestion[] {
     const suggestions: PackageSuggestion[] = [];
-    for (const line of result.stdout.split(/\r?\n/u).slice(0, APT_SCAN_LIMIT)) {
+    for (const line of stdout.split(/\r?\n/u).slice(0, APT_SCAN_LIMIT)) {
       const separator = line.indexOf(' - ');
       if (separator <= 0) continue;
       const name = line.slice(0, separator).trim();
@@ -109,6 +111,26 @@ export class PackageSuggestService {
       suggestions.push({ manager: 'apt', name, spec: name, description: line.slice(separator + 3).trim() });
     }
     return suggestions.sort(prefixFirst(query)).slice(0, APT_LIMIT);
+  }
+
+  private async apt(query: string): Promise<PackageSuggestion[]> {
+    // Local and offline, once the index exists. Not `--names-only`: `github` is
+    // a name nobody ships, but `gh` describes itself as the GitHub CLI, which is
+    // what the user was looking for.
+    const search = () => this.runner('apt-cache', ['search', query]);
+    const result = await search();
+    if (result.code !== 0) return [];
+    const rows = this.aptRows(result.stdout, query);
+    if (rows.length > 0 || this.aptIndexBuilt) return rows;
+
+    // The image deletes /var/lib/apt/lists to keep its layers small, and an
+    // empty index answers `apt-cache search` with no output and exit 0 - the
+    // same thing it does for a name that does not exist. Build the index once,
+    // then ask again. A failed update is not retried on the next keystroke.
+    this.aptIndexBuilt = true;
+    await this.runner('apt-get', ['update', '-qq']).catch(() => undefined);
+    const retry = await search().catch(() => null);
+    return retry && retry.code === 0 ? this.aptRows(retry.stdout, query) : [];
   }
 
   private async npm(query: string): Promise<PackageSuggestion[]> {
@@ -161,9 +183,11 @@ export class PackageSuggestService {
   }
 
   /**
-   * `auto` searches every source. A chosen manager searches only itself, so
-   * picking `aqua` cannot answer with npm packages; uv and pip are both PyPI,
-   * so the selected one is the manager the suggestion installs through.
+   * `auto` searches every source, GitHub included, so a name it only knows as
+   * a release shows up beside the npm and PyPI ones. A chosen manager searches
+   * only itself, so picking `aqua` cannot answer with npm packages; uv and pip
+   * are both PyPI, so the selected one is the manager the suggestion installs
+   * through.
    */
   async suggest(rawQuery: string, manager: SuggestManager = 'auto'): Promise<PackageSuggestion[]> {
     const query = rawQuery.trim();
@@ -182,7 +206,9 @@ export class PackageSuggestService {
         .then((rows) => rows.map((row) => ({ ...row, manager: target })))
         .catch(() => []));
     }
-    if (manager === 'aqua') sources.push(this.github(query).catch(() => []));
+    // `auto` has to include this or the answer to `github` - the CLI and its
+    // release - never appears beside the npm wrappers with the same name.
+    if (manager === 'auto' || manager === 'aqua') sources.push(this.github(query).catch(() => []));
 
     const collected = (await Promise.all(sources)).flat();
     const unique = new Map<string, PackageSuggestion>();
