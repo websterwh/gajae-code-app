@@ -10,7 +10,8 @@
     "untitledSession": "Unbenannte Unterhaltung",
     "newSession": "Unterhaltung beginnen",
     "fetchingProjects": "Workspaces und Unterhaltungen abrufen",
-    "projects": "Workspaces"
+    "projects": "Workspaces",
+    "pinned": "Angeheftet"
   },
   "sessions": {
     "work": "Aktiv",

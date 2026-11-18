@@ -10,7 +10,8 @@
     "untitledSession": "未命名對話",
     "newSession": "開始對話",
     "fetchingProjects": "正在獲取工作區和對話",
-    "projects": "工作區"
+    "projects": "工作區",
+    "pinned": "已釘選"
   },
   "sessions": {
     "work": "進行中",

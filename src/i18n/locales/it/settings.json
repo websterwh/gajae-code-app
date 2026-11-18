@@ -407,7 +407,7 @@
     "mempalaceDescription": "A persistent palace over MCP with an autosave hook. Installed with the image.",
     "mempalaceEnable": "Enable MemPalace",
     "mempalaceDisable": "Disable MemPalace",
-    "mempalaceIndependent": "Runs alongside the backend above, so both can be active.",
+    "mempalaceIndependent": "Funziona accanto a Local o Hindsight, quindi più di uno può essere attivo.",
     "mempalaceInstalledOnSelect": "If MemPalace is missing, enabling it installs it.",
     "mempalaceInitialized": "Initialized",
     "mempalaceReinit": "Re-initialize palace",

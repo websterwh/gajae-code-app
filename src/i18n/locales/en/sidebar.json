@@ -10,7 +10,8 @@
     "untitledSession": "Unnamed conversation",
     "newSession": "Start conversation",
     "fetchingProjects": "Retrieving workspaces and conversations",
-    "projects": "workspaces"
+    "projects": "workspaces",
+    "pinned": "Pinned"
   },
   "sessions": {
     "work": "Active",

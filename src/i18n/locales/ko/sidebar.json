@@ -10,7 +10,8 @@
     "untitledSession": "제목 없는 대화",
     "newSession": "대화 시작",
     "fetchingProjects": "워크스페이스와 대화를 가져오는 중",
-    "projects": "워크스페이스"
+    "projects": "워크스페이스",
+    "pinned": "고정됨"
   },
   "sessions": {
     "work": "진행 중",

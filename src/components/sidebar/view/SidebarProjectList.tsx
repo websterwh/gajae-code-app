@@ -127,12 +127,22 @@ export default function SidebarProjectList({
   );
 
   const showProjects = !isLoading && projects.length > 0 && filteredProjects.length > 0;
+  // sortProjects keeps starred workspaces on top, so the first row decides
+  // whether a Pinned group exists at all. No pinned rows, no header.
+  const hasPinnedGroup = showProjects && isProjectStarred(filteredProjects[0].projectId);
 
   return (
     <div className="pb-safe-area-inset-bottom md:space-y-1">
-      {!showProjects
-        ? state
-        : filteredProjects.map((project, index) => {
+      {!showProjects ? (
+        state
+      ) : (
+        <>
+          {hasPinnedGroup ? (
+            <div className="px-2 pt-1 pb-1 text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
+              {t('projects.pinned')}
+            </div>
+          ) : null}
+          {filteredProjects.map((project, index) => {
             // React key + per-project state lookups all use the DB `projectId`
             // so they remain stable across renames and session changes.
             // Pinned workspaces hold the top of the list; a hairline where they
@@ -144,8 +154,8 @@ export default function SidebarProjectList({
             return (
             <Fragment key={project.projectId}>
             {startsUnpinned ? (
-              <div role="separator" aria-hidden className="my-1 px-2">
-                <div className="h-px w-full bg-border/60" />
+              <div role="separator" aria-hidden className="my-1.5 px-2">
+                <div className="h-0.5 w-full rounded-full bg-border" />
               </div>
             ) : null}
             <SidebarProjectItem
@@ -196,6 +206,8 @@ export default function SidebarProjectList({
             </Fragment>
             );
           })}
+        </>
+      )}
     </div>
   );
 }

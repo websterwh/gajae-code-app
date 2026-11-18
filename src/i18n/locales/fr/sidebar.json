@@ -10,7 +10,8 @@
     "untitledSession": "Conversation sans nom",
     "newSession": "Démarrer une conversation",
     "fetchingProjects": "Récupération des espaces de travail et des conversations",
-    "projects": "espaces de travail"
+    "projects": "espaces de travail",
+    "pinned": "Épinglés"
   },
   "sessions": {
     "work": "En cours",

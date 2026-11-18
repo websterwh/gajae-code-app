@@ -10,7 +10,8 @@
     "untitledSession": "Adsız sohbet",
     "newSession": "Sohbet başlat",
     "fetchingProjects": "Çalışma alanları ve sohbetler alınıyor",
-    "projects": "çalışma alanları"
+    "projects": "çalışma alanları",
+    "pinned": "Sabitlenenler"
   },
   "sessions": {
     "work": "Etkin",

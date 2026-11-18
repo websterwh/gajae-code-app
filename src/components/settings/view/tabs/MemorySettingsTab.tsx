@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, Brain, CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
+import { AlertTriangle, Brain, Check, CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { authenticatedFetch } from '../../../../utils/api';
@@ -211,68 +211,76 @@ export default function MemorySettingsTab() {
             </p>
           ) : null}
           {!loading && view ? (
-            <div className="grid gap-2 p-4 sm:grid-cols-2" role="radiogroup" aria-label={t('memory.backend')}>
-              {BACKENDS.map((backend) => {
-                const label = providerLabel(backend);
-                const selected = view.backend === backend;
-                return (
+            <>
+              <p className="px-4 pt-3 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+                {t('memory.backend')}
+              </p>
+              {/* The three config.yml backends are exclusive; MemPalace is a
+                  switch beside them, which is what lets both be on at once. */}
+              <div className="grid gap-2 p-4 sm:grid-cols-2">
+                <div role="radiogroup" aria-label={t('memory.backend')} className="contents">
+                  {BACKENDS.map((backend) => {
+                    const label = providerLabel(backend);
+                    const selected = view.backend === backend;
+                    return (
+                      <button
+                        key={backend}
+                        type="button"
+                        role="radio"
+                        aria-checked={selected}
+                        disabled={busy !== null}
+                        onClick={() => choose(backend)}
+                        className={`flex items-start gap-2 rounded-lg border p-3 text-left transition-colors ${
+                          selected ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/40'
+                        }`}
+                      >
+                        <span className={`mt-1 inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border ${
+                          selected ? 'border-primary' : 'border-muted-foreground'
+                        }`}>
+                          {selected ? <span className="h-2 w-2 rounded-full bg-primary" /> : null}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                            {label.title}
+                            {selected && busy === `backend:${backend}` ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : null}
+                          </span>
+                          <span className="mt-0.5 block text-xs text-muted-foreground">{label.description}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {mempalace ? (
                   <button
-                    key={backend}
                     type="button"
-                    role="radio"
-                    aria-checked={selected}
+                    role="switch"
+                    aria-checked={mempalace.enabled}
+                    aria-label={t('memory.mempalace')}
                     disabled={busy !== null}
-                    onClick={() => choose(backend)}
+                    onClick={() => toggleMempalace(!mempalace.enabled)}
                     className={`flex items-start gap-2 rounded-lg border p-3 text-left transition-colors ${
-                      selected ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/40'
+                      mempalace.enabled ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/40'
                     }`}
                   >
-                    <span className={`mt-1 inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border ${
-                      selected ? 'border-primary' : 'border-muted-foreground'
+                    <span className={`mt-1 inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
+                      mempalace.enabled ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground'
                     }`}>
-                      {selected ? <span className="h-2 w-2 rounded-full bg-primary" /> : null}
+                      {mempalace.enabled ? <Check className="h-2.5 w-2.5" aria-hidden /> : null}
                     </span>
                     <span className="min-w-0">
                       <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-                        {label.title}
-                        {selected && busy === `backend:${backend}` ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : null}
+                        {t('memory.mempalace')}
+                        {mempalace.enabled ? <CheckCircle2 className="h-3 w-3 text-primary" aria-hidden /> : null}
+                        {busy === 'mempalace:on' || busy === 'mempalace:off' ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : null}
                       </span>
-                      <span className="mt-0.5 block text-xs text-muted-foreground">{label.description}</span>
+                      <span className="mt-0.5 block text-xs text-muted-foreground">{t('memory.mempalaceIndependent')}</span>
                     </span>
                   </button>
-                );
-              })}
-            </div>
+                ) : null}
+              </div>
+            </>
           ) : null}
         </SettingsCard>
-
-        {view ? (
-          <SettingsCard divided>
-            <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
-              <div className="min-w-0">
-                <p className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-                  <Brain className="h-3.5 w-3.5" aria-hidden />
-                  {t('memory.mempalace')}
-                  {mempalace?.enabled ? <CheckCircle2 className="h-3.5 w-3.5 text-primary" aria-hidden /> : null}
-                </p>
-                <p className="mt-0.5 text-xs text-muted-foreground">{t('memory.mempalaceIndependent')}</p>
-                <p className="mt-1 text-[11px] text-muted-foreground">{t('memory.mempalaceInstalledOnSelect')}</p>
-              </div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={Boolean(mempalace?.enabled)}
-                aria-label={t('memory.mempalace')}
-                className={buttonClass}
-                disabled={busy !== null}
-                onClick={() => toggleMempalace(!mempalace?.enabled)}
-              >
-                {busy === 'mempalace:on' || busy === 'mempalace:off' ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : null}
-                {mempalace?.enabled ? t('memory.mempalaceDisable') : t('memory.mempalaceEnable')}
-              </button>
-            </div>
-          </SettingsCard>
-        ) : null}
 
         {view?.backend === 'local' ? (
           <SettingsCard>
@@ -325,8 +333,12 @@ export default function MemorySettingsTab() {
         ) : null}
 
         {mempalace?.enabled && mempalace ? (
-          <>
+          <SettingsSection title={t('memory.mempalace')} description={t('memory.mempalaceInstalledOnSelect')}>
             <SettingsCard divided>
+              <p className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+                <Brain className="h-3.5 w-3.5" aria-hidden />
+                {t('memory.status')}
+              </p>
               <div className="flex flex-wrap gap-2 p-4" role="status" aria-label={t('memory.status')}>
                 <span className={chipClass}>
                   {mempalace.installed ? <CheckCircle2 className="h-3 w-3" aria-hidden /> : <AlertTriangle className="h-3 w-3" aria-hidden />}
@@ -358,7 +370,11 @@ export default function MemorySettingsTab() {
               ) : null}
             </SettingsCard>
 
-            <SettingsSection title={t('memory.initTitle')} description={t('memory.initHint')}>
+            <div className="space-y-2">
+              <div>
+                <h4 className="text-xs font-semibold text-foreground">{t('memory.initTitle')}</h4>
+                <p className="mt-0.5 text-xs text-muted-foreground">{t('memory.initHint')}</p>
+              </div>
               <SettingsCard>
                 <div className="flex flex-col gap-2 p-4 sm:flex-row sm:items-end">
                   <label className="min-w-0 flex-1 text-xs font-medium text-muted-foreground">
@@ -379,9 +395,13 @@ export default function MemorySettingsTab() {
                   </button>
                 </div>
               </SettingsCard>
-            </SettingsSection>
+            </div>
 
-            <SettingsSection title={t('memory.importTitle')} description={t('memory.importHint')}>
+            <div className="space-y-2">
+              <div>
+                <h4 className="text-xs font-semibold text-foreground">{t('memory.importTitle')}</h4>
+                <p className="mt-0.5 text-xs text-muted-foreground">{t('memory.importHint')}</p>
+              </div>
               <SettingsCard>
                 <div className="flex flex-col gap-2 p-4 sm:flex-row sm:items-end">
                   <label className="min-w-0 flex-1 text-xs font-medium text-muted-foreground">
@@ -398,8 +418,8 @@ export default function MemorySettingsTab() {
                   </button>
                 </div>
               </SettingsCard>
-            </SettingsSection>
-          </>
+            </div>
+          </SettingsSection>
         ) : null}
       </SettingsSection>
     </div>

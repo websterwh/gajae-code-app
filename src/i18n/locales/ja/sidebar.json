@@ -10,7 +10,8 @@
     "untitledSession": "無題の会話",
     "newSession": "会話を開始",
     "fetchingProjects": "ワークスペースと会話を取得中",
-    "projects": "ワークスペース"
+    "projects": "ワークスペース",
+    "pinned": "ピン留め"
   },
   "sessions": {
     "work": "進行中",
