@@ -84,14 +84,14 @@ which talks to the socket directly. Keeping an HTTP twin of every operation
 after the tool existed would have left a second path to the Docker daemon
 that no caller needed.
 
-None of these routes answers a LAN client that `allowLocal` admits without a
-sign-in unless the deployment also set `GAJAE_HOST_CONTROL`: the bypass covers
-read-only app surfaces, not the Docker daemon. With the variable set, that is
-the grant - it lives in the container's environment beside the socket mount and
-no request can set it - so the bypass covers `/api/host` too, and the capability
-switches still decide what any caller may do. Without it, `/api/host/status`
-answers `401 SIGN_IN_REQUIRED` in that topology, which the Settings tab reports
-instead of hiding the section.
+The sign-in gate treats these routes like every other app route: a client the
+`allowLocal` toggle admits without a session reaches them too, and nothing else
+adds a second auth rule on top. Host control does not need one - it is already
+gated twice over. `GAJAE_HOST_CONTROL` lives in the container's environment
+beside the socket mount, no request can set it, and without it every route here
+answers `available: false` and every capability is refused; with it, the
+switches still start off and decide what any caller may do. A deployment that
+wants a sign-in gate on host control turns `allowLocal` off.
 
 Each request checks the env gate, then the capability, so a process started
 without the variable cannot be talked into host access and one that loses it

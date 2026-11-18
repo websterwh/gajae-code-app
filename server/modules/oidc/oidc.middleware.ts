@@ -3,8 +3,6 @@ import type { NextFunction, Request, Response } from 'express';
 import { isDesktopMode } from '@/middleware/desktop-auth.js';
 import { isLoopbackAddress, isPrivateAddress, stripMappedV4 } from '@/shared/peer-address.js';
 
-import { hostControlAvailable } from '../host-control/index.js';
-
 import { oidcEnforcing, readOidcConfig, type OidcConfig } from './oidc.config.js';
 import { readSession } from './oidc.sessions.js';
 
@@ -34,34 +32,6 @@ export const OIDC_EXEMPT_PREFIXES = [
   '/ws',
   '/.well-known',
 ] as const;
-
-/**
- * Paths the local-access bypass never covers on its own. A trusted LAN address
- * is a convenience for reading the app, not a grant of control over the Docker
- * daemon, so host control needs either a session or the deployment's own
- * opt-in (see `coversLocalBypass`).
- */
-export const SESSION_ONLY_PREFIXES = ['/api/host'] as const;
-
-export function requiresSession(pathname: string): boolean {
-  return SESSION_ONLY_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
-}
-
-/**
- * Whether the local-access bypass reaches a path.
- *
- * Host control is the one surface it does not reach by default, because a LAN
- * address is not a statement about the Docker daemon. `GAJAE_HOST_CONTROL` is:
- * the operator puts it in the container's environment beside the socket mount,
- * and no request can set it. Requiring a sign-in on top of it was a dead end
- * for the LAN topology the bypass exists for - the operator who opted in still
- * could not reach their own switch - so the opt-in stands in for the session.
- * Without the variable every `/api/host` route is inert anyway, and with it the
- * capabilities stay off until they are switched on in Settings.
- */
-export function coversLocalBypass(pathname: string, env: NodeJS.ProcessEnv = process.env): boolean {
-  return !requiresSession(pathname) || hostControlAvailable(env);
-}
 
 /**
  * The app's own build output and public directory. This is a positive list,
@@ -253,6 +223,10 @@ function forwardedClientAddress(request: {
 /**
  * Whether a request reaches the app without a session: the desktop shell, sign-in
  * that is not enforcing, the NO_AUTH break-glass, or a trusted local address.
+ * There is no path carve-out: the local-access toggle is the one grant that
+ * covers the whole surface, and every route keeps its own permission checks on
+ * top of it (host control is inert without `GAJAE_HOST_CONTROL`, and its
+ * capabilities stay off until they are switched on in Settings).
  *
  * The WebSocket upgrade runs no HTTP middleware, so the handshake asks this
  * instead of restating the gate. Restating it is how a LAN deployment ended up
@@ -267,9 +241,6 @@ export function admitsWithoutSession(request: {
   const config = readOidcConfig();
   if (isDesktopMode() || !oidcEnforcing(config) || noAuthEnabled()) return true;
   if (!config.allowLocal) return false;
-  const target = String(request.url ?? '/');
-  const pathname = target.startsWith('/') ? target.split('?')[0] || '/' : '/';
-  if (!coversLocalBypass(pathname)) return false;
   const ip = forwardedClientAddress(request);
   const address = clientAddress({ socket: request.socket, headers: request.headers, ...(ip ? { ip } : {}) });
   return clientAddressAllowed(address, config.allowedIps);
@@ -281,7 +252,7 @@ export function createOidcGate(options: OidcGateOptions = {}) {
     if (isDesktopMode() || !oidcEnforcing(config) || isExemptPath(request.path)) return next();
     if (noAuthEnabled()) return next();
 
-    if (coversLocalBypass(request.path) && localAccessAdmits(request, config)) return next();
+    if (localAccessAdmits(request, config)) return next();
 
     const session = readSession(request.headers.cookie);
     if (session) return next();

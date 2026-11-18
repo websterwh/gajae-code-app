@@ -379,7 +379,7 @@
     "localAccessHint": "来自下方地址的请求会跳过登录门禁。列表为空时，允许回环地址和私有网段（10/8、172.16/12、192.168/16、fc00::/7）。",
     "allowedIps": "允许的 IP 地址",
     "allowedIpsHint": "以逗号分隔的地址或 IPv4 CIDR 网段，例如 192.168.1.0/24、10.0.0.5。",
-    "localAccessEffect": "来自 {{ranges}} 的客户端无需登录即可使用应用，包括 Shell 命令、终端和编辑文件。除非部署启用 GAJAE_HOST_CONTROL，否则主机控制（/api/host）仍需要会话。",
+    "localAccessEffect": "来自 {{ranges}} 的客户端无需登录即可使用应用，包括 Shell 命令、终端和编辑文件。",
     "discover": "测试发现",
     "save": "保存",
     "saved": "已保存",

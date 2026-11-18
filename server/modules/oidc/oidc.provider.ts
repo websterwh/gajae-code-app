@@ -17,7 +17,6 @@ export type OidcDiscovery = {
 export type OidcIdentity = {
   sub: string;
   email: string;
-  emailVerified: boolean;
   name?: string;
   /** Provider group names; empty when the `groups` scope was not granted. */
   groups: string[];
@@ -240,7 +239,6 @@ export async function completeSignIn(
   return {
     sub,
     email: email.toLowerCase(),
-    emailVerified: claims.email_verified !== false,
     // The display name comes from the provider, falling back to its username
     // claim before anything renders the address.
     name: typeof claims.name === 'string' && claims.name.trim()
@@ -257,9 +255,9 @@ export async function completeSignIn(
  * page. Every configured gate has to pass: an email list and a group list
  * together mean "this person, in this group", not "either".
  *
- * The provider's own `email_verified` flag is reported, never decisive: Pocket
- * ID leaves it unset for accounts it creates, and treating that as failure
- * locked the owner out of an app nobody else could reach.
+ * The provider's `email_verified` claim is not read: providers differ on when
+ * they set it (Pocket ID leaves it unset for accounts it creates), and the
+ * allowed-group list is what decides who signs in.
  */
 export function identityRejection(config: OidcConfig, identity: OidcIdentity): string | null {
   if (!config.allowedGroups.length) {

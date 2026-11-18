@@ -8,11 +8,9 @@ import {
   OIDC_EXEMPT_PREFIXES,
   clientAddress,
   clientAddressAllowed,
-  coversLocalBypass,
   isExemptPath,
   localAccessAdmits,
   noAuthEnabled,
-  requiresSession,
 } from './oidc.middleware.js';
 import {
   buildAuthorizeUrl,
@@ -100,7 +98,7 @@ test('an RS256 id_token is verified end to end', async () => {
   const nonce = 'nonce-value';
   const { issuer, server } = await startIssuer({
     aud: 'gajae-test', sub: 'subject-1', email: 'Owner@Example.com',
-    email_verified: true, nonce, exp: future(),
+    nonce, exp: future(),
   });
   try {
     const config = configFor(issuer);
@@ -110,7 +108,6 @@ test('an RS256 id_token is verified end to end', async () => {
     });
     assert.equal(identity.sub, 'subject-1');
     assert.equal(identity.email, 'owner@example.com');
-    assert.equal(identity.emailVerified, true);
   } finally {
     server.close();
   }
@@ -155,19 +152,17 @@ test('the authorize URL carries PKCE, state and nonce', () => {
   assert.ok(url.searchParams.get('code_challenge'));
 });
 
-test('an empty allowed-group list admits nobody, and the provider flag is still not the gate', () => {
+test('an empty allowed-group list admits nobody', () => {
   const base = configFor('https://auth.example.com');
-  const identity = { sub: 's', email: 'owner@example.com', emailVerified: true, groups: ['gajae-admins'] };
+  const identity = { sub: 's', email: 'owner@example.com', groups: ['gajae-admins'] };
   assert.equal(identityAllowed(base, identity), false);
   assert.match(String(identityRejection(base, identity)), /allowed group/u);
-  // The provider's flag is reported, not decisive: Pocket ID leaves it unset for
-  // accounts it creates, and the group is what decides.
-  assert.equal(identityAllowed({ ...base, allowedGroups: ['gajae-admins'] }, { ...identity, emailVerified: false }), true);
+  assert.equal(identityAllowed({ ...base, allowedGroups: ['gajae-admins'] }, identity), true);
 });
 
 test('groups gate sign-in and every configured list has to pass', () => {
   const base = configFor('https://auth.example.com');
-  const identity = { sub: 's', email: 'owner@example.com', emailVerified: true, groups: ['Gajae-Admins'] };
+  const identity = { sub: 's', email: 'owner@example.com', groups: ['Gajae-Admins'] };
   assert.equal(identityAllowed({ ...base, allowedGroups: ['gajae-admins'] }, identity), true);
   assert.equal(identityAllowed({ ...base, allowedGroups: ['other'] }, identity), false);
   assert.equal(identityAllowed({ ...base, allowedGroups: ['other'] }, { ...identity, groups: [] }), false);
@@ -175,7 +170,7 @@ test('groups gate sign-in and every configured list has to pass', () => {
 
 test('a rejection names the gate that refused the identity', () => {
   const base = { ...configFor('https://auth.example.com'), allowedGroups: ['staff'] };
-  const identity = { sub: 's', email: 'owner@example.com', emailVerified: true, groups: ['staff'] };
+  const identity = { sub: 's', email: 'owner@example.com', groups: ['staff'] };
   assert.equal(identityRejection(base, identity), null);
   assert.match(String(identityRejection({ ...base, allowedGroups: ['admins'] }, identity)), /staff/u);
   assert.match(String(identityRejection({ ...base, allowedGroups: ['admins'] }, { ...identity, groups: [] })), /no groups/u);
@@ -325,22 +320,11 @@ test('the gate is inert until the config is complete, and the exemption list is 
   assert.deepEqual([...OIDC_EXEMPT_PREFIXES], [
     '/health', '/api/auth', '/api/gjc', '/api/desktop', '/ws', '/.well-known',
   ]);
-  // A trusted LAN address may read the app without signing in, but it never
-  // reaches host control that way.
-  for (const path of ['/api/host', '/api/host/discovery', '/api/host/settings']) {
-    assert.equal(requiresSession(path), true, `${path} must not skip sign-in for local addresses`);
+  // A local-access client reaches the same routes every other client does -
+  // including host control, which is inert without GAJAE_HOST_CONTROL and
+  // starts with every capability switched off, so the toggle is the grant and
+  // not a way around it.
+  for (const path of ['/api/settings', '/api/host/status', '/api/host/settings']) {
+    assert.equal(isExemptPath(path), false, `${path} still needs a session when local access is off`);
   }
-  for (const path of ['/api/settings', '/api/hostile']) {
-    assert.equal(requiresSession(path), false, path);
-  }
-  // The deployment's own opt-in is what lets the bypass cover host control:
-  // the variable is set in the container environment, never by a request, and
-  // without it every /api/host route is inert, so a sign-in would protect
-  // nothing but would lock the operator out of the switch they just enabled.
-  assert.equal(coversLocalBypass('/api/settings', {}), true);
-  assert.equal(coversLocalBypass('/api/host/status', {}), false);
-  assert.equal(coversLocalBypass('/api/host/status', { GAJAE_HOST_CONTROL: '0' }), false);
-  assert.equal(coversLocalBypass('/api/host/status', { GAJAE_HOST_CONTROL: '1' }), true);
-  assert.equal(coversLocalBypass('/api/host/status', { GAJAE_HOST_CONTROL: 'true' }), true);
-  assert.equal(coversLocalBypass('/api/host/status', { GAJAE_HOST_CONTROL: 'false' }), false);
 });

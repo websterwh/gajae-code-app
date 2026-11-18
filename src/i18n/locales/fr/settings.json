@@ -379,7 +379,7 @@
     "localAccessHint": "Les requêtes venant des adresses ci-dessous contournent le contrôle de connexion. Si la liste est vide, la boucle locale et les plages privées (10/8, 172.16/12, 192.168/16, fc00::/7) sont autorisées.",
     "allowedIps": "Adresses IP autorisées",
     "allowedIpsHint": "Adresses ou plages CIDR IPv4 séparées par des virgules, par ex. 192.168.1.0/24, 10.0.0.5.",
-    "localAccessEffect": "Un client sur {{ranges}} peut utiliser l’application sans se connecter — y compris les commandes shell, les terminaux et la modification de fichiers. Le contrôle de l’hôte (/api/host) exige toujours une session, sauf si le déploiement active GAJAE_HOST_CONTROL.",
+    "localAccessEffect": "Un client sur {{ranges}} peut utiliser l’application sans se connecter — y compris les commandes shell, les terminaux et la modification de fichiers.",
     "discover": "Tester la découverte",
     "save": "Enregistrer",
     "saved": "Enregistré",

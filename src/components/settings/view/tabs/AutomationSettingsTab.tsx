@@ -160,7 +160,7 @@ export default function AutomationSettingsTab() {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const [statusResponse, grantsResponse, backendResponse, egoReadinessResponse, egoActivityResponse, remoteDevicesResponse, hostControlResponse] = await Promise.all([
+      const [statusResponse, grantsResponse, backendResponse, egoReadinessResponse, egoActivityResponse, remoteDevicesResponse] = await Promise.all([
         fetch('/api/automation/status'),
         fetch('/api/automation/grants'),
         fetch('/api/automation/browser-backend'),
@@ -169,7 +169,6 @@ export default function AutomationSettingsTab() {
         // observes a browser.
         fetch('/api/automation/ego-activity'),
         fetch('/api/automation/remote-computers'),
-        fetch('/api/host/status'),
       ]);
       if (statusResponse.ok) setStatus(await statusResponse.json() as Status);
       if (grantsResponse.ok) setGrants(await grantsResponse.json() as Grants);
@@ -193,10 +192,20 @@ export default function AutomationSettingsTab() {
         setSelectedRemoteDeviceId(remote.selectedDeviceId);
         setCompanionDownloadTemplate(typeof remote.companionDownloadTemplate === 'string' ? remote.companionDownloadTemplate : null);
       }
-      if (hostControlResponse.ok) setHostControl(await hostControlResponse.json() as HostControl);
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  // Read on its own: host control is a separate surface with its own failures,
+  // and a query that fails here must not blank it just because an automation
+  // call in the same batch threw or answered with something that is not JSON.
+  const refreshHostControl = useCallback(async () => {
+    try {
+      const response = await fetch('/api/host/status');
+      if (!response.ok) return;
+      setHostControl(await response.json() as HostControl);
+    } catch { /* The section keeps its standing "could not be read" note. */ }
   }, []);
 
   const changeBrowserBackend = async (backend: BrowserBackend) => {
@@ -365,7 +374,8 @@ export default function AutomationSettingsTab() {
 
   useEffect(() => {
     void refresh().catch(() => setLoading(false));
-  }, [refresh]);
+    void refreshHostControl();
+  }, [refresh, refreshHostControl]);
 
   // The server is the scope of record; the field only edits a draft of it.
   useEffect(() => {
@@ -655,8 +665,8 @@ export default function AutomationSettingsTab() {
          is the one switch here that reaches the machine the app runs on.
          It renders even when /api/host/status could not be read, because a
          row that silently disappears reads as "this build has no such
-         setting" - which is what a LAN session that has not signed in sees,
-         since host control is not exempt from the sign-in gate. */}
+         setting" - which is what a deployment without GAJAE_HOST_CONTROL
+         sees, since the section still has to say why it is inert. */}
       <SettingsSection title={t('automation.hostControl.label')} description={t('automation.hostControl.description')}>
         <SettingsCard divided>
           <SettingsRow label={t('automation.hostControl.enableLabel')} description={t('automation.hostControl.enableDescription')}>

@@ -232,18 +232,6 @@ export function createOidcRouter() {
       return fail(response, 403, 'OIDC_IDENTITY_NOT_ALLOWED', `Sign-in is not allowed for ${identity.email}. ${rejection}`);
     }
 
-    // `email_verified === false` is the only signal a provider gives that the
-    // address is unproven. Binding it onto an existing local account would be
-    // a takeover of that account's row, so only a fresh identity may proceed.
-    if (!identity.emailVerified) {
-      const existing = getConnection()
-        .prepare('SELECT id FROM users WHERE username = ? LIMIT 1')
-        .get(identity.email) as { id: number } | undefined;
-      if (existing) {
-        return fail(response, 403, 'OIDC_EMAIL_UNVERIFIED', 'The provider has not verified this email address.');
-      }
-    }
-
     const owner = ensureOwner(identity);
     const session = seal({
       sub: identity.sub,

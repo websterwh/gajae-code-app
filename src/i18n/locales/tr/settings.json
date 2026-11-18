@@ -379,7 +379,7 @@
     "localAccessHint": "Aşağıdaki adreslerden gelen istekler oturum açma kapısını atlar. Liste boşsa geri döngü ve özel aralıklar (10/8, 172.16/12, 192.168/16, fc00::/7) izinlidir.",
     "allowedIps": "İzin verilen IP adresleri",
     "allowedIpsHint": "Virgülle ayrılmış adresler veya IPv4 CIDR aralıkları, ör. 192.168.1.0/24, 10.0.0.5.",
-    "localAccessEffect": "{{ranges}} üzerindeki bir istemci, oturum açmadan uygulamayı kullanabilir; buna kabuk komutları, terminaller ve dosya düzenleme dahildir. Ana makine denetimi (/api/host) için, dağıtım GAJAE_HOST_CONTROL’ü etkinleştirmediği sürece yine oturum gerekir.",
+    "localAccessEffect": "{{ranges}} üzerindeki bir istemci, oturum açmadan uygulamayı kullanabilir; buna kabuk komutları, terminaller ve dosya düzenleme dahildir.",
     "discover": "Keşfi dene",
     "save": "Kaydet",
     "saved": "Kaydedildi",

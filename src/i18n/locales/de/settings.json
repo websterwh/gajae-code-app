@@ -379,7 +379,7 @@
     "localAccessHint": "Anfragen von den untenstehenden Adressen umgehen die Anmeldesperre. Ist die Liste leer, sind Loopback und private Bereiche (10/8, 172.16/12, 192.168/16, fc00::/7) erlaubt.",
     "allowedIps": "Erlaubte IP-Adressen",
     "allowedIpsHint": "Komma-getrennte Adressen oder IPv4-CIDR-Bereiche, z. B. 192.168.1.0/24, 10.0.0.5.",
-    "localAccessEffect": "Ein Client aus {{ranges}} kann die App ohne Anmeldung nutzen – einschließlich Shell-Befehlen, Terminals und Dateibearbeitung. Die Host-Steuerung (/api/host) erfordert weiterhin eine Sitzung, es sei denn, die Bereitstellung aktiviert GAJAE_HOST_CONTROL.",
+    "localAccessEffect": "Ein Client aus {{ranges}} kann die App ohne Anmeldung nutzen – einschließlich Shell-Befehlen, Terminals und Dateibearbeitung.",
     "discover": "Discovery testen",
     "save": "Speichern",
     "saved": "Gespeichert",

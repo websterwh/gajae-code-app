@@ -8,7 +8,6 @@ export {
   admitsWithoutSession,
   clientAddress,
   clientAddressAllowed,
-  coversLocalBypass,
   createOidcGate,
   isExemptPath,
   localAccessAdmits,
