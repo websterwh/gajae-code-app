@@ -3,6 +3,7 @@ import type { TFunction } from 'i18next';
 
 import { GITHUB_ISSUES_URL, GITHUB_REPOSITORY_URL } from '../../../constants/branding';
 
+import SidebarAccountButton from './SidebarAccountButton';
 import SidebarDesktopUpdate from './SidebarDesktopUpdate';
 import SidebarProviderQuota from './SidebarProviderQuota';
 
@@ -42,6 +43,7 @@ export default function SidebarFooter({
 
       <div className="flex items-center justify-between px-1 pt-0.5">
         <div className="flex items-center gap-0.5">
+          <SidebarAccountButton onShowSettings={onShowSettings} t={t} />
           <button className={utilityClassName} onClick={onOpenArchive} aria-label={t('archived.openArchive', 'Open archive')} title={t('archived.openArchive', 'Open archive')}>
             <Archive className="size-4" />
           </button>

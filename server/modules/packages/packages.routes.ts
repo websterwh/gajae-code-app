@@ -47,9 +47,12 @@ export function createPackagesRouter(
     }
   }));
 
+  // 202, not 201: the install is queued and the row reports `installing` until
+  // it finishes. Waiting for the install here is what made the page hang on a
+  // cargo build or an apt download.
   router.post('/', asyncHandler(async (request, response) => {
     try {
-      response.status(201).json({ success: true, data: await service.add(request.body ?? {}) });
+      response.status(202).json({ success: true, data: service.queue(request.body ?? {}) });
     } catch (error) {
       fail(response, error);
     }

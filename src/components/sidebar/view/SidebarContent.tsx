@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { TFunction } from 'i18next';
 
 import { ScrollArea } from '../../../shared/view/ui';
@@ -90,6 +90,29 @@ export default function SidebarContent({
   // empty header asking the user to start a conversation was not status.
   const showWork = hasProjects && workRows.length > 0;
   const showsFilterEmptyState = filter.active && filter.matchCount === 0 && !projectListProps.isLoading;
+  const setFilterQuery = filter.setQuery;
+  const filterInputRef = filter.inputRef;
+  const filterQuery = filter.query;
+  const noConversationOpen = projectListProps.selectedSession === null;
+
+  // With no conversation open there is nowhere else for a keystroke to go, so
+  // typing starts a conversation search. It is deliberately only that case: a
+  // field keeps its keys, and with a chat open the composer owns them - the
+  // old document-wide shortcut stole the text that was meant for the message.
+  useEffect(() => {
+    if (isArchiveOpen || !noConversationOpen) return undefined;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.key.length !== 1 || event.key === ' ') return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('input, textarea, select, [contenteditable="true"], [role="textbox"]')) return;
+      event.preventDefault();
+      setFilterQuery(filterQuery + event.key);
+      filterInputRef.current?.focus();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [filterInputRef, filterQuery, isArchiveOpen, noConversationOpen, setFilterQuery]);
 
   // A conversation in Work is also in its workspace's tree. Only the list the
   // user picked it from shows it selected - two highlighted rows read as two
@@ -146,7 +169,7 @@ export default function SidebarContent({
               t={t}
             />
           )}
-          {hasProjects && <SidebarFilterInput value={filter.query} onChange={filter.setQuery} inputRef={filter.inputRef} t={t} />}
+          {hasProjects && <SidebarFilterInput value={filterQuery} onChange={setFilterQuery} inputRef={filterInputRef} t={t} />}
         </>
       )}
 

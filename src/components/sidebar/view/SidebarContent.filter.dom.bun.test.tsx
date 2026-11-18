@@ -5,7 +5,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { MemoryRouter } from 'react-router-dom';
 
 import SidebarContent from './SidebarContent';
-import { makeSidebarT, sidebarContentPropsFixture } from './SidebarContent.testFixture';
+import { makeSidebarT, sidebarContentPropsFixture, sidebarProjectsFixture } from './SidebarContent.testFixture';
 import type { SidebarProjectListProps } from './SidebarProjectList';
 
 /** The body search streams over SSE; the test environment has none, and the title filter must still work. */
@@ -77,26 +77,38 @@ test('an active query shows hits inside a collapsed project and hands the state 
   assert.equal(projects().queryAllByText('Review pending decision').length, 0, 'collapsed again once the query is gone');
 });
 
-test('typing on the page never pulls focus into the filter', async () => {
+test('with no conversation open a keystroke starts the conversation search', async () => {
   const input = await mountSidebar();
+
+  // Nothing selected, nothing focused: the keystroke has no other home, so it
+  // becomes the first character of the filter.
+  const typed = new KeyboardEvent('keydown', { key: 'p', bubbles: true, cancelable: true });
+  act(() => { document.body.dispatchEvent(typed); });
+
+  assert.equal(document.activeElement, input, 'the filter takes focus');
+  assert.equal(input.value, 'p');
+  assert.equal(typed.defaultPrevented, true, 'and the keystroke is not lost to the page');
+});
+
+test('an open conversation and a focused field keep their keys', async () => {
+  const session = sidebarProjectsFixture[0]?.sessions?.[0];
+  assert.ok(session);
+  const input = await mountSidebar({ selectedSession: { ...session, __provider: 'gjc' } });
+
   const other = document.createElement('textarea');
   document.body.append(other);
-
   other.focus();
   fireEvent.keyDown(other, { key: '/' });
-  assert.notEqual(document.activeElement, input, 'typing a slash into the composer is left alone');
+  assert.equal(input.value, '', 'typing a slash into the composer is left alone');
 
   other.blur();
-  // A document-wide `/` shortcut here used to send everything typed next into
-  // this field, so a message meant for the conversation was never written. The
-  // composer owns unclaimed keystrokes now; the filter is entered by click or
-  // by tabbing to it.
+  // With a conversation selected the composer owns unclaimed keystrokes: the
+  // old document-wide shortcut sent what was meant for the message into the
+  // filter instead.
   const slash = new KeyboardEvent('keydown', { key: '/', bubbles: true, cancelable: true });
   act(() => { document.body.dispatchEvent(slash); });
-  assert.notEqual(document.activeElement, input, 'a slash with nothing focused is not a sidebar shortcut');
+  assert.notEqual(document.activeElement, input);
   assert.equal(slash.defaultPrevented, false, 'and is left for the composer');
-
-  fireEvent.keyDown(input, { key: 'Escape' });
-  assert.notEqual(document.activeElement, input, 'Escape on an empty field returns focus to the page');
+  assert.equal(input.value, '');
   other.remove();
 });

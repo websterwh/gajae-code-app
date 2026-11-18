@@ -248,13 +248,25 @@ export default function ModelAndReasoningPicker({
   const returnFocus = useRef(false);
   const [query, setQuery] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
+  /**
+   * The model picked here, shown until the session reports it back.
+   *
+   * The live session report outranks every fallback in `resolveDisplayModel`,
+   * and that report only moves once the next turn starts - so right after a
+   * click the trigger kept naming the previous model while the choice had in
+   * fact been saved (a new conversation showed it). The choice is local to
+   * this control, so it cannot leak onto another session's trigger.
+   */
+  const [chosenModel, setChosenModel] = useState<string | null>(null);
 
   const allGroups = useMemo(
     () => deriveSessionModelOptions(modelOptions, presetOptions, availabilityKnown),
     [modelOptions, presetOptions, availabilityKnown],
   );
   const groups = useMemo(() => filterSessionModelGroups(allGroups, query), [allGroups, query]);
-  const displayModel = resolveDisplayModel(value, currentModel, presetOptions);
+  const displayModel = chosenModel
+    ? resolveDisplayModel(chosenModel, undefined, presetOptions)
+    : resolveDisplayModel(value, currentModel, presetOptions);
   const displayModelLabel = modelDisplayLabel(displayModel, modelOptions);
   const isRawSelection = value !== DEFAULT_MODEL_VALUE && !value.startsWith('profile:');
   const displayedEffort = displayedReasoningEffort(reasoningEffort, displayModel, modelOptions);
@@ -288,6 +300,12 @@ export default function ModelAndReasoningPicker({
     width: POPUP_WIDTH,
   });
 
+  // Once the session names the chosen model, the choice is no longer pending
+  // and the trigger follows the session again.
+  useEffect(() => {
+    if (chosenModel && currentModel?.trim() === chosenModel) setChosenModel(null);
+  }, [chosenModel, currentModel]);
+
   useEffect(() => {
     if (!open) {
       setActiveProvider(null);
@@ -307,6 +325,7 @@ export default function ModelAndReasoningPicker({
     setSelecting(true);
     try {
       await persistChosenModel(modelId, value, onSelect);
+      setChosenModel(modelId);
     } finally {
       setSelecting(false);
     }
@@ -328,6 +347,7 @@ export default function ModelAndReasoningPicker({
     setSelecting(true);
     try {
       await persistChosenModel(DEFAULT_MODEL_VALUE, value, onSelect);
+      setChosenModel(DEFAULT_MODEL_VALUE);
     } finally {
       setSelecting(false);
     }

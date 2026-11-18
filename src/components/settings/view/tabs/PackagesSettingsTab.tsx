@@ -27,6 +27,8 @@ type PackageRow = {
   desired: boolean;
   status: 'installed' | 'failed' | 'missing';
   version: string | null;
+  /** The server is installing this row right now. */
+  installing?: boolean;
   error?: string;
   updatedAt?: string;
 };
@@ -89,13 +91,15 @@ export default function PackagesSettingsTab() {
   const [confirming, setConfirming] = useState<PackageRow | null>(null);
   const skipPinCommit = useRef(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (): Promise<PackageRow[]> => {
     try {
       const next = await request<PackageRow[]>('/api/packages');
       setRows(next);
       setError('');
+      return next;
     } catch (loadError) {
       setError(`${t('packages.loadFailed')} ${messageOf(loadError)}`);
+      return [];
     } finally {
       setLoading(false);
     }
@@ -144,6 +148,42 @@ export default function PackagesSettingsTab() {
 
   const suggestions = search.kind === 'ready' ? search.suggestions : [];
 
+  // Installs run for minutes on the server (a cargo build, an apt download),
+  // so the POST is queued and this page polls the list until no row reports
+  // `installing`. Awaiting the POST froze every control until it finished.
+  const pollStartedAt = useRef(0);
+  const [polling, setPolling] = useState(false);
+  const beginPolling = () => {
+    pollStartedAt.current = Date.now();
+    setPolling(true);
+  };
+
+  useEffect(() => {
+    if (!polling) return undefined;
+    const timer = window.setInterval(() => {
+      void load().then((next) => {
+        // The queue writes the row only after the POST has answered, so "no
+        // row is installing" in the first seconds is not the work ending.
+        if (!next.some((row) => row.installing) && Date.now() - pollStartedAt.current > 8_000) {
+          setPolling(false);
+        }
+      });
+    }, 2_000);
+    return () => window.clearInterval(timer);
+  }, [polling, load]);
+
+  const queueInstall = async (body: { manager: Manager; spec: string; pin: string | null }): Promise<boolean> => {
+    setError('');
+    try {
+      await request('/api/packages', { method: 'POST', body: JSON.stringify(body) });
+      beginPolling();
+      return true;
+    } catch (queueError) {
+      setError(`${t('packages.actionFailed')} ${messageOf(queueError)}`);
+      return false;
+    }
+  };
+
   const run = async (key: string, action: () => Promise<unknown>) => {
     setBusy(key);
     setError('');
@@ -178,24 +218,20 @@ export default function PackagesSettingsTab() {
     const spec = form.spec.trim();
     if (!spec) return;
     const manager = resolveManager(spec);
-    void run('add', async () => {
-      await request('/api/packages', {
-        method: 'POST',
-        body: JSON.stringify({ manager, spec, pin: form.pin.trim() || null }),
-      });
-      setForm({ ...form, spec: '', pin: '' });
+    void queueInstall({ manager, spec, pin: form.pin.trim() || null }).then((queued) => {
+      if (queued) setForm({ ...form, spec: '', pin: '' });
     });
   };
 
   // Clicking a suggestion is the install: the manager that recognised the
   // name is the one that runs, so the user does not have to know which it was.
+  // The form is left alone - writing the clicked manager into it flipped the
+  // filter from auto to apt and restarted the search under the chip, so the
+  // first click read as "it only changed the filter" and the install looked
+  // like it needed a second click.
   const installSuggestion = (suggestion: PackageSuggestion) => {
-    setForm({ ...form, manager: suggestion.manager, spec: suggestion.spec, pin: '' });
     setSearch({ kind: 'idle' });
-    void run(`add:${suggestion.manager}:${suggestion.name}`, () => request('/api/packages', {
-      method: 'POST',
-      body: JSON.stringify({ manager: suggestion.manager, spec: suggestion.spec, pin: null }),
-    }));
+    void queueInstall({ manager: suggestion.manager, spec: suggestion.spec, pin: null });
   };
 
   const retry = (row: PackageRow) => void run(`retry:${row.manager}:${row.name}`, () => request('/api/packages', {
@@ -336,7 +372,10 @@ export default function PackagesSettingsTab() {
                 : t('packages.statusMissing');
             // Rows that can be pinned carry the version on the control itself;
             // the rest keep it in the status line.
-            const versionControl = row.desired;
+            // A row installed by a catalog entry (mobile MCP, for one) is in
+            // the ledger but was never added here; it still has a version to
+            // pin and a binary to remove.
+            const versionControl = Boolean(row.version);
             const version = row.pin ?? row.version;
             return (
               <div key={key} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
@@ -347,10 +386,12 @@ export default function PackagesSettingsTab() {
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                     <span className="inline-flex items-center gap-1">
-                      {row.status === 'installed'
-                        ? <CheckCircle2 className="h-3 w-3" aria-hidden />
-                        : <AlertTriangle className="h-3 w-3" aria-hidden />}
-                      {statusLabel}
+                      {row.installing
+                        ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+                        : row.status === 'installed'
+                          ? <CheckCircle2 className="h-3 w-3" aria-hidden />
+                          : <AlertTriangle className="h-3 w-3" aria-hidden />}
+                      {row.installing ? t('packages.installing', 'Installing…') : statusLabel}
                       {row.version && !versionControl ? ` · ${row.version}` : ''}
                     </span>
                     {row.updatedAt ? <span>{new Date(row.updatedAt).toLocaleDateString()}</span> : null}
@@ -410,7 +451,7 @@ export default function PackagesSettingsTab() {
                       </button>
                     </div>
                   ) : null}
-                  {row.source === 'ui' ? (
+                  {row.source !== 'env' ? (
                     <button
                       type="button"
                       disabled={busy !== null}

@@ -36,6 +36,8 @@ export type PackageRow = {
   desired: boolean;
   status: PackageStatus;
   version: string | null;
+  /** An install for this row is running right now; the page polls until it stops. */
+  installing?: boolean;
   error?: string;
   updatedAt?: string;
 };
@@ -75,6 +77,7 @@ export class PackagesService {
   private readonly env: NodeJS.ProcessEnv;
   private readonly runner: CommandRunner;
   private chain: Promise<unknown> = Promise.resolve();
+  private readonly inFlight = new Set<string>();
 
   constructor(private readonly options: PackagesServiceOptions = {}) {
     this.env = { ...process.env, ...(options.env ?? {}) };
@@ -171,6 +174,10 @@ export class PackagesService {
       }
     }
 
+    for (const row of rows.values()) {
+      if (this.inFlight.has(id(row.manager, row.name))) row.installing = true;
+    }
+
     const order = new Map(INSTALL_MANAGERS.map((manager, index) => [manager, index]));
     return [...rows.values()].sort((a, b) => (
       (order.get(a.manager) ?? 0) - (order.get(b.manager) ?? 0) || a.name.localeCompare(b.name)
@@ -186,11 +193,40 @@ export class PackagesService {
     const pin = normalizePin(input.pin);
 
     return this.serialize(async () => {
-      const desired = await readDesired(this.desiredFile());
-      upsertDesired(desired, { manager, name: parsed.name, spec, pin, addedAt: this.now() });
-      await writeDesired(this.desiredFile(), desired);
-      return this.install(manager, spec, parsed.name, pin);
+      const key = `${manager}:${parsed.name}`;
+      this.inFlight.add(key);
+      try {
+        const desired = await readDesired(this.desiredFile());
+        upsertDesired(desired, { manager, name: parsed.name, spec, pin, addedAt: this.now() });
+        await writeDesired(this.desiredFile(), desired);
+        return await this.install(manager, spec, parsed.name, pin);
+      } finally {
+        this.inFlight.delete(key);
+      }
     });
+  }
+
+  /**
+   * Start an install without holding the HTTP response open for it.
+   *
+   * A cargo build or an apt download runs for minutes; the page polls `list()`
+   * instead, where the row reports `installing` until the work has finished or
+   * been recorded as failed. The install itself is still serialized, so two
+   * clicks queue instead of fighting over the same tool directories.
+   */
+  queue(input: { manager?: unknown; spec?: unknown; pin?: unknown }): PackageRow {
+    const manager = managerOf(input.manager);
+    const spec = String(input.spec ?? '').trim();
+    if (!spec) throw new Error('A package spec is required.');
+    const parsed = parsePackageSpec(spec);
+    if (!parsed.name) throw new Error('The package spec has no name.');
+    const pin = normalizePin(input.pin);
+    void this.add({ manager, spec, pin }).catch((error: unknown) => {
+      // The outcome is in the ledger and shows on the row; the request that
+      // queued this install has already answered.
+      console.error(`[packages] ${manager}:${parsed.name} install failed:`, error instanceof Error ? error.message : error);
+    });
+    return { manager, name: parsed.name, spec, pin, source: 'ui', desired: true, status: 'missing', version: null, installing: true };
   }
 
   /** Pinning reinstalls at that version when the installed one differs. */
@@ -199,18 +235,27 @@ export class PackagesService {
     const pin = normalizePin(value);
 
     return this.serialize(async () => {
-      const desired = await readDesired(this.desiredFile());
-      const entry = desired.packages[manager][name];
-      // A package seeded by the container has no desired entry yet; pinning it
-      // creates the override beside the seed instead of failing.
-      const seed = envSeeds(this.env).find((row) => (
-        row.manager === manager && parsePackageSpec(row.spec).name === name
-      ));
-      const spec = entry?.spec ?? seed?.spec;
-      if (!spec) throw new Error('Package was not found.');
-      upsertDesired(desired, { manager, name, spec, pin, addedAt: this.now() });
-      await writeDesired(this.desiredFile(), desired);
-      return this.install(manager, spec, name, pin);
+      const key = `${manager}:${name}`;
+      this.inFlight.add(key);
+      try {
+        const desired = await readDesired(this.desiredFile());
+        const entry = desired.packages[manager][name];
+        // A package seeded by the container has no desired entry yet, and one
+        // installed by a catalog entry (mobile MCP, say) exists only in the
+        // ledger. Both can be pinned, so the spec is read from whichever row
+        // this was listed from.
+        const seed = envSeeds(this.env).find((row) => (
+          row.manager === manager && parsePackageSpec(row.spec).name === name
+        ));
+        const ledger = entry || seed ? null : await readLedger(this.ledgerFile());
+        const spec = entry?.spec ?? seed?.spec ?? ledger?.packages[manager][name]?.spec;
+        if (!spec) throw new Error('Package was not found.');
+        upsertDesired(desired, { manager, name, spec, pin, addedAt: this.now() });
+        await writeDesired(this.desiredFile(), desired);
+        return await this.install(manager, spec, name, pin);
+      } finally {
+        this.inFlight.delete(key);
+      }
     });
   }
 
