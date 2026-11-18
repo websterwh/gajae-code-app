@@ -1,5 +1,5 @@
-import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
-import { CheckCircle2, Clipboard, ExternalLink, KeyRound, Loader2, ShieldCheck, X } from 'lucide-react';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { CheckCircle2, Clipboard, ExternalLink, KeyRound, Loader2, Search, ShieldCheck, X } from 'lucide-react';
 
 import { Button, Dialog, DialogContent, DialogTitle, Input } from '../../shared/view/ui';
 
@@ -23,6 +23,43 @@ type OAuthLoginDialogProps = {
   onDismiss: () => void;
   onRetry: () => void;
 };
+
+/**
+ * Telling more than a dozen providers apart by scrolling is the slow part of
+ * signing in, so the list is searchable. Matching is forgiving: every search
+ * term only has to appear as a subsequence ("ghcp" finds "GitHub Copilot"),
+ * and the closest names rise to the top. Empty terms match everything.
+ */
+function isSubsequence(needle: string, haystack: string): boolean {
+  let cursor = 0;
+  for (const character of haystack) {
+    if (character !== needle[cursor]) continue;
+    cursor += 1;
+    if (cursor === needle.length) return true;
+  }
+  return false;
+}
+
+function providerRank(provider: OAuthProvider, query: string): number {
+  const name = provider.name.toLowerCase();
+  if (name === query) return 0;
+  if (name.startsWith(query)) return 1;
+  if (name.includes(query)) return 2;
+  if (provider.id.toLowerCase().includes(query)) return 3;
+  return 4;
+}
+
+export function filterOAuthProviders(providers: OAuthProvider[], rawQuery: string): OAuthProvider[] {
+  const query = rawQuery.trim().toLowerCase();
+  if (!query) return providers;
+  const terms = query.split(/\s+/u).filter(Boolean);
+  return providers
+    .filter((provider) => {
+      const haystack = `${provider.name.toLowerCase()} ${provider.id.toLowerCase()}`;
+      return terms.every((term) => isSubsequence(term, haystack));
+    })
+    .sort((left, right) => providerRank(left, query) - providerRank(right, query));
+}
 
 const terminalPhases = new Set<OAuthAttempt['phase']>(['completed', 'cancelled', 'timed_out', 'failed']);
 export const shouldDisplayOAuthAuthorizationLink = (attempt: OAuthAttempt | null): boolean =>
@@ -94,6 +131,7 @@ function OAuthLoginDialog({
 }: OAuthLoginDialogProps) {
   const [value, setValue] = useState('');
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
+  const [providerQuery, setProviderQuery] = useState('');
   const valueRef = useRef('');
   const isTerminal = Boolean(attempt && terminalPhases.has(attempt.phase));
   const isBusy = isStarting || Boolean(attempt && !isTerminal && attempt.phase !== 'awaiting_browser' && attempt.phase !== 'awaiting_input');
@@ -102,6 +140,8 @@ function OAuthLoginDialog({
   const manualCodeInput = attempt?.valueKind === 'manual_code';
   const showAuthorizationLink = shouldDisplayOAuthAuthorizationLink(attempt);
   const showProviderPicker = !attempt || (isTerminal && attempt.phase !== 'completed');
+  const filteredProviders = useMemo(() => filterOAuthProviders(providers, providerQuery), [providers, providerQuery]);
+  const queryHasNoMatches = providers.length > 0 && filteredProviders.length === 0;
 
   const clearValue = useCallback(() => {
     valueRef.current = '';
@@ -112,6 +152,7 @@ function OAuthLoginDialog({
     if (!open) {
       clearValue();
       setCopyStatus(null);
+      setProviderQuery('');
     }
   }, [clearValue, open]);
 
@@ -295,8 +336,26 @@ function OAuthLoginDialog({
                   No sign-in providers are available right now.
                 </p>
               )}
+              {!isLoadingProviders && providers.length > 0 && (
+                <div className="relative">
+                  <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+                  <Input
+                    value={providerQuery}
+                    onChange={(event) => setProviderQuery(event.target.value)}
+                    placeholder="Search providers"
+                    aria-label="Search providers"
+                    autoComplete="off"
+                    className="pl-9"
+                  />
+                </div>
+              )}
+              {queryHasNoMatches && (
+                <p role="status" className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
+                  No providers match “{providerQuery.trim()}”.
+                </p>
+              )}
               <div className="space-y-2">
-                {providers.map((provider) => (
+                {filteredProviders.map((provider) => (
                   <button
                     key={provider.id}
                     type="button"

@@ -196,16 +196,8 @@ export default function SidebarContent({
                 {t('filter.noMatches', { query: filter.query.trim() })}
               </p>
             )}
-            <SidebarSection
-              id="sidebar-projects"
-              title={t('projects.title')}
-              open={projectsOpen}
-              onOpenChange={setProjectsOpen}
-              actionLabel={t('tooltips.createProject')}
-              onAction={onCreateProject}
-            >
-              <SidebarProjectList {...treeProps} onCreateProject={onCreateProject} showSessions />
-            </SidebarSection>
+            {/* Active conversations lead: they are the rows that want an
+                answer, and they used to sit under every project. */}
             {showWork && (
               <SidebarSection
                 id="sidebar-work"
@@ -217,6 +209,16 @@ export default function SidebarContent({
                 <SidebarWorkList projectListProps={workProps} />
               </SidebarSection>
             )}
+            <SidebarSection
+              id="sidebar-projects"
+              title={t('projects.title')}
+              open={projectsOpen}
+              onOpenChange={setProjectsOpen}
+              actionLabel={t('tooltips.createProject')}
+              onAction={onCreateProject}
+            >
+              <SidebarProjectList {...treeProps} onCreateProject={onCreateProject} showSessions />
+            </SidebarSection>
           </div>
         )}
       </ScrollArea>

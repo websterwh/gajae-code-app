@@ -43,7 +43,7 @@ export default function SidebarFooter({
 
       <div className="flex items-center justify-between px-1 pt-0.5">
         <div className="flex items-center gap-0.5">
-          <SidebarAccountButton onShowSettings={onShowSettings} t={t} />
+          <SidebarAccountButton t={t} />
           <button className={utilityClassName} onClick={onOpenArchive} aria-label={t('archived.openArchive', 'Open archive')} title={t('archived.openArchive', 'Open archive')}>
             <Archive className="size-4" />
           </button>

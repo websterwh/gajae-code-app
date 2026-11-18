@@ -119,7 +119,9 @@ test('the Work section pages every project with more through one control, not on
     },
   });
 
-  const work = html.slice(html.indexOf('id="sidebar-work-content"'));
+  const workStart = html.indexOf('id="sidebar-work-content"');
+  const projectsStart = html.indexOf('id="sidebar-projects-content"');
+  const work = html.slice(workStart, projectsStart > workStart ? projectsStart : undefined);
   assert.equal(work.match(/sessions\.showMore/g)?.length, 1, 'expected exactly one paging control under Work');
 });
 
