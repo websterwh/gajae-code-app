@@ -78,6 +78,19 @@ test('late token usage success and failure cannot update another session', async
   assert.deepEqual(view.result.current.tokenBudget, { used: 4 });
 });
 
+test('a failed token usage request keeps the facts the websocket already delivered', async () => {
+  const view = mount();
+  act(() => {
+    view.result.current.setSessionState({ contextPercent: 42, contextWindow: 128_000 });
+    view.result.current.setTokenBudget({ used: 7 });
+  });
+  // The endpoint answers 404 until the session is indexed, well after the
+  // runtime has already reported the same figures over the websocket.
+  await act(async () => { view.usage[0].resolve(new Response('{}', { status: 404 })); });
+  assert.equal(view.result.current.sessionState?.contextPercent, 42);
+  assert.deepEqual(view.result.current.tokenBudget, { used: 7 });
+});
+
 test('an old load-all response cannot finish a new load-all request after switching away and back', async () => {
   const view = mount();
   await view.resolvePage(0, page(20, true));

@@ -533,11 +533,11 @@ export function useChatSessionState({
           const budget = await response.json();
           if (!cancelled) setTokenBudget(budget);
         }
-        else {
-          if (cancelled) return;
-          setTokenBudget(null);
-          setSessionState(null);
-        }
+        // A failed request is not evidence about what is already on screen. The
+        // runtime sends session_state (context, model, cwd) and token_budget over
+        // the websocket, while this endpoint answers 404 until a brand-new
+        // session is indexed, so clearing them here made the Agent sidebar's
+        // context gauge appear and then vanish a moment after it arrived.
       } catch (error) {
         console.error('Failed to fetch initial token usage:', error);
       }
