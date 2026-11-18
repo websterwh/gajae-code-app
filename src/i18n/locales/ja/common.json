@@ -81,6 +81,17 @@
     "title": "エージェント",
     "open": "エージェントサイドバーを表示",
     "close": "エージェントサイドバーを閉じる",
+    "exports": {
+      "title": "エクスポート",
+      "download": "ダウンロード",
+      "failed": "ダウンロードに失敗しました。"
+    },
+    "layout": {
+      "title": "サイドバーの配置",
+      "show": "{{name}}を表示",
+      "moveUp": "{{name}}を上へ",
+      "moveDown": "{{name}}を下へ"
+    },
     "environment": {
       "title": "環境",
       "changes": "変更",

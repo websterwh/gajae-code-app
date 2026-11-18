@@ -108,6 +108,38 @@ describe('package suggestions', () => {
     assert.equal(aptCalls, 0);
   });
 
+  test('a saved GitHub token authenticates the aqua search, and its absence does not', async () => {
+    const saved = { GITHUB_TOKEN: process.env.GITHUB_TOKEN, GH_TOKEN: process.env.GH_TOKEN };
+    const headers = async () => {
+      let authorization: string | undefined;
+      const service = new PackageSuggestService({
+        fetchImpl: async (_url, init) => {
+          authorization = init?.headers?.authorization;
+          return { ok: true, json: async () => ({ items: [{ full_name: 'cli/cli', description: 'GitHub CLI' }] }) };
+        },
+      });
+      await service.suggest('gh', 'aqua');
+      return authorization;
+    };
+
+    try {
+      delete process.env.GITHUB_TOKEN;
+      delete process.env.GH_TOKEN;
+      assert.equal(await headers(), undefined);
+
+      // Anonymous search is rate-limited to ten requests a minute; a token
+      // lifts that to thirty, which is the whole reason it is sent.
+      process.env.GITHUB_TOKEN = 'ghp_savedtokenvalue';
+      assert.equal(await headers(), 'Bearer ghp_savedtokenvalue');
+    } finally {
+      for (const key of ['GITHUB_TOKEN', 'GH_TOKEN'] as const) {
+        const value = saved[key];
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  });
+
   test('choosing uv installs through uv, not pip', async () => {
     const service = new PackageSuggestService({
       runner: aptRunner(),

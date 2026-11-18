@@ -174,6 +174,9 @@ function MainContent({
               projectPath={executionPath}
               sessionId={selectedSession?.id}
               sessionStore={sessionStore}
+              blocks={agentSidebar.blocks}
+              onToggleBlock={agentSidebar.toggleBlock}
+              onMoveBlock={agentSidebar.moveBlock}
               onClose={agentSidebar.close}
             />
           </Suspense>

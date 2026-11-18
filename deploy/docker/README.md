@@ -187,7 +187,7 @@ declared in the compose file.
 
 | Container Path | Host Path (Compose) | Purpose |
 |---|---|---|
-| `/data` | `./data` | Persistent SQLite database (`auth.db`), logs, caches (`apt`, `uv`, `pip`, `aqua`, `npm`), host SSH keys, installed CLI binaries (`/data/bin`), and (via entrypoint-created symlinks) `~/.gajae-app` and `~/.claude` - chat transcripts and per-provider session state, which `auth.db` only indexes by path and does not itself contain. |
+| `/data` | `./data` | Persistent SQLite database (`auth.db`), logs, caches (`apt`, `uv`, `pip`, `aqua`, `npm`), host SSH keys, installed CLI binaries (`/data/bin`), and (via entrypoint-created symlinks) `~/.gajae-app` and `~/.claude` - chat transcripts and per-provider session state, which `auth.db` only indexes by path and does not itself contain. Also linked here so tool state outlives a recreate: `~/.config` (gh auth, pip and uv config), `~/.gitconfig`, `~/.ssh`, `~/.local` (`pip install --user`, pipx), `~/.cache`, and `~/.bun`. Shell profiles and history live in `/data/shell`. An existing real directory at one of these paths is left alone; nothing is deleted to make a link. |
 | `/workspace` | `./workspace` | Projects directory where the coding agent inspects and edits code. |
 | `/root/.gjc` | `./gjc-config` | Agent configurations, credentials, custom skills, and chat image assets (`/root/.gjc/assets`, which the entrypoint symlinks to `~/.gajae-app/assets`). |
 

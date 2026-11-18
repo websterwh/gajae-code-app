@@ -132,6 +132,14 @@
     "packages": "套件"
   },
   "automation": {
+    "computerUse": {
+      "title": "電腦使用",
+      "description": "允許工作階段透過其 agent-desktop 配套程式控制已配對的電腦。在你開啟之前保持關閉。",
+      "enableLabel": "啟用電腦使用",
+      "enableDescription": "連接多台電腦時，代理會在首次呼叫前詢問要使用哪一台。",
+      "unavailable": "請先在「遠端電腦」中配對並信任一台電腦。",
+      "saveFailed": "無法儲存電腦使用設定。"
+    },
     "browserBackend": {
       "title": "瀏覽器",
       "description": "在此啟動的 GJC 工作階段可以控制的瀏覽器。不會改變手動開啟內建瀏覽器或聊天連結的行為。",

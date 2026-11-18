@@ -213,8 +213,8 @@ test('agent computer asks for application access before controlling it', async (
       title: 'Allow the agent to control TextEdit?',
       options: ['Allow once', 'Always allow', 'Deny'],
     }]);
-    assert.deepEqual(requests.map((request) => request.operation), ['authorize', 'authorize', undefined]);
-    assert.equal((requests[1]?.payload as Record<string, unknown>).scope, 'session');
+    assert.deepEqual(requests.map((request) => request.operation), ['devices', 'authorize', 'authorize', undefined]);
+    assert.equal((requests[2]?.payload as Record<string, unknown>).scope, 'session');
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await rm(directory, { recursive: true, force: true });
@@ -501,13 +501,13 @@ test('bypass materializes a session application grant instead of skipping server
     }, { socketPath: bridge.socketPath, token: TEST_TOKEN }, 'bypass');
     await computer!.execute('click', { action: 'desktop_click', arguments: { pid: 42, x: 10, y: 20 } }, undefined);
 
-    assert.deepEqual(bridge.requests.map((request) => request.operation), ['authorize', 'authorize', undefined]);
+    assert.deepEqual(bridge.requests.map((request) => request.operation), ['devices', 'authorize', 'authorize', undefined]);
     assert.ok(bridge.requests.every((request) => request.sessionId === 'bypass-computer'));
     const scopes = bridge.requests
       .map((request) => (request.payload as Record<string, unknown> | undefined)?.scope)
       .filter(Boolean);
     assert.deepEqual(scopes, ['session'], 'bypass grants session scope only');
-    assert.equal((bridge.requests[1]!.payload as Record<string, unknown>).application, 'com.apple.TextEdit');
+    assert.equal((bridge.requests[2]!.payload as Record<string, unknown>).application, 'com.apple.TextEdit');
   } finally { await bridge.close(); }
 });
 
@@ -543,7 +543,7 @@ test('a denied standard-mode computer approval still fails closed', async () => 
       computer!.execute('click', { action: 'desktop_click', arguments: { pid: 42, x: 1, y: 1 } }, undefined),
       /Computer access to TextEdit was denied/u,
     );
-    assert.deepEqual(bridge.requests.map((request) => request.operation), ['authorize']);
+    assert.deepEqual(bridge.requests.map((request) => request.operation), ['devices', 'authorize']);
   } finally { await bridge.close(); }
 });
 
@@ -600,7 +600,9 @@ test('bypass preserves backend authorization failures', async () => {
       async select() { assert.fail('must preserve the backend rejection'); },
     }, { socketPath: rejected.socketPath, token: TEST_TOKEN }, 'bypass');
     await assert.rejects(computer!.execute('bad-target', { action: 'desktop_click', arguments: { pid: 42 } }, undefined), /resolvable application/);
-    assert.equal(rejected.requests.length, 1);
+    // The device listing is attempted first; a device-less server answers it
+    // with the same rejection, which must not replace the authorize failure.
+    assert.deepEqual(rejected.requests.map((request) => request.operation), ['devices', 'authorize']);
   } finally { await rejected.close(); }
 });
 

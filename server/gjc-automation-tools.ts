@@ -308,23 +308,67 @@ export function createGjcAutomationTools(
     },
   };
 
+  /**
+   * Which paired computer this session's calls run on.
+   *
+   * One connected device needs no question. Several do, because "the selected
+   * computer" is no longer obvious once a second one is live - the person is
+   * asked once, and the answer is remembered for the rest of the session so a
+   * picker does not appear before every click. An older server without the
+   * listing keeps its own selection authoritative.
+   */
+  type ComputerDevice = { id: string; name: string; os?: string; connected: boolean };
+  let chosenDeviceId: string | undefined;
+  const resolveComputerDevice = async (signal?: AbortSignal): Promise<string | undefined> => {
+    if (chosenDeviceId) return chosenDeviceId;
+    let state: { devices?: ComputerDevice[]; selectedDeviceId?: string };
+    try {
+      state = await bridgeRequest(transport, {
+        surface: 'computer', sessionId: appSessionId, operation: 'devices',
+      }, signal) as { devices?: ComputerDevice[]; selectedDeviceId?: string };
+    } catch {
+      return undefined;
+    }
+    const devices = (state.devices ?? []).filter((device) => device.connected);
+    if (devices.length === 0) return state.selectedDeviceId;
+    if (devices.length === 1) {
+      chosenDeviceId = devices[0].id;
+      return chosenDeviceId;
+    }
+    // A trusted run does not ask, exactly like the application grant below.
+    if (permissionMode === 'bypass') {
+      chosenDeviceId = state.selectedDeviceId ?? devices[0].id;
+      return chosenDeviceId;
+    }
+    const label = (device: ComputerDevice) => `${device.name}${device.os ? ` (${device.os})` : ''}`;
+    const labels = devices.map(label);
+    const choice = await ui.select('Which computer should the agent use?', [...labels, DENY], { signal });
+    if (choice === undefined || choice === DENY) throw new Error('Computer device selection was denied.');
+    const index = labels.indexOf(choice);
+    chosenDeviceId = devices[index]?.id ?? state.selectedDeviceId ?? devices[0].id;
+    return chosenDeviceId;
+  };
+
   const ensureComputerAccess = async (
     tool: z.infer<typeof computerSchema>['action'],
     args: Record<string, unknown>,
     signal?: AbortSignal,
-  ): Promise<void> => {
+  ): Promise<string | undefined> => {
+    const deviceId = await resolveComputerDevice(signal);
     // local_* runs on the companion's own machine and has no application to
     // approve: the --shell launch flag is the consent, re-checked by the
-    // server on every dispatch. No authorization round trip is needed.
-    if (tool.startsWith('local_')) return;
+    // server on every dispatch. No authorization round trip is needed, but the
+    // chosen device still rides along so the call runs on the right machine.
+    if (tool.startsWith('local_')) return deviceId;
     const check = await bridgeRequest(transport, {
       surface: 'computer',
       sessionId: appSessionId,
       operation: 'authorize',
       tool,
       arguments: args,
+      ...(deviceId ? { deviceId } : {}),
     }, signal) as ComputerAuthorization;
-    if (check.granted || !check.application) return;
+    if (check.granted || !check.application) return deviceId;
 
     // `bypass` is a consent-UX mode, not a safety mode. It skips the approval
     // prompt for an otherwise permitted operation, but the server still refuses
@@ -352,8 +396,10 @@ export function createGjcAutomationTools(
       tool,
       arguments: args,
       payload: { application: check.application, scope },
+      ...(deviceId ? { deviceId } : {}),
     }, signal) as ComputerAuthorization;
     if (!granted.granted) throw new Error(`Computer access to ${check.label ?? check.application} was not granted.`);
+    return deviceId;
   };
 
   const computer: NonNullable<AutomationTools['computer']> = {
@@ -364,9 +410,10 @@ export function createGjcAutomationTools(
     concurrency: 'exclusive',
     async execute(_toolCallId: string, rawParams: unknown, signal?: AbortSignal) {
       const params = computerSchema.parse(rawParams);
-      await ensureComputerAccess(params.action, params.arguments, signal);
+      const deviceId = await ensureComputerAccess(params.action, params.arguments, signal);
       return cuaResult(await bridgeRequest(transport, {
         surface: 'computer', sessionId: appSessionId, tool: params.action, arguments: params.arguments,
+        ...(deviceId ? { deviceId } : {}),
       }, signal));
     },
   };

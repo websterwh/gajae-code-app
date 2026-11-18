@@ -7,7 +7,15 @@ import test from 'node:test';
 
 import express from 'express';
 
-import { dockerClient, DockerSocketError, isContainerName, listTarEntries, parseExecFrames, type HostControlClient } from './docker-socket.js';
+import {
+  dockerClient,
+  DockerSocketError,
+  isContainerName,
+  listTarEntries,
+  parseExecFrames,
+  type HostControlClient,
+} from '../../gjc-engine.js';
+
 import { createHostControlRouter, type HostControlStore, type HostProfileStore } from './host-control.routes.js';
 import type { SavedHostProfile } from './host-profile.store.js';
 import {
@@ -73,10 +81,6 @@ function fakeClient(calls: string[]) {
     },
     async archive(name: string, path: string) {
       calls.push(`archive:${name}:${path}`);
-      if (path === '/etc') {
-        return { kind: 'dir' as const, entries: [{ name: 'etc/hostname', size: 4, type: 'file' as const }], truncated: false };
-      }
-      if (path === '/big') return { kind: 'too-large' as const, name: 'big', size: 1024 * 1024 };
       return { kind: 'file' as const, name: 'hostname', size: 4, content: Buffer.from('nas\n'), truncated: false };
     },
   };
@@ -101,7 +105,7 @@ async function serve(router: express.Router) {
   };
 }
 
-test('without the env var every route refuses and the socket is never opened', async () => {
+test('without the env var the surface is inert and the socket is never opened', async () => {
   const calls: string[] = [];
   const server = await serve(createHostControlRouter({
     client: fakeClient(calls),
@@ -120,51 +124,33 @@ test('without the env var every route refuses and the socket is never opened', a
       targets: [],
       host: null,
     });
-    assert.equal((await server.request('/containers')).status, 409);
-    assert.equal((await server.request('/containers/gajae-app/restart', { method: 'POST' })).status, 409);
     assert.equal((await server.request('/settings', json({ enabled: false }))).status, 409);
+    assert.equal((await server.request('/discovery')).status, 409);
     assert.deepEqual(calls, []);
   } finally {
     await server.close();
   }
 });
 
-test('every capability is its own switch, and listing does not imply restarting', async () => {
+test('the removed container endpoints are not served at all', async () => {
   const calls: string[] = [];
-  const store = fakeStore({ enabled: true });
-  const server = await serve(createHostControlRouter({ client: fakeClient(calls), store, env: ENABLED_ENV }));
+  const server = await serve(createHostControlRouter({
+    client: fakeClient(calls),
+    store: fakeStore({ enabled: true, facts: true, containers: true, restart: true, docker: true, shell: true, files: true, targets: ['*'] }),
+    env: ENABLED_ENV,
+  }));
+  const post = (body?: unknown) => ({
+    method: 'POST',
+    ...(body === undefined ? {} : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
+  });
   try {
-    assert.equal((await server.request('/containers')).status, 403);
-    assert.equal((await server.request('/containers/gajae-app/restart', { method: 'POST' })).status, 403);
-
-    const saved = await server.request('/settings', json({ containers: true }));
-    assert.equal(saved.status, 200);
-    assert.deepEqual((await saved.json() as { capabilities: unknown }).capabilities, capabilities({ containers: true }));
-
-    const list = await server.request('/containers');
-    assert.equal(list.status, 200);
-    assert.deepEqual((await list.json() as { containers: Array<{ name: string }> }).containers.map((entry) => entry.name), ['gajae-app']);
-    assert.equal((await server.request('/containers/gajae-app/restart', { method: 'POST' })).status, 403);
-  } finally {
-    await server.close();
-  }
-});
-
-test('restart needs its switch and a plain container name', async () => {
-  const calls: string[] = [];
-  const store = fakeStore({ enabled: true, containers: true });
-  const server = await serve(createHostControlRouter({ client: fakeClient(calls), store, env: ENABLED_ENV }));
-  try {
-    assert.equal((await server.request('/settings', json({ restart: true }))).status, 200);
-
-    const invalid = await server.request('/containers/app%3Breboot/restart', { method: 'POST' });
-    assert.equal(invalid.status, 400);
-    assert.equal((await invalid.json() as { error: string }).error, 'INVALID_CONTAINER');
-
-    const ok = await server.request('/containers/gajae-app/restart', { method: 'POST' });
-    assert.equal(ok.status, 200);
-    assert.deepEqual(await ok.json(), { restarted: true, name: 'gajae-app' });
-    assert.deepEqual(calls.filter((call) => call.startsWith('restart')), ['restart:gajae-app']);
+    for (const path of ['/info', '/containers', '/verbs', '/files?container=x&path=/etc/hostname', '/exec']) {
+      assert.equal((await server.request(path, post(path === '/exec' ? { container: 'x', verb: 'os' } : undefined))).status, 404, path);
+    }
+    for (const path of ['/containers/x/restart', '/containers/x/action']) {
+      assert.equal((await server.request(path, post({ action: 'stop' }))).status, 404, path);
+    }
+    assert.deepEqual(calls, [], 'no removed endpoint reaches the daemon');
   } finally {
     await server.close();
   }
@@ -179,6 +165,26 @@ test('the master switch drops every capability and the target scope, so re-enabl
   assert.deepEqual(applyHostControlPatch(off, { enabled: true }), {
     enabled: true, ...capabilities(), targets: [],
   });
+});
+
+test('turning the master switch off is visible over HTTP and re-enabling grants nothing back', async () => {
+  const calls: string[] = [];
+  const store = fakeStore({ enabled: true, facts: true, containers: true, restart: true, discovery: true });
+  const server = await serve(createHostControlRouter({ client: fakeClient(calls), store, env: ENABLED_ENV }));
+  try {
+    const off = await server.request('/settings', json({ enabled: false }));
+    assert.equal(off.status, 200);
+    assert.deepEqual((await off.json() as { capabilities: unknown }).capabilities, capabilities());
+    assert.equal((await server.request('/discovery')).status, 403);
+
+    const on = await server.request('/settings', json({ enabled: true }));
+    assert.equal(on.status, 200);
+    assert.deepEqual((await on.json() as { capabilities: unknown }).capabilities, capabilities());
+    assert.equal((await server.request('/discovery')).status, 403);
+    assert.equal(calls.filter((call) => call !== 'ping').length, 0);
+  } finally {
+    await server.close();
+  }
 });
 
 test('the docker client uses three fixed endpoints over a unix socket', async () => {
@@ -224,7 +230,8 @@ test('the docker client uses three fixed endpoints over a unix socket', async ()
       labels: {}, mounts: [],
     }]);
     await client.restart('gajae-app');
-    assert.deepEqual(seen, ['GET /_ping', 'GET /containers/json?all=1', 'POST /containers/gajae-app/restart']);    await assert.rejects(() => client.restart('app;reboot'), /is not a container name/u);
+    assert.deepEqual(seen, ['GET /_ping', 'GET /containers/json?all=1', 'POST /containers/gajae-app/restart']);
+    await assert.rejects(() => client.restart('app;reboot'), /is not a container name/u);
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await unlink(socketPath).catch(() => {});
@@ -237,28 +244,7 @@ test('a missing socket is reported, not thrown from the health check', async () 
   await assert.rejects(() => client.list(), /not reachable/u);
 });
 
-test('turning the master switch off is visible over HTTP and re-enabling grants nothing back', async () => {
-  const calls: string[] = [];
-  const store = fakeStore({ enabled: true, facts: true, containers: true, restart: true });
-  const server = await serve(createHostControlRouter({ client: fakeClient(calls), store, env: ENABLED_ENV }));
-  try {
-    const off = await server.request('/settings', json({ enabled: false }));
-    assert.equal(off.status, 200);
-    assert.deepEqual((await off.json() as { capabilities: unknown }).capabilities, capabilities());
-    assert.equal((await server.request('/containers')).status, 403);
-    assert.equal((await server.request('/containers/gajae-app/restart', { method: 'POST' })).status, 403);
-
-    const on = await server.request('/settings', json({ enabled: true }));
-    assert.equal(on.status, 200);
-    assert.deepEqual((await on.json() as { capabilities: unknown }).capabilities, capabilities());
-    assert.equal((await server.request('/containers')).status, 403);
-    assert.equal(calls.filter((call) => call.startsWith('restart')).length, 0);
-  } finally {
-    await server.close();
-  }
-});
-
-test('daemon failures are 503 with their own code, never a 500', async () => {
+test('a daemon failure on discovery is a 503 with its own code, never a 500', async () => {
   const failing = {
     async ping() { return true; },
     async info() { throw new DockerSocketError('DOCKER_TIMEOUT', 'The Docker daemon did not answer in time.'); },
@@ -270,21 +256,13 @@ test('daemon failures are 503 with their own code, never a 500', async () => {
   };
   const server = await serve(createHostControlRouter({
     client: failing,
-    store: fakeStore({ enabled: true, facts: true, containers: true, restart: true }),
+    store: fakeStore({ enabled: true, discovery: true }),
     env: ENABLED_ENV,
   }));
   try {
-    const info = await server.request('/info');
-    assert.equal(info.status, 503);
-    assert.equal((await info.json() as { error: string }).error, 'DOCKER_TIMEOUT');
-
-    const list = await server.request('/containers');
-    assert.equal(list.status, 503);
-    assert.equal((await list.json() as { error: string }).error, 'DOCKER_HTTP');
-
-    const restart = await server.request('/containers/missing/restart', { method: 'POST' });
-    assert.equal(restart.status, 503);
-    assert.equal((await restart.json() as { error: string }).error, 'DOCKER_HTTP');
+    const discovery = await server.request('/discovery');
+    assert.equal(discovery.status, 503);
+    assert.equal((await discovery.json() as { error: string }).error, 'DOCKER_TIMEOUT');
   } finally {
     await server.close();
   }
@@ -351,34 +329,6 @@ test('a container the daemon does not know is a 404, not a broken daemon', async
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await unlink(socketPath).catch(() => {});
-  }
-
-  const ghostClient: HostControlClient = {
-    async ping() { return true; },
-    async info() {
-      return {
-        serverVersion: 'dev', operatingSystem: 'Linux', kernelVersion: '6.18',
-        hostName: 'nas', driver: 'overlay2', swarm: 'inactive',
-        ncpu: 1, memTotal: 1, containers: 0, containersRunning: 0, containersStopped: 0, images: 0,
-      };
-    },
-    async list() { return []; },
-    async restart() { throw new DockerSocketError('DOCKER_NOT_FOUND', 'There is no container called "ghost".'); },
-    async action() { throw new DockerSocketError('DOCKER_NOT_FOUND', 'There is no container called "ghost".'); },
-    async exec() { throw new DockerSocketError('DOCKER_NOT_FOUND', 'There is no container called "ghost".'); },
-    async archive() { throw new DockerSocketError('DOCKER_NOT_FOUND', 'There is no container called "ghost".'); },
-  };
-  const http = await serve(createHostControlRouter({
-    client: ghostClient,
-    store: fakeStore({ enabled: true, restart: true }),
-    env: ENABLED_ENV,
-  }));
-  try {
-    const restart = await http.request('/containers/ghost/restart', { method: 'POST' });
-    assert.equal(restart.status, 404);
-    assert.equal((await restart.json() as { error: string }).error, 'DOCKER_NOT_FOUND');
-  } finally {
-    await http.close();
   }
 });
 
@@ -495,101 +445,9 @@ test('allowed containers are validated, deduplicated, and dropped with the maste
   }
 });
 
-test('state changes need the docker switch and a container on the allowed list', async () => {
-  const calls: string[] = [];
-  const store = fakeStore({ enabled: true, docker: true });
-  const server = await serve(createHostControlRouter({ client: fakeClient(calls), store, env: ENABLED_ENV }));
-  const post = (body: unknown) => ({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-  try {
-    const denied = await server.request('/containers/mos-web/action', post({ action: 'stop' }));
-    assert.equal(denied.status, 403);
-    assert.equal((await denied.json() as { error: string }).error, 'HOST_TARGET_DENIED');
-    assert.equal(calls.some((call) => call.startsWith('action')), false, 'a refused target never reaches the socket');
-
-    // A list that is set but does not name this container is still a refusal.
-    await server.request('/settings', json({ targets: ['immich_*'] }));
-    assert.equal((await server.request('/containers/mos-web/action', post({ action: 'stop' }))).status, 403);
-
-    await server.request('/settings', json({ targets: ['mos-*'] }));
-    const stopped = await server.request('/containers/mos-web/action', post({ action: 'stop' }));
-    assert.equal(stopped.status, 200);
-    assert.deepEqual(await stopped.json(), { name: 'mos-web', action: 'stop', done: true });
-    assert.deepEqual(calls.filter((call) => call.startsWith('action')), ['action:mos-web:stop']);
-
-    const invalid = await server.request('/containers/mos-web/action', post({ action: 'prune' }));
-    assert.equal(invalid.status, 400);
-    assert.equal((await invalid.json() as { error: string }).error, 'INVALID_ACTION');
-  } finally {
-    await server.close();
-  }
-});
-
-test('the scoped shell takes a verb id, never a command string', async () => {
-  const calls: string[] = [];
-  const store = fakeStore({ enabled: true, shell: true, targets: ['mos-*'] });
-  const server = await serve(createHostControlRouter({ client: fakeClient(calls), store, env: ENABLED_ENV }));
-  const post = (body: unknown) => ({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-  try {
-    const verbs = await server.request('/verbs');
-    assert.equal(verbs.status, 200);
-    assert.ok((await verbs.json() as { verbs: Array<{ id: string }> }).verbs.some((verb) => verb.id === 'os'));
-
-    const ran = await server.request('/exec', post({ container: 'mos-web', verb: 'os' }));
-    assert.equal(ran.status, 200);
-    const result = await ran.json() as { command: string; stdout: string; exitCode: number };
-    assert.equal(result.command, 'cat /etc/os-release');
-    assert.equal(result.stdout, 'NAME=Nas\n');
-    assert.equal(result.exitCode, 0);
-    assert.deepEqual(calls.filter((call) => call.startsWith('exec')), ['exec:mos-web:cat /etc/os-release']);
-
-    // A command field in the body is not a thing: the verb decides what runs.
-    const injected = await server.request('/exec', post({ container: 'mos-web', verb: 'os', command: ['id'] }));
-    assert.equal((await injected.json() as { command: string }).command, 'cat /etc/os-release');
-
-    const unknown = await server.request('/exec', post({ container: 'mos-web', verb: 'sh -c id' }));
-    assert.equal(unknown.status, 400);
-    assert.equal((await unknown.json() as { error: string }).error, 'UNKNOWN_VERB');
-
-    const outside = await server.request('/exec', post({ container: 'other', verb: 'os' }));
-    assert.equal(outside.status, 403);
-  } finally {
-    await server.close();
-  }
-});
-
-test('file reads refuse traversal, oversized files and containers outside the list', async () => {
-  const calls: string[] = [];
-  const store = fakeStore({ enabled: true, files: true, targets: ['mos-*'] });
-  const server = await serve(createHostControlRouter({ client: fakeClient(calls), store, env: ENABLED_ENV }));
-  try {
-    const traversal = await server.request('/files?container=mos-web&path=../../etc/passwd');
-    assert.equal(traversal.status, 400);
-    assert.equal((await traversal.json() as { error: string }).error, 'INVALID_PATH');
-
-    const outside = await server.request('/files?container=other&path=/etc/hostname');
-    assert.equal(outside.status, 403);
-    assert.equal((await outside.json() as { error: string }).error, 'HOST_TARGET_DENIED');
-
-    const file = await server.request('/files?container=mos-web&path=/etc/hostname');
-    assert.equal(file.status, 200);
-    assert.deepEqual(await file.json(), {
-      container: 'mos-web', path: '/etc/hostname', name: 'hostname', size: 4, encoding: 'utf8', content: 'nas\n', truncated: false,
-    });
-
-    const directory = await server.request('/files?container=mos-web&path=/etc');
-    assert.deepEqual((await directory.json() as { entries: unknown }).entries, [{ name: 'etc/hostname', size: 4, type: 'file' }]);
-
-    const big = await server.request('/files?container=mos-web&path=/big');
-    assert.equal(big.status, 413);
-    assert.equal((await big.json() as { error: string }).error, 'FILE_TOO_LARGE');
-  } finally {
-    await server.close();
-  }
-});
-
 test('discovery names the manager it can see and who else holds the socket', async () => {
   const calls: string[] = [];
-  const client = {
+  const client: HostControlClient = {
     ...fakeClient(calls),
     async info() {
       return {
@@ -617,40 +475,91 @@ test('discovery names the manager it can see and who else holds the socket', asy
     const response = await server.request('/discovery');
     assert.equal(response.status, 200);
     const { profile } = await response.json() as { profile: {
-      managers: Array<{ id: string }>; socketHolders: string[]; stacks: unknown[]; unmanaged: string[]; guidance: string[];
+      platforms: Array<{ id: string }>; managers: Array<{ id: string }>; socketHolders: string[]; stacks: unknown[]; unmanaged: string[]; guidance: string[];
     } };
-    // Unraid is seen through its kernel, Portainer and Mos through their containers.
-    assert.deepEqual(profile.managers.map((manager) => manager.id).sort(), ['mos', 'portainer', 'unraid']);
+    // Unraid is seen through its kernel and Mos through its containers; those
+    // are the machine's own layer. Portainer is a manager running on it.
+    assert.deepEqual(profile.platforms.map((platform) => platform.id).sort(), ['mos', 'unraid']);
+    assert.deepEqual(profile.managers.map((manager) => manager.id), ['portainer']);
     assert.deepEqual(profile.socketHolders, ['portainer']);
     assert.deepEqual(profile.stacks, [{ project: 'mos', services: ['web', 'db'], containers: ['mos-web', 'mos-db'] }]);
     assert.deepEqual(profile.unmanaged, ['portainer', 'adhoc']);
-    assert.ok(profile.guidance.some((line) => line.includes('Unraid is present')));
+    assert.ok(profile.guidance.some((line) => line.includes('Unraid is this machine')));
 
     // The detection is stored, and the cheap status read reports it, so a
-    // caller that never ran the detection still learns the machine's OS.
+    // caller that never ran the detection still learns the machine's OS - and
+    // that it is an appliance, not just "Linux".
     const snapshot = await (await server.request('/status')).json() as {
-      host: { os: string; kernelVersion: string; detectedAt: number } | null;
+      host: { os: string; kernelVersion: string; platform: { id: string; label: string } | null; detectedAt: number } | null;
     };
-    assert.deepEqual(snapshot.host, { os: 'Linux', kernelVersion: '6.12.10-Unraid', detectedAt: 1 });
+    assert.deepEqual(snapshot.host, {
+      os: 'Linux', kernelVersion: '6.12.10-Unraid', platform: { id: 'unraid', label: 'Unraid' }, detectedAt: 1,
+    });
   } finally {
     await server.close();
   }
 });
 
-test('discovery and the new capabilities are each their own switch', async () => {
+test('switching the host reads on detects once; no save or session start detects again', async () => {
+  const calls: string[] = [];
+  const profiles = fakeProfiles();
+  const server = await serve(createHostControlRouter({
+    client: fakeClient(calls), store: fakeStore({ enabled: true }), profiles, env: ENABLED_ENV,
+  }));
+  try {
+    // The master switch alone grants nothing: discovery is still off, so no read.
+    await server.request('/settings', json({ enabled: true }));
+    assert.deepEqual(calls.filter((call) => call !== 'ping'), [], 'no daemon read until the read switch is on');
+
+    // Turning the read switch on answers the question in the same response.
+    const response = await server.request('/settings', json({ facts: true, discovery: true }));
+    assert.equal(response.status, 200);
+    const snapshot = await response.json() as { host: { os: string; platform: unknown } | null };
+    assert.equal(snapshot.host?.os, 'Linux');
+    assert.equal(snapshot.host?.platform, null);
+    assert.deepEqual(calls.filter((call) => call === 'info' || call === 'list'), ['info', 'list']);
+
+    // Saving anything else reuses the stored picture instead of re-reading.
+    await server.request('/settings', json({ targets: ['gajae-*'] }));
+    assert.deepEqual(calls.filter((call) => call === 'info' || call === 'list'), ['info', 'list']);
+
+    // Status never runs a detection either: it reports what was stored.
+    await server.request('/status');
+    assert.deepEqual(calls.filter((call) => call === 'info' || call === 'list'), ['info', 'list']);
+    assert.equal(profiles.read()?.profile.runtime.hostName, 'nas');
+  } finally {
+    await server.close();
+  }
+});
+
+test('a daemon that cannot be reached does not fail the save that switched reads on', async () => {
+  const calls: string[] = [];
+  const broken: HostControlClient = {
+    ...fakeClient(calls),
+    async info() { calls.push('info'); throw new DockerSocketError('DOCKER_UNAVAILABLE', 'gone'); },
+  };
+  const server = await serve(createHostControlRouter({
+    client: broken, store: fakeStore({ enabled: true }), profiles: fakeProfiles(), env: ENABLED_ENV,
+  }));
+  try {
+    const response = await server.request('/settings', json({ facts: true, discovery: true }));
+    assert.equal(response.status, 200);
+    const snapshot = await response.json() as { capabilities: { discovery: boolean }; host: unknown };
+    assert.equal(snapshot.capabilities.discovery, true, 'the switch the operator flipped is saved');
+    assert.equal(snapshot.host, null, 'and no half-built picture is reported');
+  } finally {
+    await server.close();
+  }
+});
+
+test('discovery is its own switch and reports nothing about the host while off', async () => {
   const calls: string[] = [];
   const store = fakeStore({ enabled: true, containers: true, targets: ['mos-*'] });
   const server = await serve(createHostControlRouter({ client: fakeClient(calls), store, env: ENABLED_ENV }));
-  const post = (body: unknown) => ({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   try {
     assert.equal((await server.request('/discovery')).status, 403);
-    // Nothing detected yet, and detection is off, so status says nothing about the host.
     assert.equal(((await (await server.request('/status')).json()) as { host: unknown }).host, null);
-    assert.equal((await server.request('/verbs')).status, 403);
-    assert.equal((await server.request('/exec', post({ container: 'mos-web', verb: 'os' }))).status, 403);
-    assert.equal((await server.request('/files?container=mos-web&path=/etc/hostname')).status, 403);
-    assert.equal((await server.request('/containers/mos-web/action', post({ action: 'start' }))).status, 403);
-    assert.deepEqual(calls.filter((call) => !call.startsWith('ping')), [], 'nothing reaches the socket without its switch');
+    assert.deepEqual(calls.filter((call) => call !== 'ping'), [], 'nothing reaches the socket without its switch');
   } finally {
     await server.close();
   }

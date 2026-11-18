@@ -48,7 +48,8 @@ test('the desktop surface is a labelled lane holding the environment in one comp
   // The card is the only thing in the lane; with no work to show, the
   // environment is the only thing in the card.
   assert.match(html, /<aside[^>]*><div class="rounded-xl border border-border\/60 bg-card\/50"><section aria-labelledby="agent-sidebar-environment"/);
-  assert.match(html, /<\/section><\/div><\/aside>$/);
+  // The card holds the blocks; the lane's only control lives in its footer.
+  assert.match(html, /<\/section><\/div><footer/);
 });
 
 test('the WORK block joins the environment in the same card when the session has a todo list', () => {
@@ -58,10 +59,10 @@ test('the WORK block joins the environment in the same card when the session has
   assert.match(html, /<\/section><section aria-labelledby="agent-sidebar-work"/);
   assert.match(html, /<h3 id="agent-sidebar-work"[^>]*>agentSidebar\.work\.title<\/h3>/);
   assert.match(html, /Run tests/);
-  assert.match(html, /<\/section><\/div><\/aside>$/);
-  // The surface still has exactly one control: the environment's refresh.
+  assert.match(html, /<\/section><\/div><footer/);
+  // Two controls: the environment's refresh and the layout pencil.
   const buttons = html.match(/<button/g) ?? [];
-  assert.equal(buttons.length, 1);
+  assert.equal(buttons.length, 2);
 });
 
 test('the desktop surface has no header of its own: Environment is the top-level heading', () => {
@@ -70,10 +71,11 @@ test('the desktop surface has no header of its own: Environment is the top-level
   assert.doesNotMatch(html, /<h2/);
   assert.doesNotMatch(html, /aria-label="agentSidebar\.close"/);
   assert.match(html, /<h3 id="agent-sidebar-environment"[^>]*>agentSidebar\.environment\.title<\/h3>/);
-  // The refresh control is the only button in the whole surface.
   const buttons = html.match(/<button/g) ?? [];
-  assert.equal(buttons.length, 1);
+  assert.equal(buttons.length, 2);
   assert.match(html, /<button[^>]*aria-label="agentSidebar\.environment\.refresh"/);
+  // The layout control sits at the lane's bottom-right, closed until asked.
+  assert.match(html, /<footer class="mt-auto flex justify-end[^"]*"><div class="relative"><button[^>]*aria-expanded="false"[^>]*aria-label="agentSidebar\.layout\.title"/);
 });
 
 test('the desktop surface is not presented as a full-height rail', () => {
@@ -87,6 +89,20 @@ test('the desktop surface is not presented as a full-height rail', () => {
   // Sized to the content: the lane is a column whose only child is the card.
   assert.match(aside, /class="[^"]*\bflex\b[^"]*\bflex-col\b/);
   assert.match(aside, /class="[^"]*\bw-64\b[^"]*\blg:w-80\b/);
+});
+
+test('a block switched off in the layout is not rendered', () => {
+  const html = render({
+    blocks: [
+      { block: 'environment', visible: false },
+      { block: 'work', visible: true },
+      { block: 'actionRequired', visible: true },
+      { block: 'exports', visible: true },
+    ],
+  });
+
+  assert.doesNotMatch(html, /agent-sidebar-environment/);
+  assert.match(html, /aria-label="agentSidebar\.layout\.title"/);
 });
 
 test('the surface carries no tab strip and no expand control', () => {

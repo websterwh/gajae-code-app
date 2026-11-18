@@ -35,6 +35,7 @@ import {
   type GjcWorkerResponsePayload,
   type GjcBrowserBackend,
   type GjcWorkerResponseFrame,
+  type HostControlRunPolicy,
   type JsonObject,
 } from './gjc-engine.js';
 import { notifyRunFailed, notifyRunStopped } from './modules/notifications/index.js';
@@ -298,6 +299,8 @@ export async function resolveGjcResumeSessionRoot(
 type GjcRunOptionAuthorities = {
   resolveBrowserBackend(): GjcBrowserBackend;
   browserStatus(): Promise<unknown>;
+  computerUsable?(): boolean;
+  hostControlPolicy?(): HostControlRunPolicy | undefined;
 };
 
 export async function enrichGjcSdkRunOptions(
@@ -328,10 +331,15 @@ export async function enrichGjcSdkRunOptions(
   let authorities = injectedAuthorities;
   try {
     if (!authorities) {
-      const { automationService, resolveGjcBrowserBackend } = await import('./modules/automation/index.js');
+      const [{ automationService, resolveGjcBrowserBackend }, hostControl] = await Promise.all([
+        import('./modules/automation/index.js'),
+        import('./modules/host-control/index.js'),
+      ]);
       authorities = {
         resolveBrowserBackend: resolveGjcBrowserBackend,
         browserStatus: () => automationService.browser.status(),
+        computerUsable: () => automationService.computerUsable(),
+        hostControlPolicy: () => hostControl.readHostControlRunPolicy(),
       };
     }
     browserBackend = authorities.resolveBrowserBackend();
@@ -349,6 +357,23 @@ export async function enrichGjcSdkRunOptions(
       && status.engine === 'webview';
   } catch {
     builtinBrowserAvailable = false;
+  }
+  // Computer use is the user's Settings switch plus a trusted paired device,
+  // both server-owned. A failure here only withholds the tool; chat still
+  // starts on a self-hosted server with no companion.
+  let computerAvailable = false;
+  try {
+    computerAvailable = authorities.computerUsable?.() === true;
+  } catch {
+    computerAvailable = false;
+  }
+  // Host control is the env gate plus the operator's per-capability switches,
+  // both server-owned. A failure here only withholds the host tool.
+  let hostControl: HostControlRunPolicy | undefined;
+  try {
+    hostControl = authorities.hostControlPolicy?.();
+  } catch {
+    hostControl = undefined;
   }
 
   const liveSessionRoot = typeof options.sessionRoot === 'string' && options.sessionRoot
@@ -371,6 +396,9 @@ export async function enrichGjcSdkRunOptions(
     browserBackend,
     // Always overwrite any untrusted request field.
     builtinBrowserAvailable,
+    computerAvailable,
+    // Always overwrite any untrusted request field.
+    hostControl,
   };
 }
 

@@ -65,20 +65,24 @@ broken.
 
 ## The in-app surface (behind the env gate)
 
-`server/modules/host-control/` is the app side of the socket mount:
+`server/modules/host-control/` is the app side of the socket mount - the routes,
+the settings store and the saved profile. The client, the exec verbs and the
+discovery tables sit beside the engine (`gjc-docker-socket.ts`,
+`gjc-container-exec-verbs.ts`, `gjc-host-discovery.ts`), exported through
+`server/gjc-engine.ts`, because the worker's tool uses them directly and the
+engine may not import the application:
 
 | Route | Capability | Scope |
 |---|---|---|
 | `GET /api/host/status` | none - availability, socket path, reachability, current switches | - |
-| `GET /api/host/info` | `facts` | - |
-| `GET /api/host/containers` | `containers` | - |
 | `GET /api/host/discovery` | `discovery` | - |
-| `POST /api/host/containers/:name/restart` | `restart` | the named container |
-| `POST /api/host/containers/:name/action` | `docker` | allowed list |
-| `GET /api/host/verbs` | `shell` | - |
-| `POST /api/host/exec` | `shell` | allowed list |
-| `GET /api/host/files` | `files` | allowed list |
 | `PUT /api/host/settings` | none - only while `GAJAE_HOST_CONTROL` is set | - |
+
+That is the whole HTTP surface. Container reads, restarts, execs and file
+reads are not routes: the agent reaches them through the `host` tool below,
+which talks to the socket directly. Keeping an HTTP twin of every operation
+after the tool existed would have left a second path to the Docker daemon
+that no caller needed.
 
 None of these routes answers a LAN client that `allowLocal` admits without a
 sign-in unless the deployment also set `GAJAE_HOST_CONTROL`: the bypass covers
@@ -89,14 +93,14 @@ switches still decide what any caller may do. Without it, `/api/host/status`
 answers `401 SIGN_IN_REQUIRED` in that topology, which the Settings tab reports
 instead of hiding the section.
 
-Every route checks the env gate on each request, then the capability, so a
-process started without the variable cannot be talked into host access and one
-that loses it stops answering immediately. The three reaching capabilities
-(`docker`, `shell`, `files`) also check the operator's **allowed containers**
-list, a set of name globs; an empty list means they reach nothing, so a switch
-that is on is permission to act, not permission to act on everything.
+Each request checks the env gate, then the capability, so a process started
+without the variable cannot be talked into host access and one that loses it
+stops answering immediately. The tool's reaching operations (`docker`, `shell`,
+`files`) also check the operator's **allowed containers** list, a set of name
+globs; an empty list means they reach nothing, so a switch that is on is
+permission to act, not permission to act on everything.
 
-The client is one named method per endpoint - `/_ping`, `/info`,
+The client behind both surfaces is one named method per endpoint - `/_ping`, `/info`,
 `/containers/json?all=1`, `POST /containers/{name}/{start|stop|restart|pause|unpause}`,
 `POST /containers/{name}/exec` + `POST /exec/{id}/start` + `GET /exec/{id}/json`,
 and `GET /containers/{name}/archive?path=` - with a container name that must
@@ -106,9 +110,9 @@ above the client can reach an endpoint that is not on that list.
 
 ## The scoped shell and file reads
 
-`POST /containers/:name/exec` takes a **verb id**, never a command: `os`,
+The tool's `exec` action takes a **verb id**, never a command: `os`,
 `uptime`, `memory`, `processes`, `disk`, `root`, `network`. Each verb is one
-fixed argv in `exec-verbs.ts`, the output is capped at 64 KiB, and the run gets
+fixed argv in `gjc-container-exec-verbs.ts`, the output is capped at 64 KiB, and the run gets
 20 seconds. A caller cannot pass a flag, a pipeline or an environment variable,
 and nothing reads a container's environment, because that is where its secrets
 live.
@@ -118,7 +122,7 @@ require launching a privileged container with the host root mounted, which is
 root-equivalent control and exactly what this surface exists to avoid; that path
 stays in `gajae-host.mjs` over SSH, where the operator runs it deliberately.
 
-`GET /files?container=&path=` reads one file or lists one directory through
+The tool's `read_file` action reads one file or lists one directory through
 Docker's `archive` endpoint: read-only, 256 KiB per file, paths must be absolute
 and `..` is refused. Those paths are the *container's* filesystem, so they only
 contain host files where a bind mount puts them there.
@@ -127,11 +131,18 @@ contain host files where a bind mount puts them there.
 
 `GET /api/host/discovery` answers "what kind of machine is this" from the two
 reads the app already has - `/info` and the container list - and never from a
-product name in the logic. Detectors are rows in `HOST_MANAGERS`
-(`host-discovery.ts`): each has a label and the signals it recognises (kernel or
-OS string, image reference, container name, label key), and the profile reports
-the evidence line next to every verdict. Adding another appliance is a table
-row, not a branch.
+product name in the logic. Two tables in `gjc-host-discovery.ts` hold the
+recognisers, each row with a label and the signals it knows (OS or kernel
+string, hostname, image reference, container name, label key), and the profile
+reports the evidence line next to every verdict. Adding another appliance is a
+table row, not a branch.
+
+- **`HOST_PLATFORMS`** - the machine's own layer: Unraid, MOS, Proxmox VE,
+  OpenMediaVault, CasaOS, ZimaOS. Proxmox and OpenMediaVault matter here because
+  their userland reads as plain Debian: only the `pve` kernel suffix, the
+  hostname or their own containers give them away.
+- **`HOST_MANAGERS`** - container managers running on top: Portainer, Dockge,
+  Coolify, Yacht.
 
 It also reports the brand-agnostic facts that matter more than any name:
 
@@ -143,12 +154,47 @@ It also reports the brand-agnostic facts that matter more than any name:
 - **guidance** - the one-line consequences of the above, so an agent knows
   whether to act here or in Portainer/the appliance's own manager.
 
-Each detection is also stored (`host.profile.v1` in `app_config`), and
-`GET /api/host/status` then reports `host.os`, `host.kernelVersion` and
+### When detection runs
+
+Three triggers, all explicit:
+
+- the operator presses **Test discovery** in Settings;
+- a save that turns the host reads on (the master switch coming on with
+  `discovery` already on, or `discovery` itself flipping on) detects in the same
+  request, so the answer is there without a second click;
+- the agent calls the `host` tool's `discovery` action.
+
+Nothing detects at session or turn start, and no save that leaves the read
+switch already on detects again - the stored picture is reused. That is
+intentional: a detection costs two daemon reads and, if it were injected into a
+run, context tokens. A daemon that cannot be reached does not fail the save;
+the switches are stored and `host` stays `null`.
+
+Each detection is stored (`host.profile.v1` in `app_config`), and
+`GET /api/host/status` then reports `host.os`, `host.kernelVersion`,
+`host.platform` (the detected OS or appliance, when one is known) and
 `host.detectedAt` while `discovery` is on. An agent that arrives after the
 operator pressed Detect - or after the container restarted - therefore knows
 which machine it is standing on without re-reading the daemon or asking for
 another detection.
+
+## The native agent tool
+
+The routes above serve the Settings tab. A run that the server resolves as
+host-capable also receives a `host` tool, and that tool does **not** go through
+HTTP: the GJC worker talks to the mounted socket itself, with one named client
+method per operation. The server resolves the policy per run - the env gate,
+the master switch, the enabled capabilities and the allowed-container globs -
+and the worker enforces that snapshot on every call. The snapshot belongs to
+the run, so a settings change applies from the next turn; it never widens a
+run already in flight.
+
+The tool has seven operations: `info`, `containers`, `discovery`, `restart`,
+`container_action`, `exec` (a verb id, never a command) and `read_file`. Its
+client and discovery code lives beside the engine, so the worker reaches the
+daemon without importing the application. An image deployed without `GAJAE_HOST_CONTROL` never builds a
+policy, so the tool is absent from the run rather than refused at call time.
+The HTTP routes stay for the Settings tab and for anything outside a session.
 
 ## Which transport to use
 

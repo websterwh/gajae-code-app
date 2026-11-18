@@ -81,6 +81,17 @@
     "title": "Agent",
     "open": "Show agent sidebar",
     "close": "Hide agent sidebar",
+    "exports": {
+      "title": "Exports",
+      "download": "Download",
+      "failed": "Download failed."
+    },
+    "layout": {
+      "title": "Sidebar layout",
+      "show": "Show {{name}}",
+      "moveUp": "Move {{name}} up",
+      "moveDown": "Move {{name}} down"
+    },
     "environment": {
       "title": "Environment",
       "changes": "Changes",

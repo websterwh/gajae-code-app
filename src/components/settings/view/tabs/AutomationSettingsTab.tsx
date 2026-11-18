@@ -15,6 +15,7 @@ type Status = {
   platform: string;
   architecture: string;
   capabilities?: { browser: boolean; computer: boolean };
+  computerUse?: { enabled: boolean; usable: boolean };
   browser: { error?: string };
 };
 
@@ -66,11 +67,18 @@ type HostControl = {
   capabilities: Record<HostCapabilityKey, boolean>;
   targets: string[];
   /** The last saved detection, so the OS line survives a reload. */
-  host: { os: string; kernelVersion: string; detectedAt: number } | null;
+  host: {
+    os: string;
+    kernelVersion: string;
+    /** The appliance or distro behind the OS string, when discovery named one. */
+    platform: { id: string; label: string } | null;
+    detectedAt: number;
+  } | null;
 };
 
 type HostDiscoveryProfile = {
   runtime: { serverVersion: string; operatingSystem: string; kernelVersion: string; driver: string; swarm: string; hostName: string };
+  platforms: Array<{ id: string; label: string; kind: string; evidence: string[] }>;
   managers: Array<{ id: string; label: string; evidence: string[] }>;
   socketHolders: string[];
   stacks: Array<{ project: string; services: string[]; containers: string[] }>;
@@ -90,10 +98,18 @@ const DOCKER_ROWS: readonly HostCapabilityKey[] = ['containers', 'restart', 'doc
 // (bookworm)"), properly capitalised. Rewriting it would produce "Debian
 // Gnu/linux", so it is shown as reported; the kernel is the fallback for a
 // daemon that names no OS at all.
+function withPlatform(os: string, platform: string | undefined): string {
+  return platform ? `${os} · ${platform}` : os;
+}
+
 function describeHostOs(profile: HostDiscoveryProfile): string {
   const os = profile.runtime.operatingSystem.trim();
-  if (os.length > 0) return os;
-  return profile.runtime.kernelVersion.trim();
+  return withPlatform(os.length > 0 ? os : profile.runtime.kernelVersion.trim(), profile.platforms[0]?.label);
+}
+
+function describeSavedHost(host: NonNullable<HostControl['host']>): string {
+  const os = host.os.trim();
+  return withPlatform(os.length > 0 ? os : host.kernelVersion.trim(), host.platform?.label);
 }
 
 const selectClass = 'touch-manipulation rounded-lg border border-input bg-card p-2.5 text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary';
@@ -265,6 +281,20 @@ export default function AutomationSettingsTab() {
     }
   };
 
+  // The server is the authority for this switch; a failed write re-reads it
+  // instead of leaving the toggle showing something that was not saved.
+  const saveComputerUse = async (enabled: boolean) => {
+    const response = await fetch('/api/automation/computer-use', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }),
+    });
+    if (!response.ok) {
+      await refresh();
+      return;
+    }
+    const saved = await response.json() as { enabled: boolean; usable: boolean };
+    setStatus((current) => current ? { ...current, computerUse: saved } : current);
+  };
+
   const pairRemoteComputer = async () => {
     const response = await fetch('/api/automation/remote-computers/pairings', { method: 'POST' });
     if (!response.ok) return;
@@ -409,7 +439,7 @@ export default function AutomationSettingsTab() {
   // On when anything below is on: the group only reveals its rows, so it must
   // not read "off" while one of those rows is still granting something.
   const dockerGroupOn = hostControl !== null && DOCKER_ROWS.some((capability) => hostControl.capabilities[capability] === true);
-  const shownOs = detectedOs ?? hostControl?.host?.os ?? null;
+  const shownOs = detectedOs ?? (hostControl?.host ? describeSavedHost(hostControl.host) : null);
 
   return (
     <div className="space-y-6">
@@ -511,6 +541,25 @@ export default function AutomationSettingsTab() {
           </SettingsCard>
         </SettingsSection>
       ) : null}
+
+      {/* Its own switch above the device list: pairing a computer is not
+         permission to hand a session a computer tool. Off until the person
+         turns it on, exactly like host control. */}
+      <SettingsSection title={t('automation.computerUse.title')} description={t('automation.computerUse.description')}>
+        <SettingsCard>
+          <SettingsRow label={t('automation.computerUse.enableLabel')} description={t('automation.computerUse.enableDescription')}>
+            <SettingsToggle
+              checked={status?.computerUse?.enabled === true}
+              disabled={status === null}
+              onChange={(value) => void saveComputerUse(value)}
+              ariaLabel={t('automation.computerUse.enableLabel')}
+            />
+          </SettingsRow>
+          {status !== null && status.computerUse?.usable !== true ? (
+            <p className="px-4 pb-4 text-xs text-muted-foreground">{t('automation.computerUse.unavailable')}</p>
+          ) : null}
+        </SettingsCard>
+      </SettingsSection>
 
       <SettingsSection title={t('automation.title')} description={t('automation.description')}>
         <SettingsCard divided>

@@ -1,6 +1,6 @@
 import { appConfigDb } from '@/modules/database/index.js';
 
-import type { HostProfile } from './host-discovery.js';
+import type { HostProfile } from '../../gjc-engine.js';
 
 /**
  * The last detection, kept so the answer outlives the click that produced it.

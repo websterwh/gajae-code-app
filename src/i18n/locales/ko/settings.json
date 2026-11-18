@@ -132,6 +132,14 @@
     "packages": "패키지"
   },
   "automation": {
+    "computerUse": {
+      "title": "컴퓨터 사용",
+      "description": "세션이 agent-desktop 컴패니언을 통해 페어링된 컴퓨터를 제어할 수 있게 합니다. 켜기 전에는 꺼져 있습니다.",
+      "enableLabel": "컴퓨터 사용 활성화",
+      "enableDescription": "컴퓨터가 여러 대 연결되어 있으면 첫 호출 전에 어느 것을 사용할지 묻습니다.",
+      "unavailable": "먼저 원격 컴퓨터에서 컴퓨터를 페어링하고 신뢰하세요.",
+      "saveFailed": "컴퓨터 사용 설정을 저장하지 못했습니다."
+    },
     "browserBackend": {
       "title": "브라우저",
       "description": "여기서 시작한 GJC 세션이 제어할 수 있는 브라우저입니다. 수동 내장 브라우저 실행이나 채팅 링크에는 영향을 주지 않습니다.",

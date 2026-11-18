@@ -132,6 +132,14 @@
     "packages": "Paquets"
   },
   "automation": {
+    "computerUse": {
+      "title": "Utilisation de l’ordinateur",
+      "description": "Autorise une session à contrôler un ordinateur appairé via son compagnon agent-desktop. Désactivé jusqu’à ce que vous l’activiez.",
+      "enableLabel": "Activer l’utilisation de l’ordinateur",
+      "enableDescription": "Si plusieurs ordinateurs sont connectés, l’agent demande lequel utiliser avant le premier appel.",
+      "unavailable": "Appairez et approuvez d’abord un ordinateur dans Ordinateurs distants.",
+      "saveFailed": "L’utilisation de l’ordinateur n’a pas pu être enregistrée."
+    },
     "browserBackend": {
       "title": "Navigateur",
       "description": "Quel navigateur les sessions GJC lancées ici peuvent contrôler. Cela ne change ni les ouvertures manuelles du navigateur intégré ni les liens du chat.",

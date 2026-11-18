@@ -150,3 +150,49 @@ export type {
 // The command and skill surface the runtime advertises, generated from the
 // installed runtime rather than hand-listed.
 export { GJC_APP_BUILTIN_COMMANDS, GJC_BUNDLED_SKILLS } from './gjc-command-surface.generated.js';
+
+// Host control's transport. The worker's `host` tool talks to the Docker daemon
+// over its socket rather than through the app's HTTP API, so the client, the
+// fixed exec verbs and the discovery tables have to travel with the engine. What
+// stays with the application is the policy side: the env gate, the capability
+// switches, the stored profile and the Settings routes.
+export {
+  CONTAINER_ACTIONS,
+  dockerClient,
+  DockerSocketError,
+  isArchivePath,
+  isContainerAction,
+  isContainerName,
+  listTarEntries,
+  parseExecFrames,
+} from './gjc-docker-socket.js';
+export type {
+  ContainerAction,
+  DockerSocketErrorCode,
+  ExecResult,
+  HostArchive,
+  HostArchiveEntry,
+  HostContainer,
+  HostControlClient,
+  HostInfo,
+  HostMount,
+} from './gjc-docker-socket.js';
+export { describeExecVerbs, EXEC_VERBS, findExecVerb } from './gjc-container-exec-verbs.js';
+export type { ExecVerb } from './gjc-container-exec-verbs.js';
+export { detectHost, HOST_MANAGERS, HOST_PLATFORMS } from './gjc-host-discovery.js';
+export type {
+  HostManagerDetector,
+  HostManagerMatch,
+  HostPlatformKind,
+  HostPlatformMatch,
+  HostProfile,
+  HostStack,
+} from './gjc-host-discovery.js';
+export {
+  HOST_CAPABILITIES,
+  isHostCapability,
+  isTargetPattern,
+  matchesHostTarget,
+  parseTargets,
+} from './gjc-host-control-policy.js';
+export type { HostCapability, HostControlRunPolicy } from './gjc-host-control-policy.js';

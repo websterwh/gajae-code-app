@@ -132,6 +132,14 @@
     "packages": "Packages"
   },
   "automation": {
+    "computerUse": {
+      "title": "Computer use",
+      "description": "Let a session control a paired computer through its agent-desktop companion. This is off until you turn it on.",
+      "enableLabel": "Enable computer use",
+      "enableDescription": "When more than one computer is connected, the agent asks which one to use before the first call.",
+      "unavailable": "Pair and trust a computer under Remote computers first.",
+      "saveFailed": "Computer use could not be saved."
+    },
     "browserBackend": {
       "title": "Browser",
       "description": "Which browser GJC sessions started here can control. This does not change manual built-in launches or chat links.",

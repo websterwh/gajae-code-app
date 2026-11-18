@@ -25,7 +25,7 @@ type ApiOptions = {
   hostControl?: {
     enabled: boolean;
     capabilities: Record<string, boolean>;
-    host: { os: string; kernelVersion: string; detectedAt: number } | null;
+    host: { os: string; kernelVersion: string; platform: { id: string; label: string } | null; detectedAt: number } | null;
   };
 };
 
@@ -109,20 +109,33 @@ function fakeApi(options: ApiOptions = {}) {
       return new Response(JSON.stringify(hostStatus()));
     }
     if (hostControl && path === '/api/host/settings' && method === 'PUT') {
+      const wasReading = hostControl.enabled && hostControl.capabilities.discovery === true;
       for (const [key, value] of Object.entries(body as Record<string, unknown>)) {
         if (typeof value !== 'boolean') continue;
         if (key === 'enabled') hostControl.enabled = value;
         else hostControl.capabilities[key] = value;
       }
+      // The server detects on the transition into reading and answers in the
+      // same response; the fake does the same so the tab's real render path runs.
+      if (!wasReading && hostControl.enabled && hostControl.capabilities.discovery === true) {
+        hostControl.host = {
+          os: 'Devuan GNU/Linux 6 (excalibur)', kernelVersion: '6.12.10-mos',
+          platform: { id: 'mos', label: 'MOS' }, detectedAt: 1,
+        };
+      }
       return new Response(JSON.stringify(hostStatus()));
     }
     if (hostControl && path === '/api/host/discovery') {
       const detectedAt = 1;
-      hostControl.host = { os: 'Devuan GNU/Linux 6 (excalibur)', kernelVersion: '6.12.10-mos', detectedAt };
+      hostControl.host = {
+        os: 'Devuan GNU/Linux 6 (excalibur)', kernelVersion: '6.12.10-mos',
+        platform: { id: 'mos', label: 'MOS' }, detectedAt,
+      };
       return new Response(JSON.stringify({
         detectedAt,
         profile: {
           runtime: { serverVersion: '28.0.0', operatingSystem: 'Devuan GNU/Linux 6 (excalibur)', kernelVersion: '6.12.10-mos', driver: 'overlay2', swarm: 'inactive', hostName: 'webby' },
+          platforms: [{ id: 'mos', label: 'MOS', kind: 'os', evidence: ['host reports "Devuan GNU/Linux 6 (excalibur) 6.12.10-mos"'] }],
           managers: [], socketHolders: [], stacks: [], unmanaged: [], guidance: [],
         },
       }));
@@ -424,13 +437,16 @@ test('host reading is one switch, and detection sits left of it with the answer 
   assert.deepEqual(calls.filter((call) => call.path === '/api/host/settings').map((call) => call.body), [
     { facts: true, discovery: true },
   ]);
+  // Switching the read on detects in the same save, so the answer is already
+  // there - and the platform is named beside the OS, not just "Devuan".
+  await screen.findByText('Devuan GNU/Linux 6 (excalibur) · MOS');
 
   const detect = screen.getByRole('button', { name: hostControl.detect! }) as HTMLButtonElement;
   const readSwitch = screen.getByRole('switch', { name: hostControl.hostInfo! });
   // Detect is part of the read row and comes before the switch it depends on.
   assert.equal(detect.compareDocumentPosition(readSwitch) & 4, 4, 'the detect button sits left of its switch');
   fireEvent.click(detect);
-  await screen.findByText('Devuan GNU/Linux 6 (excalibur)');
+  await screen.findByText('Devuan GNU/Linux 6 (excalibur) · MOS');
   // Nothing else about the host is printed: the profile is the agent's, not the tab's.
   assert.equal(screen.queryByText('Webby'), null);
 });
@@ -473,7 +489,7 @@ test('a stored detection renders its OS on load instead of waiting for the butto
     hostControl: {
       enabled: true,
       capabilities: { facts: true, discovery: true, containers: false, restart: false, docker: false, shell: false, files: false },
-      host: { os: 'Debian GNU/Linux 12 (bookworm)', kernelVersion: '6.1.0-18-amd64', detectedAt: 1 },
+      host: { os: 'Debian GNU/Linux 12 (bookworm)', kernelVersion: '6.1.0-18-amd64', platform: null, detectedAt: 1 },
     },
   });
   await mount();

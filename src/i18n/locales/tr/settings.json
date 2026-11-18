@@ -132,6 +132,14 @@
     "packages": "Paketler"
   },
   "automation": {
+    "computerUse": {
+      "title": "Bilgisayar kullanımı",
+      "description": "Bir oturumun agent-desktop yardımcısı üzerinden eşleştirilmiş bir bilgisayarı denetlemesine izin verir. Siz açana kadar kapalıdır.",
+      "enableLabel": "Bilgisayar kullanımını etkinleştir",
+      "enableDescription": "Birden fazla bilgisayar bağlıysa ajan ilk çağrıdan önce hangisinin kullanılacağını sorar.",
+      "unavailable": "Önce Uzak bilgisayarlar bölümünde bir bilgisayarı eşleştirin ve güvenin.",
+      "saveFailed": "Bilgisayar kullanımı kaydedilemedi."
+    },
     "browserBackend": {
       "title": "Tarayıcı",
       "description": "Burada başlatılan GJC oturumlarının hangi tarayıcıyı denetleyebileceği. Elle yerleşik tarayıcı açmayı veya sohbet bağlantılarını değiştirmez.",

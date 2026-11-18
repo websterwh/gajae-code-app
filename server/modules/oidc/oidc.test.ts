@@ -319,7 +319,7 @@ test('the gate is inert until the config is complete, and the exemption list is 
   // Every new surface is authenticated by default: automation dispatches into a
   // paired companion, browser drives CDP, and MCP mutates the agent's config.
   // A future feature cannot quietly join this list.
-  for (const path of ['/', '/api/providers/sessions', '/api/settings', '/api/host/containers', '/api/automation/computer', '/api/browser/cdp', '/api/mcp/servers']) {
+  for (const path of ['/', '/api/providers/sessions', '/api/settings', '/api/host/discovery', '/api/automation/computer', '/api/browser/cdp', '/api/mcp/servers']) {
     assert.equal(isExemptPath(path), false, `${path} must require a session`);
   }
   assert.deepEqual([...OIDC_EXEMPT_PREFIXES], [
@@ -327,7 +327,7 @@ test('the gate is inert until the config is complete, and the exemption list is 
   ]);
   // A trusted LAN address may read the app without signing in, but it never
   // reaches host control that way.
-  for (const path of ['/api/host', '/api/host/containers', '/api/host/containers/app/restart']) {
+  for (const path of ['/api/host', '/api/host/discovery', '/api/host/settings']) {
     assert.equal(requiresSession(path), true, `${path} must not skip sign-in for local addresses`);
   }
   for (const path of ['/api/settings', '/api/hostile']) {

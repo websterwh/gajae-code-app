@@ -132,6 +132,14 @@
     "packages": "软件包"
   },
   "automation": {
+    "computerUse": {
+      "title": "计算机使用",
+      "description": "允许会话通过其 agent-desktop 配套程序控制已配对的计算机。在你开启之前保持关闭。",
+      "enableLabel": "启用计算机使用",
+      "enableDescription": "连接了多台计算机时，代理会在首次调用前询问使用哪一台。",
+      "unavailable": "请先在“远程计算机”中配对并信任一台计算机。",
+      "saveFailed": "无法保存计算机使用设置。"
+    },
     "browserBackend": {
       "title": "浏览器",
       "description": "在此启动的 GJC 会话可以控制的浏览器。不会改变手动打开内置浏览器或聊天链接的行为。",

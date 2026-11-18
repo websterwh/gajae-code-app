@@ -54,6 +54,7 @@ import {
 } from './gjc-browser-backend.js';
 import { egoActivityToken } from './gjc-ego-activity.js';
 import { resolveExportCommand } from './gjc-export-path.js';
+import { recordProjectExport } from './gjc-project-exports.js';
 import { readSessionSnapshot } from './gjc-session-state.js';
 import { GjcGoalSession, GJC_GOAL_MODEL_OPERATIONS, matchesGjcGoalOwner, readPersistedGjcGoal, type GjcGoalScope } from './gjc-goal-session.js';
 import { installGjcGoalTool } from './gjc-goal-tool.js';
@@ -64,6 +65,13 @@ import {
   takeGjcAutomationBridgeTransport,
   type GjcAutomationBridgeTransport,
 } from './gjc-automation-tools.js';
+import { createHostControlTool } from './gjc-host-control-tools.js';
+import {
+  HOST_CAPABILITIES,
+  isHostCapability,
+  parseTargets,
+  type HostControlRunPolicy,
+} from './gjc-host-control-policy.js';
 type Model = ReturnType<ModelRegistry['getAll']>[number];
 
 type ExactCredentialRef =
@@ -88,6 +96,17 @@ export type SdkRunConfig = {
   browserBackend?: GjcBrowserBackend;
   /** Trusted server-side readiness for the desktop built-in WebView. */
   builtinBrowserAvailable?: boolean;
+  /**
+   * Server-resolved computer use: the user's Settings switch is on and at
+   * least one trusted companion is paired. Absent or false withholds the
+   * `computer` tool from the run entirely.
+   */
+  computerAvailable?: boolean;
+  /**
+   * Server-resolved native host access: the env gate, the master switch and at
+   * least one enabled capability. Absent means the run gets no `host` tool.
+   */
+  hostControl?: HostControlRunPolicy;
   /**
    * The user's Settings opt-in for the paired remote computer.
    * Server-resolved like the backend; absent or false withholds `computer`.
@@ -425,11 +444,16 @@ export function selectGjcAutomationTools(
   tools: AutomationTools,
   browserBackend: Pick<GjcResolvedBrowserBackend, 'exposesBuiltinTool'>,
   builtinBrowserAvailable = false,
+  computerAvailable = false,
 ): AutomationTools {
-  const { browser, computer: _computer, ...rest } = tools;
+  const { browser, computer, ...rest } = tools;
   return {
     ...rest,
     ...(browserBackend.exposesBuiltinTool && builtinBrowserAvailable && browser ? { browser } : {}),
+    // Computer control exists only through a paired companion, and only while
+    // the user's own switch is on. The server resolves both per run; a client
+    // cannot ask for it by sending an option.
+    ...(computerAvailable && computer ? { computer } : {}),
   };
 }
 
@@ -440,6 +464,21 @@ function isAppOAuthCommand(message: string): boolean {
 
 function object(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/**
+ * The run's host-control policy is a server snapshot, so this only has to
+ * reject malformed input: unknown capabilities are dropped at normalization.
+ */
+function isHostControlRunPolicy(value: unknown): value is HostControlRunPolicy {
+  return object(value)
+    && typeof value.socketPath === 'string'
+    && value.socketPath.length > 0
+    && value.socketPath.length <= 4096
+    && Array.isArray(value.capabilities)
+    && value.capabilities.every(isHostCapability)
+    && Array.isArray(value.targets)
+    && value.targets.every((target) => typeof target === 'string');
 }
 
 function exactCredentialRef(value: unknown): value is ExactCredentialRef {
@@ -476,6 +515,8 @@ function configFromOptions(value: Record<string, unknown>): SdkRunConfig {
     || (candidate.appSessionId !== undefined && (typeof candidate.appSessionId !== 'string' || !candidate.appSessionId))
     || (candidate.browserBackend !== undefined && !isGjcBrowserBackend(candidate.browserBackend))
     || (candidate.builtinBrowserAvailable !== undefined && typeof candidate.builtinBrowserAvailable !== 'boolean')
+    || (candidate.computerAvailable !== undefined && typeof candidate.computerAvailable !== 'boolean')
+    || (candidate.hostControl !== undefined && !isHostControlRunPolicy(candidate.hostControl))
     || (candidate.retryLastTurn !== undefined && typeof candidate.retryLastTurn !== 'boolean')
   ) throw new Error(FAILURE);
   // A malformed policy block throws GjcRunPermissionsError, which keeps its
@@ -492,6 +533,19 @@ function configFromOptions(value: Record<string, unknown>): SdkRunConfig {
     // Only a trusted readiness report selects the app's WebView transport;
     // without it the runtime's own browser tool is used, as in the CLI.
     builtinBrowserAvailable: candidate.builtinBrowserAvailable === true,
+    // Same for computer: the server decides, never the request.
+    computerAvailable: candidate.computerAvailable === true,
+    // Keep only the known capabilities, in their canonical order, so an
+    // unexpected name cannot add a permission the Settings tab never granted.
+    ...(candidate.hostControl
+      ? {
+        hostControl: {
+          socketPath: candidate.hostControl.socketPath,
+          capabilities: HOST_CAPABILITIES.filter((name) => (candidate.hostControl as HostControlRunPolicy).capabilities.includes(name)),
+          targets: parseTargets(candidate.hostControl.targets),
+        },
+      }
+      : {}),
     ...(permissions ? { permissions } : {}),
   };
 }
@@ -1291,6 +1345,10 @@ export class GjcBunSdkAdapter implements GjcWorkerRuntime {
       applyGjcCompactionPolicy(settings);
       const builtinBrowserAvailable = config.builtinBrowserAvailable === true
         && Boolean(config.appSessionId);
+      const computerAvailable = config.computerAvailable === true && Boolean(config.appSessionId);
+      // Native host access is attached only when the server resolved a policy;
+      // the tool re-checks that snapshot on every call.
+      const hostTools = config.hostControl ? [createHostControlTool(config.hostControl)] : [];
       const browserBackend = applyGjcBrowserBackend(
         settings,
         config.browserBackend,
@@ -1358,9 +1416,9 @@ export class GjcBunSdkAdapter implements GjcWorkerRuntime {
             // The app WebView transport replaces the runtime's browser tool when
             // it is ready; otherwise the runtime's own tool runs, as in the CLI.
             .filter((name) => name !== 'browser' || browserBackend.exposesBuiltinTool)
-            // This server has no local desktop driver, and a paired
-            // companion is not exposed as a run tool.
-            .filter((name) => name !== 'computer'),
+            // The paired companion is a run tool only while the user's
+            // computer-use switch is on and a device is trusted.
+            .filter((name) => name !== 'computer' || computerAvailable),
           spawns: config.spawns,
           goalToolAllowedOps: goalEnabled ? GJC_GOAL_MODEL_OPERATIONS : [],
           bashAllowedPrefixes: config.bashPolicy.allowedPrefixes,
@@ -1371,7 +1429,7 @@ export class GjcBunSdkAdapter implements GjcWorkerRuntime {
               config.appSessionId,
               askController.uiContext,
               this.options.automationBridge,
-              config.permissions?.mode,              ), browserBackend, trustedBuiltinBrowserAvailable)),
+              config.permissions?.mode,              ), browserBackend, trustedBuiltinBrowserAvailable, computerAvailable)),
           } : {}),
         };
         if (config.toolNames.some((name) => GJC_APP_DELEGATION_TOOL_NAMES.includes(name as 'task' | 'subagent'))) {
@@ -1390,7 +1448,9 @@ export class GjcBunSdkAdapter implements GjcWorkerRuntime {
           // CustomTool is the public SDK replacement API. Never construct the
           // built-in executor: it does not inherit the app permission boundary.
           toolNames: sessionOptions.toolNames!.filter((name) => !GJC_APP_DELEGATION_TOOL_NAMES.includes(name as 'task' | 'subagent')),
-          ...(delegation ? { customTools: delegation.tools() } : {}),
+          ...(delegation || hostTools.length > 0
+            ? { customTools: [...(delegation?.tools() ?? []), ...hostTools] }
+            : {}),
           // The app executor above receives the configured role policy. Only
           // native SDK spawning is denied for goal/delegation-capable sessions.
           spawns: delegation || goalEnabled ? 'deny' : sessionOptions.spawns,
@@ -1543,6 +1603,18 @@ export class GjcBunSdkAdapter implements GjcWorkerRuntime {
             const written = exportPath.kind === 'rejected'
               ? undefined
               : ('outputPath' in exportPath ? exportPath.outputPath : undefined);
+            // The message is the only record the chat itself keeps, and the
+            // transcript the app reloads need not carry the extra field. The
+            // file outlives both, so the sidebar's export list is sourced from
+            // this record instead of from the conversation.
+            if (written) {
+              void recordProjectExport({
+                path: written,
+                projectPath: config.cwd,
+                sessionId: config.appSessionId ?? null,
+                at: new Date().toISOString(),
+              }).catch(() => undefined);
+            }
             writer.send({
               kind: 'text',
               role: 'assistant',

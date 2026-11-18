@@ -387,10 +387,14 @@ export default function PackagesSettingsTab() {
       </SettingsSection>
 
       {/* The removal is destructive, so it asks first - and asks in the app,
-          not in a browser confirm that ignores the theme. */}
+          not in a browser confirm that ignores the theme. Settings itself is a
+          dialog at z-9999, and this one is portalled to the body from inside
+          it, so it has to sit above that layer or it renders behind the panel
+          that opened it. */}
       <Dialog open={confirming !== null} onOpenChange={(open) => { if (!open) setConfirming(null); }}>
         <DialogContent
           aria-labelledby="packages-remove-title"
+          wrapperClassName="z-[10000]"
           className="w-[calc(100vw-2rem)] max-w-md overflow-hidden rounded-2xl border-border/80 bg-popover p-0 shadow-2xl"
         >
           <DialogTitle id="packages-remove-title">

@@ -83,7 +83,7 @@ test('the sidebar starts closed and opening it persists the open state', async (
   fireEvent.click(screen.getByText('Open'));
 
   assert.ok(lane());
-  assert.deepEqual(persisted(), { open: true });
+  assert.equal(persisted().open, true);
   await within(lane()).findByText('main');
 });
 
@@ -108,7 +108,9 @@ test('a width saved by the old resizable rail is dropped on the next write, with
   await within(lane()).findByText('main');
   fireEvent.click(screen.getByText('Toggle'));
 
-  assert.deepEqual(persisted(), { open: false });
+  assert.equal(persisted().open, false);
+  // The stale width is gone; the layout is the record's other half.
+  assert.deepEqual(Object.keys(persisted()).sort(), ['blocks', 'open']);
 });
 
 test('the desktop lane holds the environment card with the existing git summary and its refresh', async () => {
@@ -119,17 +121,20 @@ test('the desktop lane holds the environment card with the existing git summary 
   await within(region).findByText('main');
   assert.ok(within(region).getByText('2'));
   assert.ok(within(region).getByTitle('/work/alpha'));
-  assert.deepEqual(requests, ['/api/git/status?project=project-alpha&sessionId=session-1']);
+  // The lane also polls its export list, so only the Git calls are counted here.
+  const gitRequests = () => requests.filter((request) => request.startsWith('/api/git/status'));
+  assert.deepEqual(gitRequests(), ['/api/git/status?project=project-alpha&sessionId=session-1']);
 
   // No header, no close, no separator: the refresh is the lane's only control.
   assert.equal(within(lane()).queryByRole('heading', { level: 2 }), null);
   assert.equal(screen.queryByRole('separator'), null);
   const buttons = within(lane()).getAllByRole('button');
-  assert.equal(buttons.length, 1);
+  assert.equal(buttons.length, 2);
   assert.equal(buttons[0].getAttribute('aria-label'), 'agentSidebar.environment.refresh');
+  assert.equal(buttons[1].getAttribute('aria-label'), 'agentSidebar.layout.title');
 
   fireEvent.click(buttons[0]);
-  await waitFor(() => assert.equal(requests.length, 2));
+  await waitFor(() => assert.equal(gitRequests().length, 2));
 });
 
 test('the desktop lane sets no inline width and carries no rail chrome', async () => {
@@ -183,7 +188,7 @@ test('the mobile drawer is dismissed by its backdrop even from a record that sti
   fireEvent.click(backdrop);
 
   assert.equal(screen.queryByRole('complementary'), null);
-  assert.deepEqual(persisted(), { open: false });
+  assert.equal(persisted().open, false);
 });
 
 test('the lane carries the Action Required section only while the session awaits an answer', async () => {

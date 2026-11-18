@@ -2,14 +2,31 @@
  * Persisted state for the right-hand Agent sidebar.
  *
  * The sidebar is the one production right-hand surface, and its state is
- * deliberately just `{ open }`: the desktop lane is a fixed-width context
- * column, so there is no width to remember and no tab state either. A record
- * written by the earlier resizable rail (`{ open, width }`) is read for its
- * `open` alone, and the next write drops the stale field.
+ * deliberately small: whether the lane is open, and the reader's own order and
+ * visibility for the blocks inside it. A record written by the earlier
+ * resizable rail (`{ open, width }`) is read for its `open` alone, and the next
+ * write drops the stale field.
  */
+
+/** Every block the lane can show; the default order is this order. */
+export const AGENT_SIDEBAR_BLOCKS = ['environment', 'work', 'actionRequired', 'exports'] as const;
+
+export type AgentSidebarBlock = (typeof AGENT_SIDEBAR_BLOCKS)[number];
+
+/** Exports default last: the lane's stable facts sit above the files it hands out. */
+export const DEFAULT_AGENT_SIDEBAR_LAYOUT: AgentSidebarLayoutEntry[] = AGENT_SIDEBAR_BLOCKS.map((block) => ({
+  block,
+  visible: true,
+}));
+
+export type AgentSidebarLayoutEntry = {
+  block: AgentSidebarBlock;
+  visible: boolean;
+};
 
 export type AgentSidebarState = {
   open: boolean;
+  blocks: AgentSidebarLayoutEntry[];
 };
 
 export type AgentSidebarStorage = Pick<Storage, 'getItem' | 'setItem'>;
@@ -19,39 +36,70 @@ export const AGENT_SIDEBAR_STORAGE_KEY = 'agent-sidebar';
 /** The conversation keeps at least this much of the row beside the lane. */
 export const MIN_AGENT_SIDEBAR_CHAT_WIDTH = 200;
 
-export const DEFAULT_AGENT_SIDEBAR_STATE: AgentSidebarState = {
+const defaultLayout = (): AgentSidebarLayoutEntry[] => DEFAULT_AGENT_SIDEBAR_LAYOUT.map((entry) => ({ ...entry }));
+
+export const defaultAgentSidebarState = (): AgentSidebarState => ({
   open: false,
-};
+  blocks: defaultLayout(),
+});
+
+export const DEFAULT_AGENT_SIDEBAR_STATE: AgentSidebarState = defaultAgentSidebarState();
+
+const isBlock = (value: unknown): value is AgentSidebarBlock => (
+  typeof value === 'string' && (AGENT_SIDEBAR_BLOCKS as readonly string[]).includes(value)
+);
+
+/**
+ * Unknown blocks and duplicate entries are dropped, and a block the stored
+ * record predates is appended in its default position - a new block must not
+ * vanish from a reader's lane because they saved a layout before it existed.
+ */
+function readLayout(value: unknown): AgentSidebarLayoutEntry[] {
+  const layout: AgentSidebarLayoutEntry[] = [];
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      if (typeof entry !== 'object' || entry === null) continue;
+      const { block, visible } = entry as Record<string, unknown>;
+      if (!isBlock(block) || layout.some((item) => item.block === block)) continue;
+      layout.push({ block, visible: visible !== false });
+    }
+  }
+  for (const block of AGENT_SIDEBAR_BLOCKS) {
+    if (!layout.some((entry) => entry.block === block)) layout.push({ block, visible: true });
+  }
+  return layout;
+}
 
 export function readAgentSidebarState(storage: AgentSidebarStorage | null): AgentSidebarState {
   if (!storage) {
-    return DEFAULT_AGENT_SIDEBAR_STATE;
+    return defaultAgentSidebarState();
   }
 
   let raw: string | null = null;
   try {
     raw = storage.getItem(AGENT_SIDEBAR_STORAGE_KEY);
   } catch {
-    return DEFAULT_AGENT_SIDEBAR_STATE;
+    return defaultAgentSidebarState();
   }
 
   if (raw === null) {
-    return DEFAULT_AGENT_SIDEBAR_STATE;
+    return defaultAgentSidebarState();
   }
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch {
-    return DEFAULT_AGENT_SIDEBAR_STATE;
+    return defaultAgentSidebarState();
   }
 
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    return DEFAULT_AGENT_SIDEBAR_STATE;
+    return defaultAgentSidebarState();
   }
 
   return {
     open: (parsed as Record<string, unknown>).open === true,
+    blocks: readLayout((parsed as Record<string, unknown>).blocks),
   };
 }
 
@@ -61,7 +109,10 @@ export function writeAgentSidebarState(storage: AgentSidebarStorage | null, stat
   }
 
   try {
-    storage.setItem(AGENT_SIDEBAR_STORAGE_KEY, JSON.stringify({ open: state.open }));
+    storage.setItem(AGENT_SIDEBAR_STORAGE_KEY, JSON.stringify({
+      open: state.open,
+      blocks: state.blocks.map(({ block, visible }) => ({ block, visible })),
+    }));
   } catch {
     // A full or blocked storage must not take the sidebar down with it.
   }

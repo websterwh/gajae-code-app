@@ -107,6 +107,24 @@ export function createAutomationRouter(service: AutomationService = automationSe
     }
   }));
 
+  // The master switch is its own read/write pair: pairing a device is not
+  // permission to hand a session a computer tool, and turning this off must
+  // take effect on the next run without a restart.
+  router.get('/computer-use', asyncHandler((_request, response) => {
+    response.set('Cache-Control', 'no-store');
+    response.json(service.computerUseStatus());
+  }));
+
+  router.put('/computer-use', asyncHandler(async (request, response) => {
+    try {
+      const enabled = service.setComputerUseEnabled(request.body?.enabled);
+      if (enabled) await service.startBridge();
+      response.json({ ...service.computerUseStatus() });
+    } catch (error) {
+      response.status(400).json({ error: error instanceof Error ? error.message : 'Invalid computer use setting.' });
+    }
+  }));
+
   router.get('/remote-computers', asyncHandler((_request, response) => {
     // Live connection state: a cached copy would show a device as offline (or
     // still "needs approval") long after the companion reconnected, which read
@@ -287,7 +305,10 @@ export function createAutomationRouter(service: AutomationService = automationSe
       return;
     }
     try {
-      response.json(await service.callComputer(id, tool, request.body?.arguments ?? {}));
+      response.json(await service.callComputer(
+        id, tool, request.body?.arguments ?? {}, undefined,
+        typeof request.body?.deviceId === 'string' ? request.body.deviceId : undefined,
+      ));
     } catch (error) {
       errorResponse(response, error);
     }

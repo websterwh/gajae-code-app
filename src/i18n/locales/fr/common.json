@@ -81,6 +81,17 @@
     "title": "Agent",
     "open": "Afficher la barre latérale de l'agent",
     "close": "Masquer la barre latérale de l'agent",
+    "exports": {
+      "title": "Exports",
+      "download": "Télécharger",
+      "failed": "Échec du téléchargement."
+    },
+    "layout": {
+      "title": "Disposition de la barre",
+      "show": "Afficher {{name}}",
+      "moveUp": "Déplacer {{name}} vers le haut",
+      "moveDown": "Déplacer {{name}} vers le bas"
+    },
     "environment": {
       "title": "Environnement",
       "changes": "Modifications",

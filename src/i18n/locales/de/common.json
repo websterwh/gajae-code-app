@@ -81,6 +81,17 @@
     "title": "Agent",
     "open": "Agent-Seitenleiste anzeigen",
     "close": "Agent-Seitenleiste ausblenden",
+    "exports": {
+      "title": "Exporte",
+      "download": "Herunterladen",
+      "failed": "Download fehlgeschlagen."
+    },
+    "layout": {
+      "title": "Seitenleisten-Layout",
+      "show": "{{name}} anzeigen",
+      "moveUp": "{{name}} nach oben",
+      "moveDown": "{{name}} nach unten"
+    },
     "environment": {
       "title": "Umgebung",
       "changes": "Änderungen",

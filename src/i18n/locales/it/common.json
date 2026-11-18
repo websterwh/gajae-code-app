@@ -81,6 +81,17 @@
     "title": "Agente",
     "open": "Mostra la barra laterale dell'agente",
     "close": "Nascondi la barra laterale dell'agente",
+    "exports": {
+      "title": "Esportazioni",
+      "download": "Scarica",
+      "failed": "Download non riuscito."
+    },
+    "layout": {
+      "title": "Layout barra laterale",
+      "show": "Mostra {{name}}",
+      "moveUp": "Sposta {{name}} su",
+      "moveDown": "Sposta {{name}} giù"
+    },
     "environment": {
       "title": "Ambiente",
       "changes": "Modifiche",

@@ -10,6 +10,11 @@ import type { CommandRunner, InstallManager } from '../mcp/index.js';
  * answers the question the user is actually asking ("where is the GitHub CLI
  * from?"). A repository without release assets still fails at install time;
  * the alternative was offering nothing at all.
+ *
+ * The search is the only unauthenticated call here, and GitHub allows it ten
+ * times a minute. The token saved in Settings is already in this process's
+ * environment (see github-auth.service), so using it costs nothing and raises
+ * that to thirty - the search API counts differently for anonymous callers.
  */
 export type PackageSuggestion = {
   manager: InstallManager;
@@ -133,9 +138,16 @@ export class PackageSuggestService {
   private async github(query: string): Promise<PackageSuggestion[]> {
     const search = encodeURIComponent(`${query} in:name`);
     const url = `https://api.github.com/search/repositories?q=${search}&sort=stars&order=desc&per_page=${GITHUB_LIMIT}`;
+    // Read on each call: a token saved after boot is in the environment without
+    // a restart, and nothing here outlives the request it was read for.
+    const token = (process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? '').trim();
     const response = await this.fetcher()(url, {
       signal: AbortSignal.timeout(this.timeoutMs),
-      headers: { accept: 'application/vnd.github+json', 'user-agent': 'gajae-code-app' },
+      headers: {
+        accept: 'application/vnd.github+json',
+        'user-agent': 'gajae-code-app',
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
     });
     if (!response.ok) return [];
     const body = await response.json() as {

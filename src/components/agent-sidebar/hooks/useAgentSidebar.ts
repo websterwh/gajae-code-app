@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   readAgentSidebarState,
   writeAgentSidebarState,
+  type AgentSidebarBlock,
   type AgentSidebarState,
 } from '../agentSidebarState';
 
@@ -16,11 +17,9 @@ function browserStorage(): Storage | null {
 }
 
 /**
- * Owns whether the Agent sidebar is open. The sidebar is the production
- * right-hand surface, so this is the only right-rail state left: a single
- * persisted `{ open }` record under the `agent-sidebar` key. A record from
- * the earlier resizable rail still carrying a `width` is read for its `open`
- * alone and rewritten without the stale field.
+ * Owns the Agent sidebar: whether it is open, and the reader's order and
+ * visibility for the blocks inside it. Both live in one persisted record under
+ * the `agent-sidebar` key.
  */
 export function useAgentSidebar() {
   const [state, setState] = useState<AgentSidebarState>(() => readAgentSidebarState(browserStorage()));
@@ -41,10 +40,35 @@ export function useAgentSidebar() {
     setState((previous) => ({ ...previous, open: !previous.open }));
   }, []);
 
+  const toggleBlock = useCallback((block: AgentSidebarBlock) => {
+    setState((previous) => ({
+      ...previous,
+      blocks: previous.blocks.map((entry) => (
+        entry.block === block ? { ...entry, visible: !entry.visible } : entry
+      )),
+    }));
+  }, []);
+
+  const moveBlock = useCallback((block: AgentSidebarBlock, direction: -1 | 1) => {
+    setState((previous) => {
+      const index = previous.blocks.findIndex((entry) => entry.block === block);
+      const target = index + direction;
+      if (index < 0 || target < 0 || target >= previous.blocks.length) return previous;
+      const blocks = [...previous.blocks];
+      const moved = blocks[index];
+      blocks[index] = blocks[target];
+      blocks[target] = moved;
+      return { ...previous, blocks };
+    });
+  }, []);
+
   return {
     isOpen: state.open,
+    blocks: state.blocks,
     open,
     close,
     toggle,
+    toggleBlock,
+    moveBlock,
   };
 }

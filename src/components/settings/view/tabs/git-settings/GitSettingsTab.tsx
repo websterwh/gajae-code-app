@@ -148,6 +148,11 @@ export default function GitSettingsTab() {
                 className="w-full"
                 autoComplete="off"
               />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Also used for package searches under the aqua source, where a token raises GitHub's
+                search limit from 10 to 30 requests a minute. The repo scope already covers it, so
+                the link above needs no extra scope.
+              </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Button onClick={() => void saveGithubToken()} disabled={githubSaving || githubToken.trim() === ''}>

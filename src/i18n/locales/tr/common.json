@@ -81,6 +81,17 @@
     "title": "Ajan",
     "open": "Ajan kenar çubuğunu göster",
     "close": "Ajan kenar çubuğunu gizle",
+    "exports": {
+      "title": "Dışa aktarımlar",
+      "download": "İndir",
+      "failed": "İndirme başarısız."
+    },
+    "layout": {
+      "title": "Kenar çubuğu düzeni",
+      "show": "{{name}} göster",
+      "moveUp": "{{name}} yukarı taşı",
+      "moveDown": "{{name}} aşağı taşı"
+    },
     "environment": {
       "title": "Ortam",
       "changes": "Değişiklikler",

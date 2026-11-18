@@ -22,6 +22,7 @@ import { isBuiltinBrowserBinding, type BuiltinBrowserBinding, type BuiltinBrowse
 
 import { AutomationGrantStore, type AutomationGrant } from './automation-grants.js';
 import { browserBackendStore } from './browser-backend.js';
+import { computerUseStore } from './computer-use.js';
 import { egoActivityReader, egoActivityStore, type EgoActivityResponse } from './ego-activity.js';
 import { TauriBrowserClient } from './tauri-browser-client.js';
 import { automationOrigin } from './automation-url.js';
@@ -50,10 +51,12 @@ type BridgeRequest = {
   token: string;
   surface: 'browser' | 'computer';
   sessionId: string;
-  operation?: 'open' | 'close' | 'command' | 'authorize';
+  operation?: 'open' | 'close' | 'command' | 'authorize' | 'devices';
   payload?: Record<string, unknown>;
   tool?: string;
   arguments?: Record<string, unknown>;
+  /** The per-call device chosen by the session's own prompt, when it made one. */
+  deviceId?: string;
 };
 
 type AgentDesktopApplication = {
@@ -200,23 +203,73 @@ export class AutomationService {
   readonly browserBackend = browserBackendStore;
   /** Opt-in rendering of the agent's ego browser state; off by default. */
   readonly egoActivity = egoActivityStore;
+  /** The user's Settings switch for computer use; off until they turn it on. */
+  readonly computerUse = computerUseStore;
   /** Pairing state for outbound-only agent-desktop companions. */
   readonly remoteDevices = new RemoteComputerDeviceRegistry();
   readonly remoteComputerHub = new RemoteComputerHub(this.remoteDevices);
 
   /**
-   * Computer calls route only to the paired companion selected in Settings.
-   * This server never drives a desktop of its own, so a machine without a
-   * paired companion has no computer transport at all. Re-read on every call
-   * rather than cached, so switching the selected device takes effect on the
-   * very next call with no restart.
+   * Computer calls route only to a paired companion. This server never drives a
+   * desktop of its own, so a machine without a paired companion has no computer
+   * transport at all. Re-read on every call rather than cached, so switching
+   * the device takes effect on the very next call with no restart.
    */
-  private transport(): ComputerTransport {
-    const deviceId = this.remoteDevices.selectedDeviceId();
-    if (!deviceId) throw new Error('No paired computer is selected.');
-    this.remoteDevices.dispatchable(deviceId);
-    return new RemoteComputerTransport(deviceId, this.remoteComputerHub);
+  private transport(deviceId?: string): ComputerTransport {
+    return new RemoteComputerTransport(this.resolveDeviceId(deviceId), this.remoteComputerHub);
   }
+
+  /**
+   * The device a call actually runs on. An explicit per-call choice (made by
+   * the session's own device prompt) wins, then the Settings selection, then
+   * the only trusted device. More than one trusted device with no selection is
+   * ambiguous on purpose: the caller must ask, never guess.
+   */
+  private resolveDeviceId(explicit?: string): string {
+    if (explicit !== undefined) {
+      this.remoteDevices.dispatchable(explicit);
+      return explicit;
+    }
+    const selected = this.remoteDevices.selectedDeviceId();
+    if (selected) {
+      this.remoteDevices.dispatchable(selected);
+      return selected;
+    }
+    const available = this.remoteDevices.list().filter((device) => device.enabled && !device.revoked);
+    if (available.length === 1) return available[0].id;
+    if (available.length === 0) throw new Error('No paired computer is selected.');
+    throw new Error('More than one remote computer is available; choose which one to use.');
+  }
+
+  /**
+   * The paired computers a session may choose from, for the in-chat device
+   * prompt. `connected` is live socket state; a paired but offline device stays
+   * listed so the model is not told it does not exist.
+   */
+  computerDevices() {
+    return {
+      selectedDeviceId: this.remoteDevices.selectedDeviceId(),
+      devices: this.remoteDevices.list()
+        .filter((device) => device.enabled && !device.revoked)
+        .map((device) => ({
+          id: device.id, name: device.name, os: device.os,
+          connected: this.remoteComputerHub.isConnected(device.id),
+        })),
+    };
+  }
+
+  computerUseEnabled(): boolean { return this.computerUse.enabled(); }
+
+  /** The switch state plus whether anything could currently run under it. */
+  computerUseStatus(): { enabled: boolean; usable: boolean } {
+    const enabled = this.computerUseEnabled();
+    return { enabled, usable: enabled && this.computerCapable() };
+  }
+
+  setComputerUseEnabled(value: unknown): boolean { return this.computerUse.set(value); }
+
+  /** What a run may be offered as a tool: the switch, and a device to run on. */
+  computerUsable(): boolean { return this.computerUseStatus().usable; }
   private readonly egoActivityReader = egoActivityReader;
   private readonly capabilities = automationSupport(process.platform, process.arch, process.env);
   /**
@@ -226,14 +279,10 @@ export class AutomationService {
    * no environment override to reach it.
    */
   private computerCapable(): boolean {
-    const deviceId = this.remoteDevices.selectedDeviceId();
-    if (!deviceId) return false;
-    try {
-      this.remoteDevices.dispatchable(deviceId);
-      return true;
-    } catch {
-      return false;
-    }
+    // Any trusted device makes the surface capable. Which device answers a call
+    // is `resolveDeviceId`'s job, so a second device is never silently ignored
+    // just because Settings had none selected yet.
+    return this.remoteDevices.list().some((device) => device.enabled && !device.revoked);
   }
   get supported(): boolean { return this.browser.isReady(); }
   private readonly bridgeToken = randomBytes(32).toString('hex');
@@ -289,15 +338,17 @@ export class AutomationService {
     const release = this.enter('status');
     try {
       const computerCapable = this.computerCapable();
+      const computerUse = this.computerUseStatus();
       const [browser, companion] = await Promise.all([
         this.browser.status().catch(() => ({ state: 'unavailable' as const, ready: false, engine: 'webview' as const })),
         computerCapable
-          ? this.transport().status().catch(() => ({ installed: false, daemon: 'unknown' as const }))
+          ? Promise.resolve().then(() => this.transport().status()).catch(() => ({ installed: false, daemon: 'unknown' as const }))
           : Promise.resolve({ installed: false, daemon: 'unknown' as const }),
       ]);
       return {
         supported: browser.ready,
-        capabilities: { browser: browser.ready, computer: computerCapable },
+        capabilities: { browser: browser.ready, computer: computerUse.usable },
+        computerUse,
         computerSupported: computerCapable,
         platform: process.platform,
         architecture: process.arch,
@@ -418,7 +469,7 @@ export class AutomationService {
 
   async authorizeComputer(
     sessionId: string,
-    payload: { tool?: unknown; arguments?: unknown; scope?: unknown; application?: unknown },
+    payload: { tool?: unknown; arguments?: unknown; scope?: unknown; application?: unknown; deviceId?: unknown },
     signal?: AbortSignal,
   ): Promise<AgentDesktopApplicationAuthorization> {
     this.requireComputerSupported();
@@ -435,11 +486,13 @@ export class AutomationService {
       // reach callComputer. Reject policy-denied or malformed requests before
       // resolving inventory, prompting, or materializing an application grant.
       const { arguments: args } = guardAgentDesktopCall(payload.tool, rawArgs);
+      const deviceId = typeof payload.deviceId === 'string' && payload.deviceId ? payload.deviceId : undefined;
       const { application, label } = await this.resolveComputerApplication(
         sessionId,
         payload.tool,
         args,
         typeof payload.application === 'string' ? payload.application.trim() : '',
+        deviceId,
         signal,
       );
       if (!application) return { granted: true, application: null, label: null };
@@ -472,6 +525,7 @@ export class AutomationService {
     tool: AgentDesktopSafeTool,
     args: Record<string, unknown>,
     hint: string,
+    deviceId?: string,
     signal?: AbortSignal,
   ): Promise<{ application: string | null; label: string | null }> {
     let application = hint;
@@ -513,13 +567,13 @@ export class AutomationService {
     const windowId = typeof args.window_id === 'string' ? args.window_id : undefined;
     const needsInventory = tool === 'desktop_launch' || (!application && windowId !== undefined);
     if (!application && needsInventory) {
-      const window = (await this.inventoryWindows(sessionId, signal)).find((candidate) => candidate.id === windowId);
+      const window = (await this.inventoryWindows(sessionId, deviceId, signal)).find((candidate) => candidate.id === windowId);
       let pid: number | undefined;
       if (window && typeof window.pid === 'number' && Number.isSafeInteger(window.pid) && window.pid > 0) {
         pid = window.pid;
       }
       if (pid !== undefined) {
-        const match = (await this.inventoryApps(sessionId, signal)).find((app) => app.pid === pid);
+        const match = (await this.inventoryApps(sessionId, deviceId, signal)).find((app) => app.pid === pid);
         if (match && typeof match.name === 'string' && match.name.trim()) {
           application = match.name.trim();
           label = application;
@@ -590,8 +644,11 @@ export class AutomationService {
   }
 
   /** One inventory read per session and kind at a time: concurrent callers share it. */
-  private async inventoryRead<T>(sessionId: string, kind: 'windows' | 'apps', read: () => Promise<T>): Promise<T> {
-    const key = `${sessionId}\u0000${kind}`;
+  private async inventoryRead<T>(sessionId: string, kind: 'windows' | 'apps', deviceId: string | undefined, read: () => Promise<T>): Promise<T> {
+    // The device is part of the key: two devices have unrelated inventories,
+    // and sharing one read between them would resolve a window_id against the
+    // wrong machine.
+    const key = `${sessionId}\u0000${kind}\u0000${deviceId ?? ''}`;
     const inFlight = this.inventoryReads.get(key);
     if (inFlight) return await inFlight as T;
     const pending = read().finally(() => { this.inventoryReads.delete(key); });
@@ -599,26 +656,26 @@ export class AutomationService {
     return await pending;
   }
 
-  private async inventoryWindows(sessionId: string, signal?: AbortSignal): Promise<AgentDesktopWindow[]> {
-    return await this.inventoryRead(sessionId, 'windows', async () => windowRecords(
-      await this.transport().call(sessionId, 'desktop_list_windows', {}, signal),
+  private async inventoryWindows(sessionId: string, deviceId?: string, signal?: AbortSignal): Promise<AgentDesktopWindow[]> {
+    return await this.inventoryRead(sessionId, 'windows', deviceId, async () => windowRecords(
+      await this.transport(deviceId).call(sessionId, 'desktop_list_windows', {}, signal),
     ));
   }
 
-  private async inventoryApps(sessionId: string, signal?: AbortSignal): Promise<AgentDesktopApplication[]> {
-    return await this.inventoryRead(sessionId, 'apps', async () => applicationRecords(
-      await this.transport().call(sessionId, 'desktop_list_apps', {}, signal),
+  private async inventoryApps(sessionId: string, deviceId?: string, signal?: AbortSignal): Promise<AgentDesktopApplication[]> {
+    return await this.inventoryRead(sessionId, 'apps', deviceId, async () => applicationRecords(
+      await this.transport(deviceId).call(sessionId, 'desktop_list_apps', {}, signal),
     ));
   }
 
-  async callComputer(sessionId: string, tool: ComputerTool, args: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
+  async callComputer(sessionId: string, tool: ComputerTool, args: Record<string, unknown>, signal?: AbortSignal, deviceId?: string): Promise<unknown> {
     // A local_* call needs no agent-desktop transport on this machine, so the
     // local path checks the opt-in switch itself instead of failing here with
     // "no computer transport" - which would be true but not the real reason.
     if (!isLocalMachineTool(tool)) this.requireComputerSupported();
     const release = this.enter('computer.call');
     try {
-      if (isLocalMachineTool(tool)) return await this.callLocalMachine(sessionId, tool, args, signal);
+      if (isLocalMachineTool(tool)) return await this.callLocalMachine(sessionId, tool, args, signal, deviceId);
       // Same policy function the driver transport enforces, applied here so a
       // denied call costs no driver round-trip and never resolves identity.
       // guardAgentDesktopCall is idempotent.
@@ -630,14 +687,14 @@ export class AutomationService {
       // re-resolved from the live driver inventory on each call, so a window_id
       // that no longer belongs to the approved application fails closed.
       if (requiresApplicationIdentity(tool, scopedArgs)) {
-        const { application, label } = await this.resolveComputerApplication(sessionId, tool, scopedArgs, '', signal);
+        const { application, label } = await this.resolveComputerApplication(sessionId, tool, scopedArgs, '', deviceId, signal);
         if (!application || !this.grants.has('application', application, sessionId)) {
           throw new Error(`Computer access to ${label ?? application ?? 'this application'} was not granted.`);
         }
       }
       let result: unknown;
       try {
-        result = await this.transport().call(sessionId, tool, scopedArgs, signal);
+        result = await this.transport(deviceId).call(sessionId, tool, scopedArgs, signal);
       } catch (cause) {
         // The remote transport rejects instead of returning isError; give both
         // shapes the same recovery guidance.
@@ -665,9 +722,10 @@ export class AutomationService {
     tool: LocalMachineTool,
     args: Record<string, unknown>,
     signal?: AbortSignal,
+    explicitDeviceId?: string,
   ): Promise<unknown> {
     const { arguments: scopedArgs } = guardLocalMachineCall(tool, args);
-    const deviceId = this.remoteDevices.selectedDeviceId();
+    const deviceId = explicitDeviceId ?? this.remoteDevices.selectedDeviceId();
     if (!deviceId) {
       throw new Error(`${tool} runs on your own machine, so it needs a paired companion: pair one and select it in Settings > Automation > Remote devices.`);
     }
@@ -795,14 +853,19 @@ export class AutomationService {
           controller.signal,
           request.payload?.expected,
         );
+      } else if (request.surface === 'computer' && request.operation === 'devices') {
+        result = this.computerDevices();
       } else if (request.surface === 'computer' && request.operation === 'authorize') {
         result = await this.authorizeComputer(request.sessionId, {
           tool: request.tool,
           arguments: request.arguments,
+          deviceId: request.deviceId,
           ...object(request.payload),
         }, controller.signal);
       } else if (request.surface === 'computer' && (isAgentDesktopSafeTool(request.tool) || isLocalMachineTool(request.tool))) {
-        result = await this.callComputer(request.sessionId, request.tool, object(request.arguments), controller.signal);
+        result = await this.callComputer(
+          request.sessionId, request.tool, object(request.arguments), controller.signal, request.deviceId,
+        );
       } else {
         throw new Error('Unsupported automation bridge request.');
       }

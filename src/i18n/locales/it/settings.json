@@ -132,6 +132,14 @@
     "packages": "Pacchetti"
   },
   "automation": {
+    "computerUse": {
+      "title": "Uso del computer",
+      "description": "Consente a una sessione di controllare un computer associato tramite il suo companion agent-desktop. Resta disattivato finché non lo attivi.",
+      "enableLabel": "Abilita l’uso del computer",
+      "enableDescription": "Se sono connessi più computer, l’agente chiede quale usare prima della prima chiamata.",
+      "unavailable": "Associa e autorizza prima un computer in Computer remoti.",
+      "saveFailed": "Impossibile salvare l’uso del computer."
+    },
     "browserBackend": {
       "title": "Browser",
       "description": "Quale browser possono controllare le sessioni GJC avviate qui. Non cambia l’apertura manuale del browser integrato né i link della chat.",

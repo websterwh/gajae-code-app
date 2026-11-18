@@ -4,6 +4,36 @@ import { Download, Loader2 } from 'lucide-react';
 
 import { authenticatedFetch } from '../../../utils/api';
 
+const fileNameOf = (value: string): string => value.split(/[\\/]/u).pop() || 'export.html';
+
+/**
+ * Saves a project file the app can read. The download route is authenticated,
+ * so a plain link cannot carry the header: the bytes come through
+ * `authenticatedFetch` and are handed to the browser as a blob.
+ */
+export async function downloadProjectFile(options: {
+  projectId: string;
+  path: string;
+  sessionId?: string;
+}): Promise<void> {
+  const params = new URLSearchParams({ path: options.path });
+  if (options.sessionId) params.set('sessionId', options.sessionId);
+  const response = await authenticatedFetch(
+    `/api/projects/${encodeURIComponent(options.projectId)}/files/content?${params.toString()}`,
+  );
+  if (!response.ok) throw new Error(`Download failed (${response.status}).`);
+
+  const url = URL.createObjectURL(await response.blob());
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = fileNameOf(options.path);
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  // Revoking during the click can cancel the save in some browsers.
+  window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+}
+
 type ExportDownloadButtonProps = {
   /** Absolute path of the file a local command wrote, inside the project. */
   path: string;
@@ -11,14 +41,10 @@ type ExportDownloadButtonProps = {
   sessionId?: string;
 };
 
-const fileNameOf = (value: string): string => value.split(/[\\/]/u).pop() || 'export.html';
-
 /**
  * `/export` writes an HTML file into the project the CLI ran in. Until now the
- * only way to get it was to reach into that directory; this fetches the bytes
- * through the same project-file route images already use and hands the browser
- * a download. A plain link cannot carry the auth header, so it goes through
- * `authenticatedFetch` and a blob URL.
+ * only way to get it was to reach into that directory; this button hands the
+ * browser the bytes the project-file route already protects.
  */
 export default function ExportDownloadButton({ path, projectId, sessionId }: ExportDownloadButtonProps) {
   const { t } = useTranslation('chat');
@@ -27,22 +53,7 @@ export default function ExportDownloadButton({ path, projectId, sessionId }: Exp
   const download = async () => {
     setState('busy');
     try {
-      const params = new URLSearchParams({ path });
-      if (sessionId) params.set('sessionId', sessionId);
-      const response = await authenticatedFetch(
-        `/api/projects/${encodeURIComponent(projectId)}/files/content?${params.toString()}`,
-      );
-      if (!response.ok) throw new Error(`Download failed (${response.status}).`);
-
-      const url = URL.createObjectURL(await response.blob());
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = fileNameOf(path);
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      // Revoking during the click can cancel the save in some browsers.
-      window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+      await downloadProjectFile({ projectId, path, sessionId });
       setState('idle');
     } catch {
       setState('failed');

@@ -1,5 +1,13 @@
 import { appConfigDb } from '@/modules/database/index.js';
 
+import {
+  HOST_CAPABILITIES,
+  matchesHostTarget,
+  parseTargets,
+  type HostCapability,
+  type HostControlRunPolicy,
+} from '../../gjc-engine.js';
+
 /**
  * Host control is opt-in twice over.
  *
@@ -18,11 +26,6 @@ const CONFIG_KEY = 'host.control.v1';
 
 const TRUTHY = new Set(['1', 'true', 'yes', 'on']);
 
-/** `*` and `?` are globs; everything else is a literal container-name character. */
-const TARGET_PATTERN = /^[A-Za-z0-9*?_.-]{1,128}$/u;
-
-const MAX_TARGETS = 50;
-
 export function hostControlAvailable(env: NodeJS.ProcessEnv = process.env): boolean {
   return TRUTHY.has(String(env.GAJAE_HOST_CONTROL ?? '').trim().toLowerCase());
 }
@@ -31,25 +34,6 @@ export function dockerSocketPath(env: NodeJS.ProcessEnv = process.env): string {
   const configured = String(env.GAJAE_DOCKER_SOCKET ?? '').trim();
   return configured || '/var/run/docker.sock';
 }
-
-export type HostCapability =
-  | 'facts'
-  | 'containers'
-  | 'restart'
-  | 'discovery'
-  | 'docker'
-  | 'shell'
-  | 'files';
-
-export const HOST_CAPABILITIES: readonly HostCapability[] = [
-  'facts',
-  'containers',
-  'restart',
-  'discovery',
-  'docker',
-  'shell',
-  'files',
-];
 
 export type HostControlSettings = {
   enabled: boolean;
@@ -70,37 +54,6 @@ export const DEFAULT_HOST_CONTROL_SETTINGS: HostControlSettings = {
 };
 
 const flag = (value: unknown): boolean => value === true;
-
-export function isTargetPattern(value: unknown): value is string {
-  return typeof value === 'string' && TARGET_PATTERN.test(value);
-}
-
-export function parseTargets(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  const patterns = value
-    .filter(isTargetPattern)
-    .map((pattern) => pattern.trim())
-    .filter((pattern) => pattern.length > 0);
-  return [...new Set(patterns)].slice(0, MAX_TARGETS);
-}
-
-/**
- * A container-name glob, not a path or a regex: `mos-*`, `immich_?`, `gajae-app`.
- * Matching is case-insensitive because container names are typed by people.
- */
-export function matchesHostTarget(patterns: readonly string[], name: string): boolean {
-  return patterns.some((pattern) => {
-    const source = pattern
-      .split('')
-      .map((character) => {
-        if (character === '*') return '.*';
-        if (character === '?') return '.';
-        return character.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
-      })
-      .join('');
-    return new RegExp(`^${source}$`, 'iu').test(name);
-  });
-}
 
 export function readHostControlSettings(): HostControlSettings {
   const raw = appConfigDb.get(CONFIG_KEY);
@@ -176,3 +129,33 @@ export function allowsHostCapability(settings: HostControlSettings, capability: 
 export function allowsHostTarget(settings: HostControlSettings, name: string): boolean {
   return settings.enabled && matchesHostTarget(settings.targets, name);
 }
+
+/**
+ * What a run may do with the host, or undefined when the run gets no host tool.
+ *
+ * Resolved on the server, per run, exactly like the browser backend and the
+ * computer-use switch: the client cannot add a capability by sending an option.
+ * The worker receives this snapshot and enforces it on every call; a settings
+ * change takes effect on the next turn, not inside a run already in flight.
+ */
+export function readHostControlRunPolicy(env: NodeJS.ProcessEnv = process.env): HostControlRunPolicy | undefined {
+  if (!hostControlAvailable(env)) return undefined;
+  const settings = readHostControlSettings();
+  if (!settings.enabled) return undefined;
+  const capabilities = HOST_CAPABILITIES.filter((name) => settings[name]);
+  if (capabilities.length === 0) return undefined;
+  return {
+    socketPath: dockerSocketPath(env),
+    capabilities,
+    targets: [...settings.targets],
+  };
+}
+
+export {
+  HOST_CAPABILITIES,
+  isHostCapability,
+  isTargetPattern,
+  matchesHostTarget,
+  parseTargets,
+} from '../../gjc-engine.js';
+export type { HostCapability, HostControlRunPolicy } from '../../gjc-engine.js';

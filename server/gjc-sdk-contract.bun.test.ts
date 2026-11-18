@@ -2399,7 +2399,7 @@ test('app automation is injected through the SDK built-in automationTools contra
     await run;
   } finally { await f.close(); }
 });
-test('the app transport never includes computer control', async () => {
+test('computer control stays out of a run the server did not resolve as available', async () => {
   const f = await fixture();
   try {
     const run = f.host.handle(request('session.start', 'computer-never', {
@@ -2411,6 +2411,27 @@ test('the app transport never includes computer control', async () => {
     const factoryInput = f.factoryOptions.at(-1)!;
     assert.deepEqual(Object.keys(factoryInput.automationTools as Record<string, unknown>), ['browser']);
     assert.equal((factoryInput.toolNames as string[]).includes('computer'), false, 'the SDK builtin must not be requestable either');
+    assert.equal((factoryInput.toolNames as string[]).includes('browser'), true);
+    session.complete();
+    await run;
+  } finally { await f.close(); }
+});
+
+test('a run resolved computer-available receives the app computer transport', async () => {
+  const f = await fixture();
+  try {
+    const run = f.host.handle(request('session.start', 'computer-available', {
+      message: 'hello',
+      options: {
+        ...f.options, builtinBrowserAvailable: true, computerAvailable: true,
+        toolNames: ['bash', 'browser', 'computer'],
+      },
+    }, 'app-session-computer-available'));
+    const session = await waitFor(() => f.sessions[0]);
+    await session.promptStarted.promise;
+    const factoryInput = f.factoryOptions.at(-1)!;
+    assert.deepEqual(Object.keys(factoryInput.automationTools as Record<string, unknown>).sort(), ['browser', 'computer']);
+    assert.equal((factoryInput.toolNames as string[]).includes('computer'), true);
     assert.equal((factoryInput.toolNames as string[]).includes('browser'), true);
     session.complete();
     await run;

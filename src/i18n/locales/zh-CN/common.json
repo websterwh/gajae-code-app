@@ -81,6 +81,17 @@
     "title": "代理",
     "open": "显示代理侧边栏",
     "close": "隐藏代理侧边栏",
+    "exports": {
+      "title": "导出",
+      "download": "下载",
+      "failed": "下载失败。"
+    },
+    "layout": {
+      "title": "侧边栏布局",
+      "show": "显示 {{name}}",
+      "moveUp": "上移 {{name}}",
+      "moveDown": "下移 {{name}}"
+    },
     "environment": {
       "title": "环境",
       "changes": "更改",

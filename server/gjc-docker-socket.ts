@@ -1,7 +1,5 @@
 import { request } from 'node:http';
 
-import { dockerSocketPath } from './host-control.settings.js';
-
 /**
  * The smallest useful Docker client: a named method per endpoint, never a
  * generic "call this path". Nothing above this file can reach an endpoint that
@@ -319,14 +317,14 @@ function commandIsPlain(command: readonly string[]): boolean {
 }
 
 export function dockerClient({
-  socketPath = dockerSocketPath(),
+  socketPath,
   timeoutMs = 5000,
   // A restart is not a read: the daemon stops the container, waits out its
   // stop grace period and starts it again, which routinely outlasts the
   // deadline that suits a JSON listing. Reporting a timeout for a restart
   // that is in fact happening would be worse than waiting.
   restartTimeoutMs = 60_000,
-}: { socketPath?: string; timeoutMs?: number; restartTimeoutMs?: number } = {}): HostControlClient {
+}: { socketPath: string; timeoutMs?: number; restartTimeoutMs?: number }): HostControlClient {
   const requireName = (name: unknown): string => {
     if (!isContainerName(name)) {
       throw new DockerSocketError('INVALID_CONTAINER', `${JSON.stringify(name)} is not a container name.`);

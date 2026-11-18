@@ -132,6 +132,14 @@
     "packages": "Pakete"
   },
   "automation": {
+    "computerUse": {
+      "title": "Computer-Nutzung",
+      "description": "Erlaubt einer Sitzung, einen gekoppelten Computer über seinen agent-desktop-Begleiter zu steuern. Bleibt aus, bis Sie es einschalten.",
+      "enableLabel": "Computer-Nutzung aktivieren",
+      "enableDescription": "Sind mehrere Computer verbunden, fragt der Agent vor dem ersten Aufruf, welchen er verwenden soll.",
+      "unavailable": "Koppeln und vertrauen Sie zuerst einen Computer unter Remote-Computer.",
+      "saveFailed": "Die Computer-Nutzung konnte nicht gespeichert werden."
+    },
     "browserBackend": {
       "title": "Browser",
       "description": "Welchen Browser hier gestartete GJC-Sitzungen steuern dürfen. Dies ändert weder manuelle Starts des integrierten Browsers noch Chat-Links.",

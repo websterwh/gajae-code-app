@@ -49,6 +49,9 @@ export UV_LINK_MODE="copy"
 export AQUA_ROOT_DIR="/data/aqua"
 export NPM_CONFIG_CACHE="/data/cache/npm"
 export NPM_CONFIG_PREFIX="/data/npm-global"
+# npm keeps its own settings in ~/.npmrc; pointing them at the mounted prefix
+# means `npm config set ...` survives a recreate like the packages do.
+export NPM_CONFIG_USERCONFIG="${NPM_CONFIG_USERCONFIG:-/data/npm-global/.npmrc}"
 # Tool locations belong to the mounted config, not the image layer. Both stay
 # overridable; when the config dir is not mounted they still resolve, inside the
 # container layer, and are lost on recreate like any other unpersisted path.
@@ -103,7 +106,9 @@ fi
 # ==============================================================================
 mkdir -p "${DATABASE_PATH%/*}" "${WORKSPACES_ROOT}" "${GJC_WORKER_AGENT_DIR}" /data/logs /data/share
 mkdir -p /data/bin /data/cache/apt/archives /data/cache/uv /data/cache/pip /data/cache/aqua /data/cache/npm /data/npm-global /data/ssh /data/.installed_hashes
-mkdir -p /root/.ssh /var/run/sshd /var/lib/dbus
+# ~/.ssh is deliberately not created here: it is linked onto /data below, and a
+# real directory would make that link step skip it.
+mkdir -p /var/run/sshd /var/lib/dbus
 
 # Ensure machine-id exists and persists in /data so GJC machine-local identity is valid
 if [ ! -f /data/machine-id ]; then
@@ -133,7 +138,32 @@ fi
 # prior boot of this same persistent volume, it is left alone. This never
 # touches an existing real directory, so there is nothing destructive to run
 # even if something unexpected is already there.
-for mapping in "/root/.gajae-app:/data/gajae-app" "/root/.claude:/data/claude"; do
+# Every path here is state some tool writes into $HOME that a fresh container
+# would otherwise throw away. They are redirected onto /data with the same
+# rules as the transcripts above: an existing real directory is left alone, and
+# nothing is ever deleted, so a wrong guess costs nothing.
+#
+#   ~/.config   `gh auth login`, pip config, uv config, ghcup, pipx
+#   ~/.ssh      keys generated in the container and known_hosts
+#   ~/.local    `pip install --user`, pipx, anything under ~/.local/bin
+#   ~/.cache    browser and playwright downloads, tool scratch space
+#   ~/.bun      bun's global installs and cache
+#
+# ~/.cargo and ~/.rustup are not mapped on purpose: the image installs a
+# toolchain there at build time, and a link would hide it. Extra toolchains
+# added inside a container stay on its layer; RUSTUP_HOME/CARGO_HOME can point
+# at /data for anyone who needs those instead.
+#
+# The image itself must not ship content in these paths, or the link would hide
+# it; the Dockerfile installs binaries into /usr/local and /opt instead.
+for mapping in \
+    "/root/.gajae-app:/data/gajae-app" \
+    "/root/.claude:/data/claude" \
+    "/root/.config:/data/config" \
+    "/root/.ssh:/data/ssh" \
+    "/root/.local:/data/local" \
+    "/root/.cache:/data/cache" \
+    "/root/.bun:/data/bun"; do
     target="${mapping%%:*}"
     persisted="${mapping##*:}"
     mkdir -p "${persisted}"
@@ -141,6 +171,15 @@ for mapping in "/root/.gajae-app:/data/gajae-app" "/root/.claude:/data/claude"; 
         ln -sfn "${persisted}" "${target}"
     fi
 done
+
+# `git config --global` writes ~/.gitconfig, not ~/.config/git/config, so the
+# identity saved in Settings would still be lost on a recreate. The file is
+# created on the mount and linked, which needs a file rather than a directory.
+if [ ! -e /root/.gitconfig ] || [ -L /root/.gitconfig ]; then
+    mkdir -p /data/git
+    [ -f /data/git/gitconfig ] || : > /data/git/gitconfig
+    ln -sfn /data/git/gitconfig /root/.gitconfig
+fi
 
 # Chat image assets live on the config volume instead of a mount of their own:
 # /root/.gjc is already bind-mounted for credentials and skills, so one mount
@@ -486,6 +525,16 @@ for profile in /data/shell/.bashrc /data/shell/.bash_profile; do
     [ -f "${profile}" ] || continue
     grep -qF 'gajae-tool-path' "${profile}" 2>/dev/null && continue
     printf '\n# gajae-tool-path\ncase ":$PATH:" in *":%s:"*) ;; *) export PATH="%s:$PATH" ;; esac\n' "${UV_TOOL_BIN_DIR}" "${UV_TOOL_BIN_DIR}" >> "${profile}"
+done
+
+# Shell history is the one thing a terminal writes without being asked to, and
+# it lives in ~/.bash_history - on the container layer. Moving it beside the
+# profiles keeps `history` intact across a recreate. Appended once, like the
+# PATH block above.
+for profile in /data/shell/.bashrc /data/shell/.bash_profile; do
+    [ -f "${profile}" ] || continue
+    grep -qF 'gajae-history' "${profile}" 2>/dev/null && continue
+    printf '\n# gajae-history\nexport HISTFILE=/data/shell/.bash_history\n' >> "${profile}"
 done
 
 # A GitHub token saved in Settings is written to /data/shell/github.env. Source

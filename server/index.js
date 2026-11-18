@@ -114,6 +114,7 @@ import providerRoutes from './modules/providers/provider.routes.js';
 import { mcpRoutes } from './modules/mcp/index.js';
 import { memoryRoutes } from './modules/memory/index.js';
 import { packagesRoutes } from './modules/packages/index.js';
+import { projectExportsFilePath, projectExportsFor, readProjectExports } from './gjc-project-exports.js';
 import { restoreSavedGithubToken } from './modules/git/github-auth.service.js';
 import voiceRoutes from './voice-proxy.js';
 import { assetsRoutes } from './modules/assets/index.js';
@@ -710,6 +711,40 @@ app.get('/api/projects/:projectId/files/content', authenticateToken, asyncHandle
             res.status(error.statusCode || 500).json({ error: error.message });
         }
     }
+}));
+
+// The HTML files `/export` wrote, newest first, scoped like any other project
+// read: the current session's own exports plus files under the project. Only
+// files still on disk are listed, so a deleted export does not linger as a
+// button that cannot work.
+app.get('/api/projects/:projectId/exports', authenticateToken, asyncHandler(async (req, res) => {
+    const projectRoot = await resolveSessionWorkspacePath(req.params.projectId, req.query.sessionId);
+    if (!projectRoot) {
+        return res.status(404).json({ error: 'Project not found' });
+    }
+
+    const sessionId = typeof req.query.sessionId === 'string' ? req.query.sessionId : null;
+    const records = projectExportsFor(
+        await readProjectExports(projectExportsFilePath()),
+        { projectPath: projectRoot, sessionId },
+    );
+
+    const present = [];
+    for (const record of records) {
+        try {
+            await fsPromises.access(record.path);
+            present.push({
+                path: record.path,
+                name: path.basename(record.path),
+                sessionId: record.sessionId,
+                at: record.at,
+            });
+        } catch {
+            // The file was removed after it was exported; the record is stale.
+        }
+    }
+
+    res.json({ success: true, data: present });
 }));
 
 // Save file content endpoint
