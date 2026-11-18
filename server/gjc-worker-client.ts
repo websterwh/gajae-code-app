@@ -1068,9 +1068,15 @@ export class GjcWorkerSupervisor {
     const coreArgs = ['--', bunPath, workerPath];
     // The worker runs the agent's own `bash`, so it must not carry the keys
     // that authenticate a caller to this server (see child-environment.ts).
+    // The app is the only notification sender for its own sessions (desktop,
+    // web push, Telegram in notification-orchestrator). The SDK's managed
+    // Telegram/Discord/Slack adapters would deliver a second copy of the same
+    // run, so app-spawned workers are held out of automatic admission. A
+    // terminal started from the app inherits this and stays silent too.
     const workerEnv = {
       ...childEnvironment(this.runtime.environment),
       GJC_WORKER_AGENT_DIR: this.runtime.environment.GJC_WORKER_AGENT_DIR ?? join(homedir(), '.gjc', 'agent'),
+      GJC_NOTIFICATIONS: '0',
     };
     const launch = this.runtime.platform === 'win32'
       ? createWindowsJobLaunch(

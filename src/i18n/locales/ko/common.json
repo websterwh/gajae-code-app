@@ -84,7 +84,9 @@
     "exports": {
       "title": "내보내기",
       "download": "다운로드",
-      "failed": "다운로드하지 못했습니다."
+      "delete": "내보내기 삭제",
+      "failed": "다운로드하지 못했습니다.",
+      "deleteFailed": "내보내기를 삭제하지 못했습니다."
     },
     "layout": {
       "title": "사이드바 배치",

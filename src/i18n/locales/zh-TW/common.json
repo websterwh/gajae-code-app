@@ -84,7 +84,9 @@
     "exports": {
       "title": "匯出",
       "download": "下載",
-      "failed": "下載失敗。"
+      "delete": "刪除匯出",
+      "failed": "下載失敗。",
+      "deleteFailed": "無法刪除匯出。"
     },
     "layout": {
       "title": "側邊欄版面",

@@ -10,8 +10,10 @@ import {
   applyNotificationPatch,
   notificationView,
   readNotificationsFromYaml,
+  telegramCredentials,
   writeNotificationsToYaml,
 } from './gjc-notifications.config.js';
+import { sendTelegramMessage } from './telegram.service.js';
 
 const router = express.Router();
 
@@ -49,6 +51,40 @@ router.put('/', asyncHandler(async (request, response) => {
   await rename(temporary, file);
 
   return response.json({ success: true, data: notificationView(readNotificationsFromYaml(next)) });
+}));
+
+// The test uses the values on the form when it has them, so a token or chat id
+// can be checked before it is saved; a blank field means "the stored one", the
+// same rule the patch follows.
+router.post('/telegram/test', asyncHandler(async (request, response) => {
+  const config = readNotificationsFromYaml(await readConfig());
+  const stored = telegramCredentials(config);
+  const view = notificationView(config);
+  const input = request.body !== null && typeof request.body === 'object' && !Array.isArray(request.body)
+    ? request.body as Record<string, unknown>
+    : {};
+  const field = (value: unknown, fallback: string): string =>
+    typeof value === 'string' && value.trim().length > 0 ? value.trim() : fallback;
+
+  const botToken = field(input.botToken, stored.botToken);
+  const chatId = field(input.chatId, stored.chatId);
+  if (!botToken || !chatId) {
+    return response.status(400).json({ error: { message: 'A bot token and chat ID are required.' } });
+  }
+
+  const result = await sendTelegramMessage({
+    botToken,
+    chatId,
+    text: 'Gajae Code test notification: Telegram delivery is configured.',
+  });
+  if (!result.ok) return response.status(502).json({ error: { message: result.description } });
+
+  // `enabled` is why a working bot still sends nothing during a run: the test
+  // proves the credentials, the caller decides whether to mention the switches.
+  return response.json({
+    success: true,
+    data: { delivered: true, enabled: view.enabled, telegramEnabled: view.telegram.enabled },
+  });
 }));
 
 export default router;

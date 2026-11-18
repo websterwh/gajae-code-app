@@ -84,7 +84,9 @@
     "exports": {
       "title": "导出",
       "download": "下载",
-      "failed": "下载失败。"
+      "delete": "删除导出",
+      "failed": "下载失败。",
+      "deleteFailed": "无法删除导出。"
     },
     "layout": {
       "title": "侧边栏布局",

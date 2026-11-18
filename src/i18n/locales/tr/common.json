@@ -84,7 +84,9 @@
     "exports": {
       "title": "Dışa aktarımlar",
       "download": "İndir",
-      "failed": "İndirme başarısız."
+      "delete": "Dışa aktarımı sil",
+      "failed": "İndirme başarısız.",
+      "deleteFailed": "Dışa aktarım silinemedi."
     },
     "layout": {
       "title": "Kenar çubuğu düzeni",

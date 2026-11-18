@@ -84,7 +84,9 @@
     "exports": {
       "title": "Esportazioni",
       "download": "Scarica",
-      "failed": "Download non riuscito."
+      "delete": "Elimina esportazione",
+      "failed": "Download non riuscito.",
+      "deleteFailed": "Impossibile eliminare l'esportazione."
     },
     "layout": {
       "title": "Layout barra laterale",

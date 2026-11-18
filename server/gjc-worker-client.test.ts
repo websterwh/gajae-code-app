@@ -431,6 +431,7 @@ test('shares one handshake and sends one start request per concurrent run', asyn
   assert.deepEqual(starts[0]?.payload, { message: 'first', options: { model: 'x' } });
   assert.equal(peer.requests.some((request) => request.method === 'turn.start'), false);
   assert.equal(detached, process.platform !== 'win32');
+  assert.equal(launchEnvironment?.GJC_NOTIFICATIONS, '0');
   assert.equal(environmentExtendsProcessEnvWithAgentDir(launchEnvironment), true);
   assert.equal(command, '/test/gajae-core');
   assert.deepEqual(args, ['--', '/test/bun', '/test/gjc-bun-worker.js']);
@@ -478,15 +479,17 @@ test('rejects an oversized start frame as not_started without terminating its wo
 
 /**
  * The launch env is process.env, minus the credentials that authenticate a
- * caller to this server, extended by exactly one injected key:
- * GJC_WORKER_AGENT_DIR (explicit app-owned auth/config injection, F12).
+ * caller to this server, extended by exactly two injected keys:
+ * GJC_WORKER_AGENT_DIR (explicit app-owned auth/config injection, F12) and
+ * GJC_NOTIFICATIONS=0 (the app, not the SDK, delivers app-run notifications).
  */
 function environmentExtendsProcessEnvWithAgentDir(environment: NodeJS.ProcessEnv | undefined): boolean {
   if (!environment) return false;
   const keys = new Set(Object.keys(environment));
   if (typeof environment.GJC_WORKER_AGENT_DIR !== 'string' || environment.GJC_WORKER_AGENT_DIR.length === 0) return false;
+  if (environment.GJC_NOTIFICATIONS !== '0') return false;
   for (const key of Object.keys(process.env)) {
-    if (key === 'GJC_WORKER_AGENT_DIR') continue;
+    if (key === 'GJC_WORKER_AGENT_DIR' || key === 'GJC_NOTIFICATIONS') continue;
     if (SERVER_ONLY_ENVIRONMENT_NAMES.includes(key)) {
       if (environment[key] !== undefined) return false;
       continue;
@@ -495,6 +498,7 @@ function environmentExtendsProcessEnvWithAgentDir(environment: NodeJS.ProcessEnv
     keys.delete(key);
   }
   keys.delete('GJC_WORKER_AGENT_DIR');
+  keys.delete('GJC_NOTIFICATIONS');
   return keys.size === 0;
 }
 

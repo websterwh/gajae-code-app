@@ -5,6 +5,7 @@ import {
   applyNotificationPatch,
   notificationView,
   readNotificationsFromYaml,
+  telegramCredentials,
   writeNotificationsToYaml,
 } from './gjc-notifications.config.js';
 
@@ -43,6 +44,14 @@ test('reads the telegram channel with schema defaults for absent keys', () => {
   assert.equal(view.telegram.toolActivity, false);
   assert.equal(view.verbosity, 'lean');
   assert.equal(view.sessionScope, 'all');
+});
+
+test('telegram credentials come back trimmed from the stored block', () => {
+  const stored = telegramCredentials(readNotificationsFromYaml(
+    'notifications:\n  telegram:\n    botToken: " 123:abc "\n    chatId: 5160963520\n',
+  ));
+
+  assert.deepEqual(stored, { botToken: '123:abc', chatId: '5160963520' });
 });
 
 test('a patch keeps unrelated keys, the stored token and unknown channels', () => {

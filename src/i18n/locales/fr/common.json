@@ -84,7 +84,9 @@
     "exports": {
       "title": "Exports",
       "download": "Télécharger",
-      "failed": "Échec du téléchargement."
+      "delete": "Supprimer l'export",
+      "failed": "Échec du téléchargement.",
+      "deleteFailed": "Impossible de supprimer l'export."
     },
     "layout": {
       "title": "Disposition de la barre",

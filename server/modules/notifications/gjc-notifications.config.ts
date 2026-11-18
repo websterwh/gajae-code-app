@@ -267,6 +267,12 @@ export function notificationView(notifications: YamlMap): GjcNotificationView {
   };
 }
 
+/** The stored credentials, for the one caller that has to make a request. */
+export function telegramCredentials(notifications: YamlMap): { botToken: string; chatId: string } {
+  const telegram = asMap(notifications.telegram);
+  return { botToken: asText(telegram.botToken).trim(), chatId: asText(telegram.chatId).trim() };
+}
+
 export function applyNotificationPatch(notifications: YamlMap, input: unknown): YamlMap {
   const next: YamlMap = structuredClone(notifications);
   const patch = input !== null && typeof input === 'object' && !Array.isArray(input)

@@ -84,7 +84,9 @@
     "exports": {
       "title": "Exporte",
       "download": "Herunterladen",
-      "failed": "Download fehlgeschlagen."
+      "delete": "Export löschen",
+      "failed": "Download fehlgeschlagen.",
+      "deleteFailed": "Der Export konnte nicht gelöscht werden."
     },
     "layout": {
       "title": "Seitenleisten-Layout",

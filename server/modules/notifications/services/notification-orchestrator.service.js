@@ -1,7 +1,14 @@
+import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import path from 'node:path';
+
 import { notificationPreferencesDb, sessionsDb } from '@/modules/database/index.js';
 import { sendDesktopNotificationAndWait } from '@/modules/notifications/services/desktop-notification-clients.service.js';
 import { enterNotificationActivity } from '@/modules/notifications/services/desktop-update-activity.service.js';
 import { CHANNEL_WEB_PUSH, sendWebPushNotification } from '@/modules/notifications/services/web-push.service.js';
+
+import { notificationView, readNotificationsFromYaml, telegramCredentials } from '../gjc-notifications.config.js';
+import { sendTelegramMessage } from '../telegram.service.js';
 
 const eventPreferences = new Map([
   ['action_required', 'actionRequired'],
@@ -101,6 +108,31 @@ function wasDelivered(event) {
   return false;
 }
 
+/**
+ * Telegram delivery for app sessions. The CLI has its own supervisor, but an
+ * app session is not an eligible CLI host, so the settings the Notifications
+ * card writes into config.yml reach nothing unless the app sends the message
+ * itself. A missing or disabled block is simply no channel.
+ */
+function telegramChannel() {
+  try {
+    const agentDir = process.env.GJC_WORKER_AGENT_DIR || path.join(homedir(), '.gjc', 'agent');
+    const config = readNotificationsFromYaml(readFileSync(path.join(agentDir, 'config.yml'), 'utf8'));
+    const view = notificationView(config);
+    if (!view.enabled || !view.telegram.enabled) return null;
+    const credentials = telegramCredentials(config);
+    return credentials.botToken && credentials.chatId ? credentials : null;
+  } catch {
+    return null;
+  }
+}
+
+function telegramText(payload) {
+  return payload.title && payload.title !== 'Gajae Code App'
+    ? `${payload.body}\n${payload.title}`
+    : payload.body;
+}
+
 function reportChannelFailure(channel) {
   return (error) => console.error(`Notification channel "${channel}" send error:`, error);
 }
@@ -114,7 +146,8 @@ function notifyUserIfEnabled({ userId, event }) {
     const preferences = notificationPreferencesDb.getPreferences(userId);
     if (!eventIsAllowed(preferences, current) || wasDelivered(current)) return;
     const channels = preferences?.channels || {};
-    if (!channels.desktop && !channels[CHANNEL_WEB_PUSH]) return;
+    const telegram = telegramChannel();
+    if (!channels.desktop && !channels[CHANNEL_WEB_PUSH] && !telegram) return;
 
     const payload = buildNotificationPayload(current);
     const deliveries = [];
@@ -123,6 +156,15 @@ function notifyUserIfEnabled({ userId, event }) {
     }
     if (channels[CHANNEL_WEB_PUSH]) {
       deliveries.push(sendWebPushNotification(userId, payload).catch(reportChannelFailure(CHANNEL_WEB_PUSH)));
+    }
+    if (telegram) {
+      deliveries.push(sendTelegramMessage({
+        botToken: telegram.botToken,
+        chatId: telegram.chatId,
+        text: telegramText(payload),
+      }).then((result) => {
+        if (!result.ok) throw new Error(result.description);
+      }).catch(reportChannelFailure('telegram')));
     }
     pending = Promise.all(deliveries).finally(release);
     return pending;

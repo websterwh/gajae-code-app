@@ -185,6 +185,8 @@ function GjcNotificationsCard() {
   // mask fills it until the field is focused; typing replaces it, and leaving
   // it untouched keeps the stored value.
   const [tokenFocused, setTokenFocused] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -204,10 +206,12 @@ function GjcNotificationsCard() {
 
   const patchTelegram = (changes: Partial<TelegramSettings>) => {
     setSaved(false);
+    setTestResult(null);
     setSettings((current) => ({ ...current, telegram: { ...current.telegram, ...changes } }));
   };
   const patch = (changes: Partial<GjcSettings>) => {
     setSaved(false);
+    setTestResult(null);
     setSettings((current) => ({ ...current, ...changes }));
   };
 
@@ -232,7 +236,40 @@ function GjcNotificationsCard() {
     }
   };
 
+  // The test sends what the form currently shows, so a token can be proven
+  // before it is saved; blank fields fall back to the stored values server-side.
+  const sendTest = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const response = await authenticatedFetch('/api/notifications/gjc/telegram/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ botToken: botToken.trim(), chatId: settings.telegram.chatId.trim() }),
+      });
+      const body = await response.json() as {
+        data?: { delivered?: boolean; enabled?: boolean; telegramEnabled?: boolean };
+        error?: { message?: string };
+      };
+      if (!response.ok || !body.data?.delivered) {
+        throw new Error(t('notifications.gjc.testFailed', { reason: body.error?.message ?? String(response.status) }));
+      }
+      // A delivered test with delivery switched off is the usual reason a
+      // working bot still says nothing during a run.
+      const off = !body.data.enabled || !body.data.telegramEnabled;
+      setTestResult({ ok: true, message: off ? t('notifications.gjc.testOff') : t('notifications.gjc.testSent') });
+    } catch (error) {
+      setTestResult({
+        ok: false,
+        message: error instanceof Error ? error.message : t('notifications.gjc.testFailed', { reason: String(error) }),
+      });
+    } finally {
+      setTesting(false);
+    }
+  };
+
   const telegram = settings.telegram;
+  const canTest = Boolean((telegram.hasBotToken || botToken.trim()) && telegram.chatId.trim());
 
   return (
     <SettingsSection title={t('notifications.gjc.title')} description={t('notifications.gjc.description')}>
@@ -272,7 +309,7 @@ function GjcNotificationsCard() {
                 aria-label={t('notifications.gjc.botToken')}
                 onFocus={() => setTokenFocused(true)}
                 onBlur={() => setTokenFocused(false)}
-                onChange={(event) => { setSaved(false); setBotToken(event.target.value); }}
+                onChange={(event) => { setSaved(false); setTestResult(null); setBotToken(event.target.value); }}
                 className={inputClass}
               />
             </SettingsRow>
@@ -352,7 +389,23 @@ function GjcNotificationsCard() {
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Bell className="h-4 w-4" aria-hidden />}
                 {saving ? t('notifications.gjc.saving') : t('notifications.gjc.save')}
               </button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void sendTest()}
+                disabled={testing || saving || !canTest}
+                title={canTest ? undefined : t('notifications.gjc.testNeedsConfig')}
+              >
+                {testing ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Play className="h-4 w-4" aria-hidden />}
+                {testing ? t('notifications.gjc.testing') : t('notifications.gjc.test')}
+              </Button>
               {saved && <span className="text-xs text-muted-foreground">{t('notifications.gjc.saved')}</span>}
+              {testResult && (
+                <span className={testResult.ok ? 'text-xs text-muted-foreground' : 'text-xs text-destructive'}>
+                  {testResult.message}
+                </span>
+              )}
               {error && <span className="text-xs text-destructive">{error}</span>}
             </div>
           </>
