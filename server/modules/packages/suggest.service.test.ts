@@ -18,6 +18,7 @@ const APT_PACKAGES: AptPackage[] = [
   { name: 'zoxide', description: 'A smarter cd command' },
   { name: 'zoxide-doc', description: 'Documentation for zoxide' },
   { name: 'vim-zoxide', description: 'zoxide integration for Vim' },
+  { name: 'fzf', description: 'general-purpose command-line fuzzy finder' },
   { name: 'gh', description: 'GitHub CLI, GitHub’s official command line tool' },
   { name: 'golang-github-dgraph-io-badger-dev', description: 'Fast key-value DB in Go' },
 ];
@@ -78,6 +79,16 @@ describe('package suggestions', () => {
     assert.equal(suggestions[0]?.name, 'gh');
     // The full description scan took 68-73s; dumpavail replaced it entirely.
     assert.equal(calls.some((call) => /apt-cache search github$/u.test(call)), false, calls.join(', '));
+  });
+
+  test('apt descriptions match any package, not just the ones named github', async () => {
+    const service = new PackageSuggestService({ runner: aptRunner(), fetchImpl: offline });
+    await service.suggest('zzz', 'apt');
+    await service.whenAptIndexSettled();
+
+    // Neither word is in the package name; only its description knows it.
+    const suggestions = await service.suggest('fuzzy finder', 'apt');
+    assert.deepEqual(suggestions.map((suggestion) => suggestion.name), ['fzf']);
   });
 
   test('the apt table is loaded once and every later query reads memory', async () => {

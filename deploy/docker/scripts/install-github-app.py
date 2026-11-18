@@ -93,6 +93,67 @@ def fetch_release(repo, tag, headers):
         return json.loads(resp.read().decode())
 
 
+AQUA_ROOT = os.environ.get("AQUA_ROOT_DIR", "/data/aqua")
+AQUA_PACKAGES_FILE = os.environ.get("AQUA_PACKAGES_STATE", "/data/aqua/packages.json")
+
+
+def read_aqua_packages():
+    """The proxy-managed packages, each with the tag it was installed at."""
+    try:
+        with open(AQUA_PACKAGES_FILE) as f:
+            data = json.load(f)
+        if isinstance(data, dict):
+            return data
+    except Exception:
+        pass
+    # Upgrade path: an earlier installer wrote the entries straight into
+    # aqua.yaml, and this one has to keep resolving them.
+    packages = {}
+    try:
+        with open(os.path.join(AQUA_ROOT, "aqua.yaml")) as f:
+            for line in f:
+                line = line.strip()
+                if not line.startswith("- name: "):
+                    continue
+                entry = line[len("- name: "):]
+                if "@" in entry:
+                    repo, tag = entry.rsplit("@", 1)
+                    packages[repo] = tag
+    except OSError:
+        pass
+    return packages
+
+
+def save_aqua_config(packages):
+    """Write the registry and the single aqua.yaml generated from it.
+
+    The config used to be rewritten with only the package being installed, so
+    the next aqua install dropped the previous entry: the package stayed on
+    disk, but its shim looked it up in a config that no longer listed it and
+    answered "command is not found".
+    """
+    os.makedirs(AQUA_ROOT, exist_ok=True)
+    registry_tmp = f"{AQUA_PACKAGES_FILE}.tmp"
+    with open(registry_tmp, "w") as f:
+        json.dump(packages, f, indent=2, sort_keys=True)
+        f.write("\n")
+    os.replace(registry_tmp, AQUA_PACKAGES_FILE)
+
+    yaml_path = os.path.join(AQUA_ROOT, "aqua.yaml")
+    if not packages:
+        if os.path.exists(yaml_path):
+            os.remove(yaml_path)
+        return yaml_path
+    lines = ["---", "registries:", "  - type: standard", "    ref: v4.325.0", "packages:"]
+    for repo in sorted(packages):
+        lines.append(f"  - name: {repo}@{packages[repo]}")
+    yaml_tmp = f"{yaml_path}.tmp"
+    with open(yaml_tmp, "w") as f:
+        f.write("\n".join(lines) + "\n")
+    os.replace(yaml_tmp, yaml_path)
+    return yaml_path
+
+
 def install_github_app(spec, target_bin="/data/bin", target_share="/data/share"):
     repo, requested = split_spec(spec)
     if not repo:
@@ -181,12 +242,15 @@ def install_github_app(spec, target_bin="/data/bin", target_share="/data/share")
     import subprocess
     pkg_entry = f"{repo}@{tag}"
     print(f"==> [Aqua] Attempting aqua install for {pkg_entry}...")
-    yaml_path = "/data/aqua/aqua.yaml"
-    os.makedirs(os.path.dirname(yaml_path), exist_ok=True)
-    with open(yaml_path, "w") as f:
-        f.write(f"---\nregistries:\n  - type: standard\n    ref: v4.325.0\npackages:\n  - name: {pkg_entry}\n")
-    res = subprocess.run(["aqua", "install", "-l", "-a", "-c", yaml_path], env=dict(os.environ, AQUA_ROOT_DIR="/data/aqua"))
+    previous = read_aqua_packages()
+    packages = dict(previous)
+    packages[repo] = tag
+    yaml_path = save_aqua_config(packages)
+    res = subprocess.run(["aqua", "install", "-l", "-a", "-c", yaml_path], env=dict(os.environ, AQUA_ROOT_DIR=AQUA_ROOT))
     if res.returncode != 0:
+        # Packages that already worked keep their config: a failed fetch must
+        # not empty the file every other shim is resolved through.
+        save_aqua_config(previous)
         print(f"==> [ERROR] aqua could not install {pkg_entry} (exit {res.returncode}).")
         return False
     aqua_bin_dir = "/data/aqua/bin"
@@ -240,14 +304,12 @@ def uninstall_github_app(spec, target_bin="/data/bin", target_share="/data/share
             if entry.startswith(f"{name}-"):
                 drop(os.path.join(target_share, entry))
 
-    yaml_path = os.path.join(aqua_root, "aqua.yaml")
-    try:
-        if os.path.exists(yaml_path):
-            with open(yaml_path) as f:
-                if repo in f.read():
-                    drop(yaml_path)
-    except OSError:
-        pass
+    # Remove this package from the shared config instead of deleting the file:
+    # uninstalling one aqua package must not break the others.
+    packages = read_aqua_packages()
+    if repo in packages:
+        packages.pop(repo, None)
+        save_aqua_config(packages)
 
     # The verify step reads the recorded tag, so the name has to leave the
     # state file or a reinstall would look like it is still present.
