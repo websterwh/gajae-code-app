@@ -63,7 +63,11 @@ RUN --mount=type=secret,id=github_token \
 # final image can layer them separately.
 RUN mkdir -p /opt/gajae-deps && mv /opt/gajae-app/node_modules /opt/gajae-deps/node_modules
 
-FROM node:22-bookworm-slim
+# Debian 13 (trixie) rather than bookworm: bookworm's package set is frozen at
+# the 2023 release, so anything packaged afterwards (newer ffmpeg, the OpenSSH
+# 10 line) is unreachable from apt there. Node publishes the same 22.x runtime
+# on trixie, so the application layer copied in below is unchanged.
+FROM node:22-trixie-slim
 
 LABEL org.opencontainers.image.title="Gajae Code App" \
       org.opencontainers.image.description="Container image for Gajae Code App fork builds with SSH and package provisioning" \
@@ -74,6 +78,8 @@ LABEL org.opencontainers.image.title="Gajae Code App" \
 # - build / archive tools & utilities
 # - openssh-server for container SSH access
 # - Playwright / Chromium headless rendering dependencies
+# Debian 13 renamed the ATK, cups and alsa libraries for the 64-bit time_t
+# transition; only the t64 names are published.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     apt-utils \
     ca-certificates \
@@ -92,9 +98,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     openssh-server \
     libnss3 \
-    libatk1.0-0 \
-    libatk-bridge2.0-0 \
-    libcups2 \
+    libatk1.0-0t64 \
+    libatk-bridge2.0-0t64 \
+    libcups2t64 \
     libdrm2 \
     libxkbcommon0 \
     libxcomposite1 \
@@ -104,7 +110,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgbm1 \
     libpango-1.0-0 \
     libcairo2 \
-    libasound2 \
+    libasound2t64 \
     && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb
 
 # Set default editor alternative to nano
