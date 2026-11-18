@@ -602,6 +602,9 @@
     "pinnedNote": "Sabitlenmiş paketler otomatik yükseltilmez.",
     "version": "Sürüm",
     "versionHint": "Başka bir sürüm yazmak için sürüme tıklayın; kaydedince sabitlenir.",
-    "noVersion": "Sürüm yok"
+    "noVersion": "Sürüm yok",
+    "searching": "Aranıyor…",
+    "noMatches": "«{{query}}» için sonuç yok.",
+    "searchFailed": "Arama başarısız."
   }
 }

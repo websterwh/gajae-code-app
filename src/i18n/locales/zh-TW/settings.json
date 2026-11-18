@@ -602,6 +602,9 @@
     "pinnedNote": "已鎖定的套件不會自動升級。",
     "version": "版本",
     "versionHint": "點擊版本號可手動輸入，儲存後會鎖定該版本。",
-    "noVersion": "無版本"
+    "noVersion": "無版本",
+    "searching": "搜尋中…",
+    "noMatches": "沒有與「{{query}}」相符的結果。",
+    "searchFailed": "搜尋失敗。"
   }
 }

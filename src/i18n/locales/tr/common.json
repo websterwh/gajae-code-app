@@ -127,7 +127,13 @@
       "title": "Kullanım",
       "tokens": "Token",
       "turns": "Tur",
-      "cost": "Maliyet"
+      "cost": "Maliyet",
+      "context": "Bağlam",
+      "input": "Giriş",
+      "output": "Çıkış",
+      "cache": "Önbellek",
+      "thisChat": "Bu sohbet",
+      "project": "Proje"
     }
   },
   "commandPalette": {

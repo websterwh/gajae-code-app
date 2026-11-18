@@ -127,7 +127,13 @@
       "title": "Usage",
       "tokens": "Tokens",
       "turns": "Turns",
-      "cost": "Cost"
+      "cost": "Cost",
+      "context": "Context",
+      "input": "Input",
+      "output": "Output",
+      "cache": "Cache",
+      "thisChat": "This chat",
+      "project": "Project"
     }
   },
   "commandPalette": {

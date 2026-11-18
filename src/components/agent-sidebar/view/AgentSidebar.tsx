@@ -33,9 +33,9 @@ export type AgentSidebarProps = AgentSidebarEnvironmentProps & {
  *
  * On desktop it is a fixed-width column with no border, background, header or
  * resize handle of its own, holding one compact card: the Environment summary,
- * what this project has spent, the WORK block while the session has a todo
- * list or is running, Action required while a request awaits an answer, and the
- * persistent list of exports the project can hand back. The reader chooses which of those blocks
+ * the chat's context and the project's recorded usage, the WORK block while the
+ * session has a todo list or is running, Action required while a request awaits
+ * an answer, and the persistent list of exports the project can hand back. The reader chooses which of those blocks
  * are shown and in what order with the pencil in the lane's bottom-right
  * corner; that layout is theirs and is persisted with the lane's open flag.
  *

@@ -127,7 +127,13 @@
       "title": "使用量",
       "tokens": "Token",
       "turns": "轮次",
-      "cost": "费用"
+      "cost": "费用",
+      "context": "上下文",
+      "input": "输入",
+      "output": "输出",
+      "cache": "缓存",
+      "thisChat": "本对话",
+      "project": "项目"
     }
   },
   "commandPalette": {

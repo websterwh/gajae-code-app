@@ -602,6 +602,9 @@
     "pinnedNote": "I pacchetti bloccati non vengono aggiornati automaticamente.",
     "version": "Versione",
     "versionHint": "Clicca la versione per scriverne un’altra; salvandola la blocchi.",
-    "noVersion": "Nessuna versione"
+    "noVersion": "Nessuna versione",
+    "searching": "Ricerca…",
+    "noMatches": "Nessun risultato per «{{query}}».",
+    "searchFailed": "Ricerca non riuscita."
   }
 }

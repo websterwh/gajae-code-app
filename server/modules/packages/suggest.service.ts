@@ -35,6 +35,10 @@ type SuggestOptions = {
   runner?: CommandRunner;
   fetchImpl?: FetchLike;
   timeoutMs?: number;
+  /** How long an apt search may take before the other sources answer alone. */
+  aptBudgetMs?: number;
+  /** How long an explicit apt search may take, with no other source to answer. */
+  aptOnlyBudgetMs?: number;
 };
 
 const APT_LIMIT = 6;
@@ -47,6 +51,22 @@ const TOTAL_LIMIT = 12;
  * few are taken, or the winner is whichever package starts with "a".
  */
 const APT_SCAN_LIMIT = 20_000;
+/**
+ * apt decompresses its whole index per search, which on a cold or loaded
+ * machine has been measured in tens of seconds. It runs beside three network
+ * sources and the response waits for every one of them, so one slow local
+ * lookup used to delay every suggestion by a minute. Past this budget apt
+ * simply contributes nothing to this answer.
+ */
+const APT_SEARCH_BUDGET_MS = 4_000;
+/**
+ * Picking apt narrowed the search to one source, so there is nothing else to
+ * answer while apt works; cutting it short would report "no matches" for a
+ * package that exists. The budget only has to stop an unbounded hang.
+ */
+const APT_ONLY_BUDGET_MS = 20_000;
+/** A rebuild that failed is retried at most this often, never per keystroke. */
+const APT_INDEX_RETRY_MS = 60_000;
 /** A refined query (zox -> zoxid -> zoxide) hits the same sources twice. */
 const CACHE_TTL_MS = 30_000;
 const CACHE_LIMIT = 50;
@@ -81,15 +101,34 @@ const prefixFirst = (query: string) => (first: PackageSuggestion, second: Packag
   || first.name.localeCompare(second.name)
 );
 
+/** Resolves to null instead of waiting longer than `ms` for `promise`. */
+async function within<T>(promise: Promise<T>, ms: number): Promise<T | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<null>((resolve) => { timer = setTimeout(() => resolve(null), ms); }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
 export class PackageSuggestService {
   private readonly timeoutMs: number;
+  private readonly aptBudgetMs: number;
+  private readonly aptOnlyBudgetMs: number;
   private readonly runner: CommandRunner;
-  /** The index is rebuilt at most once per process; see `apt`. */
+  /** Set once a rebuild succeeded; see `warmAptIndex`. */
   private aptIndexBuilt = false;
+  private aptIndexWarm: Promise<void> | null = null;
+  private aptIndexAttemptAt = 0;
   private readonly cache = new Map<string, { at: number; suggestions: PackageSuggestion[] }>();
 
   constructor(private readonly options: SuggestOptions = {}) {
     this.timeoutMs = options.timeoutMs ?? 2500;
+    this.aptBudgetMs = options.aptBudgetMs ?? APT_SEARCH_BUDGET_MS;
+    this.aptOnlyBudgetMs = options.aptOnlyBudgetMs ?? APT_ONLY_BUDGET_MS;
     // apt is the one source read from a process, not a URL. Defaulting it to
     // the shared runner is what makes the exported service search apt at all:
     // with only an optional runner, the singleton had none and apt silently
@@ -113,24 +152,47 @@ export class PackageSuggestService {
     return suggestions.sort(prefixFirst(query)).slice(0, APT_LIMIT);
   }
 
-  private async apt(query: string): Promise<PackageSuggestion[]> {
+  /**
+   * Rebuilds the pruned package index in the background.
+   *
+   * The image deletes /var/lib/apt/lists to keep its layers small, and an empty
+   * index answers `apt-cache search` with no output and exit 0 - the same thing
+   * it does for a name that does not exist. The update takes a network round
+   * trip and a minute of decompression, so a search never waits for it: the
+   * first queries answer from npm, PyPI and GitHub, and the next ones also see
+   * apt. Only a successful rebuild sticks; a failed one is retried after a
+   * cooldown rather than on every keystroke.
+   */
+  private warmAptIndex(): void {
+    if (this.aptIndexBuilt || this.aptIndexWarm) return;
+    if (Date.now() - this.aptIndexAttemptAt < APT_INDEX_RETRY_MS) return;
+    this.aptIndexAttemptAt = Date.now();
+    this.aptIndexWarm = this.runner('apt-get', ['update', '-qq'])
+      .then((result) => {
+        if (result.code === 0) this.aptIndexBuilt = true;
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        this.aptIndexWarm = null;
+      });
+    void this.aptIndexWarm;
+  }
+
+  private async apt(query: string, budgetMs: number): Promise<PackageSuggestion[]> {
     // Local and offline, once the index exists. Not `--names-only`: `github` is
     // a name nobody ships, but `gh` describes itself as the GitHub CLI, which is
-    // what the user was looking for.
-    const search = () => this.runner('apt-cache', ['search', query]);
-    const result = await search();
-    if (result.code !== 0) return [];
+    // what the user was looking for. Bounded, because the answer must not wait
+    // on apt while three faster sources already have results.
+    const result = await within(
+      this.runner('apt-cache', ['search', query]),
+      budgetMs,
+    );
+    if (!result || result.code !== 0) return [];
     const rows = this.aptRows(result.stdout, query);
     if (rows.length > 0 || this.aptIndexBuilt) return rows;
 
-    // The image deletes /var/lib/apt/lists to keep its layers small, and an
-    // empty index answers `apt-cache search` with no output and exit 0 - the
-    // same thing it does for a name that does not exist. Build the index once,
-    // then ask again. A failed update is not retried on the next keystroke.
-    this.aptIndexBuilt = true;
-    await this.runner('apt-get', ['update', '-qq']).catch(() => undefined);
-    const retry = await search().catch(() => null);
-    return retry && retry.code === 0 ? this.aptRows(retry.stdout, query) : [];
+    this.warmAptIndex();
+    return [];
   }
 
   private async npm(query: string): Promise<PackageSuggestion[]> {
@@ -189,6 +251,11 @@ export class PackageSuggestService {
    * are both PyPI, so the selected one is the manager the suggestion installs
    * through.
    */
+  /** Test seam: settle the background index rebuild, if one is running. */
+  async whenAptIndexSettled(): Promise<void> {
+    await this.aptIndexWarm;
+  }
+
   async suggest(rawQuery: string, manager: SuggestManager = 'auto'): Promise<PackageSuggestion[]> {
     const query = rawQuery.trim();
     // One character matches half the index and costs three round trips.
@@ -198,7 +265,9 @@ export class PackageSuggestService {
     if (cached && Date.now() - cached.at < CACHE_TTL_MS) return cached.suggestions;
 
     const sources: Array<Promise<PackageSuggestion[]>> = [];
-    if (manager === 'auto' || manager === 'apt') sources.push(this.apt(query).catch(() => []));
+    if (manager === 'auto' || manager === 'apt') {
+      sources.push(this.apt(query, manager === 'apt' ? this.aptOnlyBudgetMs : this.aptBudgetMs).catch(() => []));
+    }
     if (manager === 'auto' || manager === 'npm') sources.push(this.npm(query).catch(() => []));
     if (manager === 'auto' || manager === 'uv' || manager === 'pip') {
       const target: InstallManager = manager === 'auto' ? 'pip' : manager;

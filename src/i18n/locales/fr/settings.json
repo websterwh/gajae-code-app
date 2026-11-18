@@ -602,6 +602,9 @@
     "pinnedNote": "Les paquets épinglés ne sont pas mis à jour automatiquement.",
     "version": "Version",
     "versionHint": "Cliquez sur la version pour en saisir une autre ; l’enregistrer l’épingle.",
-    "noVersion": "Aucune version"
+    "noVersion": "Aucune version",
+    "searching": "Recherche…",
+    "noMatches": "Aucun résultat pour « {{query}} ».",
+    "searchFailed": "Échec de la recherche."
   }
 }

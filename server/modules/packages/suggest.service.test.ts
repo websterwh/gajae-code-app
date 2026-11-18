@@ -164,34 +164,60 @@ describe('package suggestions', () => {
     );
   });
 
-  test('an empty apt index is rebuilt once before the search is believed', async () => {
+  /*
+   * The pruned image's index answers every search with nothing and exit 0. The
+   * rebuild costs a network update plus a minute of decompression, so it runs
+   * behind the answer: the search that notices the empty index still returns,
+   * and the one after it sees apt.
+   */
+
+  test('an empty apt index is rebuilt in the background, not in front of the answer', async () => {
     const calls: string[] = [];
+    let indexed = false;
     const service = new PackageSuggestService({
       fetchImpl: offline,
       runner: async (command, args) => {
         calls.push([command, ...args].join(' '));
-        if (command === 'apt-get') return { code: 0, stdout: '', stderr: '' };
-        // The pruned image's index answers the first search with nothing.
-        if (args[1] !== 'github') return { code: 0, stdout: '', stderr: '' };
-        return {
-          code: 0,
-          stdout: calls.filter((call) => call.startsWith('apt-cache')).length === 1
-            ? ''
-            : 'gh - GitHub CLI, cli.github.com\n',
-          stderr: '',
-        };
+        if (command === 'apt-get') {
+          indexed = true;
+          return { code: 0, stdout: '', stderr: '' };
+        }
+        return { code: 0, stdout: indexed && args[1] !== 'github' ? 'gh - GitHub CLI, cli.github.com\n' : '', stderr: '' };
       },
     });
 
-    const suggestions = await service.suggest('github', 'apt');
+    assert.deepEqual(await service.suggest('github', 'apt'), []);
+    await service.whenAptIndexSettled();
+    assert.deepEqual(calls, ['apt-cache search github', 'apt-get update -qq']);
 
+    const suggestions = await service.suggest('gh', 'apt');
     assert.equal(suggestions[0]?.name, 'gh');
-    assert.deepEqual(calls, ['apt-cache search github', 'apt-get update -qq', 'apt-cache search github']);
 
-    // A second query that really has no match does not pay for the update again.
+    // The rebuild happens once; later searches read the index directly.
     calls.length = 0;
-    assert.deepEqual(await service.suggest('no-such-package-xyz', 'apt'), []);
-    assert.deepEqual(calls, ['apt-cache search no-such-package-xyz']);
+    await service.suggest('git', 'apt');
+    assert.deepEqual(calls, ['apt-cache search git']);
+  });
+
+  test('a hung apt search does not hold back the sources that answered', async () => {
+    const service = new PackageSuggestService({
+      aptBudgetMs: 20,
+      runner: async (command) => {
+        if (command !== 'apt-cache') return { code: 1, stdout: '', stderr: '' };
+        // apt-cache decompressing a cold index: never finishes in this test.
+        return new Promise(() => undefined);
+      },
+      fetchImpl: async (url) => {
+        if (!url.includes('registry.npmjs.org')) return { ok: false, json: async () => ({}) };
+        return { ok: true, json: async () => ({ objects: [{ package: { name: 'gh', description: 'Node wrapper' } }] }) };
+      },
+    });
+
+    const started = Date.now();
+    const suggestions = await service.suggest('gh');
+
+    assert.deepEqual(suggestions.map((suggestion) => `${suggestion.manager}:${suggestion.name}`), ['npm:gh']);
+    assert.ok(Date.now() - started < 1_000, 'apt held the response');
   });
 
   test('one source cannot fill the list with its own wrappers', async () => {

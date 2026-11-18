@@ -602,6 +602,9 @@
     "pinnedNote": "Pinned packages are not upgraded automatically.",
     "version": "Version",
     "versionHint": "Click the version to type another one; saving pins it.",
-    "noVersion": "No version"
+    "noVersion": "No version",
+    "searching": "Searching…",
+    "noMatches": "No matches for “{{query}}”.",
+    "searchFailed": "Search failed."
   }
 }

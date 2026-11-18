@@ -127,7 +127,13 @@
       "title": "使用量",
       "tokens": "トークン",
       "turns": "ターン",
-      "cost": "コスト"
+      "cost": "コスト",
+      "context": "コンテキスト",
+      "input": "入力",
+      "output": "出力",
+      "cache": "キャッシュ",
+      "thisChat": "このチャット",
+      "project": "プロジェクト"
     }
   },
   "commandPalette": {

@@ -32,6 +32,15 @@ type PackageRow = {
 };
 
 type ApiEnvelope<T> = { success?: boolean; data?: T; error?: { message?: string } };
+/**
+ * The search is a state, not just a list: "still asking", "nothing matched"
+ * and "the request failed" all used to render the same nothing.
+ */
+type SearchState =
+  | { kind: 'idle' }
+  | { kind: 'searching'; query: string }
+  | { kind: 'ready'; query: string; suggestions: PackageSuggestion[] }
+  | { kind: 'error'; query: string; message: string };
 
 const MANAGERS: ManagerChoice[] = ['auto', 'uv', 'pip', 'npm', 'aqua', 'apt'];
 
@@ -74,7 +83,7 @@ export default function PackagesSettingsTab() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [form, setForm] = useState<{ manager: ManagerChoice; spec: string; pin: string }>({ manager: 'auto', spec: '', pin: '' });
-  const [suggestions, setSuggestions] = useState<PackageSuggestion[]>([]);
+  const [search, setSearch] = useState<SearchState>({ kind: 'idle' });
   const [editingVersion, setEditingVersion] = useState<string | null>(null);
   const [versionDraft, setVersionDraft] = useState('');
   const [confirming, setConfirming] = useState<PackageRow | null>(null);
@@ -100,25 +109,40 @@ export default function PackagesSettingsTab() {
   // index, the npm registry, PyPI and GitHub. The selected manager narrows the
   // sources, so "aqua" cannot answer with npm packages. Typing is debounced so
   // a name does not become a request per keystroke.
+  //
+  // Every outcome is rendered: a failed request and an empty index used to look
+  // exactly like work in progress, so a broken source read as a broken feature.
   useEffect(() => {
     const query = form.spec.trim();
     if (query.length < 2) {
-      setSuggestions([]);
+      setSearch({ kind: 'idle' });
       return undefined;
     }
     const scope = form.manager === 'auto' ? '' : `&manager=${form.manager}`;
     const controller = new AbortController();
+    setSearch({ kind: 'searching', query });
     const timer = window.setTimeout(() => {
       void authenticatedFetch(`/api/packages/suggest?q=${encodeURIComponent(query)}${scope}`, { signal: controller.signal })
-        .then(async (response) => (await response.json() as ApiEnvelope<PackageSuggestion[]>).data ?? [])
-        .then((next) => { if (!controller.signal.aborted) setSuggestions(next); })
-        .catch(() => undefined);
+        .then(async (response) => {
+          const body = await response.json().catch(() => ({})) as ApiEnvelope<PackageSuggestion[]>;
+          if (!response.ok || body.success === false) {
+            throw new Error(body.error?.message ?? `Request failed (${response.status}).`);
+          }
+          return body.data ?? [];
+        })
+        .then((next) => { if (!controller.signal.aborted) setSearch({ kind: 'ready', query, suggestions: next }); })
+        .catch((error: unknown) => {
+          // An abort is this effect replacing its own request, not a failure.
+          if (!controller.signal.aborted) setSearch({ kind: 'error', query, message: messageOf(error) });
+        });
     }, 250);
     return () => {
       window.clearTimeout(timer);
       controller.abort();
     };
   }, [form.spec, form.manager]);
+
+  const suggestions = search.kind === 'ready' ? search.suggestions : [];
 
   const run = async (key: string, action: () => Promise<unknown>) => {
     setBusy(key);
@@ -167,7 +191,7 @@ export default function PackagesSettingsTab() {
   // name is the one that runs, so the user does not have to know which it was.
   const installSuggestion = (suggestion: PackageSuggestion) => {
     setForm({ ...form, manager: suggestion.manager, spec: suggestion.spec, pin: '' });
-    setSuggestions([]);
+    setSearch({ kind: 'idle' });
     void run(`add:${suggestion.manager}:${suggestion.name}`, () => request('/api/packages', {
       method: 'POST',
       body: JSON.stringify({ manager: suggestion.manager, spec: suggestion.spec, pin: null }),
@@ -255,26 +279,45 @@ export default function PackagesSettingsTab() {
             </button>
           </form>
 
-          {suggestions.length > 0 ? (
-            <div className="border-t border-border px-4 py-3">
-              <p className="mb-2 text-xs text-muted-foreground">
-                {t('packages.suggestions', { defaultValue: 'Matching packages — click one to install it, or keep typing and press Add' })}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {suggestions.map((suggestion) => (
-                  <button
-                    key={`${suggestion.manager}:${suggestion.name}`}
-                    type="button"
-                    disabled={busy !== null}
-                    onClick={() => installSuggestion(suggestion)}
-                    title={suggestion.description || suggestion.spec}
-                    className="inline-flex max-w-full items-center gap-2 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <span className="truncate font-medium">{suggestion.name}</span>
-                    <span className="text-muted-foreground">{suggestion.manager}</span>
-                  </button>
-                ))}
-              </div>
+          {search.kind !== 'idle' ? (
+            <div aria-live="polite" className="border-t border-border px-4 py-3">
+              {search.kind === 'searching' ? (
+                <p role="status" className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                  {t('packages.searching')}
+                </p>
+              ) : null}
+              {search.kind === 'error' ? (
+                <p className="flex items-start gap-2 text-xs break-words text-destructive">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+                  <span>{t('packages.searchFailed')} {search.message}</span>
+                </p>
+              ) : null}
+              {search.kind === 'ready' && search.suggestions.length === 0 ? (
+                <p className="text-xs text-muted-foreground">{t('packages.noMatches', { query: search.query })}</p>
+              ) : null}
+              {search.kind === 'ready' && search.suggestions.length > 0 ? (
+                <>
+                  <p className="mb-2 text-xs text-muted-foreground">
+                    {t('packages.suggestions', { defaultValue: 'Matching packages — click one to install it, or keep typing and press Add' })}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {search.suggestions.map((suggestion) => (
+                      <button
+                        key={`${suggestion.manager}:${suggestion.name}`}
+                        type="button"
+                        disabled={busy !== null}
+                        onClick={() => installSuggestion(suggestion)}
+                        title={suggestion.description || suggestion.spec}
+                        className="inline-flex max-w-full items-center gap-2 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <span className="truncate font-medium">{suggestion.name}</span>
+                        <span className="text-muted-foreground">{suggestion.manager}</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : null}
             </div>
           ) : null}
 

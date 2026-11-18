@@ -602,6 +602,9 @@
     "pinnedNote": "固定したパッケージは自動更新されません。",
     "version": "バージョン",
     "versionHint": "バージョンをクリックすると入力できます。保存すると固定されます。",
-    "noVersion": "バージョンなし"
+    "noVersion": "バージョンなし",
+    "searching": "検索中…",
+    "noMatches": "「{{query}}」に一致するものはありません。",
+    "searchFailed": "検索に失敗しました。"
   }
 }

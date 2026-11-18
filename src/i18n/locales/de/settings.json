@@ -602,6 +602,9 @@
     "pinnedNote": "Gepinnte Pakete werden nicht automatisch aktualisiert.",
     "version": "Version",
     "versionHint": "Auf die Version klicken, um eine andere einzugeben; beim Speichern wird sie gepinnt.",
-    "noVersion": "Keine Version"
+    "noVersion": "Keine Version",
+    "searching": "Suche läuft…",
+    "noMatches": "Keine Treffer für „{{query}}“.",
+    "searchFailed": "Suche fehlgeschlagen."
   }
 }

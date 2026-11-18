@@ -127,7 +127,13 @@
       "title": "Использование",
       "tokens": "Токены",
       "turns": "Ходы",
-      "cost": "Стоимость"
+      "cost": "Стоимость",
+      "context": "Контекст",
+      "input": "Ввод",
+      "output": "Вывод",
+      "cache": "Кэш",
+      "thisChat": "Этот чат",
+      "project": "Проект"
     }
   },
   "commandPalette": {

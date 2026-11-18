@@ -127,7 +127,13 @@
       "title": "Nutzung",
       "tokens": "Token",
       "turns": "Züge",
-      "cost": "Kosten"
+      "cost": "Kosten",
+      "context": "Kontext",
+      "input": "Eingabe",
+      "output": "Ausgabe",
+      "cache": "Cache",
+      "thisChat": "Dieser Chat",
+      "project": "Projekt"
     }
   },
   "commandPalette": {

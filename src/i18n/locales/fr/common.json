@@ -127,7 +127,13 @@
       "title": "Utilisation",
       "tokens": "Jetons",
       "turns": "Tours",
-      "cost": "Coût"
+      "cost": "Coût",
+      "context": "Contexte",
+      "input": "Entrée",
+      "output": "Sortie",
+      "cache": "Cache",
+      "thisChat": "Cette conversation",
+      "project": "Projet"
     }
   },
   "commandPalette": {

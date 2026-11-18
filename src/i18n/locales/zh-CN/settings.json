@@ -602,6 +602,9 @@
     "pinnedNote": "已锁定的软件包不会自动升级。",
     "version": "版本",
     "versionHint": "点击版本号可手动输入，保存后会锁定该版本。",
-    "noVersion": "无版本"
+    "noVersion": "无版本",
+    "searching": "搜索中…",
+    "noMatches": "没有与“{{query}}”匹配的结果。",
+    "searchFailed": "搜索失败。"
   }
 }

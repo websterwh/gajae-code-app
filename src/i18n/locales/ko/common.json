@@ -127,7 +127,13 @@
       "title": "사용량",
       "tokens": "토큰",
       "turns": "턴",
-      "cost": "비용"
+      "cost": "비용",
+      "context": "맥락",
+      "input": "입력",
+      "output": "출력",
+      "cache": "캐시",
+      "thisChat": "이 채팅",
+      "project": "프로젝트"
     }
   },
   "commandPalette": {

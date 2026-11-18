@@ -602,6 +602,9 @@
     "pinnedNote": "고정된 패키지는 자동으로 업그레이드되지 않습니다.",
     "version": "버전",
     "versionHint": "버전을 클릭해 다른 버전을 입력할 수 있으며, 저장하면 고정됩니다.",
-    "noVersion": "버전 없음"
+    "noVersion": "버전 없음",
+    "searching": "검색 중…",
+    "noMatches": "'{{query}}'에 대한 결과가 없습니다.",
+    "searchFailed": "검색에 실패했습니다."
   }
 }
