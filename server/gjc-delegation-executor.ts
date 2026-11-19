@@ -78,7 +78,11 @@ type Job = {
 };
 
 export const GJC_APP_DELEGATION_TOOL_NAMES = ['task', 'subagent'] as const;
-export const GJC_DELEGATION_LIMITS = Object.freeze({ concurrency: 4, depth: 2, launches: 32, runtimeMs: 300_000 });
+// A delegated child runs real commands, and one bash call can legally use 300s
+// of the SDK default. A 5-minute child cap therefore cancelled healthy work at
+// the same moment a long command finished. The cap is a runaway guard, not a
+// work budget: 30 minutes still bounds a stuck child without pre-empting it.
+export const GJC_DELEGATION_LIMITS = Object.freeze({ concurrency: 4, depth: 2, launches: 32, runtimeMs: 1_800_000 });
 
 /**
  * The public settlement snapshot: exactly the fields `#snapshot` exposes minus
@@ -178,7 +182,7 @@ export class GjcDelegationExecutor {
     const tools: CustomTool[] = [];
     if (requested.has('task')) tools.push({
       name: 'task', label: 'Task', concurrency: 'exclusive', parameters: taskSchema,
-      description: 'Start app-owned delegated tasks. Children use this session’s exact model, effort, credentials, tool policy and app browser. Supply complete assignments/context. Returns child ids; use subagent await to collect results. At most 4 active children across the tree, 2 levels, 32 launches per turn, 5 minutes per child. Children are cancelled when their owner turn ends. No model overrides, worktree creation, detached work beyond the turn, or implicit context fork.',
+      description: 'Start app-owned delegated tasks. Children use this session’s exact model, effort, credentials, tool policy and app browser. Supply complete assignments/context. Returns child ids; use subagent await to collect results. At most 4 active children across the tree, 2 levels, 32 launches per turn, 30 minutes per child. Children are cancelled when their owner turn ends. No model overrides, worktree creation, detached work beyond the turn, or implicit context fork.',
       execute: async (callId, raw, _update, _context, signal) => {
         const params = taskSchema.parse(raw);
         this.#checkOwner(owner, signal);

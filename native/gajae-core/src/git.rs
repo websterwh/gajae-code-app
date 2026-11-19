@@ -56,6 +56,7 @@ enum GitError {
     DirtyWorktree,
     UnsupportedEncoding,
     OutputTooLarge,
+    RefreshConflict,
     GitFailed,
 }
 
@@ -71,6 +72,7 @@ impl GitError {
             Self::DirtyWorktree => "dirty_worktree",
             Self::UnsupportedEncoding => "unsupported_encoding",
             Self::OutputTooLarge => "output_too_large",
+            Self::RefreshConflict => "refresh_conflict",
             Self::GitFailed => "git_failed",
         }
     }
@@ -173,6 +175,7 @@ fn write_json<W: Write>(output: &mut W, value: &Value) -> bool {
 fn dispatch(workdir: &Path, request: &Request, stream: &mut Vec<Value>) -> Result<Value, GitError> {
     match request.method.as_str() {
         "worktree.create" => create(workdir, &request.params),
+        "worktree.refresh" => refresh(workdir, &request.params),
         "worktree.list" => list(workdir, &request.id, &request.params, stream),
         "status" => status(workdir, &request.id, &request.params, stream),
         "diff" => diff(workdir, &request.id, &request.params, stream),
@@ -259,6 +262,56 @@ fn create(workdir: &Path, params: &Value) -> Result<Value, GitError> {
         .find(|item| item.path == path)
         .ok_or(GitError::GitFailed)?;
     Ok(worktree_result(true, &job_id, &branch, &item))
+}
+
+/// Moves a job worktree onto the repository's current HEAD so a resumed job
+/// starts from the tree it would have started from today.
+///
+/// The job keeps its own commits: they are rebased onto the new base. A dirty
+/// worktree or a rebase conflict is refused, and the abort returns the checkout
+/// to exactly where it was, so a failed refresh never half-applies. The caller
+/// must record the returned `baseCommit` against the job; the job diff measures
+/// from that commit, and a moved tree with an unmoved base would report
+/// upstream work as the job's own.
+fn refresh(workdir: &Path, params: &Value) -> Result<Value, GitError> {
+    let (job_id, branch, requested) = fields(params, false)?;
+    let path = registered(workdir, &job_id, &branch, &requested)?;
+    if !git_bytes(
+        &path,
+        ["status", "--porcelain=v1", "-z", "--untracked-files=all"],
+    )?
+    .is_empty()
+    {
+        return Err(GitError::DirtyWorktree);
+    }
+    let base = git_text(workdir, ["rev-parse", "HEAD^{commit}"])?;
+    let head = git_text(&path, ["rev-parse", "HEAD^{commit}"])?;
+    // The branch already contains the current base: nothing to replay.
+    if git_status(&path, ["merge-base", "--is-ancestor", &base, &head]) {
+        return Ok(json!({"refreshed":false,"head":head,"baseCommit":base}));
+    }
+    // This core runs git with the global config excluded (git_environment), so
+    // a rebase has no committer identity to fall back on. Supplying one keeps
+    // each commit's author and makes the result independent of a machine-wide
+    // gitconfig this process deliberately cannot read.
+    if !git_status(
+        &path,
+        [
+            "-c",
+            "user.name=Gajae Code",
+            "-c",
+            "user.email=gajae-code@localhost",
+            "rebase",
+            &base,
+        ],
+    ) {
+        // A conflict must not leave a half-rebased checkout behind. The abort
+        // is best-effort; the caller needs the conflict, not the abort result.
+        let _ = git_status(&path, ["rebase", "--abort"]);
+        return Err(GitError::RefreshConflict);
+    }
+    let head = git_text(&path, ["rev-parse", "HEAD^{commit}"])?;
+    Ok(json!({"refreshed":true,"head":head,"baseCommit":base}))
 }
 
 fn list(
@@ -1137,6 +1190,61 @@ mod tests {
         );
         assert_eq!(std::fs::read_to_string(&outside).unwrap(), "preserve me\n");
         assert!(matches!(result, Err(GitError::InvalidRequest)));
+    }
+
+    #[test]
+    fn refresh_replays_job_commits_onto_the_current_base() {
+        let repo = TestRepo::new();
+        let path = repo.path.join(".gjc-worktrees/job-1");
+        let params = json!({"jobId":"job-1", "branch":"job/job-1", "path":path});
+        create(&repo.path, &params).unwrap();
+        commit_in(&path, "job.txt", "job work");
+        commit_in(&repo.path, "main.txt", "upstream work");
+
+        let refreshed = refresh(&repo.path, &params).unwrap();
+        assert_eq!(refreshed["refreshed"], true);
+        let base = git_text(&repo.path, ["rev-parse", "HEAD"]).unwrap();
+        assert_eq!(refreshed["baseCommit"], base);
+        assert_eq!(git_text(&path, ["rev-parse", "HEAD^"]).unwrap(), base);
+        assert_eq!(
+            std::fs::read_to_string(path.join("job.txt")).unwrap(),
+            "job work\n"
+        );
+        assert!(path.join("main.txt").exists());
+
+        // The branch now contains the base: a second refresh has nothing to do.
+        let again = refresh(&repo.path, &params).unwrap();
+        assert_eq!(again["refreshed"], false);
+    }
+
+    #[test]
+    fn refresh_refuses_a_dirty_tree_and_aborts_a_conflicted_rebase() {
+        let repo = TestRepo::new();
+        let path = repo.path.join(".gjc-worktrees/job-1");
+        let params = json!({"jobId":"job-1", "branch":"job/job-1", "path":path});
+        create(&repo.path, &params).unwrap();
+        std::fs::write(path.join("tracked.txt"), "dirty\n").unwrap();
+        assert!(matches!(
+            refresh(&repo.path, &params),
+            Err(GitError::DirtyWorktree)
+        ));
+        std::fs::write(path.join("tracked.txt"), "before\n").unwrap();
+
+        // Both sides rewrite the same line, so the replay cannot apply.
+        commit_in(&path, "tracked.txt", "job edit");
+        commit_in(&repo.path, "tracked.txt", "upstream edit");
+        let before = git_text(&path, ["rev-parse", "HEAD"]).unwrap();
+        assert!(matches!(
+            refresh(&repo.path, &params),
+            Err(GitError::RefreshConflict)
+        ));
+        assert_eq!(git_text(&path, ["rev-parse", "HEAD"]).unwrap(), before);
+        // The abort restored a clean checkout with no rebase left in progress.
+        assert!(
+            git_bytes(&path, ["status", "--porcelain=v1"])
+                .unwrap()
+                .is_empty()
+        );
     }
 
     fn branch_exists(repo: &TestRepo, branch: &str) -> bool {

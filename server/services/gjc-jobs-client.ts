@@ -45,6 +45,8 @@ export class GjcJobsClient extends GjcNativeClient {
   }
   reserve(params: Record<string, unknown>): Promise<unknown> { return this.request('capacity.reserve', params); }
   prepare(params: Record<string, unknown>): Promise<unknown> { return this.request('job.prepare', params); }
+  /** Records the base a refreshed worktree starts from, so diffs keep measuring the job's own work. */
+  setBase(params: Record<string, unknown>): Promise<unknown> { return this.request('job.setBase', params); }
   admit(params: Record<string, unknown>): Promise<unknown> { return this.request('job.admit', params); }
   reserveStart(params: Record<string, unknown>): Promise<unknown> { return this.request('job.reserveStart', params); }
   turnAdmit(params: Record<string, unknown>): Promise<unknown> { return this.request('job.turnAdmit', params); }

@@ -399,6 +399,8 @@ export class GjcGitClient extends GjcNativeClient {
   constructor(private readonly gitOptions: GjcGitClientOptions) { super('git', gitOptions, ['git', '--workdir', gitOptions.workdir]); }
   override start(): Promise<void> { return super.start(); }
   create(params: Record<string, unknown>): Promise<unknown> { return this.request('worktree.create', params); }
+  /** Rebases the job branch onto the repository's current HEAD; may refuse a dirty or conflicting tree. */
+  refresh(params: Record<string, unknown>): Promise<unknown> { return this.request('worktree.refresh', params); }
   list(params: Record<string, unknown> = {}): Promise<unknown> { return this.request('worktree.list', params); }
   status(params: Record<string, unknown> = {}): Promise<unknown> { return this.request('status', params); }
   diff(params: Record<string, unknown> = {}): Promise<unknown> { return this.request('diff', params); }

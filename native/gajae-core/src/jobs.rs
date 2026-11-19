@@ -732,6 +732,43 @@ impl PersistentAuthority {
         tx.commit().map_err(|_| AuthorityError::Storage)?;
         Ok(result)
     }
+    /// Records the commit the job's tree actually starts from after a refresh.
+    /// Diffs and has-commits measure from this value, so a worktree that moved
+    /// without its base moving would report upstream work as the job's own.
+    /// Only a queued admission may move it: a running job's tree is in use.
+    fn set_base(
+        &mut self,
+        id: &str,
+        lease: &Lease,
+        base_commit: &str,
+    ) -> Result<JobSnapshot, AuthorityError> {
+        validate_id(id)?;
+        validate_id(base_commit)?;
+        let tx = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(|_| AuthorityError::Storage)?;
+        verify_lease(&tx, id, lease)?;
+        if state(&tx, id)? != JobState::Queued {
+            return Err(AuthorityError::InvalidTransition);
+        }
+        let worktree: Option<String> = tx
+            .query_row("SELECT worktree_id FROM jobs WHERE id=?1", [id], |r| {
+                r.get(0)
+            })
+            .map_err(|_| AuthorityError::Storage)?;
+        if worktree.is_none() {
+            return Err(AuthorityError::WorktreeConflict);
+        }
+        tx.execute(
+            "UPDATE jobs SET base_commit=?2 WHERE id=?1",
+            params![id, base_commit],
+        )
+        .map_err(|_| AuthorityError::Storage)?;
+        let result = snapshot_tx(&tx, id)?;
+        tx.commit().map_err(|_| AuthorityError::Storage)?;
+        Ok(result)
+    }
     fn prepare(
         &mut self,
         id: &str,
@@ -1848,6 +1885,16 @@ fn dispatch(
                     .ok_or(AuthorityError::InvalidIdentifier)?,
                 request
                     .repository_root
+                    .as_deref()
+                    .ok_or(AuthorityError::InvalidIdentifier)?,
+            )?,
+        ),
+        "job.setBase" => serde_json::to_value(
+            authority.set_base(
+                id()?,
+                lease()?,
+                request
+                    .base_commit
                     .as_deref()
                     .ok_or(AuthorityError::InvalidIdentifier)?,
             )?,
@@ -3107,6 +3154,41 @@ mod tests {
                 .unwrap(),
             2
         );
+        std::fs::remove_dir_all(d).unwrap();
+    }
+    #[test]
+    fn set_base_moves_the_recorded_base_only_for_the_live_queued_lease() {
+        let (d, p) = db();
+        let mut a = PersistentAuthority::open(&p).unwrap();
+        a.reserve("j", "p", "o", 64).unwrap();
+        let lease = a.snapshot("j").unwrap().lease.unwrap();
+        a.prepare("j", &lease, "/tmp/tree", "job/j", "old-base", "/tmp")
+            .unwrap();
+        a.reconcile().unwrap();
+        let readmitted = a.readmit("j", "o", "run-1", "app", 64).unwrap();
+        let live = readmitted.lease.unwrap();
+        let stale = Lease {
+            owner: live.owner.clone(),
+            generation: live.generation - 1,
+        };
+        assert!(matches!(
+            a.set_base("j", &stale, "stale-base"),
+            Err(AuthorityError::StaleLease)
+        ));
+        let moved = a.set_base("j", &live, "new-base").unwrap();
+        assert_eq!(moved.base_commit.as_deref(), Some("new-base"));
+        assert_eq!(moved.state, JobState::Queued);
+        assert_eq!(
+            a.snapshot("j").unwrap().base_commit.as_deref(),
+            Some("new-base")
+        );
+        // The job may only move its base while queued; the run transition ends it.
+        a.mark_dispatching("j", &live, "run-1").unwrap();
+        a.transition("j", &live, JobState::Running).unwrap();
+        assert!(matches!(
+            a.set_base("j", &live, "late-base"),
+            Err(AuthorityError::InvalidTransition)
+        ));
         std::fs::remove_dir_all(d).unwrap();
     }
     #[test]

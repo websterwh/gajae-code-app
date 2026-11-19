@@ -6,13 +6,14 @@ import type { GjcWorkerOutcome } from '../gjc-worker-client.js';
 import { DesktopRestartAuthority } from './desktop-restart-authority.js';
 import { createGjcJobOrchestratorDesktopRestartReader, GjcCapacityExhaustedError, JobOrchestrator, withOwnedJobDesktopContinuation, type JobAuthority, type GitWorktrees, type JobSupervisor } from './gjc-job-orchestrator.js';
 
-type Snap = { jobId: string; state: string; lease: { owner: string; generation: number }; worktreeId?: string; repositoryRoot?: string; branch?: string; currentRun?: { runId: string; appSessionId: string }; dispatchCheckpoint?: { runId: string }; lastSequence?: number };
+type Snap = { jobId: string; state: string; lease: { owner: string; generation: number }; worktreeId?: string; repositoryRoot?: string; branch?: string; baseCommit?: string; currentRun?: { runId: string; appSessionId: string }; dispatchCheckpoint?: { runId: string }; lastSequence?: number };
 class Jobs implements JobAuthority {
   calls: Array<[string, Record<string, unknown>]> = []; events: Array<{ eventId: string; sequence: number; payload: unknown }> = []; state: Snap = { jobId: '', state: 'reserved', lease: { owner: 'owner', generation: 1 }, lastSequence: 0 };
   private call(name: string, params: Record<string, unknown>): Promise<unknown> { this.calls.push([name, params]); return Promise.resolve(this.state); }
   private event(name: string, params: Record<string, unknown>): Promise<unknown> { this.calls.push([name, params]); const existing = this.events.find((event) => event.eventId === params.eventId); if (existing) return Promise.resolve(existing); const event = { eventId: String(params.eventId), sequence: (this.state.lastSequence ?? 0) + 1, payload: params.payload }; this.events.push(event); this.state = { ...this.state, lastSequence: event.sequence }; return Promise.resolve(event); }
   reserve(p: Record<string, unknown>) { this.state = { ...this.state, jobId: String(p.jobId), state: 'reserved', lease: { owner: String(p.owner), generation: 1 } }; return this.call('reserve', p); }
   prepare(p: Record<string, unknown>) { this.state = { ...this.state, worktreeId: String(p.worktreeId), repositoryRoot: String(p.repositoryRoot), branch: String(p.branch) }; return this.call('prepare', p); }
+  setBase(p: Record<string, unknown>) { this.state = { ...this.state, baseCommit: String(p.baseCommit) }; return this.call('setBase', p); }
   admit(p: Record<string, unknown>) { this.state = { ...this.state, state: 'queued', currentRun: { runId: String(p.runId), appSessionId: String(p.appSessionId) } }; return this.call('admit', p); }
   readmit(p: Record<string, unknown>) { this.state = { ...this.state, state: 'queued', lease: { owner: String(p.owner), generation: 2 }, currentRun: { runId: String(p.runId), appSessionId: String(p.appSessionId) } }; return this.call('readmit', p); }
   transition(p: Record<string, unknown>) { if (['succeeded', 'failed', 'aborted', 'interrupted'].includes(String(p.state))) return Promise.reject(new Error('invalid_transition')); this.state = { ...this.state, state: String(p.state) }; return this.call('transition', p); }
@@ -49,7 +50,7 @@ class Jobs implements JobAuthority {
   bindingRelease(p: Record<string, unknown>) { return this.call('bindingRelease', p); }
   interruptForShutdown() { this.state = { ...this.state, state: 'interrupted' }; return this.call('interruptForShutdown', {}); }
 }
-class Git implements GitWorktrees { calls: string[] = []; async create() { this.calls.push('create'); return { worktree: { worktreeId: '/project/.gjc-worktrees/job-abc', jobId: 'job-abc', path: '/project/.gjc-worktrees/job-abc', branch: 'job/job-abc', head: 'abc' } }; } async list() { this.calls.push('list'); return { items: [{ worktreeId: '/project/.gjc-worktrees/job-abc', path: '/project/.gjc-worktrees/job-abc' }] }; } async status() { this.calls.push('status'); return { branch: 'job/abc' }; } }
+class Git implements GitWorktrees { calls: string[] = []; async create() { this.calls.push('create'); return { worktree: { worktreeId: '/project/.gjc-worktrees/job-abc', jobId: 'job-abc', path: '/project/.gjc-worktrees/job-abc', branch: 'job/job-abc', head: 'abc' } }; } async list() { this.calls.push('list'); return { items: [{ worktreeId: '/project/.gjc-worktrees/job-abc', path: '/project/.gjc-worktrees/job-abc' }] }; } async status() { this.calls.push('status'); return { branch: 'job/abc' }; } async refresh() { this.calls.push('refresh'); return { refreshed: true, head: 'def', baseCommit: 'def' }; } }
 class Supervisor implements JobSupervisor { input?: Parameters<JobSupervisor['spawnRun']>[0]; aborted?: string; spawnRun(input: Parameters<JobSupervisor['spawnRun']>[0]) { this.input = input; return { started: Promise.resolve(), completion: new Promise<void>(() => {}), abortHandle: input.runId }; } async abort(id: string) { this.aborted = id; return 'aborted' as const; } }
 const options = { appSessionId: 'app-1', writer: { send() {} } };
 const stopCompletionTimeoutMs = 5;
@@ -291,7 +292,7 @@ test('resume derives the repository root from its stored worktree and never crea
   const git = new Git(); const supervisor = new Supervisor(); let requestedRoot: string | undefined;
   const orchestrator = new JobOrchestrator({ jobs, gitForProject: (root) => (requestedRoot = root, git), supervisor, owner: 'owner', createId: () => 'next' });
   await orchestrator.resume('job-abc', 'app-1', 'resume', options);
-  assert.equal(requestedRoot, '/project'); assert.deepEqual(git.calls, ['list', 'status']); assert.equal(supervisor.input?.options?.sessionId, 'provider-1'); assert.equal(supervisor.input?.options?.cwd, '/project/.gjc-worktrees/job-abc');
+  assert.equal(requestedRoot, '/project'); assert.deepEqual(git.calls, ['list', 'status', 'refresh']); assert.equal(jobs.state.baseCommit, 'def'); assert.equal(supervisor.input?.options?.sessionId, 'provider-1'); assert.equal(supervisor.input?.options?.cwd, '/project/.gjc-worktrees/job-abc');
 });
 
 test('turn start adopts the caller provider session when the job never bound one', async () => {

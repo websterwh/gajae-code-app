@@ -186,7 +186,7 @@ builtins from `toolNames` (gjc-bun-sdk-adapter.ts:1003-1015) and installs
   disabled; tool allowlist narrowed by role; no IRC/yield for children
   (explicit in the child system prompt).
 - Hard limits (`GJC_DELEGATION_LIMITS`): 4 concurrent, depth 2, 32 launches per
-  turn, 5 min per child; children are cancelled when the owner turn ends;
+  turn, 30 min per child; children are cancelled when the owner turn ends;
   no detached work beyond the turn; no model overrides.
 - Identity is the **receipt**, persisted as custom entries
   (`customType: 'gajae-app.delegation.v1'`) in the *owner's* SDK transcript at

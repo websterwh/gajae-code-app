@@ -21,12 +21,12 @@ type JobSnapshot = { jobId: string; provider?: string; state: string; lease?: Le
 type Binding = { jobId: string; state: string; providerSessionId?: string | null };
 export type JobAuthority = {
   reserveStart(params: Record<string, unknown>): Promise<unknown>; turnAdmit(params: Record<string, unknown>): Promise<unknown>; prepare(params: Record<string, unknown>): Promise<unknown>; admit(params: Record<string, unknown>): Promise<unknown>; readmit(params: Record<string, unknown>): Promise<unknown>;
-  transition(params: Record<string, unknown>): Promise<unknown>; markDispatching(params: Record<string, unknown>): Promise<unknown>; runFinalize(params: Record<string, unknown>): Promise<unknown>; cancelAdmission(params: Record<string, unknown>): Promise<unknown>; appendEvent(params: Record<string, unknown>): Promise<unknown>; appendAdminEvent(params: Record<string, unknown>): Promise<unknown>; get(params: Record<string, unknown>): Promise<unknown>;
+  transition(params: Record<string, unknown>): Promise<unknown>; markDispatching(params: Record<string, unknown>): Promise<unknown>; runFinalize(params: Record<string, unknown>): Promise<unknown>; cancelAdmission(params: Record<string, unknown>): Promise<unknown>; appendEvent(params: Record<string, unknown>): Promise<unknown>; appendAdminEvent(params: Record<string, unknown>): Promise<unknown>; get(params: Record<string, unknown>): Promise<unknown>; setBase(params: Record<string, unknown>): Promise<unknown>;
   list?(params?: Record<string, unknown>): Promise<unknown>; replayEvents(params: Record<string, unknown>): Promise<unknown>;
   bindingResolve(params: Record<string, unknown>): Promise<unknown>; bindingRelease(params: Record<string, unknown>): Promise<unknown>; interruptForShutdown(): Promise<unknown>; reconcile(params?: Record<string, unknown>): Promise<unknown>; bindProviderSession(params: Record<string, unknown>): Promise<unknown>;
   archive?(params: { jobId: string }): Promise<unknown>; unarchive?(params: { jobId: string }): Promise<unknown>;
 };
-export type GitWorktrees = { create(params: Record<string, unknown>): Promise<unknown>; list(params?: Record<string, unknown>): Promise<unknown>; status(params?: Record<string, unknown>): Promise<unknown>; reap?(): Promise<unknown> };
+export type GitWorktrees = { create(params: Record<string, unknown>): Promise<unknown>; list(params?: Record<string, unknown>): Promise<unknown>; status(params?: Record<string, unknown>): Promise<unknown>; refresh?(params: Record<string, unknown>): Promise<unknown>; reap?(): Promise<unknown> };
 export type JobSupervisor = { spawnRun(input: GjcWorkerSpawnRun): GjcWorkerRun; abort(alias: string): Promise<GjcWorkerAbortOutcome>; terminate?(alias: string): Promise<GjcWorkerReapOutcome> };
 export type JobOrchestratorOptions = GjcWorkerOptions & {
   writer: GjcWorkerWriter; jobId?: string; cap?: number; dispatched?: boolean;
@@ -66,6 +66,7 @@ function binding(value: unknown): Binding { if (!safe(value) || typeof value.job
 function lease(value: JobSnapshot): Lease { if (!value.lease || typeof value.lease.owner !== 'string' || !Number.isSafeInteger(value.lease.generation)) throw new Error('Job has no active lease.'); return value.lease; }
 function worktree(value: unknown): { worktreeId: string; path: string; head?: string } { const item = safe(value) && safe(value.worktree) ? value.worktree : undefined; if (!item || typeof item.worktreeId !== 'string' || typeof item.path !== 'string') throw new Error('Invalid git worktree.create response.'); return item as { worktreeId: string; path: string; head?: string }; }
 function worktreePath(value: unknown, id: string): string | undefined { const items = Array.isArray(value) ? value : safe(value) && Array.isArray(value.items) ? value.items : []; const item = items.find((candidate) => safe(candidate) && candidate.worktreeId === id && typeof candidate.path === 'string'); return safe(item) && typeof item.path === 'string' ? item.path : undefined; }
+function refreshBase(value: unknown): string | undefined { return safe(value) && typeof value.baseCommit === 'string' && value.baseCommit ? value.baseCommit : undefined; }
 function sameFence(current: JobSnapshot, runId: string, expected: Lease): boolean { return current.currentRun?.runId === runId && current.lease?.owner === expected.owner && current.lease?.generation === expected.generation; }
 type PersistenceScope = { pending: Set<Promise<void>>; ownsWork: () => boolean; failure?: unknown };
 function failureError(error: unknown): Error { return error instanceof Error ? new Error(error.message) : new Error('Worker failed.'); }
@@ -499,9 +500,20 @@ export class JobOrchestrator {
       const git = this.git(current.repositoryRoot); const cwd = worktreePath(await git.list({}), current.worktreeId);
       if (!cwd) throw new Error('Stored worktree is no longer available.');
       await git.status({ jobId, branch: current.branch, path: cwd });
+      // A resumed job must not keep working on the tree it was cut from. Move
+      // the branch onto today's base before taking the lease. A dirty or
+      // conflicting tree keeps its old base rather than failing the resume.
+      let baseCommit = current.baseCommit ?? null;
+      try {
+        baseCommit = refreshBase(await git.refresh?.({ jobId, branch: current.branch, path: cwd })) ?? baseCommit;
+      } catch (error) {
+        const code = (error as { code?: string }).code;
+        if (code !== 'refresh_conflict' && code !== 'dirty_worktree') throw error;
+      }
       const runId = `run-${this.createId()}`; let admitted: JobSnapshot;
       try {
         admitted = snapshot(await this.deps.jobs.readmit({ jobId, appSessionId, owner: this.owner, cap: options.cap ?? 4, runId }));
+        if (baseCommit && baseCommit !== current.baseCommit) admitted = snapshot(await this.deps.jobs.setBase({ jobId, lease: lease(admitted), baseCommit }));
       } catch (error) {
         if (error instanceof GjcJobsClientError && error.code === 'capacity_exhausted') throw new GjcCapacityExhaustedError(jobId);
         throw error;
