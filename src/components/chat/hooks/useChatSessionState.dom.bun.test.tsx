@@ -8,7 +8,7 @@ import { createElement } from 'react';
 import { useSessionStore, type FetchMoreResult, type NormalizedMessage, type SessionSlot, type SessionStore } from '../../../stores/useSessionStore';
 import type { Project, ProjectSession } from '../../../types/app';
 
-import { useChatSessionState } from './useChatSessionState';
+import { LOAD_ALL_LIMIT, useChatSessionState } from './useChatSessionState';
 
 const originalFetch = globalThis.fetch;
 afterEach(() => { cleanup(); globalThis.fetch = originalFetch; });
@@ -225,7 +225,7 @@ async function setup(options: { pane?: boolean } = {}) {
     getMessages: () => rows,
     has: () => true,
     isStale: () => false,
-    fetchFromServer: (_id: string, options: { limit: number | null }) => options.limit === null
+    fetchFromServer: (_id: string, options: { limit: number | null }) => options.limit === null || options.limit === LOAD_ALL_LIMIT
       ? new Promise(resolve => { allResolve = resolve; })
       : Promise.resolve({ serverMessages: rows, hasMore: true, total: 40 }),
     fetchMore: () => { pageRequests += 1; return new Promise(resolve => { pageResolve = resolve; }); },

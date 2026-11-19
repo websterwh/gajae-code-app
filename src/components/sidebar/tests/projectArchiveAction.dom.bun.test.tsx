@@ -38,7 +38,7 @@ function installFetch(): string[] {
   globalThis.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
     const url = typeof input === 'string' ? input : input.toString();
     requests.push(`${init.method ?? 'GET'} ${url}`);
-    if (url === '/api/projects/archived') return Response.json({ success: true, data: { projects: [] } });
+    if (url.startsWith('/api/projects/archived')) return Response.json({ success: true, data: { projects: [] } });
     if (url === '/api/providers/sessions/archived') return Response.json({ success: true, data: { sessions: [] } });
     return Response.json({ success: true, data: { projectId: 'alpha', isArchived: true } });
   }) as typeof globalThis.fetch;
@@ -152,5 +152,5 @@ test('archiving a project posts the archive request and never a delete', async (
   assert.ok(requests.includes('POST /api/projects/alpha/archive'), requests.join('\n'));
   assert.deepEqual(requests.filter((request) => request.startsWith('DELETE')), []);
   // The archive screen has to show the project the moment it disappears here.
-  await waitFor(() => assert.ok(requests.includes('GET /api/projects/archived')));
+  await waitFor(() => assert.ok(requests.some((request) => request.startsWith('GET /api/projects/archived'))));
 });

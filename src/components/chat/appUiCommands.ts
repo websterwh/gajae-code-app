@@ -138,7 +138,7 @@ export const APP_UI_COMMANDS: readonly AppUiCommand[] = [
   },
   {
     name: '/retry',
-    description: 'Re-run the last turn here — after an error, or on the model you just switched to',
+    description: 'Rerun last turn',
     namespace: 'app',
     type: 'app',
     actionId: 'retry-last-turn',

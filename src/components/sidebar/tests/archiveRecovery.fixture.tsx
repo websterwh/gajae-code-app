@@ -21,11 +21,11 @@ window.fetch = async (input, init = {}) => {
   const method = init.method ?? 'GET';
   requests.push(`${method} ${url}`);
 
-  if (window.archiveFixtureScenario === 'failure' && url.endsWith('/archived')) {
+  if (window.archiveFixtureScenario === 'failure' && url.includes('/archived')) {
     return new Response(null, { status: 500 });
   }
 
-  if (url === '/api/projects/archived') {
+  if (url.startsWith('/api/projects/archived')) {
     return Response.json({
       success: true,
       data: {

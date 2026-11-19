@@ -84,7 +84,9 @@ export const api = {
       body: JSON.stringify(input),
     }),
   },
-  archivedProjects: () => authenticatedFetch('/api/projects/archived'),
+  // Archiving a conversation refreshes this list. The full forward scan is
+  // skipped here too: opening the archive must not re-read every transcript.
+  archivedProjects: () => authenticatedFetch('/api/projects/archived?skipSynchronization=1'),
   // Read-only working-tree summary for the Workspace status tab: branch plus
   // the files git reports as changed. Never writes to the repository.
   gitStatus: (projectId: string, sessionId?: string) =>

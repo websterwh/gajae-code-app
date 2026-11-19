@@ -13,6 +13,10 @@ import { normalizedToChatMessages } from './useChatMessages';
 import { useChatFollowScroll } from './useChatFollowScroll';
 
 const PAGE_SIZE = 20;
+// The server refuses an unbounded history request once a transcript passes its
+// record cap, so the "get all messages" paths ask for one bounded page. Older
+// rows stay reachable through the paged scroll path.
+export const LOAD_ALL_LIMIT = 1000;
 const FIRST_VISIBLE_COUNT = 100;
 const NO_MESSAGES: NormalizedMessage[] = [];
 
@@ -482,15 +486,15 @@ export function useChatSessionState({
     const navigate = async () => {
       if (!loadedAllRef.current && selectedSession && selectedProject) {
         try {
-          const window = await sessionStore.fetchFromServer(selectedSession.id, { limit: null, offset: 0, includeImages: showImagePreviews });
+          const window = await sessionStore.fetchFromServer(selectedSession.id, { limit: LOAD_ALL_LIMIT, offset: 0, includeImages: showImagePreviews });
           if (requestViewRef.current !== requestView) return;
           if (window) {
-            setHasMoreMessages(false);
+            setHasMoreMessages(Boolean(window.hasMore));
             setTotalMessages(window.total);
             ignoredOffsetRef.current = window.total;
             setVisibleMessageCount(Infinity);
-            setAllMessagesLoaded(true);
-            loadedAllRef.current = true;
+            setAllMessagesLoaded(!window.hasMore);
+            loadedAllRef.current = !window.hasMore;
             await new Promise(resolve => setTimeout(resolve, 300));
           }
         } catch {
@@ -582,21 +586,21 @@ export function useChatSessionState({
     setIsLoadingAllMessages(true);
     setFollowing(false);
     try {
-      const window = await sessionStore.fetchFromServer(requestId, { limit: null, offset: 0, includeImages: showImagePreviews });
+      const window = await sessionStore.fetchFromServer(requestId, { limit: LOAD_ALL_LIMIT, offset: 0, includeImages: showImagePreviews });
       if (requestViewRef.current !== requestView) return;
       if (!window) {
-        // Too large to serve at once, or otherwise refused: say so and offer
-        // the paged path instead of quietly dropping the request.
+        // Refused or unreachable: say so and offer the paged path instead of
+        // quietly dropping the request.
         loadedAllRef.current = false;
         historyLoadErrorRef.current = true;
         setHistoryLoadError(true);
         return;
       }
-      setHasMoreMessages(false);
+      setHasMoreMessages(Boolean(window.hasMore));
       setTotalMessages(window.total);
       ignoredOffsetRef.current = window.total;
       setVisibleMessageCount(Infinity);
-      setAllMessagesLoaded(true);
+      setAllMessagesLoaded(!window.hasMore);
       setLoadAllJustFinished(true);
       clearTimer(finishedTimerRef);
       finishedTimerRef.current = setTimeout(() => {

@@ -79,10 +79,11 @@ router.get('/', asyncHandler(async (request, response) => {
 }));
 
 router.get('/archived', asyncHandler(async (request, response) => {
+  const skipSynchronization = ['skipSynchronization', 'skipSync'].some((key) => queryText(request.query[key]).trim() === '1');
   const sessionsLimit = queryNumber(request.query.sessionsLimit) ?? undefined;
   const sessionsOffset = queryNumber(request.query.sessionsOffset) ?? undefined;
   response.json(createApiSuccessResponse({
-    projects: await getArchivedProjectsWithSessions({ sessionsLimit, sessionsOffset }),
+    projects: await getArchivedProjectsWithSessions({ skipSynchronization, sessionsLimit, sessionsOffset }),
   }));
 }));
 
