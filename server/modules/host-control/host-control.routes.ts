@@ -94,6 +94,9 @@ export function createHostControlRouter({
     // caller learns which machine this is without triggering another one - and
     // only while detection is switched on, since the answer names the host.
     const saved = allowsHostCapability(settings, 'discovery') ? profiles.read() : null;
+    // A profile saved before discovery knew about platforms has no list. Status
+    // must still answer for it: a stored record is not a reason to fail the read.
+    const platform = saved?.profile.platforms?.[0];
     return {
       available,
       socketPath: dockerSocketPath(env),
@@ -107,9 +110,7 @@ export function createHostControlRouter({
           kernelVersion: saved.profile.runtime.kernelVersion,
           // The appliance or distro behind that OS string, when one is known:
           // "Debian GNU/Linux 12" alone would hide that this is a Proxmox guest.
-          platform: saved.profile.platforms[0]
-            ? { id: saved.profile.platforms[0].id, label: saved.profile.platforms[0].label }
-            : null,
+          platform: platform ? { id: platform.id, label: platform.label } : null,
           detectedAt: saved.detectedAt,
         }
         : null,

@@ -552,6 +552,37 @@ test('a daemon that cannot be reached does not fail the save that switched reads
   }
 });
 
+test('a profile saved before platforms existed still answers status', async () => {
+  const calls: string[] = [];
+  // An older detection stored the runtime and nothing else; the stored record
+  // predates `platforms`, so status must not read through it.
+  const legacy = {
+    detectedAt: 5,
+    profile: {
+      runtime: {
+        serverVersion: '29.9.3', operatingSystem: 'Devuan GNU/Linux 6', kernelVersion: '6.18.60-mos',
+        driver: 'overlay2', swarm: 'inactive', hostName: 'Webby',
+      },
+      platforms: undefined,
+    },
+  } as unknown as SavedHostProfile;
+  const server = await serve(createHostControlRouter({
+    client: fakeClient(calls),
+    store: fakeStore({ enabled: true, discovery: true }),
+    profiles: { read: () => legacy, write: () => legacy },
+    env: ENABLED_ENV,
+  }));
+  try {
+    const response = await server.request('/status');
+    assert.equal(response.status, 200);
+    assert.deepEqual((await response.json() as { host: unknown }).host, {
+      os: 'Devuan GNU/Linux 6', kernelVersion: '6.18.60-mos', platform: null, detectedAt: 5,
+    });
+  } finally {
+    await server.close();
+  }
+});
+
 test('discovery is its own switch and reports nothing about the host while off', async () => {
   const calls: string[] = [];
   const store = fakeStore({ enabled: true, containers: true, targets: ['mos-*'] });
