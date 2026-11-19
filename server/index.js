@@ -44,6 +44,13 @@ import { GjcJobProjectionService } from './modules/websocket/services/gjc-job-pr
 import { chatRunRegistry } from './modules/websocket/index.js';
 import { drainWebSocketClients } from './modules/websocket/services/websocket-drain.service.js';
 import { createGjcTerminalNotificationAdapter } from './modules/notifications/services/gjc-terminal-notification-adapter.service.js';
+import { startTelegramInbound } from './modules/notifications/telegram-inbound.js';
+import { daemonOwnsTelegram } from './modules/notifications/telegram-ownership.js';
+import { ensureSessionTelegramTopic } from './modules/notifications/telegram-session-topic.js';
+import { readTelegramDelivery, telegramAgentDir } from './modules/notifications/telegram-settings.js';
+import { telegramThreads } from './modules/notifications/telegram-threads.js';
+import { createTelegramTurnStream } from './modules/notifications/telegram-turn-stream.js';
+import { createHeadlessChatTurn } from './modules/websocket/services/chat-websocket.service.js';
 import { findAppRoot, getModuleDir } from './utils/runtime-paths.js';
 import {
     abortGjcRun,
@@ -118,7 +125,7 @@ import { forgetProjectExport, projectExportsFilePath, projectExportsFor, readPro
 import { restoreSavedGithubToken } from './modules/git/github-auth.service.js';
 import voiceRoutes from './voice-proxy.js';
 import { assetsRoutes } from './modules/assets/index.js';
-import { initializeDatabase, projectsDb, sessionsDb } from './modules/database/index.js';
+import { initializeDatabase, projectsDb, sessionsDb, userDb } from './modules/database/index.js';
 import {
     authenticateAutomation,
     authenticateAutomationDeviceRequest,
@@ -262,6 +269,24 @@ const authenticateGjcAccess = (request, response, next) => {
     });
 };
 
+const chatDependencies = {
+    spawnFns: {
+        gjc: gjcSpawn,
+    },
+    abortFns: {
+        gjc: abortGjcChatRun,
+    },
+    steerFns: {
+        gjc: steerGjcChatRun,
+    },
+    resolveToolApproval: resolveProviderToolApproval,
+    getPendingApprovalsForSession: getPendingProviderApprovalsForSession,
+    oauthSupervisor: getGjcWorkerSupervisor(),
+    goalSupervisor: getGjcWorkerSupervisor(),
+    gjcProjection: gjcJobProjection,
+    sessionWorktrees: { prepare: prepareSessionWorktreeRun, abort: abortSessionWorktreeRun, workerHandle: sessionWorktreeWorkerHandle, resolveWorkspace: resolveSessionWorkspacePath },
+};
+
 const { app, server, wss } = createGjcAppFactory({
     desktopRestartAdmission,
     desktopUpdateRelay: new DesktopUpdateRelay({ initialization: desktopNativeInit, restart: desktopRestartBackend }),
@@ -276,23 +301,7 @@ const { app, server, wss } = createGjcAppFactory({
     authenticateWebSocket,
     authenticateGjcRoute: authenticateGjcAccess,
     validateApiKey,
-    chat: {
-        spawnFns: {
-            gjc: gjcSpawn,
-        },
-        abortFns: {
-            gjc: abortGjcChatRun,
-        },
-        steerFns: {
-            gjc: steerGjcChatRun,
-        },
-        resolveToolApproval: resolveProviderToolApproval,
-        getPendingApprovalsForSession: getPendingProviderApprovalsForSession,
-        oauthSupervisor: getGjcWorkerSupervisor(),
-        goalSupervisor: getGjcWorkerSupervisor(),
-        gjcProjection: gjcJobProjection,
-        sessionWorktrees: { prepare: prepareSessionWorktreeRun, abort: abortSessionWorktreeRun, workerHandle: sessionWorktreeWorkerHandle, resolveWorkspace: resolveSessionWorkspacePath },
-    },
+    chat: chatDependencies,
     shell: {
         resolveProviderSessionId: (sessionId, provider) => {
             const dbSession = sessionsDb.getSessionById(sessionId);
@@ -306,6 +315,51 @@ const { app, server, wss } = createGjcAppFactory({
         extractUrlsFromText,
         shouldAutoOpenUrlFromOutput,
     },
+});
+
+const headlessChatTurn = createHeadlessChatTurn({ ...chatDependencies, desktopRestartAdmission });
+
+/**
+ * A Telegram reply is a user turn: steer the live run when there is one, and
+ * otherwise start a turn through the same chat pipeline a browser uses.
+ */
+async function deliverTelegramReply(sessionId, text) {
+    const run = chatRunRegistry.getRun(sessionId);
+    if (run && run.status === 'running') {
+        const destination = run.provider === 'gjc'
+            ? run.writer.getAbortHandle() ?? run.providerSessionId
+            : run.providerSessionId ?? run.writer.getAbortHandle();
+        if (destination && await steerGjcRun(destination, text))
+            return 'steered';
+        return 'refused';
+    }
+    const storedUser = userDb.getFirstUser();
+    const userId = run?.writer?.userId ?? (storedUser ? Number(storedUser.id) : null);
+    void headlessChatTurn(sessionId, text, userId).catch((error) => {
+        console.error('[Telegram] Could not start a turn from a reply:', error?.message || error);
+    });
+    return 'started';
+}
+
+// Replies arrive with no browser attached; the poller stays inert until the
+// Notifications card enables Telegram, and backs off when the CLI daemon owns
+// the bot's single poller slot.
+const telegramInbound = startTelegramInbound({
+    readSettings: () => (daemonOwnsTelegram() ? null : readTelegramDelivery()),
+    sessionForTopic: (topicId) => telegramThreads().sessionForTopic(topicId),
+    deliver: deliverTelegramReply,
+    offsetPath: path.join(telegramAgentDir(), 'notifications', 'telegram-inbound.json'),
+    logger: (message) => console.warn('[Telegram]', message),
+});
+
+// The topic is a live transcript of the turn - reasoning, tool calls and their
+// results, and the answer - which is what the CLI's threaded daemon renders.
+const telegramTurnStream = createTelegramTurnStream({
+    ensureTopic: (sessionId, provider) => ensureSessionTelegramTopic({ sessionId, provider }),
+    logger: (message) => console.warn('[Telegram]', message),
+});
+const unsubscribeTelegramTurnStream = chatRunRegistry.onRunEvent(({ appSessionId, provider, event }) => {
+    telegramTurnStream.observe({ sessionId: appSessionId, provider, event });
 });
 
 // Public health check endpoint (no authentication required)
@@ -1748,6 +1802,8 @@ async function startServer() {
         // Normal quit is not a restart-idle observation. Once this path
         // starts, no reversible preparation may certify an idle runtime.
         markInternalActivityUncertain('runtime_shutdown_started');
+        telegramInbound.stop();
+        unsubscribeTelegramTurnStream();
         await startupFlight.catch(() => { });
         // Persist interruption before any slower observer cleanup. Otherwise
         // a not-yet-started worker can cancel admission back to ready while

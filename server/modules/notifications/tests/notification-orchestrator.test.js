@@ -83,6 +83,69 @@ test('an enabled Telegram block delivers app-session notifications to the Bot AP
   }
 });
 
+test('a chat delivers the notification into the session topic', async (t) => {
+  const previousAgentDir = process.env.GJC_WORKER_AGENT_DIR;
+  const directory = await mkdtemp(path.join(tmpdir(), 'notification-telegram-topic-'));
+  const agentDir = path.join(directory, 'agent');
+  await mkdir(agentDir, { recursive: true });
+  await writeFile(path.join(agentDir, 'config.yml'), [
+    'notifications:',
+    '  enabled: true',
+    '  telegram:',
+    '    enabled: true',
+    "    botToken: '123:abc'",
+    "    chatId: '-1001234567890'",
+    '',
+  ].join('\n'));
+  process.env.GJC_WORKER_AGENT_DIR = agentDir;
+
+  const calls = [];
+  t.mock.method(globalThis, 'fetch', async (url, init) => {
+    const method = String(url).split('/').pop();
+    calls.push({ method, body: JSON.parse(String(init?.body)) });
+    const result = method === 'createForumTopic'
+      ? { message_thread_id: 77 }
+      : method === 'sendMessage'
+        ? { message_id: 5 }
+        : {};
+    return new Response(JSON.stringify({ ok: true, result }), { status: 200 });
+  });
+
+  try {
+    await withIsolatedDatabase(async () => {
+      const user = userDb.createUser('telegram-topic-user', 'hash');
+      const userId = Number(user.id);
+      notificationPreferencesDb.updatePreferences(userId, {
+        channels: { desktop: false, webPush: false },
+        events: { actionRequired: true, stop: true, error: true },
+      });
+      sessionsDb.createAppSession('app-session-topic', 'gjc', '/workspace/demo');
+
+      await notifyRunStopped({
+        userId,
+        provider: 'gjc',
+        sessionId: 'app-session-topic',
+        stopReason: 'completed',
+      });
+
+      assert.deepEqual(calls.map((call) => call.method), [
+        'createForumTopic',
+        'sendMessage',
+        'pinChatMessage',
+        'sendMessage',
+      ]);
+      const notification = calls[calls.length - 1];
+      assert.equal(notification.body.message_thread_id, 77);
+      assert.equal(notification.body.text, 'GJC: completed');
+      assert.equal(notification.body.parse_mode, 'HTML');
+    });
+  } finally {
+    if (previousAgentDir === undefined) delete process.env.GJC_WORKER_AGENT_DIR;
+    else process.env.GJC_WORKER_AGENT_DIR = previousAgentDir;
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test('desktop payload uses the app session id when notified with a provider session id', async () => {
   const sentMessages = [];
   const fakeSocket = {

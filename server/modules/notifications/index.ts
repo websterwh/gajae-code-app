@@ -28,3 +28,4 @@ export {
   sendToDesktop as sendDesktopNotification,
   unregisterClient as unregisterDesktopNotificationClient,
 };
+export { daemonOwnsTelegram, resolveTelegramOwner, workerNotificationsEnv } from './telegram-ownership.js';

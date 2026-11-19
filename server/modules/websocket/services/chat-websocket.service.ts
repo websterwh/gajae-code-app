@@ -393,6 +393,19 @@ async function oauthRequest(ws: WebSocket, userId: string | number | null, type:
   sendFrame(ws, { kind: type, payload: response });
 }
 
+/**
+ * Starts a turn for a session with no browser attached, for a Telegram reply.
+ * The chat pipeline resolves the model, policy and session worktree; a silent
+ * connection reuses that one path instead of growing a second spawn path that
+ * would drift from it. Frames still reach subscribed tabs through the registry.
+ */
+export function createHeadlessChatTurn(
+  dependencies: ChatWebSocketDependencies,
+): (sessionId: string, content: string, userId: string | number | null) => Promise<void> {
+  const connection = { readyState: WS_OPEN_STATE, send() {} } as unknown as WebSocket;
+  return (sessionId, content, userId) => sendChat(connection, userId, { sessionId, content }, dependencies);
+}
+
 export function handleChatConnection(ws: WebSocket, request: AuthenticatedWebSocketRequest, dependencies: ChatWebSocketDependencies): void {
   console.log('[INFO] Chat WebSocket connected');
   connectedClients.add(ws);

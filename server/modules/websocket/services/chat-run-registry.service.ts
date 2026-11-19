@@ -32,6 +32,15 @@ type StartRunInput = {
   userId: string | number | null;
 };
 
+/** One published frame, fanned out to observers that are not browser sockets. */
+export type RunEventNotification = {
+  appSessionId: string;
+  provider: LLMProvider;
+  event: NormalizedMessage;
+};
+
+const runEventListeners = new Set<(notification: RunEventNotification) => void>();
+
 const completedRunLifetime = 5 * 60 * 1000;
 const eventBufferLimit = 5000;
 const runsByAppSession = new Map<string, ChatRun>();
@@ -90,6 +99,18 @@ function decorateRunEvent(run: ChatRun, event: NormalizedMessage): NormalizedMes
 
   run.events.push(publishedEvent);
   if (run.events.length > eventBufferLimit) run.events.splice(0, run.events.length - eventBufferLimit);
+  for (const listener of runEventListeners) {
+    // A transcript sink must never be able to fail a run; a broken observer is
+    // its own problem and stays out of the provider's completion path.
+    try {
+      listener({ appSessionId: run.appSessionId, provider: run.provider, event: publishedEvent });
+    } catch (error) {
+      console.error('[ChatRunRegistry] Run event listener failed', {
+        appSessionId: run.appSessionId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
   return publishedEvent;
 }
 
@@ -228,6 +249,14 @@ export const chatRunRegistry = {
 
   getRun(appSessionId: AppSessionId): ChatRun | undefined {
     return runsByAppSession.get(appSessionId);
+  },
+
+  /** Observes every published frame (Telegram transcript). Returns an unsubscribe. */
+  onRunEvent(listener: (notification: RunEventNotification) => void): () => void {
+    runEventListeners.add(listener);
+    return () => {
+      runEventListeners.delete(listener);
+    };
   },
 
   isProcessing(appSessionId: AppSessionId): boolean {

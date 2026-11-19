@@ -38,7 +38,7 @@ import {
   type HostControlRunPolicy,
   type JsonObject,
 } from './gjc-engine.js';
-import { notifyRunFailed, notifyRunStopped } from './modules/notifications/index.js';
+import { notifyRunFailed, notifyRunStopped, workerNotificationsEnv } from './modules/notifications/index.js';
 import { childEnvironment } from './shared/child-environment.js';
 import {
   createCompleteMessage,
@@ -1076,7 +1076,9 @@ export class GjcWorkerSupervisor {
     const workerEnv = {
       ...childEnvironment(this.runtime.environment),
       GJC_WORKER_AGENT_DIR: this.runtime.environment.GJC_WORKER_AGENT_DIR ?? join(homedir(), '.gjc', 'agent'),
-      GJC_NOTIFICATIONS: '0',
+      // In daemon mode the session must be eligible for the CLI's notification
+      // daemon; in app mode it stays opted out so both never send.
+      GJC_NOTIFICATIONS: workerNotificationsEnv(this.runtime.environment),
     };
     const launch = this.runtime.platform === 'win32'
       ? createWindowsJobLaunch(
