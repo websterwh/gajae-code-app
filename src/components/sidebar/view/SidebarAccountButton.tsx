@@ -72,6 +72,17 @@ export default function SidebarAccountButton({ t }: SidebarAccountButtonProps) {
     try {
       const response = await authenticatedFetch('/api/auth/oidc/logout', { method: 'POST' });
       if (!response.ok) throw new Error(`Sign-out refused: ${response.status}`);
+      const body = await response.json().catch(() => null) as {
+        data?: { logoutUrl?: string | null };
+      } | null;
+      const logoutUrl = body?.data?.logoutUrl;
+      if (logoutUrl) {
+        // Follow the provider's logout endpoint: its SSO session survives our
+        // cookie, and the next reload would otherwise sign us back in. It
+        // returns the browser here once that session is gone.
+        window.location.assign(logoutUrl);
+        return;
+      }
       // A full reload drops every cached read made under the old session; there
       // is no client-side auth store to clear instead.
       window.location.reload();

@@ -16,6 +16,7 @@ import {
 import { clientAddress, createOidcGate, localAccessAdmits, noAuthEnabled } from './oidc.middleware.js';
 import {
   buildAuthorizeUrl,
+  buildEndSessionUrl,
   completeSignIn,
   createTransaction,
   discoverOidc,
@@ -30,6 +31,7 @@ import {
   readTransaction,
   seal,
   serializeCookie,
+  type OidcSession,
 } from './oidc.sessions.js';
 
 const SESSION_TTL_SECONDS = 12 * 60 * 60;
@@ -78,6 +80,49 @@ function redirectUriFor(request: Request, config: OidcConfig): string {
   if (config.redirectUri) return config.redirectUri;
   return `${request.protocol}://${request.get('host') ?? 'localhost'}${OIDC_REDIRECT_PATH}`;
 }
+
+/**
+ * A browser's cookie is capped at 4 KB, and a dropped `Set-Cookie` would mean a
+ * sign-in that silently did not happen - worse than losing the logout hint. An
+ * id_token over this limit is left out and logout falls back to `client_id`.
+ */
+const ID_TOKEN_COOKIE_LIMIT = 2048;
+
+/**
+ * Where the provider sends the browser back after ending its own session. The
+ * app root of the same origin the sign-in callback is registered under, so a
+ * deployment on a subpath returns to the app rather than to the proxy root.
+ */
+function postLogoutRedirectUriFor(request: Request, config: OidcConfig): string {
+  const callback = redirectUriFor(request, config);
+  if (callback.endsWith(OIDC_REDIRECT_PATH)) return `${callback.slice(0, -OIDC_REDIRECT_PATH.length)}/`;
+  return `${request.protocol}://${request.get('host') ?? 'localhost'}/`;
+}
+
+/**
+ * The provider's logout endpoint, or `null` when it has none. Discovery can fail
+ * at that moment (the app is being signed out because something is wrong), so a
+ * failure falls back to the app: the local session is cleared either way, and a
+ * browser stuck on an error would hide that.
+ */
+async function providerLogoutUrl(request: Request, session: OidcSession | null): Promise<string | null> {
+  const config = readOidcConfig();
+  if (!oidcEnforcing(config)) return null;
+  try {
+    const discovery = await discoverOidc(config.issuer);
+    return buildEndSessionUrl(config, discovery, {
+      ...(session?.idToken ? { idToken: session.idToken } : {}),
+      postLogoutRedirectUri: postLogoutRedirectUriFor(request, config),
+    });
+  } catch {
+    return null;
+  }
+}
+
+const clearedSessionCookies = (request: Request): string[] => [
+  clearedCookie(SESSION_COOKIE, request.secure),
+  clearedCookie(TRANSACTION_COOKIE, request.secure),
+];
 
 /**
  * Local owner row for a provider identity. The email stays the login key, but
@@ -237,6 +282,7 @@ export function createOidcRouter() {
       sub: identity.sub,
       email: identity.email,
       name: identity.name,
+      ...(identity.idToken.length <= ID_TOKEN_COOKIE_LIMIT ? { idToken: identity.idToken } : {}),
       exp: Date.now() + SESSION_TTL_SECONDS * 1000,
     });
     response.setHeader('set-cookie', [
@@ -251,9 +297,28 @@ export function createOidcRouter() {
     return response.redirect(302, destination);
   }));
 
-  router.post('/logout', asyncHandler((request, response) => {
-    response.setHeader('set-cookie', clearedCookie(SESSION_COOKIE, request.secure));
-    ok(response, { signedOut: true });
+  /**
+   * Signs out of this app and of the provider, and reports where to send the
+   * browser to finish the provider's side. Clearing the cookie alone left the
+   * provider's SSO session alive, so the next reload signed the same person
+   * back in and sign-out appeared to do nothing.
+   *
+   * `logoutUrl` is null when the provider publishes no end-session endpoint (or
+   * discovery is unreachable); the caller then simply reloads.
+   */
+  router.post('/logout', asyncHandler(async (request, response) => {
+    const session = readSession(request.headers.cookie);
+    const logoutUrl = await providerLogoutUrl(request, session);
+    response.setHeader('set-cookie', clearedSessionCookies(request));
+    ok(response, { signedOut: true, logoutUrl });
+  }));
+
+  /** The same sign-out as a navigation, so a link can end the whole session. */
+  router.get('/logout', asyncHandler(async (request, response) => {
+    const session = readSession(request.headers.cookie);
+    const logoutUrl = await providerLogoutUrl(request, session);
+    response.setHeader('set-cookie', clearedSessionCookies(request));
+    return response.redirect(302, logoutUrl ?? '/');
   }));
 
   /** Who the current cookie belongs to, for the settings tab and the shell. */

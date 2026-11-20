@@ -20,6 +20,8 @@ export type OidcIdentity = {
   name?: string;
   /** Provider group names; empty when the `groups` scope was not granted. */
   groups: string[];
+  /** The verified id_token, used as the hint when signing out at the provider. */
+  idToken: string;
 };
 
 const DISCOVERY_TTL_MS = 10 * 60 * 1000;
@@ -114,6 +116,29 @@ export function buildAuthorizeUrl(
   url.searchParams.set('nonce', transaction.nonce);
   url.searchParams.set('code_challenge', transaction.codeChallenge);
   url.searchParams.set('code_challenge_method', 'S256');
+  return url.toString();
+}
+
+/**
+ * RP-initiated logout: the only way out of the provider's own SSO session.
+ * Clearing this app's cookie and reloading is not a sign-out - the gate sends
+ * the browser back through `/start`, where a live provider session signs it
+ * straight in again.
+ *
+ * `id_token_hint` identifies the session to end; `client_id` is the fallback for
+ * providers that accept one without the other. `null` means the provider
+ * published no end-session endpoint, so it cannot be signed out of at all.
+ */
+export function buildEndSessionUrl(
+  config: OidcConfig,
+  discovery: OidcDiscovery,
+  input: { idToken?: string; postLogoutRedirectUri: string },
+): string | null {
+  if (!discovery.end_session_endpoint) return null;
+  const url = new URL(discovery.end_session_endpoint);
+  url.searchParams.set('client_id', config.clientId);
+  if (input.idToken) url.searchParams.set('id_token_hint', input.idToken);
+  if (input.postLogoutRedirectUri) url.searchParams.set('post_logout_redirect_uri', input.postLogoutRedirectUri);
   return url.toString();
 }
 
@@ -239,6 +264,7 @@ export async function completeSignIn(
   return {
     sub,
     email: email.toLowerCase(),
+    idToken,
     // The display name comes from the provider, falling back to its username
     // claim before anything renders the address.
     name: typeof claims.name === 'string' && claims.name.trim()

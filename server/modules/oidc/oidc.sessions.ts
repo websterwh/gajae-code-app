@@ -11,6 +11,12 @@ export type OidcSession = {
   sub: string;
   email: string;
   name?: string;
+  /**
+   * The id_token this session was created from, kept only as the
+   * `id_token_hint` for RP-initiated logout. Absent when the provider's token
+   * was too large for the cookie, or for sessions sealed before it was stored.
+   */
+  idToken?: string;
   /** Epoch milliseconds. */
   exp: number;
 };

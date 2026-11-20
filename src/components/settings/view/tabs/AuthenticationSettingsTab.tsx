@@ -163,7 +163,17 @@ export default function AuthenticationSettingsTab() {
   };
 
   const signOut = async () => {
-    await authenticatedFetch('/api/auth/oidc/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const response = await authenticatedFetch('/api/auth/oidc/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const body = response.ok
+      ? await response.json().catch(() => null) as { data?: { logoutUrl?: string | null } } | null
+      : null;
+    const logoutUrl = body?.data?.logoutUrl;
+    if (logoutUrl) {
+      // The provider's own session outlives this app's cookie, so signing out
+      // only here would sign the same account back in on the next load.
+      window.location.assign(logoutUrl);
+      return;
+    }
     await loadSession();
   };
 

@@ -14,6 +14,7 @@ import {
 } from './oidc.middleware.js';
 import {
   buildAuthorizeUrl,
+  buildEndSessionUrl,
   completeSignIn,
   createTransaction,
   discoverOidc,
@@ -152,9 +153,35 @@ test('the authorize URL carries PKCE, state and nonce', () => {
   assert.ok(url.searchParams.get('code_challenge'));
 });
 
+test('RP-initiated logout names the id_token and returns to this app', () => {
+  const config = configFor('https://auth.example.com');
+  const discovery = {
+    issuer: 'https://auth.example.com',
+    authorization_endpoint: 'https://auth.example.com/authorize',
+    token_endpoint: 'https://auth.example.com/token',
+    jwks_uri: 'https://auth.example.com/jwks',
+    end_session_endpoint: 'https://auth.example.com/logout',
+  };
+  const url = new URL(String(buildEndSessionUrl(config, discovery, {
+    idToken: 'header.payload.signature',
+    postLogoutRedirectUri: 'https://app.example.com/',
+  })));
+  assert.equal(url.origin + url.pathname, 'https://auth.example.com/logout');
+  assert.equal(url.searchParams.get('id_token_hint'), 'header.payload.signature');
+  assert.equal(url.searchParams.get('client_id'), 'gajae-test');
+  assert.equal(url.searchParams.get('post_logout_redirect_uri'), 'https://app.example.com/');
+
+  // A provider with no end-session endpoint cannot be signed out of, so the
+  // caller falls back to clearing this app's own cookie.
+  assert.equal(buildEndSessionUrl(config, { ...discovery, end_session_endpoint: undefined }, {
+    idToken: 'header.payload.signature',
+    postLogoutRedirectUri: 'https://app.example.com/',
+  }), null);
+});
+
 test('an empty allowed-group list admits nobody', () => {
   const base = configFor('https://auth.example.com');
-  const identity = { sub: 's', email: 'owner@example.com', groups: ['gajae-admins'] };
+  const identity = { sub: 's', email: 'owner@example.com', groups: ['gajae-admins'], idToken: 'id-token' };
   assert.equal(identityAllowed(base, identity), false);
   assert.match(String(identityRejection(base, identity)), /allowed group/u);
   assert.equal(identityAllowed({ ...base, allowedGroups: ['gajae-admins'] }, identity), true);
@@ -162,7 +189,7 @@ test('an empty allowed-group list admits nobody', () => {
 
 test('groups gate sign-in and every configured list has to pass', () => {
   const base = configFor('https://auth.example.com');
-  const identity = { sub: 's', email: 'owner@example.com', groups: ['Gajae-Admins'] };
+  const identity = { sub: 's', email: 'owner@example.com', groups: ['Gajae-Admins'], idToken: 'id-token' };
   assert.equal(identityAllowed({ ...base, allowedGroups: ['gajae-admins'] }, identity), true);
   assert.equal(identityAllowed({ ...base, allowedGroups: ['other'] }, identity), false);
   assert.equal(identityAllowed({ ...base, allowedGroups: ['other'] }, { ...identity, groups: [] }), false);
@@ -170,7 +197,7 @@ test('groups gate sign-in and every configured list has to pass', () => {
 
 test('a rejection names the gate that refused the identity', () => {
   const base = { ...configFor('https://auth.example.com'), allowedGroups: ['staff'] };
-  const identity = { sub: 's', email: 'owner@example.com', groups: ['staff'] };
+  const identity = { sub: 's', email: 'owner@example.com', groups: ['staff'], idToken: 'id-token' };
   assert.equal(identityRejection(base, identity), null);
   assert.match(String(identityRejection({ ...base, allowedGroups: ['admins'] }, identity)), /staff/u);
   assert.match(String(identityRejection({ ...base, allowedGroups: ['admins'] }, { ...identity, groups: [] })), /no groups/u);
