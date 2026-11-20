@@ -392,10 +392,14 @@ export async function provisionPackages(options: {
     // installed version does not satisfy is not healthy.
     const preflight = verifyCommand(options.manager, parsed.name);
     const preflightResult = await options.runner(preflight.command, preflight.args);
+    // A virtual apt name is not installed under its own name, so `dpkg-query`
+    // exits non-zero even when the package that provides it is right there.
+    // Asking the providers is the only answer for that name, and it is what
+    // keeps such a package from being reinstalled on every boot.
     const preflightVersion = preflightResult.code === 0
       ? await detectedOrProvided(options.manager, parsed.name, preflightResult.stdout, options.runner)
-      : null;
-    const preflightHealthy = preflightResult.code === 0
+      : (options.manager === 'apt' ? await aptProviderVersion(options.runner, parsed.name) : null);
+    const preflightHealthy = (preflightResult.code === 0 || preflightVersion !== null)
       && verificationConfirms(options.manager, parsed.name, preflightResult.stdout, preflightVersion)
       && (!pin || preflightVersion === null || preflightVersion === pin);
     if (preflightHealthy) {
@@ -426,7 +430,13 @@ export async function provisionPackages(options: {
 
     const verify = verifyCommand(options.manager, parsed.name);
     const verified = await options.runner(verify.command, verify.args);
-    if (verified.code !== 0) {
+    // The same virtual-name gap after the install: apt installed the provider
+    // and exits 0, then `dpkg-query` still knows nothing about the name that
+    // was asked for. A provider version is a successful install, not a failure.
+    const providedVersion = verified.code !== 0 && options.manager === 'apt'
+      ? await aptProviderVersion(options.runner, parsed.name)
+      : null;
+    if (verified.code !== 0 && providedVersion === null) {
       const error = `install exited 0 but verification failed (exit ${verified.code}): ${tailLines(verified.stderr || verified.stdout)}`;
       recordFailure(options.ledger, options.manager, parsed.name, spec, error, now());
       log(`[${options.manager}] ${parsed.name} failed verification - command: ${printable}`);
@@ -436,7 +446,8 @@ export async function provisionPackages(options: {
 
     // `latest` is resolved here, at install time, and the concrete version is
     // what the ledger (and the UI) records as actually running.
-    const detected = await detectedOrProvided(options.manager, parsed.name, verified.stdout, options.runner);
+    const detected = providedVersion
+      ?? await detectedOrProvided(options.manager, parsed.name, verified.stdout, options.runner);
     if (!verificationConfirms(options.manager, parsed.name, verified.stdout, detected)) {
       const error = 'install exited 0 but the package is not present in the tool inventory';
       recordFailure(options.ledger, options.manager, parsed.name, spec, error, now());

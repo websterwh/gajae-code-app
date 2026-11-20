@@ -49,7 +49,11 @@ describe('apt packages', () => {
       log: () => {},
     });
 
-    assert.equal(commands[1], 'apt-get update -qq');
+    // The index refresh is not a fixed index: a name dpkg does not know costs a
+    // provider lookup first, so only the order (refresh before install) holds.
+    const refresh = commands.indexOf('apt-get update -qq');
+    const install = commands.findIndex((line) => line.startsWith('apt-get install'));
+    assert.ok(refresh !== -1 && refresh < install, `index refresh precedes the install: ${commands.join(' | ')}`);
     assert.equal(ledger.packages.apt.zoxide?.status, 'installed');
     assert.equal(ledger.packages.apt.zoxide?.version, '0.9.4');
   });
@@ -102,6 +106,59 @@ describe('apt packages', () => {
     assert.equal(outcomes[0]?.status, 'installed');
     assert.equal(ledger.packages.apt['android-tools-adb']?.status, 'installed');
     assert.equal(ledger.packages.apt['android-tools-adb']?.version, '1:29.0.6-28');
+  });
+
+  test('a virtual name is present when its provider is, even though dpkg exits non-zero', async () => {
+    const ledger = emptyLedger();
+    const commands: string[] = [];
+    const outcomes = await provisionPackages({
+      manager: 'apt',
+      packages: ['android-tools-adb'],
+      ledger,
+      runner: async (command, args) => {
+        commands.push(`${command} ${args.join(' ')}`);
+        if (command !== 'dpkg-query') return { code: 0, stdout: '', stderr: '' };
+        // What dpkg really does for a name that only exists as a Provides entry.
+        if (args.includes('android-tools-adb')) {
+          return { code: 1, stdout: '', stderr: 'dpkg-query: no packages found matching android-tools-adb' };
+        }
+        return { code: 0, stdout: 'adb\tinstall ok installed\t1:34.0.5-12\tandroid-tools-adb\n', stderr: '' };
+      },
+      log: () => {},
+    });
+
+    assert.equal(outcomes[0]?.status, 'installed');
+    assert.equal(outcomes[0]?.version, '1:34.0.5-12');
+    assert.equal(commands.some((line) => line.startsWith('apt-get install')), false, 'a satisfied name is not reinstalled');
+  });
+
+  test('an install that only satisfies a provider is recorded when dpkg exits non-zero', async () => {
+    const ledger = emptyLedger();
+    let installed = false;
+    const outcomes = await provisionPackages({
+      manager: 'apt',
+      packages: ['android-tools-adb'],
+      ledger,
+      runner: async (command, args) => {
+        if (command === 'apt-get') {
+          if (args.includes('install')) installed = true;
+          return { code: 0, stdout: '', stderr: '' };
+        }
+        if (command !== 'dpkg-query') return { code: 0, stdout: '', stderr: '' };
+        if (args.includes('android-tools-adb')) {
+          return { code: 1, stdout: '', stderr: 'dpkg-query: no packages found matching android-tools-adb' };
+        }
+        return {
+          code: 0,
+          stdout: installed ? 'adb\tinstall ok installed\t1:34.0.5-12\tandroid-tools-adb\n' : '',
+          stderr: '',
+        };
+      },
+      log: () => {},
+    });
+
+    assert.equal(outcomes[0]?.status, 'installed');
+    assert.equal(ledger.packages.apt['android-tools-adb']?.version, '1:34.0.5-12');
   });
 
   test('a failed install is recorded as failed, not installed', async () => {

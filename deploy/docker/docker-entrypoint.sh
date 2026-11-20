@@ -228,21 +228,29 @@ parse_csv() {
 # ==============================================================================
 # Provisioning: APT Packages
 # ==============================================================================
-# Debian turns a few tools into single-provider virtual packages: asking for the
-# old name installs the new package, but dpkg then answers `unknown
-# ok not-installed` for the name that was requested, so the next boot saw it as
-# missing forever. `android-tools-adb` is `adb` (and `android-tools-fastboot` is
-# `fastboot`), and nothing else about those tools changes with the name.
-apt_install_name() {
-    case "$1" in
-        android-tools-adb) echo adb ;;
-        android-tools-fastboot) echo fastboot ;;
-        *) echo "$1" ;;
-    esac
+# A name in APT_PACKAGES is not always a package: Debian also has virtual
+# names, which a real package Provides. `android-tools-adb` is provided by
+# `adb`, so asking dpkg about the virtual name answers "no packages found" even
+# when the tool is installed - and a boot that trusted that answer reinstalled
+# it every time, or worse, judged it missing after a good install.
+apt_installed() {
+    local name="$1"
+    dpkg-query -W -f='${Status}' "$name" 2>/dev/null | grep -qx 'install ok installed' && return 0
+    # Any installed package that Provides this name satisfies it. The Provides
+    # field is a comma list and may carry a version constraint to strip.
+    dpkg-query -W -f='${Status}\t${Provides}\n' 2>/dev/null \
+        | awk -F'\t' '$1 == "install ok installed" && $2 != "" { print $2 }' \
+        | tr ',' '\n' \
+        | sed 's/^[[:space:]]*//; s/[[:space:](].*$//' \
+        | grep -qx "$name"
 }
 
-apt_installed() {
-    dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -qx 'install ok installed'
+# The one package that Provides a virtual name, when there is exactly one. Two
+# or more is a choice apt itself refuses to make silently, so this makes none.
+apt_provider() {
+    local providers
+    providers="$(apt-cache showpkg "$1" 2>/dev/null | awk '/^Reverse Provides:/ { found = 1; next } found && NF { print $1 }')"
+    [ "$(printf '%s\n' "$providers" | grep -c .)" -eq 1 ] && printf '%s\n' "$providers"
 }
 
 provision_apt() {
@@ -257,7 +265,7 @@ provision_apt() {
     [ -f "$saved_hash_file" ] && previous_hash="$(cat "$saved_hash_file")"
     local pkg_list=()
     while IFS= read -r pkg; do
-        pkg_list+=("$(apt_install_name "$pkg")")
+        pkg_list+=("$pkg")
     done < <(parse_csv "${APT_PACKAGES}")
     local packages_missing="false"
     for pkg in "${pkg_list[@]}"; do
@@ -276,16 +284,25 @@ provision_apt() {
             DEBIAN_FRONTEND=noninteractive dpkg --configure -a || true
             DEBIAN_FRONTEND=noninteractive apt-get update -qq || true
             local failed="false"
+            local provider=""
             for pkg in "${pkg_list[@]}"; do
                 apt_installed "$pkg" && continue
                 # One name apt cannot resolve aborts the whole transaction, so
                 # a typo used to leave every other package in the list
                 # uninstalled. Each name is its own install now, and a failure
                 # is reported instead of being swallowed by >/dev/null.
-                if ! DEBIAN_FRONTEND=noninteractive apt-get install -qq -y --no-install-recommends "$pkg"; then
-                    failed="true"
-                    echo "==> [APT] ${pkg} failed to install; the remaining packages continue." >&2
+                if DEBIAN_FRONTEND=noninteractive apt-get install -qq -y --no-install-recommends "$pkg"; then
+                    continue
                 fi
+                # A virtual name apt would not resolve on its own: install the
+                # single package that provides it, which is what the name meant.
+                provider="$(apt_provider "$pkg" || true)"
+                if [ -n "$provider" ] && DEBIAN_FRONTEND=noninteractive apt-get install -qq -y --no-install-recommends "$provider"; then
+                    echo "==> [APT] ${pkg} is a virtual name; installed ${provider}, which provides it."
+                    continue
+                fi
+                failed="true"
+                echo "==> [APT] ${pkg} failed to install; the remaining packages continue." >&2
             done
         fi
         if [ "${failed:-false}" = "false" ]; then
