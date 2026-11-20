@@ -228,6 +228,23 @@ parse_csv() {
 # ==============================================================================
 # Provisioning: APT Packages
 # ==============================================================================
+# Debian turns a few tools into single-provider virtual packages: asking for the
+# old name installs the new package, but dpkg then answers `unknown
+# ok not-installed` for the name that was requested, so the next boot saw it as
+# missing forever. `android-tools-adb` is `adb` (and `android-tools-fastboot` is
+# `fastboot`), and nothing else about those tools changes with the name.
+apt_install_name() {
+    case "$1" in
+        android-tools-adb) echo adb ;;
+        android-tools-fastboot) echo fastboot ;;
+        *) echo "$1" ;;
+    esac
+}
+
+apt_installed() {
+    dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -qx 'install ok installed'
+}
+
 provision_apt() {
     if [ -z "${APT_PACKAGES}" ]; then
         return 0
@@ -240,11 +257,11 @@ provision_apt() {
     [ -f "$saved_hash_file" ] && previous_hash="$(cat "$saved_hash_file")"
     local pkg_list=()
     while IFS= read -r pkg; do
-        pkg_list+=("$pkg")
+        pkg_list+=("$(apt_install_name "$pkg")")
     done < <(parse_csv "${APT_PACKAGES}")
     local packages_missing="false"
     for pkg in "${pkg_list[@]}"; do
-        if ! dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -qx 'install ok installed'; then
+        if ! apt_installed "$pkg"; then
             packages_missing="true"
             break
         fi
@@ -256,12 +273,30 @@ provision_apt() {
         if [ ${#pkg_list[@]} -gt 0 ]; then
             # A container may have been stopped during a previous install.
             # Complete any unpacked packages before invoking apt again.
-            DEBIAN_FRONTEND=noninteractive dpkg --configure -a
-            DEBIAN_FRONTEND=noninteractive apt-get update -qq
-            DEBIAN_FRONTEND=noninteractive apt-get install -qq -y --no-install-recommends "${pkg_list[@]}" >/dev/null
+            DEBIAN_FRONTEND=noninteractive dpkg --configure -a || true
+            DEBIAN_FRONTEND=noninteractive apt-get update -qq || true
+            local failed="false"
+            for pkg in "${pkg_list[@]}"; do
+                apt_installed "$pkg" && continue
+                # One name apt cannot resolve aborts the whole transaction, so
+                # a typo used to leave every other package in the list
+                # uninstalled. Each name is its own install now, and a failure
+                # is reported instead of being swallowed by >/dev/null.
+                if ! DEBIAN_FRONTEND=noninteractive apt-get install -qq -y --no-install-recommends "$pkg"; then
+                    failed="true"
+                    echo "==> [APT] ${pkg} failed to install; the remaining packages continue." >&2
+                fi
+            done
         fi
-        echo "$current_hash" > "$saved_hash_file"
-        echo "==> [APT] Finished provisioning packages."
+        if [ "${failed:-false}" = "false" ]; then
+            echo "$current_hash" > "$saved_hash_file"
+            echo "==> [APT] Finished provisioning packages."
+        else
+            # The hash is not saved: the next boot retries the failed names
+            # instead of remembering them as installed.
+            rm -f "$saved_hash_file"
+            echo "==> [APT] Finished with failures; they are retried on the next boot." >&2
+        fi
     elif [ "${AUTO_UPDATE_PACKAGES}" = "true" ] || [ "${AUTO_UPDATE_PACKAGES}" = "1" ]; then
         echo "==> [APT] Checking for updates on installed packages..."
         apt-get update -qq || true
