@@ -14,7 +14,14 @@ import {
   matchesHostTarget,
   type HostCapability,
   type HostControlRunPolicy,
+  type SshHostTarget,
 } from './gjc-host-control-policy.js';
+import {
+  describeSshVerbs,
+  findSshVerb,
+  resolveSshCommand,
+  runSshCommand,
+} from './gjc-ssh-host.js';
 
 /**
  * `host` - the native agent path to the Docker host.
@@ -48,6 +55,16 @@ const hostSchema = z.discriminatedUnion('action', [
     container: z.string().min(1).max(128),
     path: z.string().min(1).max(4096),
   }),
+  z.strictObject({
+    action: z.literal('ssh'),
+    verb: z.string().min(1).max(64),
+    target: z.string().min(1).max(64).optional(),
+  }),
+  z.strictObject({
+    action: z.literal('host_shell'),
+    command: z.string().min(1).max(8192),
+    timeoutMs: z.number().int().min(1_000).max(300_000).optional(),
+  }),
 ]);
 
 function textResult(text: string, details?: Record<string, unknown>) {
@@ -60,6 +77,7 @@ function jsonResult(value: unknown, details?: Record<string, unknown>) {
 
 function describe(policy: HostControlRunPolicy): string {
   const verbs = EXEC_VERBS.map((verb) => `${verb.id} (${verb.summary})`).join(', ');
+  const sshVerbs = describeSshVerbs().map((verb) => `${verb.id} (${verb.summary})`).join(', ');
   return [
     'Direct access to the Docker host that runs this app, over the daemon socket rather than the app\'s own HTTP API.',
     `Capabilities enabled for this run: ${policy.capabilities.join(', ')}. A capability that is off is refused with the switch that turns it on.`,
@@ -67,12 +85,31 @@ function describe(policy: HostControlRunPolicy): string {
     'info reads daemon facts, containers lists every container with image, state, mounts and compose labels, and discovery derives the host picture: which OS or appliance the daemon runs on (Unraid, MOS, Proxmox VE, OpenMediaVault, CasaOS, ZimaOS) with its evidence, compose stacks, containers that mount the daemon socket, and unmanaged containers.',
     `exec runs one fixed verb inside the named container - there is no command string: ${verbs}. read_file reads one absolute path out of that container (files up to 256 KiB, directories list).`,
     'Start with containers to find the name, then exec with network or processes, or read_file on the mounted configuration. Do not guess a container name; the list is authoritative.',
+    policy.ssh
+      ? `ssh runs one fixed verb on ${policy.ssh.user}@${policy.ssh.host}:${policy.ssh.port} over SSH, pinned to the host key the operator saved - no command string is involved: ${sshVerbs}. A read verb runs immediately; a write verb asks the user for approval before it runs${policy.sshWritePreauthorized ? ', except that the operator pre-authorized host writes in Settings' : ', even in a trusted permission mode'}. host_shell is the general path: it runs the shell command you write on that host as ${policy.ssh.user} - edit a file, install a package, drive compose, restart what no verb names. The command is passed unchanged as one argument to sh on the remote host, so heredocs and pipes work. It counts as a host write: it needs the hostWrite switch and asks the user for approval showing the exact command${policy.sshWritePreauthorized ? ', unless the operator pre-authorized host writes' : ', in every permission mode'}. Prefer the fixed verbs for reads, because those run without a question. Output is capped at 64 KiB; pass timeoutMs (up to 5 minutes) for slow work.`
+      : 'ssh and host_shell are not configured for this deployment: no address, key or pinned host key is saved in Settings → Automation.',
   ].join(' ');
 }
 
+/** The words the app's own approval cards use, so a host write reads like them. */
+const APPROVE_ONCE = 'Allow once';
+const DENY = 'Deny';
+
+type HostApprovalUI = {
+  select(prompt: string, choices: string[], selectOptions?: { signal?: AbortSignal }): Promise<string | undefined>;
+};
+
 export function createHostControlTool(
   policy: HostControlRunPolicy,
-  { client }: { client?: HostControlClient } = {},
+  {
+    client,
+    ui,
+    run = runSshCommand,
+  }: {
+    client?: HostControlClient;
+    ui?: HostApprovalUI;
+    run?: typeof runSshCommand;
+  } = {},
 ): ToolDefinition {
   let docker: HostControlClient | undefined = client;
   const socket = (): HostControlClient => {
@@ -85,6 +122,36 @@ export function createHostControlTool(
     throw new Error(
       `The host ${capability} capability is off for this run. Turn it on in Settings → Automation (host control) and start a new turn.`,
     );
+  };
+
+  /**
+   * A host write is approved per call, whatever the run's permission mode is:
+   * `bypass` is a consent-UX mode for the agent's own tools, and this one
+   * reaches root on another machine. Only the operator's explicit prior
+   * authorization in Settings skips this question.
+   */
+  const approveWrite = async (target: SshHostTarget, verb: string, remote?: string): Promise<void> => {
+    if (!ui) {
+      throw new Error(`The host write ${verb} needs the user's approval, but this run has no approval surface.`);
+    }
+    const where = `${target.user}@${target.host}`;
+    const choice = await ui.select(
+      `Allow the agent to run ${verb}${remote ? ` ${remote}` : ''} on ${where}?`,
+      [APPROVE_ONCE, DENY],
+    ).catch(() => undefined);
+    if (choice !== APPROVE_ONCE) throw new Error(`The host write ${verb} was not approved.`);
+  };
+
+  /** A shell command is approved the same way, with the command itself on the card. */
+  const approveShell = async (target: SshHostTarget, command: string): Promise<void> => {
+    if (!ui) {
+      throw new Error('host_shell needs the user\'s approval, but this run has no approval surface.');
+    }
+    const choice = await ui.select(
+      `Allow the agent to run this command on ${target.user}@${target.host}?\n\n${command}`,
+      [APPROVE_ONCE, DENY],
+    ).catch(() => undefined);
+    if (choice !== APPROVE_ONCE) throw new Error('The host command was not approved.');
   };
 
   const requireTarget = (capability: HostCapability, container: string): void => {
@@ -158,6 +225,62 @@ export function createHostControlTool(
           return jsonResult(
             { container: params.container, verb: verb.id, command: verb.command.join(' '), ...result },
             { host: 'exec', verb: verb.id },
+          );
+        }
+
+        case 'ssh': {
+          if (!policy.ssh) {
+            throw new Error(
+              'SSH access is not configured. Add the host, user, private key and pinned host key in Settings → Automation (host control), then start a new turn.',
+            );
+          }
+          const verb = findSshVerb(params.verb);
+          if (!verb) {
+            throw new Error(
+              `Unknown SSH verb ${JSON.stringify(params.verb)}. Known verbs: ${describeSshVerbs().map((entry) => entry.id).join(', ')}.`,
+            );
+          }
+          if (verb.mutating) {
+            requireCapability('hostWrite');
+            if (!policy.sshWritePreauthorized) await approveWrite(policy.ssh, verb.id, params.target);
+          } else {
+            requireCapability('hostRead');
+          }
+          const command = resolveSshCommand(verb, params.target);
+          const result = await run(policy.ssh, command, { timeoutMs: verb.mutating ? 30_000 : 20_000 });
+          return jsonResult(
+            {
+              host: policy.ssh.host,
+              verb: verb.id,
+              mutating: verb.mutating,
+              command,
+              target: params.target ?? null,
+              ...result,
+            },
+            { host: 'ssh', verb: verb.id, mutating: verb.mutating },
+          );
+        }
+
+        case 'host_shell': {
+          if (!policy.ssh) {
+            throw new Error(
+              'SSH access is not configured. Add the host, user, private key and pinned host key in Settings → Automation (host control), then start a new turn.',
+            );
+          }
+          // A command can read, write and install, so it is never a read verb:
+          // the write switch and the per-call question both apply.
+          requireCapability('hostWrite');
+          if (params.command.includes('\u0000')) throw new Error('command must not contain a NUL byte.');
+          if (!policy.sshWritePreauthorized) await approveShell(policy.ssh, params.command);
+          const result = await run(policy.ssh, params.command, { timeoutMs: params.timeoutMs ?? 60_000 });
+          return jsonResult(
+            {
+              host: policy.ssh.host,
+              user: policy.ssh.user,
+              command: params.command,
+              ...result,
+            },
+            { host: 'host_shell' },
           );
         }
 

@@ -470,6 +470,15 @@ function object(value: unknown): value is Record<string, unknown> {
  * The run's host-control policy is a server snapshot, so this only has to
  * reject malformed input: unknown capabilities are dropped at normalization.
  */
+function isSshRunTarget(value: unknown): value is NonNullable<HostControlRunPolicy['ssh']> {
+  return object(value)
+    && typeof value.host === 'string' && value.host.length > 0 && value.host.length <= 253
+    && typeof value.port === 'number' && Number.isInteger(value.port) && value.port > 0 && value.port <= 65535
+    && typeof value.user === 'string' && value.user.length > 0 && value.user.length <= 32
+    && typeof value.hostKey === 'string' && value.hostKey.length > 0 && value.hostKey.length <= 4096
+    && typeof value.privateKey === 'string' && value.privateKey.length > 0 && value.privateKey.length <= 16 * 1024;
+}
+
 function isHostControlRunPolicy(value: unknown): value is HostControlRunPolicy {
   return object(value)
     && typeof value.socketPath === 'string'
@@ -478,7 +487,9 @@ function isHostControlRunPolicy(value: unknown): value is HostControlRunPolicy {
     && Array.isArray(value.capabilities)
     && value.capabilities.every(isHostCapability)
     && Array.isArray(value.targets)
-    && value.targets.every((target) => typeof target === 'string');
+    && value.targets.every((target) => typeof target === 'string')
+    && (value.ssh === undefined || isSshRunTarget(value.ssh))
+    && (value.sshWritePreauthorized === undefined || typeof value.sshWritePreauthorized === 'boolean');
 }
 
 function exactCredentialRef(value: unknown): value is ExactCredentialRef {
@@ -543,6 +554,20 @@ function configFromOptions(value: Record<string, unknown>): SdkRunConfig {
           socketPath: candidate.hostControl.socketPath,
           capabilities: HOST_CAPABILITIES.filter((name) => (candidate.hostControl as HostControlRunPolicy).capabilities.includes(name)),
           targets: parseTargets(candidate.hostControl.targets),
+          ...((candidate.hostControl as HostControlRunPolicy).ssh
+            ? {
+              ssh: {
+                host: (candidate.hostControl as HostControlRunPolicy).ssh!.host,
+                port: (candidate.hostControl as HostControlRunPolicy).ssh!.port,
+                user: (candidate.hostControl as HostControlRunPolicy).ssh!.user,
+                hostKey: (candidate.hostControl as HostControlRunPolicy).ssh!.hostKey,
+                privateKey: (candidate.hostControl as HostControlRunPolicy).ssh!.privateKey,
+              },
+            }
+            : {}),
+          ...((candidate.hostControl as HostControlRunPolicy).sshWritePreauthorized === true
+            ? { sshWritePreauthorized: true }
+            : {}),
         },
       }
       : {}),
@@ -1346,9 +1371,7 @@ export class GjcBunSdkAdapter implements GjcWorkerRuntime {
       const builtinBrowserAvailable = config.builtinBrowserAvailable === true
         && Boolean(config.appSessionId);
       const computerAvailable = config.computerAvailable === true && Boolean(config.appSessionId);
-      // Native host access is attached only when the server resolved a policy;
-      // the tool re-checks that snapshot on every call.
-      const hostTools = config.hostControl ? [createHostControlTool(config.hostControl)] : [];
+
       const browserBackend = applyGjcBrowserBackend(
         settings,
         config.browserBackend,
@@ -1370,6 +1393,12 @@ export class GjcBunSdkAdapter implements GjcWorkerRuntime {
       if (config.goalCommand && !goalEnabled) throw new Error('Goal controls are unavailable in this view.');
       settings.override('goal.enabled', goalEnabled);
       const askController = new GjcBunAskController(writer);
+      // Native host access is attached only when the server resolved a policy;
+      // the tool re-checks that snapshot on every call. It shares the run's ask
+      // controller so a host write can ask the user before it runs.
+      const hostTools = config.hostControl
+        ? [createHostControlTool(config.hostControl, { ui: askController.uiContext })]
+        : [];
       const model = await modelForWithRefresh(this.modelRegistry, configuredModelId);
       const resolvedCredential = await credentialFor(this.authStorage, config.credential, model, this.modelRegistry);
       let delegation: GjcDelegationExecutor | undefined;

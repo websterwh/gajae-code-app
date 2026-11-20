@@ -191,8 +191,17 @@ export type {
 export {
   HOST_CAPABILITIES,
   isHostCapability,
+  isRemoteTarget,
+  isSshHost,
+  isSshUser,
   isTargetPattern,
   matchesHostTarget,
+  parseSshHostKey,
+  parseSshPort,
+  parseSshPrivateKey,
   parseTargets,
+  SSH_HOST_KEY_ALGORITHMS,
+  SSH_HOST_PATTERN,
+  SSH_USER_PATTERN,
 } from './gjc-host-control-policy.js';
-export type { HostCapability, HostControlRunPolicy } from './gjc-host-control-policy.js';
+export type { HostCapability, HostControlRunPolicy, SshHostTarget } from './gjc-host-control-policy.js';

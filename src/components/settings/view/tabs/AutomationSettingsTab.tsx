@@ -55,9 +55,28 @@ type RemoteDevice = {
   };
 };
 
-type HostCapabilityKey = 'facts' | 'containers' | 'restart' | 'discovery' | 'docker' | 'shell' | 'files';
+type HostCapabilityKey = 'facts' | 'containers' | 'restart' | 'discovery' | 'docker' | 'shell' | 'files' | 'hostRead' | 'hostWrite';
 
-type HostControlPatch = Partial<{ enabled: boolean; targets: string[] } & Record<HostCapabilityKey, boolean>>;
+type HostSshSettings = {
+  host: string;
+  port: number;
+  user: string;
+  hostKey: string;
+  /** Write-only: the key itself never comes back from the server. */
+  keyPresent: boolean;
+  writePreauthorized: boolean;
+};
+
+type HostControlPatch = Partial<{
+  enabled: boolean;
+  targets: string[];
+  sshHost: string;
+  sshPort: number;
+  sshUser: string;
+  sshHostKey: string;
+  sshPrivateKey: string;
+  sshWritePreauthorized: boolean;
+} & Record<HostCapabilityKey, boolean>>;
 
 type HostControl = {
   available: boolean;
@@ -66,6 +85,8 @@ type HostControl = {
   enabled: boolean;
   capabilities: Record<HostCapabilityKey, boolean>;
   targets: string[];
+  /** Absent on a server that predates SSH host control. */
+  ssh?: HostSshSettings;
   /** The last saved detection, so the OS line survives a reload. */
   host: {
     os: string;
@@ -141,6 +162,8 @@ export default function AutomationSettingsTab() {
   const [hostControl, setHostControl] = useState<HostControl | null>(null);
   const [targetsDraft, setTargetsDraft] = useState('');
   const [hostControlError, setHostControlError] = useState<string | null>(null);
+  const [sshDraft, setSshDraft] = useState({ host: '', port: '22', user: 'root', hostKey: '' });
+  const [sshKeyDraft, setSshKeyDraft] = useState('');
   const [detectedOs, setDetectedOs] = useState<string | null>(null);
   const [detectingHost, setDetectingHost] = useState(false);
   const [detectError, setDetectError] = useState<string | null>(null);
@@ -156,6 +179,18 @@ export default function AutomationSettingsTab() {
   const selectedProjectId = useAppShellStore((state) => state.selectedProject?.projectId);
   const selectedSessionId = useAppShellStore((state) => state.selectedSession?.id);
   const builtinBrowserOwner = builtinBrowserOwnerId(selectedProjectId, selectedSessionId);
+
+  // The server is the authority for every host-control field, so a save re-reads
+  // what it stored instead of leaving the optimistic draft on screen.
+  const applyHostControl = useCallback((next: HostControl) => {
+    setHostControl(next);
+    setSshDraft({
+      host: next.ssh?.host ?? '',
+      port: String(next.ssh?.port ?? 22),
+      user: next.ssh?.user ?? 'root',
+      hostKey: next.ssh?.hostKey ?? '',
+    });
+  }, []);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -204,9 +239,9 @@ export default function AutomationSettingsTab() {
     try {
       const response = await fetch('/api/host/status');
       if (!response.ok) return;
-      setHostControl(await response.json() as HostControl);
+      applyHostControl(await response.json() as HostControl);
     } catch { /* The section keeps its standing "could not be read" note. */ }
-  }, []);
+  }, [applyHostControl]);
 
   const changeBrowserBackend = async (backend: BrowserBackend) => {
     setBrowserBackendError(null);
@@ -266,7 +301,7 @@ export default function AutomationSettingsTab() {
       return;
     }
     setHostControlError(null);
-    setHostControl(await response.json() as HostControl);
+    applyHostControl(await response.json() as HostControl);
   };
 
   // Discovery answers "what is actually running this host". The server keeps
@@ -692,6 +727,130 @@ export default function AutomationSettingsTab() {
           )}
           {hostControl?.available === true && hostControl.enabled ? (
             <>
+              {/* SSH is its own group because it is its own transport: the
+                 socket path reaches a mounted daemon, this reaches a machine
+                 the container has no socket for. The key is write-only, so the
+                 card can say whether one is stored but never show it. */}
+              <div className="border-b border-border bg-muted/20 py-1">
+                <p className="px-4 py-2 text-xs font-medium text-foreground">{t('automation.hostControl.sshGroup')}</p>
+                <div className="ml-4 border-l border-border pl-1">
+                  <SettingsRow label={t('automation.hostControl.sshHost')} description={t('automation.hostControl.sshHostDescription')}>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        aria-label={t('automation.hostControl.sshHost')}
+                        value={sshDraft.host}
+                        placeholder={t('automation.hostControl.sshHostPlaceholder')}
+                        onChange={(event) => setSshDraft((current) => ({ ...current, host: event.target.value }))}
+                        onBlur={() => {
+                          const next = sshDraft.host.trim();
+                          if (next !== (hostControl.ssh?.host ?? '')) void saveHostControl({ sshHost: next });
+                        }}
+                        className={`${selectClass} sm:w-40`}
+                      />
+                      <input
+                        aria-label={t('automation.hostControl.sshPort')}
+                        value={sshDraft.port}
+                        inputMode="numeric"
+                        onChange={(event) => setSshDraft((current) => ({ ...current, port: event.target.value }))}
+                        onBlur={() => {
+                          const port = Number(sshDraft.port);
+                          if (Number.isInteger(port) && port >= 1 && port <= 65535) {
+                            if (port !== (hostControl.ssh?.port ?? 22)) void saveHostControl({ sshPort: port });
+                          } else {
+                            setSshDraft((current) => ({ ...current, port: String(hostControl.ssh?.port ?? 22) }));
+                          }
+                        }}
+                        className={`${selectClass} w-20`}
+                      />
+                      <input
+                        aria-label={t('automation.hostControl.sshUser')}
+                        value={sshDraft.user}
+                        onChange={(event) => setSshDraft((current) => ({ ...current, user: event.target.value }))}
+                        onBlur={() => {
+                          const next = sshDraft.user.trim();
+                          if (next.length > 0 && next !== (hostControl.ssh?.user ?? 'root')) void saveHostControl({ sshUser: next });
+                        }}
+                        className={`${selectClass} sm:w-32`}
+                      />
+                    </div>
+                  </SettingsRow>
+                  <SettingsRow label={t('automation.hostControl.sshHostKey')} description={t('automation.hostControl.sshHostKeyDescription')}>
+                    <input
+                      aria-label={t('automation.hostControl.sshHostKey')}
+                      value={sshDraft.hostKey}
+                      placeholder={t('automation.hostControl.sshHostKeyPlaceholder')}
+                      onChange={(event) => setSshDraft((current) => ({ ...current, hostKey: event.target.value }))}
+                      onBlur={() => {
+                        const next = sshDraft.hostKey.trim();
+                        if (next !== (hostControl.ssh?.hostKey ?? '')) void saveHostControl({ sshHostKey: next });
+                      }}
+                      className={`${selectClass} sm:w-72`}
+                    />
+                  </SettingsRow>
+                  <SettingsRow
+                    label={t('automation.hostControl.sshPrivateKey')}
+                    description={hostControl.ssh?.keyPresent === true
+                      ? t('automation.hostControl.sshPrivateKeyStored')
+                      : t('automation.hostControl.sshPrivateKeyMissing')}
+                  >
+                    <div className="flex w-full flex-col gap-2 sm:w-80">
+                      <textarea
+                        aria-label={t('automation.hostControl.sshPrivateKey')}
+                        value={sshKeyDraft}
+                        rows={3}
+                        spellCheck={false}
+                        placeholder={t('automation.hostControl.sshPrivateKeyPlaceholder')}
+                        onChange={(event) => setSshKeyDraft(event.target.value)}
+                        className={`${selectClass} font-mono text-xs`}
+                      />
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          disabled={sshKeyDraft.trim().length === 0}
+                          onClick={() => { void saveHostControl({ sshPrivateKey: sshKeyDraft }).then(() => setSshKeyDraft('')); }}
+                          className="rounded-lg border border-input px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {t('automation.hostControl.sshPrivateKeySave')}
+                        </button>
+                        {hostControl.ssh?.keyPresent === true ? (
+                          <button
+                            type="button"
+                            onClick={() => void saveHostControl({ sshPrivateKey: '' })}
+                            className="rounded-lg border border-destructive px-3 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/10"
+                          >
+                            {t('automation.hostControl.sshPrivateKeyClear')}
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  </SettingsRow>
+                  <SettingsRow label={t('automation.hostControl.hostRead')} description={t('automation.hostControl.hostReadDescription')}>
+                    <SettingsToggle
+                      checked={hostControl.capabilities.hostRead === true}
+                      onChange={(value) => void saveHostControl({ hostRead: value })}
+                      ariaLabel={t('automation.hostControl.hostRead')}
+                    />
+                  </SettingsRow>
+                  <SettingsRow label={t('automation.hostControl.hostWrite')} description={t('automation.hostControl.hostWriteDescription')}>
+                    <SettingsToggle
+                      checked={hostControl.capabilities.hostWrite === true}
+                      onChange={(value) => void saveHostControl({ hostWrite: value })}
+                      ariaLabel={t('automation.hostControl.hostWrite')}
+                    />
+                  </SettingsRow>
+                  <SettingsRow label={t('automation.hostControl.sshPreauthorized')} description={t('automation.hostControl.sshPreauthorizedDescription')}>
+                    <SettingsToggle
+                      checked={hostControl.ssh?.writePreauthorized === true}
+                      disabled={hostControl.capabilities.hostWrite !== true}
+                      onChange={(value) => void saveHostControl({ sshWritePreauthorized: value })}
+                      ariaLabel={t('automation.hostControl.sshPreauthorized')}
+                    />
+                  </SettingsRow>
+                  {hostControl.ssh?.keyPresent !== true || !hostControl.ssh?.host || !hostControl.ssh?.hostKey ? (
+                    <p className="px-4 py-2 text-xs text-muted-foreground">{t('automation.hostControl.sshIncomplete')}</p>
+                  ) : null}
+                </div>
+              </div>
               {/* One row, one right-hand cluster: the button that refreshes the
                  answer sits left of the switch that permits it, and the answer
                  itself takes the description slot once it is known, so it lines

@@ -77,6 +77,8 @@ LABEL org.opencontainers.image.title="Gajae Code App" \
 # Install system dependencies:
 # - build / archive tools & utilities
 # - openssh-server for container SSH access
+# - openssh-client for host control's outbound SSH (the daemon package does not
+#   provide the `ssh` binary on a slim base image)
 # - Playwright / Chromium headless rendering dependencies
 # Debian 13 renamed the ATK, cups and alsa libraries for the 64-bit time_t
 # transition; only the t64 names are published.
@@ -97,6 +99,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     jq \
     ffmpeg \
     openssh-server \
+    openssh-client \
     libnss3 \
     libatk1.0-0t64 \
     libatk-bridge2.0-0t64 \

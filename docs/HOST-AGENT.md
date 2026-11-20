@@ -58,6 +58,48 @@ that the desktop companion uses. Host control is a separate, opt-in surface:
    inbound port, no pairing token and no device registration to manage. The
    allow-listed verbs and the settings decide what a request may do with it.
 
+## SSH: the same permissions over a second transport
+
+The socket path only reaches a daemon that was mounted into the container. SSH
+reaches a machine directly - the same host by its address, or another one - and
+answers questions the socket cannot: init services, filesystem use, listeners,
+block devices. It is the same permission model, not a second one:
+
+- **A fixed verb table.** `server/gjc-ssh-host.ts` holds the whole vocabulary on
+  the app side and `deploy/host/verbs.mjs` holds the host side. Read verbs
+  (`host.info`, `host.disk`, `host.storage`, `host.memory`, `host.network`,
+  `host.listeners`, `service.status`, `docker.ps`, `docker.images`,
+  `docker.inspect`) run without asking. Write verbs (`service.restart`,
+  `docker.restart`) ask the user on every call - in every permission mode,
+  including a trusted `bypass` run - unless the operator pre-authorized host
+  writes in Settings. No verb takes a command string.
+- **One general path, and it always asks.** `host_shell` runs a command the
+  agent writes, on that host, as the SSH user: edit a file, install a package,
+  drive a compose stack, restart something no verb names. It is a write, so it
+  needs **Change host state** and puts the exact command on the approval card
+  for every call - in every permission mode - unless the operator
+  pre-authorized host writes. The command is passed unchanged as a single
+  argument to `sh` on the remote host, so heredocs and pipes behave as written;
+  output is capped at 64 KiB. Those fixed verbs stay the preferred path for the
+  reads they cover, because those run without a question.
+- **The host key is pinned.** The `known_hosts` file for a call contains exactly
+  one line, the key entered in Settings, and `StrictHostKeyChecking=yes`. A
+  changed host key is a failure, never a prompt to trust on first use; key
+  authentication against an unpinned host is a machine in the middle with root.
+- **The private key is encrypted at rest.** It lives under its own config row as
+  AES-256-GCM ciphertext; the master key is `GAJAE_HOST_CONTROL_KEY` when the
+  deployment sets one, otherwise a 32-byte file with mode 0600 beside the
+  database. `GET /api/host/status` reports only that a key is present. A call
+  writes it to a 0600 file inside a 0700 temporary directory and removes it
+  afterwards, including on timeout and abort.
+- **The address is typed in.** There is no default host: inside a container,
+  `host.docker.internal` only resolves when compose maps it
+  (`extra_hosts: ["host.docker.internal:host-gateway"]`), so the field takes a
+  hostname or a literal address and refuses a value that starts with `-`.
+
+The image installs `openssh-client` for this; a deployment without it can still
+use the socket path and will see SSH fail with the missing binary named.
+
 The standalone agent above still works without any of this: `ssh webby node
 deploy/host/gajae-host.mjs inventory` needs no mount and no env var, which is
 the way to use it during an incident when the app itself is the thing that is

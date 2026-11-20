@@ -6,10 +6,16 @@ import {
   detectHost,
   dockerClient,
   DockerSocketError,
+  isSshHost,
+  isSshUser,
+  parseSshHostKey,
+  parseSshPort,
+  parseSshPrivateKey,
   type HostControlClient,
   type HostProfile,
 } from '../../gjc-engine.js';
 
+import { clearSshPrivateKey, sshPrivateKeyPresent, writeSshPrivateKey } from './host-control.secrets.js';
 import {
   allowsHostCapability,
   dockerSocketPath,
@@ -104,6 +110,16 @@ export function createHostControlRouter({
       enabled: settings.enabled,
       capabilities: Object.fromEntries(HOST_CAPABILITIES.map((name) => [name, settings[name]])),
       targets: settings.targets,
+      // Never the key itself: only whether one is stored. A private key that
+      // comes back out of a status read has left the operator's control.
+      ssh: {
+        host: settings.sshHost,
+        port: settings.sshPort,
+        user: settings.sshUser,
+        hostKey: settings.sshHostKey,
+        keyPresent: sshPrivateKeyPresent(),
+        writePreauthorized: settings.sshWritePreauthorized,
+      },
       host: saved
         ? {
           os: saved.profile.runtime.operatingSystem,
@@ -164,7 +180,79 @@ export function createHostControlRouter({
       }
       patch.targets = parseTargets(targets);
     }
-    if (Object.keys(patch).length === 0) {
+    // The SSH endpoint. The address is typed in - a default that guessed the
+    // right host would be a guess that silently pointed somewhere else - and a
+    // pasted `ssh-keyscan` line is normalized to the key it pins.
+    if (body.sshHost !== undefined) {
+      const value = typeof body.sshHost === 'string' ? body.sshHost.trim() : undefined;
+      if (value === undefined || (value.length > 0 && !isSshHost(value))) {
+        return refuse(response, 400, 'HOST_SETTINGS_INVALID', 'sshHost must be a hostname or a literal IP address.');
+      }
+      patch.sshHost = value;
+    }
+    if (body.sshPort !== undefined) {
+      const port = parseSshPort(body.sshPort);
+      if (port === undefined) {
+        return refuse(response, 400, 'HOST_SETTINGS_INVALID', 'sshPort must be a whole number between 1 and 65535.');
+      }
+      patch.sshPort = port;
+    }
+    if (body.sshUser !== undefined) {
+      if (!isSshUser(body.sshUser)) {
+        return refuse(response, 400, 'HOST_SETTINGS_INVALID', 'sshUser must be a plain user name, for example root.');
+      }
+      patch.sshUser = body.sshUser;
+    }
+    if (body.sshHostKey !== undefined) {
+      const value = typeof body.sshHostKey === 'string' ? body.sshHostKey.trim() : undefined;
+      if (value === undefined) {
+        return refuse(response, 400, 'HOST_SETTINGS_INVALID', 'sshHostKey must be a pinned host key line.');
+      }
+      if (value.length === 0) {
+        patch.sshHostKey = '';
+      } else {
+        const key = parseSshHostKey(value);
+        if (!key) {
+          return refuse(
+            response,
+            400,
+            'HOST_SETTINGS_INVALID',
+            'sshHostKey must name the algorithm and the key, for example "ssh-ed25519 AAAAC3Nz…".',
+          );
+        }
+        patch.sshHostKey = key;
+      }
+    }
+    if (body.sshWritePreauthorized !== undefined) {
+      if (typeof body.sshWritePreauthorized !== 'boolean') {
+        return refuse(response, 400, 'HOST_SETTINGS_INVALID', 'sshWritePreauthorized must be true or false.');
+      }
+      patch.sshWritePreauthorized = body.sshWritePreauthorized;
+    }
+    // Write-only: an empty string forgets the key, and nothing ever reads it
+    // back through this router.
+    let keyChanged = false;
+    if (body.sshPrivateKey !== undefined) {
+      if (typeof body.sshPrivateKey !== 'string') {
+        return refuse(response, 400, 'HOST_SETTINGS_INVALID', 'sshPrivateKey must be a private key in text form.');
+      }
+      if (body.sshPrivateKey.trim().length === 0) {
+        clearSshPrivateKey();
+      } else {
+        const key = parseSshPrivateKey(body.sshPrivateKey);
+        if (!key) {
+          return refuse(
+            response,
+            400,
+            'HOST_SETTINGS_INVALID',
+            'sshPrivateKey must be an unencrypted OpenSSH or PEM private key, up to 16 KiB.',
+          );
+        }
+        writeSshPrivateKey(key);
+      }
+      keyChanged = true;
+    }
+    if (Object.keys(patch).length === 0 && !keyChanged) {
       return refuse(response, 400, 'HOST_SETTINGS_EMPTY', 'Nothing to update.');
     }
     const current = store.read();

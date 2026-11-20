@@ -39,6 +39,7 @@
     "server/gjc-project-exports.ts",
     "server/gjc-runtime-manifest.ts",
     "server/gjc-session-state.ts",
+    "server/gjc-ssh-host.ts",
     "server/gjc-windows-job.ts",
     "server/gjc-worker.ts",
     "server/gjc-worker-protocol.ts"
@@ -74,6 +75,7 @@
     "server/gjc-sdk-workflow-identity.bun.test.ts",
     "server/gjc-session-state.test.ts",
     "server/gjc-session-worktree-contract.bun.test.ts",
+    "server/gjc-ssh-host.test.ts",
     "server/gjc-windows-job.test.ts",
     "server/gjc-worker-protocol.test.ts",
     "server/gjc-worker.test.ts"

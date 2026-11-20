@@ -160,3 +160,122 @@ test('restart is one named container with its own switch, not the allowed list',
   );
   assert.equal(calls.length, 1);
 });
+
+const sshTarget = {
+  host: '192.168.1.10',
+  port: 22,
+  user: 'root',
+  hostKey: 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample',
+  privateKey: '-----BEGIN OPENSSH PRIVATE KEY-----\nkey\n-----END OPENSSH PRIVATE KEY-----',
+};
+
+function sshRun(commands: string[]) {
+  return async (_target: unknown, command: string) => {
+    commands.push(command);
+    return { exitCode: 0, stdout: 'Linux webby 6.8.0', stderr: '', truncated: false, timedOut: false };
+  };
+}
+
+test('an ssh read runs without asking, because the verb table is the whole surface', async () => {
+  const commands: string[] = [];
+  const tool = createHostControlTool(policy({ capabilities: ['hostRead'], ssh: sshTarget }), {
+    run: sshRun(commands),
+    ui: { select: async () => { assert.fail('a read verb must not ask for approval'); } },
+  });
+
+  const result = await run(tool, { action: 'ssh', verb: 'host.info' });
+  assert.match(result, /Linux webby/);
+  assert.match(result, /"mutating": false/);
+  assert.deepEqual(commands, ['uname -a; cat /etc/os-release; uptime']);
+});
+
+test('an ssh write asks before it runs and a denial runs nothing', async () => {
+  const commands: string[] = [];
+  let asked: string | undefined;
+  const tool = createHostControlTool(policy({ capabilities: ['hostWrite'], ssh: sshTarget }), {
+    run: sshRun(commands),
+    ui: { select: async (prompt) => { asked = prompt; return 'Deny'; } },
+  });
+
+  await assert.rejects(
+    run(tool, { action: 'ssh', verb: 'docker.restart', target: 'godoxy' }),
+    /was not approved/u,
+  );
+  assert.match(asked ?? '', /docker\.restart godoxy on root@192\.168\.1\.10/u);
+  assert.deepEqual(commands, []);
+
+  const approved = createHostControlTool(policy({ capabilities: ['hostWrite'], ssh: sshTarget }), {
+    run: sshRun(commands),
+    ui: { select: async () => 'Allow once' },
+  });
+  await run(approved, { action: 'ssh', verb: 'docker.restart', target: 'godoxy' });
+  assert.deepEqual(commands, ['docker restart godoxy']);
+});
+
+test('prior authorization is the only way past the write question, and it needs the write switch', async () => {
+  const commands: string[] = [];
+  const tool = createHostControlTool(
+    policy({ capabilities: ['hostWrite'], ssh: sshTarget, sshWritePreauthorized: true }),
+    { run: sshRun(commands), ui: { select: async () => assert.fail('pre-authorized writes do not ask') } },
+  );
+  await run(tool, { action: 'ssh', verb: 'service.restart', target: 'nginx' });
+  assert.deepEqual(commands, ['service nginx restart']);
+
+  // The grant rides with the read switch only: a read-only run cannot be
+  // talked into a mutating verb, whatever Settings says about pre-authorization.
+  const readOnly = createHostControlTool(policy({ capabilities: ['hostRead'], ssh: sshTarget }), { run: sshRun(commands) });
+  await assert.rejects(
+    run(readOnly, { action: 'ssh', verb: 'service.restart', target: 'nginx' }),
+    /hostWrite capability is off/u,
+  );
+  assert.deepEqual(commands, ['service nginx restart']);
+});
+
+test('a shell command is a host write: the card shows it verbatim and a denial runs nothing', async () => {
+  const commands: string[] = [];
+  let asked = '';
+  const tool = createHostControlTool(policy({ capabilities: ['hostWrite'], ssh: sshTarget }), {
+    run: sshRun(commands),
+    ui: { select: async (prompt) => { asked = prompt; return 'Deny'; } },
+  });
+
+  const script = 'cat >/srv/app/.env <<\'EOF\'\nDEBUG=true\nEOF';
+  await assert.rejects(run(tool, { action: 'host_shell', command: script }), /was not approved/u);
+  assert.ok(asked.includes(script), 'the approval must show the command, not a summary of it');
+  assert.deepEqual(commands, []);
+
+  const approved = createHostControlTool(policy({ capabilities: ['hostWrite'], ssh: sshTarget }), {
+    run: sshRun(commands),
+    ui: { select: async () => 'Allow once' },
+  });
+  await run(approved, { action: 'host_shell', command: 'systemctl restart nginx' });
+  assert.deepEqual(commands, ['systemctl restart nginx']);
+});
+
+test('pre-authorized host writes skip the shell question too', async () => {
+  const commands: string[] = [];
+  const tool = createHostControlTool(
+    policy({ capabilities: ['hostWrite'], ssh: sshTarget, sshWritePreauthorized: true }),
+    { run: sshRun(commands), ui: { select: async () => assert.fail('pre-authorized commands do not ask') } },
+  );
+  await run(tool, { action: 'host_shell', command: 'docker compose up -d' });
+  assert.deepEqual(commands, ['docker compose up -d']);
+});
+
+test('host_shell needs the write switch and a configured endpoint', async () => {
+  const commands: string[] = [];
+  const readOnly = createHostControlTool(policy({ capabilities: ['hostRead'], ssh: sshTarget }), { run: sshRun(commands) });
+  await assert.rejects(
+    run(readOnly, { action: 'host_shell', command: 'uptime' }),
+    /hostWrite capability is off/u,
+  );
+
+  const unconfigured = createHostControlTool(policy({ capabilities: ['hostWrite'] }), { run: sshRun(commands) });
+  await assert.rejects(run(unconfigured, { action: 'host_shell', command: 'uptime' }), /SSH access is not configured/u);
+  assert.deepEqual(commands, []);
+});
+
+test('ssh says what is missing instead of failing on the host', async () => {
+  const tool = createHostControlTool(policy({ capabilities: ['hostRead'] }), { run: sshRun([]) });
+  await assert.rejects(run(tool, { action: 'ssh', verb: 'host.disk' }), /SSH access is not configured/u);
+});

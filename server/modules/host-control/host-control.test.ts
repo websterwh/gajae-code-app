@@ -51,9 +51,13 @@ function fakeProfiles(): HostProfileStore {
 /** Every capability, all off: assertions add the ones a test switches on. */
 function capabilities(overrides: Partial<Record<HostCapability, boolean>> = {}) {
   return {
-    facts: false, containers: false, restart: false, discovery: false, docker: false, shell: false, files: false, ...overrides,
+    facts: false, containers: false, restart: false, discovery: false, docker: false, shell: false, files: false,
+    hostRead: false, hostWrite: false, ...overrides,
   };
 }
+
+/** The connection half of the settings, which the master switch leaves alone. */
+const SSH_DEFAULTS = { sshHost: '', sshPort: 22, sshUser: 'root', sshHostKey: '', sshWritePreauthorized: false };
 
 function fakeClient(calls: string[]) {
   return {
@@ -122,6 +126,8 @@ test('without the env var the surface is inert and the socket is never opened', 
       enabled: true,
       capabilities: capabilities({ containers: true, restart: true }),
       targets: [],
+      // The endpoint is described, never the key: only whether one is stored.
+      ssh: { host: '', port: 22, user: 'root', hostKey: '', keyPresent: false, writePreauthorized: false },
       host: null,
     });
     assert.equal((await server.request('/settings', json({ enabled: false }))).status, 409);
@@ -157,13 +163,15 @@ test('the removed container endpoints are not served at all', async () => {
 });
 
 test('the master switch drops every capability and the target scope, so re-enabling restores nothing', () => {
-  const allOn = capabilities({ facts: true, containers: true, restart: true, discovery: true, docker: true, shell: true, files: true });
-  const on = applyHostControlPatch({ enabled: true, ...allOn, targets: ['mos-*'] }, {});
-  assert.deepEqual(on, { enabled: true, ...allOn, targets: ['mos-*'] });
+  const allOn = capabilities({ facts: true, containers: true, restart: true, discovery: true, docker: true, shell: true, files: true, hostRead: true, hostWrite: true });
+  const on = applyHostControlPatch({ enabled: true, ...SSH_DEFAULTS, ...allOn, targets: ['mos-*'] }, {});
+  assert.deepEqual(on, { enabled: true, ...SSH_DEFAULTS, ...allOn, targets: ['mos-*'] });
   const off = applyHostControlPatch(on, { enabled: false });
-  assert.deepEqual(off, { enabled: false, ...capabilities(), targets: [] });
+  // The address and the pinned host key are settings, not permissions, so they
+  // survive: turning the feature back on must not ask for the key again.
+  assert.deepEqual(off, { enabled: false, ...SSH_DEFAULTS, ...capabilities(), targets: [] });
   assert.deepEqual(applyHostControlPatch(off, { enabled: true }), {
-    enabled: true, ...capabilities(), targets: [],
+    enabled: true, ...SSH_DEFAULTS, ...capabilities(), targets: [],
   });
 });
 
