@@ -7,6 +7,7 @@ import { createElement } from 'react';
 
 import { useSessionStore, type FetchMoreResult, type NormalizedMessage, type SessionSlot, type SessionStore } from '../../../stores/useSessionStore';
 import type { Project, ProjectSession } from '../../../types/app';
+import { cacheContextFacts, readCachedContextFacts } from '../utils/contextSnapshotCache';
 
 import { LOAD_ALL_LIMIT, useChatSessionState } from './useChatSessionState';
 
@@ -204,6 +205,54 @@ test('subscription cursors survive A → B → A, reconnect, and remount with th
   await act(async () => {});
   expectCursor('a', 'a-next', 1);
   assert.deepEqual(store.getReplayCursor('b'), { replayGeneration: 'b-first', lastSeq: 3 });
+});
+
+test('opening a conversation restores the context facts it last reported', async () => {
+  // The Agent sidebar reads these through the published status snapshot; the
+  // runtime only sends them with a run, so a reopened conversation used to
+  // have no Context row until the next message.
+  const storage = new Map<string, string>();
+  Object.defineProperty(globalThis, 'localStorage', {
+    value: {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => { storage.set(key, value); },
+      removeItem: (key: string) => { storage.delete(key); },
+    },
+    configurable: true,
+  });
+  cacheContextFacts('a', { contextPercent: 42, contextWindow: 128_000, contextTokens: 53_760 });
+  cacheContextFacts('b', { contextPercent: 7, contextWindow: 200_000 });
+  globalThis.fetch = (async () => new Response(JSON.stringify({ messages: [], total: 0, hasMore: false }))) as typeof fetch;
+  const sessionStore = {
+    getMessages: () => empty,
+    has: () => true,
+    isStale: () => false,
+    setActiveSession: noop,
+    fetchFromServer: () => Promise.resolve({ total: 0, hasMore: false, serverMessages: [], tokenUsage: null } as unknown as SessionSlot),
+    fetchMore: () => Promise.resolve(null),
+  } as unknown as SessionStore;
+  const statusCheckSentAtRef = { current: new Map<string, number>() };
+  const view = renderHook(({ id }: { id: string | null }) => useChatSessionState({
+    selectedProject: project,
+    selectedSession: id ? { id } as ProjectSession : null,
+    ws: null, sendMessage: noop, resetStreamingState: noop,
+    sessionStore, statusCheckSentAtRef,
+  }), { initialProps: { id: null as string | null } });
+  // The pane is mounted before a conversation is picked, which is the ordinary
+  // path: landing, then a click in the sidebar.
+  await act(async () => {});
+  view.rerender({ id: 'a' });
+  await act(async () => {});
+
+  assert.equal(view.result.current.sessionState?.contextPercent, 42, 'the session shows its own reported context on open');
+  assert.equal(view.result.current.sessionState?.contextWindow, 128_000);
+  assert.equal(view.result.current.sessionState?.contextTokens, 53_760);
+
+  assert.deepEqual(readCachedContextFacts('b'), { contextWindow: 200_000, contextPercent: 7 }, 'the second session is cached');
+  view.rerender({ id: 'b' });
+  await act(async () => {});
+  assert.equal(view.result.current.sessionState?.contextPercent, 7, 'another conversation gets its own facts, never the previous ones');
+  assert.deepEqual(readCachedContextFacts('b'), { contextWindow: 200_000, contextPercent: 7 }, 'the switch does not file the old session facts under the new id');
 });
 
 const message = (id: string, seconds: number, content = id): NormalizedMessage => ({

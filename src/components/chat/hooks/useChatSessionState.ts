@@ -8,6 +8,7 @@ import type { NormalizedMessage, SessionStore } from '../../../stores/useSession
 import type { ChatMessage } from '../types/types';
 import { createCachedDiffCalculator, type DiffCalculator } from '../utils/messageTransforms';
 import { getIntrinsicMessageKey } from '../utils/messageKeys';
+import { cacheContextFacts, readCachedContextFacts } from '../utils/contextSnapshotCache';
 
 import { normalizedToChatMessages } from './useChatMessages';
 import { useChatFollowScroll } from './useChatFollowScroll';
@@ -122,7 +123,13 @@ export function useChatSessionState({
   const [totalMessages, setTotalMessages] = useState(0);
   const [hasNewMessagesBelow, setHasNewMessagesBelow] = useState(false);
   const [tokenBudget, setTokenBudget] = useState<Record<string, unknown> | null>(null);
-  const [sessionState, setSessionState] = useState<Record<string, unknown> | null>(null);
+  // The runtime reports context facts with a run and the chat drops them when
+  // the session changes. A conversation opened later starts from the facts it
+  // last reported, so the Agent sidebar's Context row is there before the next
+  // message instead of appearing only after one.
+  const [sessionState, setSessionState] = useState<Record<string, unknown> | null>(
+    () => (selectedSession?.id ? readCachedContextFacts(selectedSession.id) : null),
+  );
   const [visibleMessageCount, setVisibleMessageCount] = useState(FIRST_VISIBLE_COUNT);
   const [allMessagesLoaded, setAllMessagesLoaded] = useState(false);
   const [isLoadingAllMessages, setIsLoadingAllMessages] = useState(false);
@@ -146,6 +153,21 @@ export function useChatSessionState({
   const activeSession = selectedSession?.id || currentSessionId || null;
   const activeSessionRef = useRef(activeSession);
   activeSessionRef.current = activeSession;
+  // Which session the state in hand was reported for. A render that has just
+  // switched the selected session still holds the previous one's facts for a
+  // frame; without this the cache would file them under the new session before
+  // the restore below reads them back.
+  const sessionStateOwnerRef = useRef<string | null>(selectedSession?.id ?? null);
+  const applySessionState = useCallback((update: SetStateAction<Record<string, unknown> | null>) => {
+    sessionStateOwnerRef.current = activeSessionRef.current;
+    setSessionState(update);
+  }, []);
+  // Persist what the runtime reported while this session is on screen, keyed
+  // by session so another conversation never inherits these numbers.
+  useEffect(() => {
+    const owner = sessionStateOwnerRef.current;
+    if (owner && owner === activeSession && sessionState) cacheContextFacts(owner, sessionState);
+  }, [activeSession, sessionState]);
   // A response belongs to one visit, including when the user returns to the
   // same session while an earlier visit still has requests in flight.
   const viewKey = `${selectedProject?.projectId ?? ''}:${activeSession ?? ''}:${newSessionTrigger ?? 0}`;
@@ -194,7 +216,7 @@ export function useChatSessionState({
     setCurrentSessionId(null);
     setPendingUserMessage(null);
     setTokenBudget(null);
-    setSessionState(null);
+    applySessionState(null);
     setViewHiddenCount(0);
     setSearchTarget(null);
     initialScrollRef.current = true;
@@ -202,7 +224,7 @@ export function useChatSessionState({
     loadedKeyRef.current = null;
     imageStateRef.current = { sessionKey: null, enabled: showImagePreviews };
     resetPagination(true);
-  }, [_onSessionIdle, newSessionTrigger, resetPagination, resetStreamingState, showImagePreviews]);
+  }, [_onSessionIdle, applySessionState, newSessionTrigger, resetPagination, resetStreamingState, showImagePreviews]);
 
   const sessionActivity = activeSession ? processingSessions?.get(activeSession) || null : null;
   const isProcessing = sessionActivity !== null;
@@ -393,7 +415,7 @@ export function useChatSessionState({
       resetStreamingState();
       setCurrentSessionId(null);
       setTokenBudget(null);
-      setSessionState(null);
+      applySessionState(null);
       resetPagination(true);
       setIsLoadingSessionMessages(false);
       loadedKeyRef.current = null;
@@ -423,10 +445,11 @@ export function useChatSessionState({
       searchInProgressRef.current = false;
       setSearchTarget(null);
     }
-    if (changed) {
-      setTokenBudget(null);
-      setSessionState(null);
-    }
+    if (changed) setTokenBudget(null);
+    // The pane outlives the selection: the first session picked after the chat
+    // mounted arrives here with no previous id, so the restore follows the
+    // owner rather than only a session-to-session change.
+    if (sessionStateOwnerRef.current !== sessionId) applySessionState(readCachedContextFacts(sessionId));
     setCurrentSessionId(sessionId);
     subscribe();
     loadedKeyRef.current = key;
@@ -445,7 +468,7 @@ export function useChatSessionState({
       .catch(() => {
         if (requestViewRef.current === requestView) setIsLoadingSessionMessages(false);
       });
-  }, [currentSessionId, resetPagination, resetStreamingState, selectedProject, selectedSession, sendMessage, sessionStore, showImagePreviews, statusCheckSentAtRef, ws]);
+  }, [applySessionState, currentSessionId, resetPagination, resetStreamingState, selectedProject, selectedSession, sendMessage, sessionStore, showImagePreviews, statusCheckSentAtRef, ws]);
 
   useEffect(() => {
     const session = selectedSession as (ProjectSession & { __searchTargetSnippet?: unknown; __searchTargetTimestamp?: unknown }) | null;
@@ -532,7 +555,7 @@ export function useChatSessionState({
   useEffect(() => {
     if (!usageProjectId || !usageSessionId) {
       setTokenBudget(null);
-      setSessionState(null);
+      applySessionState(null);
       return;
     }
     let cancelled = false;
@@ -554,7 +577,7 @@ export function useChatSessionState({
     };
     void loadUsage();
     return () => { cancelled = true; };
-  }, [usageProjectId, usageSessionId]);
+  }, [applySessionState, usageProjectId, usageSessionId]);
 
   const visibleMessages = useMemo(() => chatMessages.length <= visibleMessageCount ? chatMessages : chatMessages.slice(-visibleMessageCount), [chatMessages, visibleMessageCount]);
 
@@ -643,7 +666,7 @@ export function useChatSessionState({
     tokenBudget,
     setTokenBudget,
     sessionState,
-    setSessionState,
+    setSessionState: applySessionState,
     visibleMessageCount,
     visibleMessages,
     loadAllMessages,
