@@ -28,6 +28,7 @@ type AppUiCommandActionId =
   | 'open-cost-modal'
   | 'fork-session'
   | 'retry-last-turn'
+  | 'rename-session'
   | 'run-shell-command';
 
 export type AppUiCommand = {
@@ -60,6 +61,8 @@ export type AppUiCommandActions = {
   forkSession: () => void;
   /** Re-runs the turn the transcript ends on, as GJC's `/retry` does. */
   retryLastTurn: () => void;
+  /** Retitles the open conversation, as the sidebar's rename does. */
+  renameSession: (title: string) => void;
   /** Runs one shell command in the session's project and reports the result. */
   runShellCommand: (command: string) => void;
   /** Runs a MemPalace command in the session's project. */
@@ -144,6 +147,15 @@ export const APP_UI_COMMANDS: readonly AppUiCommand[] = [
     actionId: 'retry-last-turn',
   },
   {
+    name: '/rename',
+    description: 'Rename this conversation',
+    namespace: 'app',
+    type: 'app',
+    actionId: 'rename-session',
+    // A bare /rename has nothing to apply, so the menu inserts it for typing.
+    requiresArguments: true,
+  },
+  {
     name: '/run',
     description: 'Run a shell command here and show its output',
     namespace: 'app',
@@ -194,6 +206,9 @@ export function runAppUiCommand(command: AppUiCommand, actions: AppUiCommandActi
       // holds its prompt, so arguments typed after the command are ignored
       // rather than becoming a second prompt.
       actions.retryLastTurn();
+      break;
+    case 'rename-session':
+      actions.renameSession(args.trim());
       break;
     case 'run-shell-command':
       actions.runShellCommand(args);

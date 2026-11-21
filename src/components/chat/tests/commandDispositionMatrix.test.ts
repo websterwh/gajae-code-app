@@ -216,8 +216,10 @@ const GROUP_D: readonly Row[] = [
   ['D83', '/export --copy', 'command'],
   ['D84', '/export', 'command'],
   ['D85', '/export dummy/e2e-export.html', 'command'],
-  ['D86', '/rename', 'command'],
-  ['D87', '/rename E2E Dummy Session', 'command'],
+  // /rename retitles the open conversation the way the sidebar's rename does;
+  // a bare /rename has no title to apply and answers with a usage line.
+  ['D86', '/rename', 'app-action'],
+  ['D87', '/rename E2E Dummy Session', 'app-action'],
 ];
 
 const GROUP_E: readonly Row[] = [

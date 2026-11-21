@@ -73,6 +73,7 @@ test('runAppUiCommand dispatches each action id to its action', () => {
     openCostModal: () => { calls.push('open-cost-modal'); },
     forkSession: () => { calls.push('fork-session'); },
     retryLastTurn: () => { calls.push('retry-last-turn'); },
+    renameSession: () => { calls.push('rename-session'); },
     runShellCommand: () => { calls.push('run-shell-command'); },
   };
 
@@ -214,6 +215,31 @@ test('typed /run asks the server and renders the output, never the model', async
   assert.equal(result.type, 'assistant');
   assert.match(result.content, /exit 0/u);
   assert.match(result.content, /connected to 127\.0\.0\.1:5555/u);
+});
+
+test('typed /rename PUTs the new title and never reaches the model', async () => {
+  const sentMessages: unknown[] = [];
+  const addedMessages: unknown[] = [];
+  const composer = captureComposer(sentMessages, addedMessages);
+  const originalFetch = globalThis.fetch;
+  const requests: Array<{ url: string; method?: string; body: unknown }> = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    requests.push({ url: String(input), method: init?.method, body: init?.body ? JSON.parse(String(init.body)) : null });
+    return Response.json({ success: true, data: { sessionId: 'session-1', summary: 'Fix adb pairing' } });
+  }) as typeof fetch;
+
+  try {
+    composer.handleVoiceTranscript('/rename Fix adb pairing');
+    await composer.handleSubmit(submitEvent);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.deepEqual(sentMessages, [], 'a /rename command must not reach the model');
+  assert.deepEqual(requests.map((request) => `${request.method} ${request.url}`), ['PUT /api/providers/sessions/session-1']);
+  assert.deepEqual(requests[0]?.body, { summary: 'Fix adb pairing' });
+  assert.deepEqual(addedMessages.filter((message) => (message as { type?: string }).type === 'error'), []);
 });
 
 test('typed TUI-only command gets a local notice instead of a model prompt', async () => {

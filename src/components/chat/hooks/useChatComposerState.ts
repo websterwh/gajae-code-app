@@ -11,7 +11,7 @@ import type { MarkSessionProcessing } from '../../../hooks/useSessionProtection'
 import type { ChatMessage, PendingPermissionRequest, PermissionDecision, SessionEstablishedContext  } from '../types/types';
 import type { LLMProvider, Project, ProjectSession, ProviderModelsCacheInfo } from '../../../types/app';
 import { randomUUID } from '../../../utils/uuid';
-import { authenticatedFetch } from '../../../utils/api';
+import { api, authenticatedFetch } from '../../../utils/api';
 import { classifyCommandInput, isAutoSendable } from '../commandDispatchPolicy';
 import { findAppUiCommand, getLocalCommandNotice, resolveCommandAlias, runAppUiCommand, type AppUiCommand } from '../appUiCommands';
 import { permissionResponseMessage } from '../utils/chatPermissions';
@@ -178,7 +178,32 @@ export function useChatComposerState(args: UseChatComposerStateArgs) {
         addMessage({ type: 'error', content: `/run failed: ${error instanceof Error ? error.message : 'unknown error'}`, timestamp: Date.now() });
       });
   }, [addMessage, selectedProject]);
-  const applyAppCommand = useCallback((command: AppUiCommand, commandArgs = '') => { if (isComposerSealed()) return; return runAppUiCommand(command, { openSessionPicker: palette.openSessionPicker, startNewChat: palette.startNewChat, openSettings: () => onShowSettings ? onShowSettings() : palette.openSettings(), openMemorySettings: () => palette.openSettings('memory'), runMempalace: (args: string) => runShellCommand(`mempalace ${args}`), openModelPicker: () => setModelPickerTrigger((n) => n + 1), openCostModal: showCostModal, forkSession, retryLastTurn: () => onRetryLastTurn?.(), runShellCommand }, commandArgs); }, [forkSession, onRetryLastTurn, onShowSettings, palette, runShellCommand, showCostModal]);
+  // `/rename` is the sidebar's rename without the inline editor: the same
+  // endpoint the row's editor posts to, then the projects query so the sidebar
+  // and the header both show the new title instead of the old one.
+  const renameSession = useCallback((title: string) => {
+    if (isComposerSealed()) return;
+    const trimmed = title.trim();
+    if (!trimmed) {
+      addMessage({ type: 'assistant', content: 'Usage: `/rename <new title>` — for example `/rename Fix adb pairing`.', timestamp: Date.now() });
+      return;
+    }
+    const target = selectedSession?.id || currentSessionId;
+    if (!target) {
+      addMessage({ type: 'assistant', content: 'Send a message first: there is no conversation to rename here yet.', timestamp: Date.now() });
+      return;
+    }
+    void api.renameSession(target, trimmed)
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Request failed (${response.status})`);
+        useAppShellStore.getState().setSelectedSession((session) => session && session.id === target ? { ...session, summary: trimmed } : session);
+        await palette.refreshProjects();
+      })
+      .catch((error: unknown) => {
+        addMessage({ type: 'error', content: `/rename failed: ${error instanceof Error ? error.message : 'unknown error'}`, timestamp: Date.now() });
+      });
+  }, [addMessage, currentSessionId, palette, selectedSession?.id]);
+  const applyAppCommand = useCallback((command: AppUiCommand, commandArgs = '') => { if (isComposerSealed()) return; return runAppUiCommand(command, { openSessionPicker: palette.openSessionPicker, startNewChat: palette.startNewChat, openSettings: () => onShowSettings ? onShowSettings() : palette.openSettings(), openMemorySettings: () => palette.openSettings('memory'), runMempalace: (args: string) => runShellCommand(`mempalace ${args}`), openModelPicker: () => setModelPickerTrigger((n) => n + 1), openCostModal: showCostModal, forkSession, retryLastTurn: () => onRetryLastTurn?.(), runShellCommand, renameSession }, commandArgs); }, [forkSession, onRetryLastTurn, onShowSettings, palette, renameSession, runShellCommand, showCostModal]);
 
   const { slashCommands, slashCommandsCount, filteredCommands, frequentCommands, commandQuery, showCommandMenu, selectedCommandIndex, resetCommandMenuState, handleCommandSelect, handleToggleCommandMenu, handleCommandInputChange, handleCommandMenuKeyDown } = useSlashCommands({ selectedProject, executionCwd, provider: 'gjc', sessionId: conversation, input, setInput, textareaRef, onLoginCommand: login, onAppCommand: (command) => { const app = findAppUiCommand(command.name); if (app) applyAppCommand(app); } });
   const { showFileDropdown, filteredFiles, selectedFileIndex, renderInputWithMentions, selectFile, setCursorPosition, handleFileMentionsKeyDown } = useFileMentions({ selectedProject, executionCwd, sessionId: conversation, input, setInput, textareaRef });
