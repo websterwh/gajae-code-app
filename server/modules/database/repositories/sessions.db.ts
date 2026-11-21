@@ -165,6 +165,27 @@ export const sessionsDb = {
     return selectMany(`SELECT ${rowColumns} FROM sessions WHERE jsonl_path IS NOT NULL`);
   },
 
+  /**
+   * Only the given sessions that have a transcript path on record. The list
+   * routes check just the rows they are about to return, so the orphan sweep
+   * costs what is on screen instead of the whole table.
+   */
+  getSessionsWithTranscriptPathByIds(sessionIds: readonly string[]): SessionRow[] {
+    const rows: SessionRow[] = [];
+    // Well under SQLite's bound-parameter limit, and bounded per request:
+    // one page of sessions per project.
+    const chunkSize = 400;
+    for (let index = 0; index < sessionIds.length; index += chunkSize) {
+      const chunk = sessionIds.slice(index, index + chunkSize);
+      const placeholders = chunk.map(() => '?').join(', ');
+      rows.push(...selectMany(
+        `SELECT ${rowColumns} FROM sessions WHERE jsonl_path IS NOT NULL AND session_id IN (${placeholders})`,
+        ...chunk,
+      ));
+    }
+    return rows;
+  },
+
   getArchivedSessions(): SessionRow[] {
     return selectMany(`SELECT ${rowColumns} FROM sessions WHERE isArchived = 1 ORDER BY ${recency} DESC, session_id DESC`);
   },

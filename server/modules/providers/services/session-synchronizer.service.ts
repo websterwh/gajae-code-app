@@ -6,6 +6,7 @@ import type { LLMProvider } from '@/shared/types.js';
 
 type SessionSynchronizeResult = { processedByProvider: Record<LLMProvider, number>; failures: string[]; pruned: number };
 type ProviderScan = { provider: LLMProvider; processed: number };
+type TranscriptRow = { session_id: string; jsonl_path: string | null };
 
 /**
  * The forward scan below only ever discovers sessions, never un-discovers
@@ -16,14 +17,30 @@ type ProviderScan = { provider: LLMProvider; processed: number };
  * deleting that goes through the worktree release path with its own
  * dirty/running checks - never silently here.
  */
-export function pruneSessionsWithMissingTranscripts(): number {
-  let pruned = 0;
-  for (const row of sessionsDb.getAllSessionsWithTranscriptPath()) {
+function deleteRowsWithMissingTranscripts(rows: readonly TranscriptRow[]): string[] {
+  const removed: string[] = [];
+  for (const row of rows) {
     if (!row.jsonl_path || existsSync(row.jsonl_path)) continue;
     if (sessionWorktreesDb.get(row.session_id)) continue;
-    if (sessionsDb.deleteSessionById(row.session_id)) pruned += 1;
+    if (sessionsDb.deleteSessionById(row.session_id)) removed.push(row.session_id);
   }
-  return pruned;
+  return removed;
+}
+
+export function pruneSessionsWithMissingTranscripts(): number {
+  return deleteRowsWithMissingTranscripts(sessionsDb.getAllSessionsWithTranscriptPath()).length;
+}
+
+/**
+ * The list routes sweep only the rows they are about to return. Sweeping the
+ * whole table on every fetch blocked the event loop for seconds on a large
+ * history - and the first fetch after a restart is the one the loading screen
+ * waits on - while an orphan can only mislead a reader once it is listed.
+ * Returns the ids it removed so the response can drop them too.
+ */
+export function pruneListedSessionsWithMissingTranscripts(sessionIds: readonly string[]): ReadonlySet<string> {
+  if (sessionIds.length === 0) return new Set<string>();
+  return new Set(deleteRowsWithMissingTranscripts(sessionsDb.getSessionsWithTranscriptPathByIds(sessionIds)));
 }
 
 function failureMessage(reason: unknown): string {

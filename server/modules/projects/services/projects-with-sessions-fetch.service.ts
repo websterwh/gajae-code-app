@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import { projectsDb, sessionsDb } from '@/modules/database/index.js';
-import { pruneSessionsWithMissingTranscripts, sessionSynchronizerService } from '@/modules/providers/index.js';
+import { pruneListedSessionsWithMissingTranscripts, sessionSynchronizerService } from '@/modules/providers/index.js';
 import { WS_OPEN_STATE, connectedClients } from '@/modules/websocket/index.js';
 import type { RealtimeClientConnection } from '@/shared/types.js';
 import { AppError } from '@/shared/utils.js';
@@ -105,15 +105,31 @@ function configuredProjectName(customName: string | null | undefined): string | 
   return customName && customName.trim().length > 0 ? customName : null;
 }
 
+/**
+ * Drops the rows whose transcript file is gone from the page it is about to
+ * return, adjusting the totals so "show more" stays truthful. Only the listed
+ * ids are checked: the whole-table sweep this replaces read and stat'ed every
+ * session ever recorded on every fetch, and on a large history that blocked
+ * the event loop for the first request after a restart - the very request the
+ * loading screen waits on.
+ */
+function withoutOrphanedSessions<T extends ProjectListItem>(projects: T[]): T[] {
+  const pruned = pruneListedSessionsWithMissingTranscripts(
+    projects.flatMap((project) => project.sessions.map((session) => session.id)),
+  );
+  if (pruned.size === 0) return projects;
+
+  return projects.map((project) => {
+    const sessions = project.sessions.filter((session) => !pruned.has(session.id));
+    const removed = project.sessions.length - sessions.length;
+    if (removed === 0) return project;
+    const total = Math.max(0, project.sessionMeta.total - removed);
+    return { ...project, sessions, sessionMeta: { total, hasMore: sessions.length < total } };
+  });
+}
+
 export async function getProjectsWithSessions(options: GetProjectsWithSessionsOptions = {}): Promise<ProjectListItem[]> {
-  if (options.skipSynchronization) {
-    // The full forward scan is skipped, but a transcript deleted by hand
-    // outside the app is a cheap stat() per session, not a rescan - cheap
-    // enough to run on every list fetch so Refresh always clears it.
-    pruneSessionsWithMissingTranscripts();
-  } else {
-    await sessionSynchronizerService.synchronizeSessions();
-  }
+  if (!options.skipSynchronization) await sessionSynchronizerService.synchronizeSessions();
 
   const projects = projectsDb.getProjectPaths() as Array<{ project_id: string; project_path: string; custom_project_name?: string | null; origin?: 'legacy' | 'explicit' | 'auto' | null; isStarred?: number }>;
   const sessionLimit = Math.min(Math.max(1, options.sessionsLimit ?? initialPageSize), maxPageSize);
@@ -144,7 +160,9 @@ export async function getProjectsWithSessions(options: GetProjectsWithSessionsOp
   }
 
   publishProgress({ phase: 'complete', current: projects.length, total: projects.length });
-  return result;
+  // Refresh still clears a transcript deleted by hand outside the app, because
+  // the rows that would have shown it are the ones checked here.
+  return withoutOrphanedSessions(result);
 }
 
 /** Names and paths only; this must not load or synchronize session data. */
@@ -161,11 +179,7 @@ export function listProjectSummaries(): Array<{ projectId: string; path: string;
 }
 
 export async function getArchivedProjectsWithSessions(options: Pick<GetProjectsWithSessionsOptions, 'skipSynchronization' | 'sessionsLimit' | 'sessionsOffset'> = {}): Promise<ArchivedProjectListItem[]> {
-  if (options.skipSynchronization) {
-    pruneSessionsWithMissingTranscripts();
-  } else {
-    await sessionSynchronizerService.synchronizeSessions();
-  }
+  if (!options.skipSynchronization) await sessionSynchronizerService.synchronizeSessions();
 
   const projects = projectsDb.getArchivedProjectPaths() as Array<{ project_id: string; project_path: string; custom_project_name?: string | null; origin?: 'legacy' | 'explicit' | 'auto' | null; isStarred?: number }>;
   const result: ArchivedProjectListItem[] = [];
@@ -184,7 +198,7 @@ export async function getArchivedProjectsWithSessions(options: Pick<GetProjectsW
     };
     result.push(archivedItem);
   }
-  return result;
+  return withoutOrphanedSessions(result);
 }
 
 export async function getProjectSessionsPage(projectId: string, options: SessionPaginationOptions = {}): Promise<ProjectSessionsPageApiView> {

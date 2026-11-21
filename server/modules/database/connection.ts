@@ -46,6 +46,19 @@ function connect(): SqliteDatabase.Database {
 
   const db = new SqliteDatabase(filename);
   restrictToOwner(filename);
+  try {
+    // WAL lets the session watcher write while requests read, and NORMAL stops
+    // paying an fsync per statement. The default rollback journal fsyncs every
+    // insert and delete, and indexing a history is one insert per transcript:
+    // on a mounted volume that blocked the event loop for minutes, which is
+    // exactly the "container lags right after a restart" report.
+    db.pragma('journal_mode = WAL');
+    db.pragma('synchronous = NORMAL');
+    db.pragma('busy_timeout = 5000');
+  } catch (error) {
+    // An exotic filesystem may refuse WAL; the database must still open.
+    console.warn('Could not tune the SQLite connection:', error);
+  }
   db.exec(APP_CONFIG_TABLE_SCHEMA_SQL);
   restrictToOwner(filename);
   return db;
