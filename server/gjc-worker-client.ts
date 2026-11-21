@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { spawn as spawnChild } from 'node:child_process';
-import { appendFileSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, chownSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { realpath } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, relative } from 'node:path';
@@ -310,6 +310,36 @@ export function findGjcTranscript(root: string, providerSessionId: string): stri
 }
 
 /**
+ * Makes a transcript appendable by this process.
+ *
+ * The runtime verifies owner-only permissions before every append and refuses
+ * to write a session another user owns. A transcript written while the app ran
+ * as a different user (an older image) therefore fails every resumed turn with
+ * `owner_mismatch` even though the file is right there. Taking ownership is the
+ * repair the runtime itself attempts for managed directories, so do the same
+ * for the transcript and its sidecar directory; a process that may not perform
+ * it reports the transcript as unusable, which starts a new session instead of
+ * repeating that failure forever.
+ */
+export function ensureGjcTranscriptOwner(transcriptPath: string, uid = process.getuid?.()): boolean {
+  if (uid === undefined) return true;
+  const gid = process.getgid?.() ?? uid;
+  for (const pathname of [transcriptPath, transcriptPath.replace(/\.jsonl$/u, '')]) {
+    try {
+      if (statSync(pathname).uid !== uid) chownSync(pathname, uid, gid);
+    } catch {
+      // A missing sidecar directory is normal; a refused chown is not, and the
+      // readback below is what decides whether the run may resume.
+    }
+  }
+  try {
+    return statSync(transcriptPath).uid === uid;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Whether this provider session can still be resumed. A recorded path that is
  * gone is searched for by id in the roots the app reads, and the row is
  * repointed at the file it finds - a transcript restored from a backup, or one
@@ -326,6 +356,10 @@ async function resumableGjcTranscript(providerSessionId: string): Promise<boolea
     const found = findGjcTranscript(getGjcLiveSessionRoot(), providerSessionId)
       ?? findGjcTranscript(join(homedir(), '.gjc', 'agent', 'sessions'), providerSessionId);
     if (!found) return false;
+    if (!ensureGjcTranscriptOwner(found)) {
+      console.warn(`[GJC] Cannot resume ${providerSessionId}: its transcript is owned by another user.`);
+      return false;
+    }
     // The row still names the old location, so the resumed run would resolve
     // the wrong session root. Repointing it also keeps later turns cheap.
     if (session && found !== stored) sessionsDb.updateSessionJsonlPath(session.session_id, found);

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn as spawnChild } from 'node:child_process';
 import { EventEmitter } from 'node:events';
-import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { chown, mkdir, mkdtemp, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
@@ -18,6 +18,7 @@ import {
   GjcWorkerSupervisor,
   createGjcWorkerDesktopRestartReader,
   enrichGjcSdkRunOptions,
+  ensureGjcTranscriptOwner,
   findGjcTranscript,
   getGjcWorkerSupervisor,
   killWorkerTree,
@@ -77,6 +78,19 @@ test('a transcript that moved is found under either session layout', async () =>
   assert.equal(findGjcTranscript(live, 'provider-live'), liveFile);
   assert.equal(findGjcTranscript(legacy, 'provider-legacy'), legacyFile);
   assert.equal(findGjcTranscript(live, 'provider-missing'), undefined);
+});
+
+test('a transcript owned by another user is taken over before it is resumed', async (t) => {
+  if (process.getuid?.() !== 0) return t.skip('taking ownership needs root');
+  const root = await mkdtemp(join(tmpdir(), 'gjc-transcript-owner-'));
+  after(() => rm(root, { recursive: true, force: true }));
+  const file = join(root, '2026-01-01T00-00-00-000Z_provider-foreign.jsonl');
+  await writeFile(file, '{}\n');
+  await chown(file, 1000, 1001);
+  assert.equal((await stat(file)).uid, 1000);
+
+  assert.equal(ensureGjcTranscriptOwner(file), true);
+  assert.equal((await stat(file)).uid, process.getuid());
 });
 
 test('a conversation whose transcript vanished starts a new session instead of failing to resume', async () => {
