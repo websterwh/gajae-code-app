@@ -53,10 +53,14 @@ export default function AgentSidebarWork({ sessionId, sessionStore }: AgentSideb
   const phases = useSessionTodos(sessionStore, sessionId, Boolean(sessionId));
   const delegations = useSessionDelegations(sessionStore, sessionId, Boolean(sessionId));
   const hasTasks = phases.some((phase) => phase.tasks.length > 0);
-  const agents = delegations.filter((delegation) => delegation.status === 'running');
   // Only the published activity of this very session counts; a snapshot left
   // over from another conversation must never read as this one running.
   const running = Boolean(sessionId) && status.sessionId === sessionId && status.activity.running;
+  // A receipt left `running` by a live frame is stale once the session itself
+  // is idle: no child outlives the run that spawned it, and the server applies
+  // the same rule when it reads the transcript. Without this the row outlived
+  // the answer it belonged to until the page was reloaded.
+  const agents = running ? delegations.filter((delegation) => delegation.status === 'running') : [];
   const browser = useEgoActivity(sessionId, running);
   const browserSpaces = browser.spaces;
 

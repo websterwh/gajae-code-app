@@ -9,6 +9,8 @@ import type { ChatMessage } from '../types/types';
 import { createCachedDiffCalculator, type DiffCalculator } from '../utils/messageTransforms';
 import { getIntrinsicMessageKey } from '../utils/messageKeys';
 import { cacheContextFacts, readCachedContextFacts } from '../utils/contextSnapshotCache';
+import { DEFAULT_TOOL_OUTPUT_DENSITY, toolOutputDensityRules } from '../utils/toolOutputDensity';
+import type { ToolOutputDensity } from '../utils/toolOutputDensity';
 
 import { normalizedToChatMessages } from './useChatMessages';
 import { useChatFollowScroll } from './useChatFollowScroll';
@@ -33,6 +35,8 @@ type Props = {
   statusCheckSentAtRef: MutableRefObject<Map<string, number>>;
   sessionStore: SessionStore;
   showImagePreviews?: boolean;
+  /** The transcript's reading level; the unread pill only counts rows it renders. */
+  density?: ToolOutputDensity;
 };
 
 type SearchRequest = { timestamp?: string; uuid?: string; snippet?: string };
@@ -97,6 +101,18 @@ function hasNewTailContent(previous: ChatMessage[], next: ChatMessage[]): boolea
       && (after.content?.length ?? 0) > (before.content?.length ?? 0));
 }
 
+/**
+ * Drops trailing rows the density never renders. Reasoning arrives as its own
+ * message and compact and balanced hide those rows, so an arrival that is only
+ * thoughts is nothing on screen - the pill must not claim a new message for it.
+ */
+function renderedTail(messages: ChatMessage[], showReasoning: boolean): ChatMessage[] {
+  if (showReasoning) return messages;
+  let end = messages.length;
+  while (end > 0 && messages[end - 1].isThinking) end -= 1;
+  return end === messages.length ? messages : messages.slice(0, end);
+}
+
 function clearTimer(timer: MutableRefObject<ReturnType<typeof setTimeout> | null>) {
   if (timer.current) clearTimeout(timer.current);
   timer.current = null;
@@ -114,6 +130,7 @@ export function useChatSessionState({
   statusCheckSentAtRef,
   sessionStore,
   showImagePreviews = true,
+  density = DEFAULT_TOOL_OUTPUT_DENSITY,
 }: Props) {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(selectedSession?.id || null);
   const [isLoadingSessionMessages, setIsLoadingSessionMessages] = useState(false);
@@ -182,6 +199,12 @@ export function useChatSessionState({
   const imageStateRef = useRef({ sessionKey: null as string | null, enabled: showImagePreviews });
   const loadedKeyRef = useRef<string | null>(null);
   const initialScrollRef = useRef(true);
+  // Armed while a session is opening. The follow reset for that open is a state
+  // update scheduled by a sibling effect, so the first commit after the switch
+  // still reports the previous session's scrolled-up flag; that stale flag must
+  // not cancel the jump to the newest row, or a reopened conversation stayed
+  // wherever it was while the backlog rendered above it.
+  const openingSessionRef = useRef(false);
   const searchInProgressRef = useRef(false);
   const loadingMoreRef = useRef(false);
   const historyLoadErrorRef = useRef(false);
@@ -220,6 +243,7 @@ export function useChatSessionState({
     setViewHiddenCount(0);
     setSearchTarget(null);
     initialScrollRef.current = true;
+    openingSessionRef.current = true;
     searchInProgressRef.current = false;
     loadedKeyRef.current = null;
     imageStateRef.current = { sessionKey: null, enabled: showImagePreviews };
@@ -357,7 +381,10 @@ export function useChatSessionState({
     const node = scrollContainerRef.current;
     if (!node) return;
     const bottom = isNearBottom();
-    if (!bottom) initialScrollRef.current = false;
+    if (!bottom) {
+      initialScrollRef.current = false;
+      openingSessionRef.current = false;
+    }
     if (bottom) setHasNewMessagesBelow(false);
     // The in-flight request guard is enough. Requiring a trip away from the
     // top after every page forces a second gesture before history can continue.
@@ -373,6 +400,7 @@ export function useChatSessionState({
   useEffect(() => {
     if (!searchInProgressRef.current) {
       initialScrollRef.current = true;
+      openingSessionRef.current = true;
       setVisibleMessageCount(FIRST_VISIBLE_COUNT);
     }
     setIsUserScrolledUp(false);
@@ -380,12 +408,13 @@ export function useChatSessionState({
 
   useEffect(() => {
     if (!isFollowing) {
-      initialScrollRef.current = false;
+      if (!openingSessionRef.current) initialScrollRef.current = false;
       return;
     }
     if (!initialScrollRef.current || isLoadingSessionMessages || !scrollContainer) return;
     if (!chatMessages.length || searchInProgressRef.current) {
       initialScrollRef.current = false;
+      openingSessionRef.current = false;
       return;
     }
     const node = scrollContainer;
@@ -403,7 +432,10 @@ export function useChatSessionState({
       }
       frames += 1;
       if (unchanged < 3 && frames < 60) frameId = requestAnimationFrame(settle);
-      else initialScrollRef.current = false;
+      else {
+        initialScrollRef.current = false;
+        openingSessionRef.current = false;
+      }
     };
     frameId = requestAnimationFrame(settle);
     return () => cancelAnimationFrame(frameId);
@@ -591,8 +623,11 @@ export function useChatSessionState({
     if (isLoadingSessionMessages || searchInProgressRef.current || isFollowing) return;
     // Loading flags cannot identify insertion direction: pagination and realtime
     // updates may commit together, or a genuine arrival may happen mid-request.
-    if (hasNewTailContent(before.messages, chatMessages)) setHasNewMessagesBelow(true);
-  }, [activeSession, chatMessages, isFollowing, isLoadingSessionMessages]);
+    const showReasoning = toolOutputDensityRules(density).showReasoning;
+    if (hasNewTailContent(renderedTail(before.messages, showReasoning), renderedTail(chatMessages, showReasoning))) {
+      setHasNewMessagesBelow(true);
+    }
+  }, [activeSession, chatMessages, density, isFollowing, isLoadingSessionMessages]);
   useEffect(() => {
     const node = scrollContainer;
     if (!node) return;

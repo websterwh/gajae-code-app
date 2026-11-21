@@ -260,7 +260,7 @@ const message = (id: string, seconds: number, content = id): NormalizedMessage =
   provider: 'gjc', kind: 'text', role: 'assistant', content,
 });
 
-async function setup(options: { pane?: boolean } = {}) {
+async function setup(options: { pane?: boolean; density?: 'compact' | 'balanced' | 'detailed' } = {}) {
   let pane = options.pane ?? true;
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async () => new Response('{}', { status: 200 })) as typeof fetch;
@@ -284,6 +284,7 @@ async function setup(options: { pane?: boolean } = {}) {
     selectedSession: { id: 'session' }, ws: null, sendMessage() {}, resetStreamingState() {},
     statusCheckSentAtRef: { current: new Map<string, number>() },
     sessionStore: store,
+    density: options.density,
   };
   function Harness() {
     state = useChatSessionState(props);
@@ -495,6 +496,37 @@ test('a genuine append in the same commit as prepend is announced', async () => 
     act(() => harness.state().scrollToBottomAndReset());
     assert.equal(harness.state().hasNewMessagesBelow, false);
   } finally { harness.close(); }
+});
+
+test('opening a session lands on its newest row even from a scrolled-up one', async () => {
+  const harness = await setup();
+  try {
+    const pane = harness.state().scrollContainerRef.current!;
+    let scrollTop = 0;
+    Object.defineProperty(pane, 'scrollTop', { configurable: true, get: () => scrollTop, set: (value: number) => { scrollTop = value; } });
+    Object.defineProperty(pane, 'scrollHeight', { configurable: true, get: () => 900 });
+    // The harness leaves the previous conversation scrolled up, as reading back
+    // through a running session does. That flag belongs to the conversation it
+    // was set in: switching must not let it cancel the open, which left the
+    // reopened transcript parked while its backlog rendered above the newest row.
+    await harness.switchSession();
+    await act(async () => { await new Promise(resolve => { setTimeout(resolve, 120); }); });
+    assert.equal(scrollTop, 900);
+  } finally { harness.close(); }
+});
+
+test('arrivals the density never renders do not announce unseen messages', async () => {
+  const compact = await setup({ density: 'compact' });
+  try {
+    act(() => compact.update([...compact.rows(), { ...message('thoughts', 40), kind: 'thinking', content: 'weighing options' }]));
+    assert.equal(compact.state().hasNewMessagesBelow, false, 'compact hides reasoning rows, so nothing new is on screen');
+  } finally { compact.close(); }
+
+  const detailed = await setup({ density: 'detailed' });
+  try {
+    act(() => detailed.update([...detailed.rows(), { ...message('thoughts', 40), kind: 'thinking', content: 'weighing options' }]));
+    assert.equal(detailed.state().hasNewMessagesBelow, true, 'detailed renders the reasoning row it just received');
+  } finally { detailed.close(); }
 });
 
 test('a pane attached after the landing view still binds the transcript scroll listener', async () => {

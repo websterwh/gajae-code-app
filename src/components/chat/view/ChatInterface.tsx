@@ -84,8 +84,9 @@ function ChatInterface({
 
   const session = useChatSessionState({
     selectedProject, selectedSession, ws, sendMessage, newSessionTrigger, processingSessions,
-    onSessionIdle, resetStreamingState: clearStreaming, statusCheckSentAtRef,
-    sessionStore, showImagePreviews,
+    onSessionIdle, resetStreamingState: clearStreaming, statusCheckSentAtRef,    sessionStore,
+    showImagePreviews,
+    density: toolOutputDensity,
   });
 
   const { setCurrentSessionId } = session;

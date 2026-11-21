@@ -152,6 +152,21 @@ async function settle() {
 
 const section = () => screen.getByRole('region', { name: 'Work' });
 
+test('a child the runtime last reported running is not listed once its session is idle', async () => {
+  const state = await setup();
+  state.delegate('session-1', [agent()]);
+  const view = render(state.ui('session-1', running('session-1')));
+  assert.ok(within(section()).getByText(/Executor — Wire the WORK lane/));
+
+  // A live receipt can be the last word the window holds for that child. The
+  // session going idle is the settlement: nothing outlives the run, and the
+  // row used to survive until the page was reloaded.
+  view.rerender(state.ui('session-1'));
+  await settle();
+  assert.equal(screen.queryByText(/Executor/), null);
+  assert.equal(screen.queryByRole('region', { name: 'Work' }), null, 'an idle session with nothing to report leaves the lane silent');
+});
+
 test('an idle session without a todo list renders no WORK block at all', async () => {
   const state = await setup();
   const view = render(state.ui('session-1'));
@@ -377,7 +392,7 @@ test('every active agent is listed; the concurrency limit keeps the block compac
     agent({ id: 'd2', agent: 'executor', description: 'Server lane' }),
     agent({ id: 'd3', agent: 'critic', description: 'Review the plan' }),
   ]);
-  render(state.ui('session-1'));
+  render(state.ui('session-1', running('session-1')));
 
   const rows = within(section()).getAllByRole('listitem');
   assert.deepEqual(rows.map((row) => row.querySelector('span:last-child')!.textContent), [
@@ -388,7 +403,7 @@ test('every active agent is listed; the concurrency limit keeps the block compac
 test('a settled agent leaves the lane as soon as its receipt lands', async () => {
   const state = await setup();
   state.delegate('session-1', [agent({ id: 'd1' }), agent({ id: 'd2', agent: 'planner', description: 'Sequence the work' })]);
-  render(state.ui('session-1'));
+  const view = render(state.ui('session-1', running('session-1')));
   assert.equal(within(section()).getAllByRole('listitem').length, 2);
 
   act(() => state.settle('session-1', { delegationId: 'd1', status: 'completed', agent: 'executor', description: 'Wire the WORK lane' }));
@@ -396,8 +411,13 @@ test('a settled agent leaves the lane as soon as its receipt lands', async () =>
   assert.equal(rows.length, 1);
   assert.match(rows[0].textContent!, /Planner — Sequence the work/);
 
-  // The last agent settling empties the lane entirely: WORK is now-only.
+  // The last agent settling leaves the run's generic row: WORK is now-only.
   act(() => state.settle('session-1', { delegationId: 'd2', status: 'cancelled', agent: 'planner', description: 'Sequence the work' }));
+  assert.equal(within(section()).queryByText('Agents'), null);
+  assert.ok(within(section()).getByText('Working'));
+
+  // And once the session itself is idle there is nothing left to report.
+  view.rerender(state.ui('session-1'));
   assert.equal(screen.queryByRole('region', { name: 'Work' }), null);
 });
 
@@ -420,7 +440,7 @@ test('a long agent description truncates to one line and keeps the full value on
   const state = await setup();
   const description = `${'Implement the very long delegation description/'.repeat(20)}done`;
   state.delegate('session-1', [agent({ description })]);
-  render(state.ui('session-1'));
+  render(state.ui('session-1', running('session-1')));
 
   const row = within(section()).getByText(`Executor — ${description}`).closest('li')!;
   assert.equal(row.getAttribute('title'), `executor: ${description}`);
@@ -433,7 +453,7 @@ test('agents published for another conversation never appear in this one', async
   const view = render(state.ui('session-1'));
   assert.equal(view.container.innerHTML, '');
 
-  view.rerender(state.ui('session-2'));
+  view.rerender(state.ui('session-2', running('session-2')));
   assert.ok(within(section()).getByText('Executor — Another conversation'));
 });
 
