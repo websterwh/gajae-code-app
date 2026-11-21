@@ -773,6 +773,53 @@ export function claimProtocolStdout(output: Writable, diagnostics: Writable, std
   return (frame) => { protocolWrite(frame); };
 }
 
+type WorkerFatalTarget = { once(event: string, listener: (value?: unknown) => void): unknown };
+
+function describeThrown(value: unknown): string {
+  if (value instanceof Error) return value.stack ?? `${value.name}: ${value.message}`;
+  try {
+    return typeof value === 'string' ? value : JSON.stringify(value) ?? String(value);
+  } catch {
+    return String(value);
+  }
+}
+
+/**
+ * Installs the process-level nets the worker runs under.
+ *
+ * The worker hosts every session, so a process-level fault takes all of them
+ * down at once. A throw that escapes every run leaves the runtime's state
+ * unknown and still fails closed — but it now names its cause (with the stack)
+ * first: this handler used to ignore the error and write only the constant
+ * "GJC worker protocol failure.", so every crash looked like a protocol fault
+ * and no operator could tell why the sessions died.
+ *
+ * A rejection nobody awaited is not a protocol fault. Bun's own default is to
+ * report it and keep running, and one conversation's stray cleanup rejection
+ * must not kill the other live sessions; each run's own promise chain stays
+ * authoritative for its terminal, so this only records the cause.
+ */
+export function installWorkerFatalHandlers(
+  target: WorkerFatalTarget,
+  failClosed: () => void,
+  diagnose: (message: string) => void,
+): void {
+  const report = (message: string): void => {
+    try {
+      diagnose(message);
+    } catch {
+      // Diagnostics must never change how a fault settles.
+    }
+  };
+  target.once('uncaughtException', (error) => {
+    report(`GJC worker uncaught exception: ${describeThrown(error)}`);
+    failClosed();
+  });
+  target.once('unhandledRejection', (reason) => {
+    report(`GJC worker unhandled rejection: ${describeThrown(reason)}`);
+  });
+}
+
 /**
  * Runs the private NDJSON executable using only stdin/stdout/stderr.
  *
@@ -821,8 +868,11 @@ export function runGjcWorkerEntrypoint(
   input.on('error', failClosed);
   if (input === process.stdin) {
     output.on('error', failClosed);
-    process.once('uncaughtException', failClosed);
-    process.once('unhandledRejection', failClosed);
+    installWorkerFatalHandlers(
+      process,
+      failClosed,
+      (message) => diagnostics.write(`${message}\n`),
+    );
     process.once('SIGINT', failClosed);
     process.once('SIGTERM', failClosed);
   }

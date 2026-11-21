@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { spawn as spawnChild } from 'node:child_process';
-import { appendFileSync, existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { realpath } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, relative } from 'node:path';
@@ -14,6 +14,7 @@ import {
   GJC_ASIDE_UNAVAILABLE_CODE,
   GJC_ASIDE_UNAVAILABLE_MESSAGE,
   GJC_CLEANUP_UNCONFIRMED_CODE,
+  GJC_CLEANUP_UNCONFIRMED_MESSAGE,
   GJC_AGENT_TOOL_NAMES,
   GJC_INVALID_PERMISSIONS_CODE,
   GJC_INVALID_PERMISSIONS_MESSAGE,
@@ -199,6 +200,17 @@ const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/;
 const SAFE_FAILURE = 'GJC worker failed.';
 const REQUEST_TIMEOUT = 'GJC worker request timed out.';
 /**
+ * Short, cause-specific text for the chat. Protocol responses stay sanitized,
+ * but "which part broke" and "what unblocks it" is what makes a failure
+ * reportable instead of a shrug. Every one of these is a constant this file
+ * owns; no worker-supplied text reaches a caller.
+ */
+const WORKER_EXITED = 'GJC worker exited unexpectedly';
+const WORKER_NOT_STARTED = 'GJC worker did not finish starting in time. Send the message again.';
+const WORKER_RESTART_BLOCKED = 'GJC worker could not be restarted after a failed shutdown. Restart the app server.';
+const CLEANUP_UNCONFIRMED_FAILURE = `${GJC_CLEANUP_UNCONFIRMED_MESSAGE} Restart the app server.`;
+const RUN_FAILED = 'GJC run failed.';
+/**
  * `worker.initialize` covers the whole SDK bootstrap (model registry build and
  * online model discovery), measured at 4-8 s on a loaded developer machine. The
  * previous 5 s bound killed a healthy worker mid-bootstrap, and every tab that
@@ -217,6 +229,10 @@ function runFailureMessage(response: GjcWorkerResponsePayload): string {
   if (!response.ok && response.error.code === GJC_INVALID_PERMISSIONS_CODE) return GJC_INVALID_PERMISSIONS_MESSAGE;
   if (!response.ok && response.error.code === GJC_MODEL_UNRESOLVED_CODE) return GJC_MODEL_UNRESOLVED_MESSAGE;
   if (!response.ok && response.error.code === GJC_ASIDE_UNAVAILABLE_CODE) return GJC_ASIDE_UNAVAILABLE_MESSAGE;
+  if (!response.ok && response.error.code === GJC_CLEANUP_UNCONFIRMED_CODE) return CLEANUP_UNCONFIRMED_FAILURE;
+  // The worker is alive here; the run itself was refused or failed, so blaming
+  // the worker (the generic text) sent operators after the wrong process.
+  if (!response.ok && response.error.code === 'run_failed') return RUN_FAILED;
   return SAFE_FAILURE;
 }
 
@@ -267,6 +283,59 @@ async function sessionJsonlPath(sessionId: string): Promise<string | undefined> 
   return session?.provider === 'gjc' ? session.jsonl_path ?? undefined : undefined;
 }
 
+/**
+ * Finds a session's transcript by id. The live root keeps sessions flat
+ * (`<timestamp>_<id>.jsonl`); the legacy agent root nests them one directory
+ * deep (one per working directory), so both layouts are searched.
+ */
+export function findGjcTranscript(root: string, providerSessionId: string): string | undefined {
+  const suffix = `_${providerSessionId}.jsonl`;
+  const direct = join(root, `${providerSessionId}.jsonl`);
+  if (existsSync(direct)) return direct;
+  const children = (directory: string) => {
+    try {
+      return readdirSync(directory, { withFileTypes: true });
+    } catch {
+      return [];
+    }
+  };
+  for (const entry of children(root)) {
+    if (entry.isFile() && entry.name.endsWith(suffix)) return join(root, entry.name);
+    if (!entry.isDirectory()) continue;
+    for (const child of children(join(root, entry.name))) {
+      if (child.isFile() && child.name.endsWith(suffix)) return join(root, entry.name, child.name);
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Whether this provider session can still be resumed. A recorded path that is
+ * gone is searched for by id in the roots the app reads, and the row is
+ * repointed at the file it finds - a transcript restored from a backup, or one
+ * left behind when the app moved roots, still carries the conversation. Only a
+ * transcript that is nowhere is a definite no.
+ */
+async function resumableGjcTranscript(providerSessionId: string): Promise<boolean> {
+  try {
+    const { sessionsDb } = await import('./modules/database/index.js');
+    const session = sessionsDb.getSessionByProviderSessionId('gjc', providerSessionId)
+      ?? sessionsDb.getSessionById(providerSessionId);
+    const stored = session?.provider === 'gjc' ? session.jsonl_path : undefined;
+    if (stored && existsSync(stored)) return true;
+    const found = findGjcTranscript(getGjcLiveSessionRoot(), providerSessionId)
+      ?? findGjcTranscript(join(homedir(), '.gjc', 'agent', 'sessions'), providerSessionId);
+    if (!found) return false;
+    // The row still names the old location, so the resumed run would resolve
+    // the wrong session root. Repointing it also keeps later turns cheap.
+    if (session && found !== stored) sessionsDb.updateSessionJsonlPath(session.session_id, found);
+    return true;
+  } catch {
+    // An unreadable store is not proof the history is gone; keep resuming.
+    return true;
+  }
+}
+
 export async function resolveGjcResumeSessionRoot(
   sessionId: string,
   liveSessionRoot: string,
@@ -301,6 +370,8 @@ type GjcRunOptionAuthorities = {
   browserStatus(): Promise<unknown>;
   computerUsable?(): boolean;
   hostControlPolicy?(): HostControlRunPolicy | undefined;
+  /** Production reads the session row; tests inject the answer. */
+  transcriptExists?(providerSessionId: string): Promise<boolean>;
 };
 
 export async function enrichGjcSdkRunOptions(
@@ -379,11 +450,25 @@ export async function enrichGjcSdkRunOptions(
   const liveSessionRoot = typeof options.sessionRoot === 'string' && options.sessionRoot
     ? options.sessionRoot
     : getGjcLiveSessionRoot();
-  const sessionRoot = typeof options.sessionId === 'string' && options.sessionId
-    ? await resolveGjcResumeSessionRoot(options.sessionId, liveSessionRoot) ?? liveSessionRoot
+  const requestedSessionId = typeof options.sessionId === 'string' && options.sessionId
+    ? options.sessionId
+    : undefined;
+  // A conversation whose transcript has vanished (deleted, half-restored
+  // backup, wiped volume) can never be resumed: the worker's lookup finds no
+  // file, so every send fails and the conversation is stuck forever with a
+  // message that names nothing. Start a new provider session in the same
+  // conversation instead; the app registers the new id on `session.created`.
+  // A transcript that merely moved is repointed first, so its context survives.
+  const resumable = requestedSessionId
+    ? await (authorities.transcriptExists ?? resumableGjcTranscript)(requestedSessionId)
+    : false;
+  const sessionRoot = requestedSessionId && resumable
+    ? await resolveGjcResumeSessionRoot(requestedSessionId, liveSessionRoot) ?? liveSessionRoot
     : liveSessionRoot;
+  const base: GjcWorkerOptions = { ...options };
+  if (requestedSessionId && !resumable) delete base.sessionId;
   return {
-    ...options,
+    ...base,
     cwd: options.cwd ?? options.projectPath,
     sessionRoot,
     credential: options.credential ?? { kind: 'stored' },
@@ -497,6 +582,8 @@ export class GjcWorkerSupervisor {
   private terminatingGeneration?: { child: Child; runIds: ReadonlySet<string>; outcome: Promise<GjcWorkerReapOutcome> };
   private terminationFailure?: Error;
   private decoder?: GjcWorkerNdjsonDecoder;
+  private recentWorkerOutput = '';
+  private generationFailure?: string;
   private tracker = new GjcWorkerRequestTracker();
   private readonly runs = new Map<string, Run>();
   private readonly aliases = new Map<string, string>();
@@ -974,14 +1061,24 @@ export class GjcWorkerSupervisor {
       const startingChild = this.child;
       if (!this.canStartRun(run, startingChild)) return;
 
-      const providerSessionId = safeId(run.options.sessionId);
-      if (providerSessionId) {
-        run.providerSessionId = providerSessionId;
-        this.aliases.set(providerSessionId, run.runId);
+      const requestedSessionId = safeId(run.options.sessionId);
+      if (requestedSessionId) {
+        run.providerSessionId = requestedSessionId;
+        this.aliases.set(requestedSessionId, run.runId);
         this.activityChanged();
       }
 
-      const options = safeOptions(await this.runtime.enrichOptions(run.options));
+      const enriched = await this.runtime.enrichOptions(run.options);
+      // Enrichment may refuse to resume (the transcript the app points at is
+      // gone); the run must start a new provider session instead of asking the
+      // worker to reopen a file that no longer exists.
+      const providerSessionId = safeId(enriched.sessionId) ? requestedSessionId : undefined;
+      if (!providerSessionId && requestedSessionId) {
+        this.aliases.delete(requestedSessionId);
+        run.providerSessionId = undefined;
+        this.activityChanged();
+      }
+      const options = safeOptions(enriched);
       // No await between the final ownership check and writing the request.
       if (!this.canStartRun(run, startingChild)) return;
       if (!options) {
@@ -1017,8 +1114,10 @@ export class GjcWorkerSupervisor {
       }
       this.finish(run, run.terminalFailed || !response.ok, runFailureMessage(response));
     } catch (error) {
-      // workerFailed owns terminal settlement and must first prove the reap barrier.
-      if (this.terminating || (this.terminationFailure && run.phase === 'request_issued')) return;
+      // workerFailed owns terminal settlement for a run whose request reached
+      // the worker; a run that never started is settled here, even while a reap
+      // is still in flight, or an unconfirmed reap strands its promise forever.
+      if (run.phase === 'request_issued' && (this.terminating || this.terminationFailure)) return;
       this.finish(
         run,
         true,
@@ -1099,6 +1198,8 @@ export class GjcWorkerSupervisor {
       windowsHide: true,
     });
     this.child = child; this.ready = false; this.decoder = new GjcWorkerNdjsonDecoder();
+    this.recentWorkerOutput = '';
+    this.generationFailure = undefined;
     this.unreapedWorkers.add(child);
     this.activityChanged();
     const usesWindowsJobGuard = this.runtime.platform === 'win32';
@@ -1164,9 +1265,16 @@ export class GjcWorkerSupervisor {
       void this.workerFailed(child, guardedProcessExited);
     };
     child.stdin.on('error', () => failWorker());
-    child.stderr?.on('data', (chunk: Buffer) => this.diagnose(chunk.toString('utf8')));
+    child.stderr?.on('data', (chunk: Buffer) => {
+      const text = chunk.toString('utf8');
+      this.recentWorkerOutput = (this.recentWorkerOutput + text).slice(-2_048);
+      this.diagnose(text);
+    });
     child.on('error', () => failWorker());
-    child.on('exit', () => failWorker(true));
+    child.on('exit', (code?: number | null, signal?: NodeJS.Signals | null) => {
+      this.diagnoseWorkerExit(child, code ?? null, signal ?? null);
+      failWorker(true);
+    });
     child.on('close', () => failWorker(true));
     const starting = guardReady
       .then(() => this.request(
@@ -1187,8 +1295,9 @@ export class GjcWorkerSupervisor {
         // outlasting initializeTimeoutMs).
         const reason = error instanceof Error ? error.message : String(error);
         this.diagnose(`GJC worker initialization failed after ${this.runtime.initializeTimeoutMs}ms bound: ${reason}`);
+        this.generationFailure = WORKER_NOT_STARTED;
         this.workerFailed(child);
-        throw new Error(SAFE_FAILURE);
+        throw new GjcConfigurationError(WORKER_NOT_STARTED);
       })
       .finally(() => {
         if (this.starting === starting) {
@@ -1655,16 +1764,20 @@ export class GjcWorkerSupervisor {
     const usesWindowsJobGuard = this.runtime.platform === 'win32';
     const affectedRuns = [...this.runs.values()];
     const terminations: Promise<void>[] = [];
-    const terminate = (label: string, action: () => void | Promise<void>): void => {
+    // A tree that was still unwinding when the first kill landed is the common
+    // failure. Retrying once keeps it from latching the worker shut for the rest
+    // of the server's life, which used to need a restart to clear.
+    const attempt = async (label: string, action: () => void | Promise<void>, remaining: number): Promise<void> => {
       try {
-        terminations.push(Promise.resolve(action()).catch((error) => {
-          this.diagnose(label);
-          throw error;
-        }));
+        await action();
       } catch (error) {
+        if (remaining > 1) return attempt(label, action, remaining - 1);
         this.diagnose(label);
-        terminations.push(Promise.reject(error));
+        throw error;
       }
+    };
+    const terminate = (label: string, action: () => void | Promise<void>): void => {
+      terminations.push(attempt(label, action, 2));
     };
     // On frozen v2 Windows, tree reaping is deliberately unverified and fails closed.
     // `guardedProcessExited` cannot establish descendant termination without a tested runtime.
@@ -1676,7 +1789,9 @@ export class GjcWorkerSupervisor {
       }
     }
     const termination = Promise.all(terminations).then(() => {}).catch((error) => {
-      this.terminationFailure = new Error(SAFE_FAILURE, { cause: error });
+      // The latch outlives this generation and blocks every later run, so the
+      // text has to say that a restart, not a retry, is what clears it.
+      this.terminationFailure = new GjcConfigurationError(WORKER_RESTART_BLOCKED, { cause: error });
       this.activityChanged();
       throw this.terminationFailure;
     });
@@ -1696,8 +1811,9 @@ export class GjcWorkerSupervisor {
           this.requestTimeoutUncertainty = false;
         }
         this.activityChanged();
+        const failure = this.generationFailure ?? SAFE_FAILURE;
         for (const run of affectedRuns) {
-          this.finish(run, run.terminalForwarded ? run.terminalFailed : true, SAFE_FAILURE, 'reaped');
+          this.finish(run, run.terminalForwarded ? run.terminalFailed : true, failure, 'reaped');
         }
         return 'reaped' as const;
       },
@@ -1725,6 +1841,23 @@ export class GjcWorkerSupervisor {
     this.expiredRequests.clear();
     this.activityChanged();
     return outcome;
+  }
+
+  /**
+   * Records how the shared worker went away. Its stderr stream alone cannot
+   * tell an OOM kill (SIGKILL) from a crash, so a dead worker used to leave no
+   * exit status anywhere and every session failed with the same sanitized
+   * message. The tail is the worker's own last words, without which the log
+   * ends at "GJC worker failed." and nothing else.
+   */
+  private diagnoseWorkerExit(child: Child, code: number | null, signal: NodeJS.Signals | null): void {
+    if (this.shuttingDown || child !== this.child) return;
+    this.generationFailure = `${WORKER_EXITED} (${signal ? `signal ${signal}` : `code ${code ?? 'unknown'}`}). Send the message again to restart it.`;
+    const tail = this.recentWorkerOutput.split('\n').map((line) => line.trim()).filter(Boolean).slice(-6).join(' | ');
+    this.diagnose(
+      `GJC worker exited (code=${code ?? 'null'}, signal=${signal ?? 'null'}, activeRuns=${this.runs.size})`
+      + (tail ? `; last worker output: ${tail}` : '; last worker output: none'),
+    );
   }
 
   private async awaitTermination(): Promise<void> {
@@ -1795,6 +1928,9 @@ function appendWorkerDiagnostic(message: string): void {
 }
 
 const INITIALIZATION_DIAGNOSTIC = /^GJC worker initialization failed/u;
+/** A worker that dies (or crashes) is an app-level event too: the sanitized run
+ * message is all the chat shows, so the reason must reach the server output. */
+const FATAL_WORKER_DIAGNOSTIC = /^GJC worker (?:exited|uncaught exception|unhandled rejection)/u;
 
 /**
  * Worker stderr is file-only (it is noisy: terminal bells, SDK chatter), but a
@@ -1803,7 +1939,7 @@ const INITIALIZATION_DIAGNOSTIC = /^GJC worker initialization failed/u;
  */
 function reportWorkerDiagnostic(message: string): void {
   appendWorkerDiagnostic(message);
-  if (INITIALIZATION_DIAGNOSTIC.test(message)) console.error(`[GJC] ${message.trimEnd()}`);
+  if (INITIALIZATION_DIAGNOSTIC.test(message) || FATAL_WORKER_DIAGNOSTIC.test(message)) console.error(`[GJC] ${message.trimEnd()}`);
 }
 
 const supervisor = new GjcWorkerSupervisor({ enrichOptions: enrichGjcSdkRunOptions, diagnostic: reportWorkerDiagnostic });

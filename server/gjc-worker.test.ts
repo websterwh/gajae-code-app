@@ -21,7 +21,7 @@ import {
   GJC_ASIDE_UNAVAILABLE_MESSAGE,
   GjcAsideUnavailableError,
 } from './gjc-browser-backend.js';
-import { claimProtocolStdout, GjcWorkerHost, runGjcWorkerEntrypoint, type GjcWorkerRuntime, type GjcWorkerWriter } from './gjc-worker.js';
+import { claimProtocolStdout, GjcWorkerHost, installWorkerFatalHandlers, runGjcWorkerEntrypoint, type GjcWorkerRuntime, type GjcWorkerWriter } from './gjc-worker.js';
 
 const request = (method: string, id: string, payload: Record<string, unknown> = {}, sessionId = 'scope-1') => ({ protocolVersion: GJC_WORKER_PROTOCOL_VERSION, kind: 'request' as const, id, method, payload, ...(['worker.initialize', 'worker.shutdown', 'worker.activity', 'worker.admission', 'models.catalog', 'oauth.providers', 'oauth.status', 'oauth.start', 'oauth.submit', 'oauth.cancel'].includes(method) ? {} : { sessionId }) }) as GjcWorkerRequestFrame;
 const deferred = <T>() => { let resolve!: (value: T) => void; let reject!: (error: Error) => void; const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
@@ -428,4 +428,33 @@ test('executing the host module directly runs nothing', async (t) => {
   assert.equal(exitCode, 0);
   assert.equal(stdout, '');
   assert.equal(stderr, '');
+});
+
+function fatalHandlers() {
+  const handlers = new Map<string, (value?: unknown) => void>();
+  const diagnostics: string[] = [];
+  let failures = 0;
+  installWorkerFatalHandlers(
+    { once: (event, listener) => { handlers.set(event, listener); } },
+    () => { failures += 1; },
+    (message) => diagnostics.push(message),
+  );
+  return { handlers, diagnostics, failures: () => failures };
+}
+
+test('a throw that escapes every run names itself before the shared worker fails closed', () => {
+  const { handlers, diagnostics, failures } = fatalHandlers();
+  handlers.get('uncaughtException')?.(new Error('SDK exploded in /home/someone/project'));
+
+  assert.equal(failures(), 1, 'an unknown runtime state still fails closed');
+  assert.match(diagnostics[0] ?? '', /^GJC worker uncaught exception: Error: SDK exploded in \/home\/someone\/project/u);
+  assert.ok((diagnostics[0] ?? '').includes('\n    at '), 'the stack, not just the message, reaches the log');
+});
+
+test('a rejection nobody awaited is recorded without taking the shared worker down', () => {
+  const { handlers, diagnostics, failures } = fatalHandlers();
+  handlers.get('unhandledRejection')?.(new Error('stray cleanup rejection'));
+
+  assert.equal(failures(), 0, "one conversation's stray rejection must not kill the others");
+  assert.match(diagnostics[0] ?? '', /^GJC worker unhandled rejection: Error: stray cleanup rejection/u);
 });

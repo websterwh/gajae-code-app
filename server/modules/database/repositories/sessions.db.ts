@@ -125,6 +125,11 @@ export const sessionsDb = {
     })();
   },
 
+  /** Repoints a row at the transcript that actually holds its history. */
+  updateSessionJsonlPath(sessionId: string, jsonlPath: string): void {
+    getConnection().prepare('UPDATE sessions SET jsonl_path = ?, updated_at = CURRENT_TIMESTAMP WHERE session_id = ?').run(jsonlPath, sessionId);
+  },
+
   updateSessionCustomName(sessionId: string, customName: string, source: SessionNameSource): void {
     getConnection().prepare('UPDATE sessions SET custom_name = ?, name_source = ? WHERE session_id = ?').run(customName, source, sessionId);
   },

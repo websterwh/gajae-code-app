@@ -47,7 +47,7 @@ export type {
 } from './gjc-worker-protocol.js';
 
 // A worker that cannot confirm owned cleanup must be reaped before settlement.
-export { GJC_CLEANUP_UNCONFIRMED_CODE } from './gjc-cleanup-error.js';
+export { GJC_CLEANUP_UNCONFIRMED_CODE, GJC_CLEANUP_UNCONFIRMED_MESSAGE } from './gjc-cleanup-error.js';
 
 // Which builtin tools a browser-hosted session may use. The application sends
 // this to the worker at session start; the reasons for each decision, and the

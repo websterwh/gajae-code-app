@@ -18,6 +18,7 @@ import {
   GjcWorkerSupervisor,
   createGjcWorkerDesktopRestartReader,
   enrichGjcSdkRunOptions,
+  findGjcTranscript,
   getGjcWorkerSupervisor,
   killWorkerTree,
   resolveGjcResumeSessionRoot,
@@ -43,6 +44,92 @@ import {
   type GjcWorkerResponseFrame,
   type JsonObject,
 } from './gjc-worker-protocol.js';
+
+test('run enrichment stops resuming a conversation whose transcript is gone', async () => {
+  const base = { projectPath: '/fixture/project', sessionRoot: '/fixture/sessions', modelId: 'fixture-model' };
+  const authorities = {
+    resolveBrowserBackend: () => 'builtin' as const,
+    browserStatus: async () => ({ state: 'ready', ready: true, engine: 'webview' }),
+  };
+  const kept = await enrichGjcSdkRunOptions({ ...base, sessionId: 'provider-session' }, {
+    ...authorities, transcriptExists: async () => true,
+  });
+  assert.equal(kept.sessionId, 'provider-session');
+
+  const dropped = await enrichGjcSdkRunOptions({ ...base, sessionId: 'provider-session' }, {
+    ...authorities, transcriptExists: async () => false,
+  });
+  assert.equal(dropped.sessionId, undefined);
+  assert.equal(dropped.sessionRoot, '/fixture/sessions');
+});
+
+test('a transcript that moved is found under either session layout', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'gjc-transcript-move-'));
+  after(() => rm(root, { recursive: true, force: true }));
+  const live = join(root, 'live');
+  const legacy = join(root, 'legacy');
+  await mkdir(live, { recursive: true });
+  await mkdir(join(legacy, '-workspace-project'), { recursive: true });
+  const liveFile = join(live, '2026-01-01T00-00-00-000Z_provider-live.jsonl');
+  const legacyFile = join(legacy, '-workspace-project', '2026-01-01T00-00-00-000Z_provider-legacy.jsonl');
+  await Promise.all([writeFile(liveFile, '{}\n'), writeFile(legacyFile, '{}\n')]);
+
+  assert.equal(findGjcTranscript(live, 'provider-live'), liveFile);
+  assert.equal(findGjcTranscript(legacy, 'provider-legacy'), legacyFile);
+  assert.equal(findGjcTranscript(live, 'provider-missing'), undefined);
+});
+
+test('a conversation whose transcript vanished starts a new session instead of failing to resume', async () => {
+  const child = new FakeChild();
+  const peer = new FakePeer(child);
+  const methods: string[] = [];
+  peer.handle((request) => {
+    methods.push(request.method);
+    if (request.method === 'worker.initialize' || request.method === 'session.start' || request.method === 'session.resume') {
+      peer.respond(request);
+    }
+  });
+  const supervisor = new GjcWorkerSupervisor({
+    ...runtime(child),
+    enrichOptions: async (options) => {
+      const { sessionId: _dropped, ...rest } = options;
+      return rest;
+    },
+  });
+
+  await spawn(supervisor, 'hello', { sessionId: 'gone-session' }, { send() {} });
+  assert.ok(methods.includes('session.start'));
+  assert.equal(methods.includes('session.resume'), false);
+});
+
+function unreapOnceChild() {
+  const child = new FakeChild();
+  const peer = new FakePeer(child);
+  let kills = 0;
+  peer.handle((request) => {
+    if (request.method === 'worker.initialize') peer.respond(request);
+  });
+  const supervisor = new GjcWorkerSupervisor({
+    ...runtime(child),
+    killTree: async () => {
+      kills += 1;
+      if (kills === 1) throw new Error('tree still alive');
+      child.kill();
+    },
+  });
+  return { child, peer, supervisor, kills: () => kills };
+}
+
+test('a tree reap that fails once is retried instead of latching the worker shut', async () => {
+  const { child, peer, supervisor, kills } = unreapOnceChild();
+  const run = spawn(supervisor, 'hello', {}, { send() {} });
+  await peer.waitFor('session.start');
+  child.emit('exit', null, 'SIGKILL');
+
+  await assert.rejects(run, /GJC worker exited unexpectedly \(signal SIGKILL\)/);
+  assert.equal(kills(), 2, 'the second attempt is what clears a transient reap failure');
+  assert.equal(supervisor.snapshotActivity().unknown.includes('worker_reap_unconfirmed'), false);
+});
 
 test('run enrichment overwrites client browser capability with authenticated WebView readiness', async () => {
   const options = {
@@ -395,7 +482,7 @@ test('fails closed when the Windows job guard never proves app ownership', async
 
   await assert.rejects(
     spawn(supervisor, 'hello', {}, { send() {} }),
-    /GJC worker failed/,
+    /GJC worker did not finish starting in time\. Send the message again\./,
   );
 
   assert.equal(child.killed, false);
@@ -833,7 +920,7 @@ test('failed tree cleanup permanently blocks a replacement worker generation', a
   assert.equal(await failedRun.outcome, 'unconfirmed');
   await assert.rejects(
     spawn(supervisor, 'replacement', {}, { send() {} }),
-    /GJC worker failed/,
+    /GJC worker could not be restarted after a failed shutdown\. Restart the app server\./,
   );
 
   assert.equal(spawnCalls, 1);
@@ -918,13 +1005,13 @@ test('unconfirmed fatal reap retains uncertain runs and blocks new work across s
   assert.equal(settled, false);
   assert.deepEqual(messages, []);
   const next = supervisor.spawnRun({ runId: 'blocked-next', appSessionId: 'scope-b', message: 'b', writer: { send() {} } });
-  await assert.rejects(next.completion, /GJC worker failed/);
+  await assert.rejects(next.completion, /GJC worker could not be restarted after a failed shutdown\./);
   assert.equal(await next.outcome, 'not_started');
-  await assert.rejects(supervisor.modelCatalog(), /GJC worker failed/);
+  await assert.rejects(supervisor.modelCatalog(), /GJC worker could not be restarted after a failed shutdown\./);
   assert.equal(spawnCalls, 1);
   assert.equal(supervisor.isActive(run.abortHandle), true);
   assert.equal(settled, false);
-  await assert.rejects(supervisor.shutdown(), /GJC worker failed/);
+  await assert.rejects(supervisor.shutdown(), /GJC worker could not be restarted after a failed shutdown\./);
 });
 
 test('an ordinary failed run cannot poison a healthy worker by imitating cleanup text', async () => {
@@ -932,7 +1019,7 @@ test('an ordinary failed run cannot poison a healthy worker by imitating cleanup
   let kills = 0;
   const supervisor = new GjcWorkerSupervisor({ ...runtime(child), killTree: () => { kills += 1; child.kill(); } });
   const failed = spawn(supervisor, 'first', {}, { send() {} });
-  const rejected = assert.rejects(failed, /GJC worker failed/);
+  const rejected = assert.rejects(failed, /GJC run failed\./);
   peer.respond(await peer.waitFor('session.start'), { ok: false, error: {
     code: 'run_failed', message: `${GJC_CLEANUP_UNCONFIRMED_CODE}: GjcCleanupUnconfirmedError`,
   } });
@@ -1024,7 +1111,7 @@ test('forwards one worker terminal event without synthesizing a duplicate', asyn
 
   peer.event('app-terminal', start.id, 'turn.failed', { message: terminal });
   peer.respond(start, { ok: false, error: { code: 'run_failed', message: 'safe' } });
-  await assert.rejects(run, /GJC worker failed/);
+  await assert.rejects(run, /GJC run failed\./);
 
   assert.deepEqual(sent, [terminal]);
   assert.equal(failures, 1);
@@ -1072,7 +1159,7 @@ test('durable-job notification ownership suppresses direct GJC terminal sends', 
   );
   const start = await peer.waitFor('session.start');
   peer.respond(start, { ok: false, error: { code: 'run_failed', message: 'safe' } });
-  await assert.rejects(run, /GJC worker failed/);
+  await assert.rejects(run, /GJC run failed\./);
   assert.equal(failures, 0);
 });
 
@@ -1162,7 +1249,7 @@ test('shutdown waits for in-flight exit cleanup and propagates its failure', asy
 
   assert.equal(settled, false);
   rejectTermination(new Error('tree still alive'));
-  await assert.rejects(shutdownPromise, /GJC worker failed/);
+  await assert.rejects(shutdownPromise, /GJC worker could not be restarted after a failed shutdown\./);
 });
 test('rejecting option enrichment settles a pre-request run as not_started', async () => {
   const child = new FakeChild();
@@ -1281,6 +1368,30 @@ test('worker initialization survives a bootstrap slower than the former 5 s boun
   assert.equal(DEFAULT_INITIALIZE_TIMEOUT_MS >= 30_000, true);
 });
 
+test('a worker that dies records its exit status and last output instead of only the sanitized failure', async () => {
+  const child = new FakeChild();
+  const peer = new FakePeer(child);
+  const diagnostics: string[] = [];
+  peer.handle((request) => {
+    if (request.method === 'worker.initialize') peer.respond(request);
+  });
+  const supervisor = new GjcWorkerSupervisor({
+    ...runtime(child),
+    diagnostic: (message) => diagnostics.push(message),
+  });
+
+  const run = spawn(supervisor, 'hello', {}, { send() {} });
+  await peer.waitFor('session.start');
+  child.stderr.write('panic: model registry closed\n');
+  child.emit('exit', null, 'SIGKILL');
+
+  await assert.rejects(run, /GJC worker exited unexpectedly \(signal SIGKILL\)\. Send the message again to restart it\./u);
+  const exitLine = diagnostics.find((line) => line.startsWith('GJC worker exited'));
+  assert.ok(exitLine, 'the death is diagnosable');
+  assert.match(exitLine!, /code=null, signal=SIGKILL, activeRuns=1/u);
+  assert.match(exitLine!, /last worker output: panic: model registry closed/u);
+});
+
 test('a worker that never initializes fails every waiter once and says why in the diagnostics', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const child = new FakeChild();
@@ -1295,7 +1406,10 @@ test('a worker that never initializes fails every waiter once and says why in th
   const settled = waiters.map((waiter) => waiter.then(() => 'fulfilled', (error: Error) => error.message));
   await peer.waitFor('worker.initialize');
   t.mock.timers.tick(DEFAULT_INITIALIZE_TIMEOUT_MS);
-  assert.deepEqual(await Promise.all(settled), ['GJC worker failed.', 'GJC worker failed.']);
+  assert.deepEqual(await Promise.all(settled), [
+    'GJC worker did not finish starting in time. Send the message again.',
+    'GJC worker did not finish starting in time. Send the message again.',
+  ]);
   assert.equal(child.killed, true);
   assert.deepEqual(diagnostics, [
     `GJC worker initialization failed after ${DEFAULT_INITIALIZE_TIMEOUT_MS}ms bound: GJC worker request timed out.`,
@@ -1312,7 +1426,7 @@ test('a rejected initialize response records the worker\'s code', async () => {
     diagnostic: (message) => diagnostics.push(message),
   });
 
-  await assert.rejects(supervisor.oauthStatus(), /GJC worker failed/);
+  await assert.rejects(supervisor.oauthStatus(), /GJC worker did not finish starting in time\./);
   assert.deepEqual(diagnostics, [
     `GJC worker initialization failed after ${DEFAULT_INITIALIZE_TIMEOUT_MS}ms bound: worker.initialize was rejected (initialization_failed)`,
   ]);
@@ -1364,10 +1478,10 @@ test('a start refused for a malformed permissions block tells the client why', a
     ['complete', 1],
   ]);
 
-  // Every other worker-side failure stays behind the sanitized text.
-  await assert.rejects(spawn(supervisor, 'hello', {}, { send(value) { sent.push(value as Record<string, unknown>); } }), /^Error: GJC worker failed\.$/);
-  assert.deepEqual(sent.at(-2)?.content, 'GJC worker failed.');
-  assert.deepEqual(failures, ['Invalid GJC run permissions.', 'GJC worker failed.']);
+  // A worker that is still alive reports the run failure, not a worker failure.
+  await assert.rejects(spawn(supervisor, 'hello', {}, { send(value) { sent.push(value as Record<string, unknown>); } }), /^Error: GJC run failed\.$/);
+  assert.deepEqual(sent.at(-2)?.content, 'GJC run failed.');
+  assert.deepEqual(failures, ['Invalid GJC run permissions.', 'GJC run failed.']);
 });
 test('a start refused for an unresolvable model tells the client why', async () => {
   const child = new FakeChild();
@@ -2281,7 +2395,7 @@ test('successful option enrichment from a reaped worker cannot dispatch into its
   });
   try {
     await entered.promise;
-    const failure = assert.rejects(run.completion, /GJC worker failed/);
+    const failure = assert.rejects(run.completion, /GJC worker exited unexpectedly \(code 1\)\./);
     first.emit('exit', 1);
     await failure;
     assert.equal(await run.outcome, 'reaped');
@@ -2338,7 +2452,7 @@ test('desktop reap-to-finalization handoff has no zero-count gap inside a writer
   const supervisor = new GjcWorkerSupervisor(runtime(child));
   const run = spawn(supervisor, 'hello', {}, { send() { observed.push(supervisor.snapshotActivity()); } });
   await peer.waitFor('session.start');
-  const failure = assert.rejects(run, /GJC worker failed/);
+  const failure = assert.rejects(run, /GJC worker exited unexpectedly \(code 1\)\./);
   child.emit('exit', 1);
   await failure;
   await new Promise((resolve) => setImmediate(resolve));
@@ -2404,7 +2518,7 @@ test('desktop process-tree proof includes a separately reported run process, not
   const beforePid = supervisor.getGeneration();
   peer.status('app-session-1', start.id, 4242);
   assert.notEqual(supervisor.getGeneration(), beforePid);
-  const failure = assert.rejects(run, /GJC worker failed/);
+  const failure = assert.rejects(run, /GJC worker exited unexpectedly \(code 1\)\./);
   child.emit('exit', 1);
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(killed, [4242]);
@@ -2430,7 +2544,7 @@ test('desktop missing process reaper or discarded PID never becomes an OS tree-t
     if (mode === 'pid-cleared') peer.status('app-session-1', start.id, null);
     if (mode === 'pid-replaced') peer.status('app-session-1', start.id, 4243);
     if (mode === 'run-finished') { peer.respond(start); await run; }
-    const settled = mode === 'run-finished' ? run : assert.rejects(run, /GJC worker failed/);
+    const settled = mode === 'run-finished' ? run : assert.rejects(run, /GJC worker exited unexpectedly \(code 1\)\./);
     child.emit('exit', 1); await settled;
     await new Promise((resolve) => setImmediate(resolve));
     const unknown = supervisor.snapshotActivity();

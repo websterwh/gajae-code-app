@@ -1308,20 +1308,27 @@ export class GjcBunSdkAdapter implements GjcWorkerRuntime {
       const run = active;
       run.settling = true;
       this.#revision += 1;
-      for (const cleanup of [
-        () => run.goals?.dispose(),
-        () => run.unsubscribe(),
-        () => run.askController.dispose(),
-        () => run.delegation?.dispose(),
-        () => disposeSdkSession(run.session),
-      ]) {
+      const cleanups: Array<readonly [string, () => unknown]> = [
+        ['goals', () => run.goals?.dispose()],
+        ['subscriptions', () => run.unsubscribe()],
+        ['ask controller', () => run.askController.dispose()],
+        ['delegation', () => run.delegation?.dispose()],
+        ['SDK session', () => disposeSdkSession(run.session)],
+      ];
+      for (const [label, cleanup] of cleanups) {
         try { await cleanup(); }
-        catch { disposalError ??= new Error(FAILURE); }
+        catch (error) {
+          // Which step failed and why used to be discarded, leaving only
+          // "GJC SDK session disposal failed." in the worker log and no way to
+          // tell a transient teardown from a real one.
+          console.error(
+            `GJC SDK session disposal failed (${label}):`,
+            error instanceof Error ? error.stack ?? error.message : String(error),
+          );
+          disposalError ??= new Error(FAILURE, { cause: error });
+        }
       }
-      if (disposalError) {
-        console.error('GJC SDK session disposal failed.');
-        throw this.#poison();
-      }
+      if (disposalError) throw this.#poison();
       // Only a completed physical teardown plus its live ownership receipt may
       // retire this session. Source hashes and logical terminal events are not idle proof.
       if (this.#sdkSessionOwners.has(run.session)) {
