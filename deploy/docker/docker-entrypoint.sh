@@ -144,9 +144,9 @@ fi
 # them. Redirect both onto /data, the one bind-mounted persistent volume.
 # No migration and no deletion here: on a fresh container neither path exists
 # yet, so the symlink is created directly; if one is already a symlink from a
-# prior boot of this same persistent volume, it is left alone. This never
-# touches an existing real directory, so there is nothing destructive to run
-# even if something unexpected is already there.
+# touches an existing real directory only to adopt its content onto the mount
+# once, and only when the mount is still empty, so nothing already persisted is
+# ever overwritten and nothing is deleted before it has been copied.
 # Every path here is state some tool writes into $HOME that a fresh container
 # would otherwise throw away. They are redirected onto /data with the same
 # rules as the transcripts above: an existing real directory is left alone, and
@@ -157,11 +157,16 @@ fi
 #   ~/.local    `pip install --user`, pipx, anything under ~/.local/bin
 #   ~/.cache    browser and playwright downloads, tool scratch space
 #   ~/.bun      bun's global installs and cache
+#   ~/.android  adb's host key, which is what keeps a device authorised
 #
+# A package's files are only half of it: the config and keys it writes into
+# $HOME are what make the next boot behave like the last one. Anything that
+# does not fit one of these directories has to be redirected the way
+# RUSTUP_HOME/CARGO_HOME are above, or it is reinstalled or re-authorised on
+# every recreate.
 # ~/.cargo and ~/.rustup are not mapped: they are redirected to /data with
 # RUSTUP_HOME/CARGO_HOME above instead. A symlink would hide a toolchain the
 # image ships in ~; the env override cannot.
-#
 # The image itself must not ship content in these paths, or the link would hide
 # it; the Dockerfile installs binaries into /usr/local and /opt instead.
 for mapping in \
@@ -171,10 +176,21 @@ for mapping in \
     "/root/.ssh:/data/ssh" \
     "/root/.local:/data/local" \
     "/root/.cache:/data/cache" \
-    "/root/.bun:/data/bun"; do
+    "/root/.bun:/data/bun" \
+    "/root/.android:/data/android"; do
     target="${mapping%%:*}"
     persisted="${mapping##*:}"
     mkdir -p "${persisted}"
+    if [ -d "${target}" ] && [ ! -L "${target}" ] && [ -z "$(ls -A "${persisted}" 2>/dev/null)" ]; then
+        # Something already wrote this directory on the container layer (an
+        # adb key, an SSH key) and nothing has been persisted yet: move it onto
+        # the mount before linking, so the current authorisation survives the
+        # recreate instead of being stranded on a layer that is about to go.
+        # The copy is additive and only removed on success.
+        if cp -an "${target}/." "${persisted}/"; then
+            rm -rf "${target}"
+        fi
+    fi
     if [ ! -e "${target}" ] || [ -L "${target}" ]; then
         ln -sfn "${persisted}" "${target}"
     fi
