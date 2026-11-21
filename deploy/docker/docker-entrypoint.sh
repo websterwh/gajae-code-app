@@ -191,6 +191,19 @@ for mapping in \
         echo "==> [Persist] ${target} is mounted; leaving it as configured."
         continue
     fi
+    # The same applies to a mount below it: the adoption step removes the real
+    # directory afterwards, and rm -rf would cross into that mount and delete
+    # the operator's data.
+    contains_mount=false
+    while read -r _ _ _ _ mount_path _; do
+        case "${mount_path}" in
+            "${target}"/*) contains_mount=true; break ;;
+        esac
+    done < /proc/self/mountinfo
+    if [ "${contains_mount}" = true ]; then
+        echo "==> [Persist] ${target} contains a mount; leaving it as configured."
+        continue
+    fi
     if [ -d "${target}" ] && [ ! -L "${target}" ]; then
         # Something already wrote this directory on the container layer (npm's
         # configstore, an adb key, a tool's config store). Merge it into the
