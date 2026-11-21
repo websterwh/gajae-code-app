@@ -397,7 +397,9 @@ export class PackageSuggestService {
     if (manager === 'auto' || manager === 'apt') {
       sources.push(this.apt(query, manager === 'apt' ? this.aptOnlyBudgetMs : this.aptBudgetMs).catch(() => []));
     }
-    if (manager === 'auto' || manager === 'android') sources.push(this.android(query));
+    // The SDK component list is a constant, not a request; wrapping it keeps
+    // every source in the same shape as the ones that do hit the network.
+    if (manager === 'auto' || manager === 'android') sources.push(Promise.resolve(this.android(query)));
     if (manager === 'auto' || manager === 'npm') sources.push(this.npm(query).catch(() => []));
     if (manager === 'auto' || manager === 'uv' || manager === 'pip') {
       const target: InstallManager = manager === 'auto' ? 'pip' : manager;
