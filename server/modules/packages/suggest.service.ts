@@ -91,6 +91,20 @@ const PACKAGE_NAME = /^[a-z0-9][a-z0-9+._-]*$/iu;
 const REPOSITORY = /^[A-Za-z0-9][A-Za-z0-9_.-]*\/[A-Za-z0-9][A-Za-z0-9_.-]*$/u;
 
 /**
+ * The Android SDK has no index to search: `sdkmanager --list` needs the
+ * command-line tools installed first, which is exactly what a search is
+ * looking for. The components worth naming are a short, stable set, so they
+ * are listed here and matched by name or description.
+ */
+const ANDROID_PACKAGES: ReadonlyArray<{ name: string; description: string }> = [
+  { name: 'cmdline-tools;latest', description: 'Android SDK command-line tools: sdkmanager, avdmanager' },
+  { name: 'platform-tools', description: 'Android platform tools: adb, fastboot' },
+  { name: 'platforms;android-35', description: 'Android 15 SDK platform' },
+  { name: 'build-tools;35.0.0', description: 'Android 15 build tools: aapt2, d8, apksigner' },
+  { name: 'system-images;android-35;google_apis;x86_64', description: 'Android 15 emulator system image with Google APIs' },
+];
+
+/**
  * Name matches outrank description matches, and a description that opens with
  * the query ("GitHub CLI" for `github`) outranks a name that merely embeds it.
  *
@@ -322,6 +336,14 @@ export class PackageSuggestService {
     return [{ manager: 'pip', name, spec: name, description: body.info?.summary ?? '' }];
   }
 
+  private android(query: string): PackageSuggestion[] {
+    const needle = query.toLowerCase();
+    return ANDROID_PACKAGES
+      .filter((pkg) => pkg.name.toLowerCase().includes(needle) || pkg.description.toLowerCase().includes(needle))
+      .slice(0, NPM_LIMIT)
+      .map((pkg) => ({ manager: 'android' as const, name: pkg.name, spec: pkg.name, description: pkg.description }));
+  }
+
   private async github(query: string): Promise<PackageSuggestion[]> {
     const search = encodeURIComponent(`${query} in:name`);
     const url = `https://api.github.com/search/repositories?q=${search}&sort=stars&order=desc&per_page=${GITHUB_LIMIT}`;
@@ -375,6 +397,7 @@ export class PackageSuggestService {
     if (manager === 'auto' || manager === 'apt') {
       sources.push(this.apt(query, manager === 'apt' ? this.aptOnlyBudgetMs : this.aptBudgetMs).catch(() => []));
     }
+    if (manager === 'auto' || manager === 'android') sources.push(this.android(query));
     if (manager === 'auto' || manager === 'npm') sources.push(this.npm(query).catch(() => []));
     if (manager === 'auto' || manager === 'uv' || manager === 'pip') {
       const target: InstallManager = manager === 'auto' ? 'pip' : manager;

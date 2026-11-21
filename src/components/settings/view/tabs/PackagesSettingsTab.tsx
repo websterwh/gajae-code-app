@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogTitle } from '../../../../shared/view/ui';
 import SettingsCard from '../SettingsCard';
 import SettingsSection from '../SettingsSection';
 
-type Manager = 'uv' | 'pip' | 'npm' | 'aqua' | 'apt';
+type Manager = 'uv' | 'pip' | 'npm' | 'aqua' | 'apt' | 'android';
 /** `auto` searches every source and installs through whichever one matched. */
 type ManagerChoice = Manager | 'auto';
 type PackageSuggestion = {
@@ -44,7 +44,7 @@ type SearchState =
   | { kind: 'ready'; query: string; suggestions: PackageSuggestion[] }
   | { kind: 'error'; query: string; message: string };
 
-const MANAGERS: ManagerChoice[] = ['auto', 'uv', 'pip', 'npm', 'aqua', 'apt'];
+const MANAGERS: ManagerChoice[] = ['auto', 'uv', 'pip', 'npm', 'aqua', 'apt', 'android'];
 
 const inputClass = 'w-full touch-manipulation rounded-lg border border-input bg-card p-2 text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary';
 const buttonClass = 'inline-flex items-center gap-1.5 rounded-lg border border-input px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50';
@@ -208,6 +208,8 @@ export default function PackagesSettingsTab() {
     // `github` is not a package name anywhere, but exactly one source knows
     // what it means: follow that source instead of guessing uv.
     if (suggestions.length === 1) return suggestions[0].manager;
+    // `platforms;android-35` is an SDK component; no other manager uses `;`.
+    if (spec.includes(';')) return 'android';
     // A bare owner/repo has no PyPI or npm package to be confused with.
     if (/^[^/@\s]+\/[^/@\s]+$/u.test(spec)) return 'aqua';
     return 'uv';

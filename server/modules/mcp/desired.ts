@@ -31,10 +31,11 @@ export const ENV_PACKAGE_VARIABLES: ReadonlyArray<{ manager: InstallManager; var
   { manager: 'npm', variable: 'NPM_PACKAGES' },
   { manager: 'aqua', variable: 'GITHUB_APPS' },
   { manager: 'apt', variable: 'APT_PACKAGES' },
+  { manager: 'android', variable: 'ANDROID_SDK_PACKAGES' },
 ];
 
 export function emptyDesired(): DesiredState {
-  return { version: 1, packages: { uv: {}, pip: {}, npm: {}, aqua: {}, apt: {} } };
+  return { version: 1, packages: { uv: {}, pip: {}, npm: {}, aqua: {}, apt: {}, android: {} } };
 }
 
 export function envSeeds(env: NodeJS.ProcessEnv = process.env): EnvSeed[] {

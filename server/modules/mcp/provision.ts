@@ -36,6 +36,66 @@ export function tailLines(text: string, count = 5): string {
   return lines.slice(-count).join(' | ');
 }
 
+/**
+ * Google ships no Debian package for the Android SDK, and `sdkmanager` is the
+ * only supported way to fetch its components. The first install puts Google's
+ * command-line tools into the SDK root on the config mount - so a recreate
+ * keeps both the download and the licenses that were accepted - and every
+ * install after that is one `sdkmanager --install`. The component arrives as
+ * `$1`, never interpolated into the script.
+ */
+const ANDROID_INSTALL = [
+  'set -e',
+  'root="${ANDROID_SDK_ROOT}"',
+  'tools="$root/cmdline-tools/latest/bin/sdkmanager"',
+  'if [ ! -x "$tools" ]; then',
+  '  command -v curl >/dev/null 2>&1 || apt-get install -y -qq curl >/dev/null',
+  '  command -v unzip >/dev/null 2>&1 || { apt-get update -qq && apt-get install -y -qq unzip >/dev/null; }',
+  '  tmp=$(mktemp -d)',
+  '  trap \'rm -rf "$tmp"\' EXIT',
+  '  curl -fsSL "${ANDROID_CMDLINE_TOOLS_URL:-https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip}" -o "$tmp/tools.zip"',
+  '  unzip -q "$tmp/tools.zip" -d "$tmp"',
+  '  rm -rf "$root/cmdline-tools/latest"',
+  '  mkdir -p "$root/cmdline-tools"',
+  '  mv "$tmp/cmdline-tools" "$root/cmdline-tools/latest"',
+  'fi',
+  'export ANDROID_HOME="$root" ANDROID_SDK_ROOT="$root"',
+  // The licenses belong to whoever asked for the component, and a
+  // non-interactive install cannot answer the prompt; `yes` reads them as
+  // accepted, which is what installing through this page means anyway.
+  'yes | "$tools" --licenses >/dev/null 2>&1 || true',
+  '"$tools" --install "$1" >/dev/null',
+  // sdkmanager lives under the SDK root, which is not on PATH; the mount's bin
+  // directory already is, and the entrypoint re-exports it on every boot.
+  'bin="${UV_TOOL_BIN_DIR:-$root/../app/bin}"',
+  'mkdir -p "$bin"',
+  'ln -sf "$root/cmdline-tools/latest/bin/sdkmanager" "$bin/sdkmanager"',
+  'ln -sf "$root/cmdline-tools/latest/bin/avdmanager" "$bin/avdmanager"',
+  '{ [ -x "$root/platform-tools/adb" ] && ln -sf "$root/platform-tools/adb" "$bin/adb"; } || true',
+].join('\n');
+
+/**
+ * An installed component is a directory under the SDK root, and its
+ * `source.properties` carries the revision apt would call a version:
+ * `platforms;android-35` lives in `platforms/android-35` and reads
+ * `Pkg.Revision=35.0.0`.
+ */
+const ANDROID_VERIFY = [
+  'root="${ANDROID_SDK_ROOT}"',
+  'rel=$(printf "%s" "$1" | tr ";" "/")',
+  'props="$root/$rel/source.properties"',
+  '[ -f "$props" ] || exit 1',
+  'sed -n "s/^Pkg.Revision=//p" "$props" | head -n 1',
+].join('\n');
+
+const ANDROID_UNINSTALL = [
+  'root="${ANDROID_SDK_ROOT}"',
+  'tools="$root/cmdline-tools/latest/bin/sdkmanager"',
+  '[ -x "$tools" ] || exit 0',
+  'export ANDROID_HOME="$root" ANDROID_SDK_ROOT="$root"',
+  '"$tools" --uninstall "$1"',
+].join('\n');
+
 export function installCommand(
   manager: InstallManager,
   parsed: ReturnType<typeof parsePackageSpec>,
@@ -60,6 +120,10 @@ export function installCommand(
         args: ['install', '-y', '-qq', '--no-install-recommends',
           '-o', 'Dpkg::Options::=--force-confdef', '-o', 'Dpkg::Options::=--force-confold', spec],
       };
+    case 'android':
+      // The component is `$1` for the same reason: it names a path under the
+      // SDK root (`tr ; /`), so it must never become part of the script.
+      return { command: 'sh', args: ['-c', ANDROID_INSTALL, 'sh', spec] };
   }
 }
 
@@ -92,14 +156,36 @@ const AQUA_VERIFY = [
  * Settings page installing onto the mount even when the app was started by
  * something that did not read the entrypoint.
  */
-export function provisionEnv(base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+function configRoot(base: NodeJS.ProcessEnv): string {
   const agentDir = base.GJC_WORKER_AGENT_DIR || path.join(homedir(), '.gjc', 'agent');
-  const configRoot = path.dirname(agentDir);
-  const toolDir = base.UV_TOOL_DIR || path.join(configRoot, 'app', 'uv');
-  const binDir = base.UV_TOOL_BIN_DIR || path.join(configRoot, 'app', 'bin');
+  return path.dirname(agentDir);
+}
+
+/**
+ * Where the Android SDK lives: beside the other tool state on the config
+ * mount, unless the container names a root itself. Google publishes no Debian
+ * package for the SDK, so this is all the `android` manager needs to know
+ * before `sdkmanager` takes over.
+ */
+export function androidSdkRoot(base: NodeJS.ProcessEnv = process.env): string {
+  return base.ANDROID_SDK_ROOT || base.ANDROID_HOME || path.join(configRoot(base), 'android-sdk');
+}
+
+export function provisionEnv(base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const toolDir = base.UV_TOOL_DIR || path.join(configRoot(base), 'app', 'uv');
+  const binDir = base.UV_TOOL_BIN_DIR || path.join(configRoot(base), 'app', 'bin');
+  const sdkRoot = androidSdkRoot(base);
   const pathEntries = (base.PATH ?? '').split(':').filter(Boolean);
-  const searchPath = pathEntries.includes(binDir) ? pathEntries.join(':') : [binDir, ...pathEntries].join(':');
-  return { ...base, UV_TOOL_DIR: toolDir, UV_TOOL_BIN_DIR: binDir, PATH: searchPath };
+  const wanted = [binDir, path.join(sdkRoot, 'cmdline-tools', 'latest', 'bin'), path.join(sdkRoot, 'platform-tools')];
+  const searchPath = [...wanted.filter((entry) => !pathEntries.includes(entry)), ...pathEntries].join(':');
+  return {
+    ...base,
+    UV_TOOL_DIR: toolDir,
+    UV_TOOL_BIN_DIR: binDir,
+    ANDROID_HOME: sdkRoot,
+    ANDROID_SDK_ROOT: sdkRoot,
+    PATH: searchPath,
+  };
 }
 
 /** The one process runner both boot provisioning and the HTTP API use. */
@@ -133,6 +219,8 @@ export function verifyCommand(manager: InstallManager, name: string): { command:
       return { command: 'sh', args: ['-c', AQUA_VERIFY, 'sh', aquaBinary(name), name] };
     case 'apt':
       return { command: 'dpkg-query', args: ['-W', '-f=${Status}\t${Version}\n', name] };
+    case 'android':
+      return { command: 'sh', args: ['-c', ANDROID_VERIFY, 'sh', name] };
   }
 }
 
@@ -160,6 +248,8 @@ export function uninstallCommand(manager: InstallManager, spec: string): { comma
         args: ['remove', '-y', '-qq', '-o', 'Dpkg::Options::=--force-confdef',
           '-o', 'Dpkg::Options::=--force-confold', spec],
       };
+    case 'android':
+      return { command: 'sh', args: ['-c', ANDROID_UNINSTALL, 'sh', spec] };
   }
 }
 
@@ -355,6 +445,12 @@ export function parseInstalledVersion(manager: InstallManager, name: string, out
       // `dpkg-query -W -f='${Status}\t${Version}'` prints `install ok installed\t1.2.3`
       // for a known package, and exits non-zero when the name is unknown.
       const match = /^install ok installed\s+(\S+)/mu.exec(output);
+      return match?.[1] ?? null;
+    }
+    case 'android': {
+      // The verify script prints `Pkg.Revision` alone: `35.0.0` for a platform,
+      // `21.0.1` for the command-line tools.
+      const match = /^\s*(\d+(?:\.\d+)*)\s*$/mu.exec(output);
       return match?.[1] ?? null;
     }
   }
@@ -621,5 +717,9 @@ function upgradeCommand(manager: InstallManager, parsed: ReturnType<typeof parse
       return { command: 'install-github-app', args: [parsed.raw] };
     case 'apt':
       return { command: 'apt-get', args: ['install', '-y', '-qq', '--only-upgrade', parsed.name] };
+    case 'android':
+      // `sdkmanager --install` on an installed component is its update: the
+      // revision comes from the channel, exactly like a first install.
+      return installCommand('android', parsed, null);
   }
 }

@@ -55,6 +55,9 @@ services:
       # them into the Settings-managed packages.json on the config mount, so
       # they can be deleted once Settings -> Packages lists the packages.
       - APT_PACKAGES=${APT_PACKAGES:-}
+      # Android SDK components (platform-tools, platforms;android-35, ...) go
+      # through sdkmanager; no Debian package provides the SDK itself.
+      - ANDROID_SDK_PACKAGES=${ANDROID_SDK_PACKAGES:-}
       - UV_TOOLS=${UV_TOOLS:-}
       - PIP_PACKAGES=${PIP_PACKAGES:-}
       - NPM_PACKAGES=${NPM_PACKAGES:-}

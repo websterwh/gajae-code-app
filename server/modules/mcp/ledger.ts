@@ -11,8 +11,14 @@ import path from 'node:path';
  * install and its verification both succeed. It is additive - an absent or
  * unreadable file means "nothing installed", never "remove things".
  */
-export type InstallManager = 'uv' | 'pip' | 'npm' | 'aqua' | 'apt';
-export const INSTALL_MANAGERS: readonly InstallManager[] = ['uv', 'pip', 'npm', 'aqua', 'apt'];
+export type InstallManager = 'uv' | 'pip' | 'npm' | 'aqua' | 'apt' | 'android';
+/**
+ * `android` is Google's SDK manager rather than a distro package manager: no
+ * Debian release ships the SDK, so the only supported install is
+ * `sdkmanager` over the command-line tools. It is a manager here so an SDK
+ * component is provisioned, verified, pinned and removed like any other row.
+ */
+export const INSTALL_MANAGERS: readonly InstallManager[] = ['uv', 'pip', 'npm', 'aqua', 'apt', 'android'];
 
 export type LedgerStatus = 'installed' | 'failed';
 export type LedgerAttempt = { status: LedgerStatus; at: string; error?: string };
@@ -31,7 +37,7 @@ export type Ledger = {
 };
 
 const EMPTY_PACKAGES = (): Record<InstallManager, Record<string, LedgerEntry>> => ({
-  uv: {}, pip: {}, npm: {}, aqua: {}, apt: {},
+  uv: {}, pip: {}, npm: {}, aqua: {}, apt: {}, android: {},
 });
 
 export function emptyLedger(): Ledger {

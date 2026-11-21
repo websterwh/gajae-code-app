@@ -25,6 +25,10 @@ export GAJAE_COMPANION_DOWNLOAD_TEMPLATE="${GAJAE_COMPANION_DOWNLOAD_TEMPLATE:-$
 
 # Addon / Package Provisioning Configuration
 export APT_PACKAGES="${APT_PACKAGES:-}"
+# Android SDK components are installed by Google's sdkmanager rather than apt.
+export ANDROID_SDK_PACKAGES="${ANDROID_SDK_PACKAGES:-}"
+export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$(dirname "${GJC_WORKER_AGENT_DIR}")/android-sdk}}"
+export ANDROID_HOME="${ANDROID_SDK_ROOT}"
 export UV_TOOLS="${UV_TOOLS:-}"
 export PIP_PACKAGES="${PIP_PACKAGES:-}"
 export NPM_PACKAGES="${NPM_PACKAGES:-}"

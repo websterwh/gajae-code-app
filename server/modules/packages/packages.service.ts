@@ -53,7 +53,7 @@ export type PackagesServiceOptions = {
 
 function managerOf(value: unknown): InstallManager {
   if (typeof value !== 'string' || !INSTALL_MANAGERS.includes(value as InstallManager)) {
-    throw new Error('manager must be one of uv, pip, npm, aqua or apt.');
+    throw new Error('manager must be one of uv, pip, npm, aqua, apt or android.');
   }
   return value as InstallManager;
 }
@@ -232,6 +232,12 @@ export class PackagesService {
   /** Pinning reinstalls at that version when the installed one differs. */
   async setPin(managerValue: unknown, name: string, value: unknown): Promise<PackageRow> {
     const manager = managerOf(managerValue);
+    // An SDK component names its own revision (`build-tools;35.0.0`), and that
+    // name is what sdkmanager installs. A pin here would not change what is
+    // installed; it would only stop the component being updated.
+    if (manager === 'android') {
+      throw new Error('Android SDK components cannot be pinned; name the revision instead, for example build-tools;35.0.0.');
+    }
     const pin = normalizePin(value);
 
     return this.serialize(async () => {

@@ -61,12 +61,15 @@ export function normalizePin(value: unknown): string | null {
 export function pinnedSpec(
   parsed: ParsedPackageSpec,
   pin: string | null | undefined,
-  manager?: 'uv' | 'pip' | 'npm' | 'aqua' | 'apt',
+  manager?: 'uv' | 'pip' | 'npm' | 'aqua' | 'apt' | 'android',
 ): string {
   const version = normalizePin(pin);
   if (!version) return parsed.raw;
   // A git checkout has no package version to pin.
   if (parsed.manager === 'git') return parsed.raw;
+  // An SDK component names its own revision (`build-tools;35.0.0`), so there is
+  // no separate pin syntax to apply.
+  if (manager === 'android') return parsed.raw;
   // apt addresses a version as `name=version`.
   if (manager === 'apt') return `${parsed.name}=${version}`;
   // A GitHub release is pinned by the tag it was fetched at: `skylot/jadx@v1.5.1`.

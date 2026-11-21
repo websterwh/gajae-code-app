@@ -209,3 +209,11 @@ test('a boot provision in flight blocks a second install', async (t) => {
   const service = serviceFor(root, scripted({}, []));
   await assert.rejects(service.add({ manager: 'uv', spec: 'serena' }), /already running/u);
 });
+
+test('an Android SDK component refuses a pin it could not apply', async (t) => {
+  const root = await workspace(t);
+  const service = serviceFor(root, scripted({}, []));
+  // The component name carries its own revision (`build-tools;35.0.0`), so a
+  // pin would be stored but never installed - and it would stop auto-updates.
+  await assert.rejects(service.setPin('android', 'platform-tools', '37.0.3'), /cannot be pinned/u);
+});

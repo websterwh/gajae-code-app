@@ -17,6 +17,7 @@ compose files and pulls keep working.
 - 🔀 **Upstream-friendly fork workflow**: Merge `devswha/gajae-code-app` into the source fork, then rebuild the image.
 - 📦 **Universal Addon Package Provisioning**:
   - `APT_PACKAGES`: Comma-separated Debian packages (e.g. `openjdk-17-jre-headless,ffmpeg`).
+  - `ANDROID_SDK_PACKAGES`: Android SDK components installed with Google's `sdkmanager` (e.g. `platform-tools,platforms;android-35`). No Debian package exists for the SDK, so this is the only route that keeps it on `/data`.
   - `UV_TOOLS`: Standalone Python CLI tools / MCP servers (e.g. `serena,canvas-mcp-server`).
   - `PIP_PACKAGES`: Global Python packages via `uv pip install --system`.
   - `NPM_PACKAGES`: Global Node packages via `npm install -g` (installed under `/data/npm-global`).
@@ -113,6 +114,7 @@ revision is required.
 | Variable | Default | Description |
 |---|---|---|
 | `APT_PACKAGES` | *(empty)* | Comma-separated Debian packages to install via APT (`openjdk-17-jre-headless,ffmpeg`). |
+| `ANDROID_SDK_PACKAGES` | *(empty)* | Comma-separated Android SDK components installed through the `android` manager (`platform-tools,platforms;android-35,build-tools;35.0.0`). The first install fetches Google's command-line tools into `<config root>/android-sdk`; components and accepted licenses stay there, so a recreate does not download them again. Also selectable as `android` in Settings -> Packages, which is what keeps every component in the ledger. |
 | `UV_TOOLS` | *(empty)* | Comma-separated isolated Python CLI tools / MCPs via `uv tool install` (`serena`). |
 | `PIP_PACKAGES` | *(empty)* | Comma-separated Python packages installed globally via `uv pip install --system`. |
 | `NPM_PACKAGES` | *(empty)* | Comma-separated Node packages installed globally via `npm install -g` (`typescript,prettier`). Persisted under `/data/npm-global`. |
@@ -189,7 +191,7 @@ declared in the compose file.
 |---|---|---|
 | `/data` | `./data` | Persistent SQLite database (`auth.db`), logs, caches (`apt`, `uv`, `pip`, `aqua`, `npm`), host SSH keys, installed CLI binaries (`/data/bin`), and (via entrypoint-created symlinks) `~/.gajae-app` and `~/.claude` - chat transcripts and per-provider session state, which `auth.db` only indexes by path and does not itself contain. Also linked here so tool state outlives a recreate: `~/.config` (gh auth, pip and uv config), `~/.gitconfig`, `~/.ssh`, `~/.local` (`pip install --user`, pipx), `~/.cache`, `~/.bun`, and `~/.android` (adb's host key, so an authorised device stays authorised). An existing real directory at one of these paths is adopted onto the mount once, when the mount is still empty, and left alone otherwise; nothing is deleted before it has been copied. |
 | `/workspace` | `./workspace` | Projects directory where the coding agent inspects and edits code. |
-| `/root/.gjc` | `./gjc-config` | Agent configurations, credentials, custom skills, and chat image assets (`/root/.gjc/assets`, which the entrypoint symlinks to `~/.gajae-app/assets`). |
+| `/root/.gjc` | `./gjc-config` | Agent configurations, credentials, custom skills, chat image assets (`/root/.gjc/assets`, which the entrypoint symlinks to `~/.gajae-app/assets`), and the Android SDK (`/root/.gjc/android-sdk`) that the `android` package manager installs into. |
 
 ---
 

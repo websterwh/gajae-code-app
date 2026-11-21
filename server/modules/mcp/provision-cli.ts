@@ -25,7 +25,7 @@ async function pinsFromConfigAndLedger(ledger: Awaited<ReturnType<typeof readLed
   } catch {
     // A malformed mcp.json must not stop package provisioning.
   }
-  for (const manager of ['uv', 'pip', 'npm', 'aqua', 'apt'] as const) {
+  for (const manager of ['uv', 'pip', 'npm', 'aqua', 'apt', 'android'] as const) {
     for (const [name, entry] of Object.entries(ledger.packages[manager])) {
       if (entry.pin) pins[name] = entry.pin;
     }
@@ -43,7 +43,7 @@ async function main(): Promise<void> {
   const runner = spawnCommandRunner();
 
   const seeds = envSeeds(env);
-  const groups: Array<{ manager: InstallManager; packages: string[] }> = (['uv', 'pip', 'npm', 'aqua', 'apt'] as const)
+  const groups: Array<{ manager: InstallManager; packages: string[] }> = (['uv', 'pip', 'npm', 'aqua', 'apt', 'android'] as const)
     .map((manager) => ({
       manager,
       packages: seeds.filter((seed) => seed.manager === manager).map((seed) => seed.spec),
