@@ -148,13 +148,13 @@ fi
 # them. Redirect both onto /data, the one bind-mounted persistent volume.
 # No migration and no deletion here: on a fresh container neither path exists
 # yet, so the symlink is created directly; if one is already a symlink from a
-# previous boot it is repointed. An existing real directory is merged onto the
-# mount with an additive copy, so nothing already persisted is overwritten and
-# nothing is deleted before it has been copied.
+# touches an existing real directory only to adopt its content onto the mount
+# once, and only when the mount is still empty, so nothing already persisted is
+# ever overwritten and nothing is deleted before it has been copied.
 # Every path here is state some tool writes into $HOME that a fresh container
 # would otherwise throw away. They are redirected onto /data with the same
-# rules as the transcripts above: an existing real directory is merged into the
-# mount, and nothing is ever deleted before it has been copied.
+# rules as the transcripts above: an existing real directory is left alone, and
+# nothing is ever deleted, so a wrong guess costs nothing.
 #
 #   ~/.config   `gh auth login`, pip config, uv config, ghcup, pipx
 #   ~/.ssh      keys generated in the container and known_hosts
@@ -185,39 +185,14 @@ for mapping in \
     target="${mapping%%:*}"
     persisted="${mapping##*:}"
     mkdir -p "${persisted}"
-    # A path the operator mounted belongs to them: adopt nothing into it and do
-    # not replace it with a link.
-    if mountpoint -q "${target}"; then
-        echo "==> [Persist] ${target} is mounted; leaving it as configured."
-        continue
-    fi
-    # The same applies to a mount below it: the adoption step removes the real
-    # directory afterwards, and rm -rf would cross into that mount and delete
-    # the operator's data.
-    contains_mount=false
-    while read -r _ _ _ _ mount_path _; do
-        case "${mount_path}" in
-            "${target}"/*) contains_mount=true; break ;;
-        esac
-    done < /proc/self/mountinfo
-    if [ "${contains_mount}" = true ]; then
-        echo "==> [Persist] ${target} contains a mount; leaving it as configured."
-        continue
-    fi
-    if [ -d "${target}" ] && [ ! -L "${target}" ]; then
-        # Something already wrote this directory on the container layer (npm's
-        # configstore, an adb key, a tool's config store). Merge it into the
-        # mount even when the mount already holds files: cp -an never overwrites
-        # a persisted file, so the mount stays canonical and both sides survive.
-        # The copy is removed only after it has succeeded. Limiting this to an
-        # empty mount left a real ~/.config in place whenever /data/config
-        # already had state, so the tool started a fresh store on the container
-        # layer - the persisted files were still in /data/config, just invisible
-        # - and the next recreate discarded it.
-        if cp -an "${target}/." "${persisted}/" && rm -rf "${target}"; then
-            :
-        else
-            echo "==> [Persist] Could not adopt ${target} into ${persisted}; leaving both in place." >&2
+    if [ -d "${target}" ] && [ ! -L "${target}" ] && [ -z "$(ls -A "${persisted}" 2>/dev/null)" ]; then
+        # Something already wrote this directory on the container layer (an
+        # adb key, an SSH key) and nothing has been persisted yet: move it onto
+        # the mount before linking, so the current authorisation survives the
+        # recreate instead of being stranded on a layer that is about to go.
+        # The copy is additive and only removed on success.
+        if cp -an "${target}/." "${persisted}/"; then
+            rm -rf "${target}"
         fi
     fi
     if [ ! -e "${target}" ] || [ -L "${target}" ]; then
