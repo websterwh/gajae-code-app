@@ -1,5 +1,5 @@
 import { FileDiff, FilePlus, Folder, GitBranch, Gauge, GitCommitHorizontal, RefreshCw, type LucideIcon } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useSessionStatus } from '../../../contexts/SessionStatusContext';
@@ -42,6 +42,14 @@ export default function AgentSidebarEnvironment({ projectId, projectPath, sessio
   const { t } = useTranslation();
   const status = useSessionStatus();
   const { state: git, refresh } = useProjectGitSummary(projectId, Boolean(projectId), sessionId, projectPath);
+  // A git action in the lane (pull, push, commit) changes the same working tree
+  // this summary counts, so it re-reads rather than showing counts that were
+  // true a moment before the command ran.
+  useEffect(() => {
+    const onChanged = () => { void refresh(); };
+    window.addEventListener('gajae:git-changed', onChanged);
+    return () => window.removeEventListener('gajae:git-changed', onChanged);
+  }, [refresh]);
 
   const directory = status.cwd ?? projectPath;
   const worktree = directory ? sessionWorktreeOf(directory) : null;

@@ -10,6 +10,7 @@ import {
 } from '../agentSidebarState';
 
 import AgentSidebarEnvironment, { type AgentSidebarEnvironmentProps } from './AgentSidebarEnvironment';
+import AgentSidebarGit from './AgentSidebarGit';
 import AgentSidebarExports from './AgentSidebarExports';
 import AgentSidebarLayoutPanel from './AgentSidebarLayoutPanel';
 import AgentSidebarStats from './AgentSidebarStats';
@@ -64,6 +65,7 @@ export default function AgentSidebar({
 
   const sections: Record<AgentSidebarBlock, ReactNode> = {
     environment: <AgentSidebarEnvironment projectId={projectId} projectPath={projectPath} sessionId={sessionId} />,
+    git: <AgentSidebarGit projectId={projectId} />,
     stats: <AgentSidebarStats projectId={projectId} projectPath={projectPath} />,
     work: <AgentSidebarWork sessionId={sessionId} sessionStore={sessionStore} />,
     actionRequired: <AgentSidebarActionRequired sessionId={sessionId} onRequestShown={isMobile ? onClose : undefined} />,

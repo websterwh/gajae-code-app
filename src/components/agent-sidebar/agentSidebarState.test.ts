@@ -32,6 +32,7 @@ test('the sidebar starts closed with every block shown, exports last', () => {
     open: false,
     blocks: [
       { block: 'environment', visible: true },
+      { block: 'git', visible: true },
       { block: 'stats', visible: true },
       { block: 'work', visible: true },
       { block: 'actionRequired', visible: true },
@@ -67,7 +68,7 @@ test('a record from the resizable rail keeps its open state and gains the defaul
 
 test('a written state reads back unchanged, layout included', () => {
   const storage = createStorage();
-  const state = { open: true, blocks: layout([['work', true], ['exports', false], ['environment', true], ['actionRequired', true], ['stats', true]]) };
+  const state = { open: true, blocks: layout([['work', true], ['exports', false], ['environment', true], ['git', true], ['actionRequired', true], ['stats', true]]) };
 
   writeAgentSidebarState(storage, state);
 
@@ -104,6 +105,7 @@ test('a stored layout keeps its order, drops unknown blocks and appends a block 
     { block: 'work', visible: false },
     { block: 'environment', visible: true },
     // The missing blocks arrive in their default order rather than vanishing.
+    { block: 'git', visible: true },
     { block: 'stats', visible: true },
     { block: 'actionRequired', visible: true },
     { block: 'exports', visible: true },

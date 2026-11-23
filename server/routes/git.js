@@ -1188,4 +1188,25 @@ router.post('/push', asyncHandler(async (req, res) => {
   }
 }));
 
+// Commit the staged changes with the caller's message. Staging stays explicit:
+// the agent sidebar offers a commit, not a "commit everything" gesture that
+// could sweep in files the agent never meant to include.
+router.post('/commit', asyncHandler(async (req, res) => {
+  const { project, message } = req.body ?? {};
+  if (!project) return res.status(400).json({ error: 'Project id is required' });
+  const commitMessage = typeof message === 'string' ? message.trim() : '';
+  if (!commitMessage) return res.status(400).json({ error: 'A commit message is required' });
+  if (commitMessage.length > 5000) return res.status(400).json({ error: 'Commit message is too long' });
+
+  try {
+    const projectPath = await getActualProjectPath(project);
+    await validateGitRepository(projectPath);
+    const { stdout } = await spawnAsync('git', ['commit', '-m', commitMessage], { cwd: projectPath });
+    res.json({ success: true, output: stdout || 'Committed staged changes' });
+  } catch (error) {
+    const details = String(error.stderr || error.message || '').trim() || 'Commit failed';
+    res.status(500).json({ error: 'Commit failed', details });
+  }
+}));
+
 export default router;

@@ -97,6 +97,58 @@ router.post('/git-config', authenticateToken, asyncHandler(async (req, res) => {
 // The GitHub token is stored per user, then materialised into the container:
 // the server's own environment (agents inherit it), ~/.git-credentials (so
 // clones, fetches and pushes work), and a sourced env file for SSH shells.
+const scopeCache = new Map();
+const SCOPE_CACHE_TTL_MS = 5 * 60 * 1000;
+
+/**
+ * What the saved token may do, read from GitHub rather than guessed from the
+ * token string. A classic token reports its scopes in `x-oauth-scopes`; a
+ * fine-grained token reports no scope header at all, so `fineGrained` tells the
+ * caller the permissions cannot be introspected here.
+ */
+router.get('/github-token/scopes', authenticateToken, asyncHandler(async (req, res) => {
+  const userId = req.user.id;
+  const token = githubTokensDb.getActiveGithubToken(userId);
+  if (!token) {
+    return res.json({ success: true, connected: false, login: null, scopes: [], fineGrained: false });
+  }
+  const cached = scopeCache.get(userId);
+  if (cached && Date.now() - cached.at < SCOPE_CACHE_TTL_MS) {
+    return res.json({ success: true, ...cached.value });
+  }
+  try {
+    const response = await fetch('https://api.github.com/user', {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'User-Agent': 'gajae-code-app',
+      },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!response.ok) {
+      return res.status(502).json({
+        success: false,
+        error: response.status === 401 ? 'GitHub rejected the saved token.' : `GitHub returned ${response.status}.`,
+      });
+    }
+    const scopeHeader = response.headers.get('x-oauth-scopes');
+    const scopes = scopeHeader
+      ? scopeHeader.split(',').map((scope) => scope.trim()).filter(Boolean)
+      : [];
+    const body = await response.json().catch(() => ({}));
+    const value = {
+      connected: true,
+      login: typeof body.login === 'string' ? body.login : null,
+      scopes,
+      fineGrained: scopeHeader === null,
+    };
+    scopeCache.set(userId, { at: Date.now(), value });
+    res.json({ success: true, ...value });
+  } catch (error) {
+    res.status(502).json({ success: false, error: error instanceof Error ? error.message : 'GitHub could not be reached.' });
+  }
+}));
+
 router.get('/github-token', authenticateToken, asyncHandler(async (req, res) => {
   const token = githubTokensDb.getActiveGithubToken(req.user.id);
   res.json({ success: true, connected: Boolean(token) });
@@ -116,6 +168,7 @@ router.post('/github-token', authenticateToken, asyncHandler(async (req, res) =>
   githubTokensDb.createGithubToken(userId, 'gajae-code-app', token, 'Saved from Git settings');
   // A new token can see a different set of repositories than the old one.
   repositoryCache.delete(userId);
+  scopeCache.delete(userId);
   await applyGithubToken(token);
   console.log(`GitHub token saved for user ${userId}; git, gh and agents now use it.`);
   res.json({ success: true, connected: true });
@@ -127,6 +180,7 @@ router.delete('/github-token', authenticateToken, asyncHandler(async (req, res) 
     githubTokensDb.deleteGithubToken(userId, existing.id);
   }
   repositoryCache.delete(userId);
+  scopeCache.delete(userId);
   await clearGithubToken();
   res.json({ success: true, connected: false });
 }));

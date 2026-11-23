@@ -9,7 +9,7 @@
  */
 
 /** Every block the lane can show; the default order is this order. */
-export const AGENT_SIDEBAR_BLOCKS = ['environment', 'stats', 'work', 'actionRequired', 'exports'] as const;
+export const AGENT_SIDEBAR_BLOCKS = ['environment', 'git', 'stats', 'work', 'actionRequired', 'exports'] as const;
 
 export type AgentSidebarBlock = (typeof AGENT_SIDEBAR_BLOCKS)[number];
 

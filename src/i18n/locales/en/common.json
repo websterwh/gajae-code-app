@@ -107,6 +107,19 @@
       "staged": "Staged",
       "untracked": "Untracked"
     },
+    "git": {
+      "title": "Git",
+      "fetch": "Fetch",
+      "pull": "Pull",
+      "push": "Push",
+      "commit": "Commit",
+      "message": "Commit message",
+      "messagePlaceholder": "Describe the staged changes",
+      "submit": "Commit staged changes",
+      "busy": "Committing…",
+      "done": "Done",
+      "failed": "Git command failed."
+    },
     "work": {
       "title": "Work",
       "working": "Working",
