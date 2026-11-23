@@ -79,6 +79,26 @@ export async function fetchCompleteHistory(
   return { ...last, messages, total: last.total, hasMore: false, offset: 0, limit: null };
 }
 
+/**
+ * A workspace row lives in the data volume; its folder does not. A container
+ * rebuild can leave the row without its directory, and every new session then
+ * failed with "Project directory is unavailable." Recreate the empty folder the
+ * app would have made - only for a path the app already knows, never for an
+ * arbitrary path someone typed.
+ */
+async function restoreKnownProjectDirectory(input: string): Promise<void> {
+  const requested = input.trim();
+  if (!requested) return;
+  let known = false;
+  try { known = Boolean(projectsDb.getProjectPath(requested)); } catch { return; }
+  if (!known) return;
+  try {
+    await fsp.stat(requested);
+  } catch {
+    await fsp.mkdir(requested, { recursive: true }).catch(() => undefined);
+  }
+}
+
 export const sessionsService = {
   listProviderIds(): LLMProvider[] {
     return providerRegistry.listProviders().map(({ id }) => id);
@@ -93,6 +113,7 @@ export const sessionsService = {
   },
 
   async createAppSession(provider: LLMProvider, projectPath: string): Promise<CreateAppSessionResult> {
+    await restoreKnownProjectDirectory(projectPath);
     const project = await resolveSessionProjectPath(projectPath);
     const sessionId = randomUUID();
     sessionsDb.createAppSession(sessionId, provider, project);

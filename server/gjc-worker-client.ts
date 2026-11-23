@@ -352,7 +352,15 @@ async function resumableGjcTranscript(providerSessionId: string): Promise<boolea
     const session = sessionsDb.getSessionByProviderSessionId('gjc', providerSessionId)
       ?? sessionsDb.getSessionById(providerSessionId);
     const stored = session?.provider === 'gjc' ? session.jsonl_path : undefined;
-    if (stored && existsSync(stored)) return true;
+    if (stored && existsSync(stored)) {
+      // An existing transcript can still be owned by another user: an older
+      // image wrote it under a different uid. Taking ownership only on the
+      // found-by-id fallback below left the ordinary stored path resuming into
+      // `owner_mismatch` on every turn.
+      if (ensureGjcTranscriptOwner(stored)) return true;
+      console.warn(`[GJC] Cannot resume ${providerSessionId}: its transcript is owned by another user.`);
+      return false;
+    }
     const found = findGjcTranscript(getGjcLiveSessionRoot(), providerSessionId)
       ?? findGjcTranscript(join(homedir(), '.gjc', 'agent', 'sessions'), providerSessionId);
     if (!found) return false;
