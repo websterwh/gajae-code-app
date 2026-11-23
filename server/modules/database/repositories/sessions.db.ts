@@ -52,12 +52,38 @@ function selectMany(sql: string, ...bindings: unknown[]): SessionRow[] {
   return presentRows(getConnection().prepare(sql).all(...bindings) as SessionRow[]);
 }
 
-function projectSessions(projectPath: string, archived: boolean, page?: { limit: number; offset: number }): SessionRow[] {
+/**
+ * Running sessions sort ahead of the rest of a project's history, so the first
+ * preview page cannot hide a conversation that is still working. Putting the
+ * clause inside the page's ORDER BY keeps LIMIT/OFFSET coherent: the client's
+ * "show more" offset still walks one total order instead of a page with rows
+ * appended outside the page count. The first page also carries these rows on
+ * top of its limit (see getInitialSessionPagesByProject), so a busy project
+ * shows every live conversation and still fills the rest of the preview with
+ * recent ones.
+ */
+function prioritizedSessions(prioritizedIds: readonly string[]): { clause: string; bindings: string[] } {
+  const ids = [...new Set(prioritizedIds)].filter((id) => typeof id === 'string' && id.length > 0);
+  if (ids.length === 0) return { clause: '', bindings: [] };
+  return {
+    clause: `CASE WHEN session_id IN (${ids.map(() => '?').join(', ')}) THEN 0 ELSE 1 END, `,
+    bindings: ids,
+  };
+}
+
+function projectSessions(
+  projectPath: string,
+  archived: boolean,
+  page?: { limit: number; offset: number },
+  prioritizedIds: readonly string[] = [],
+): SessionRow[] {
   const where = archived ? 'project_path = ?' : 'project_path = ? AND isArchived = 0';
-  const paging = page ? ` ORDER BY ${recency} DESC, session_id DESC LIMIT ? OFFSET ?` : '';
-  const bindings: unknown[] = [normalizeProjectPath(projectPath)];
-  if (page) bindings.push(page.limit, page.offset);
-  return selectMany(`SELECT ${rowColumns} FROM sessions WHERE ${where}${paging}`, ...bindings);
+  if (!page) return selectMany(`SELECT ${rowColumns} FROM sessions WHERE ${where}`, normalizeProjectPath(projectPath));
+  const priority = prioritizedSessions(prioritizedIds);
+  return selectMany(
+    `SELECT ${rowColumns} FROM sessions WHERE ${where} ORDER BY ${priority.clause}${recency} DESC, session_id DESC LIMIT ? OFFSET ?`,
+    normalizeProjectPath(projectPath), ...priority.bindings, page.limit, page.offset,
+  );
 }
 
 export const sessionsDb = {
@@ -207,16 +233,25 @@ export const sessionsDb = {
     return projectSessions(projectPath, true);
   },
 
-  getSessionsByProjectPathPage(projectPath: string, limit: number, offset: number): SessionRow[] {
-    return projectSessions(projectPath, false, { limit, offset });
+  getSessionsByProjectPathPage(projectPath: string, limit: number, offset: number, prioritizedIds: readonly string[] = []): SessionRow[] {
+    return projectSessions(projectPath, false, { limit, offset }, prioritizedIds);
   },
 
-  getInitialSessionPagesByProject(limit: number): ProjectSessionPageRow[] {
+  getInitialSessionPagesByProject(limit: number, prioritizedIds: readonly string[] = []): ProjectSessionPageRow[] {
+    const priority = prioritizedSessions(prioritizedIds);
+    // Rows in flight are not counted toward the page size: a project with two
+    // live conversations returns those two plus `limit` recent ones. They sort
+    // first, so the page is still one contiguous prefix of the order and the
+    // client's "show more" offset stays correct.
+    const prioritizedCount = priority.bindings.length
+      ? `SUM(CASE WHEN session_id IN (${priority.bindings.map(() => '?').join(', ')}) THEN 1 ELSE 0 END) OVER (PARTITION BY project_path)`
+      : '0';
     const rows = getConnection().prepare(`WITH numbered AS (
       SELECT ${rowColumns}, COUNT(*) OVER (PARTITION BY project_path) AS total,
-        ROW_NUMBER() OVER (PARTITION BY project_path ORDER BY ${recency} DESC, session_id DESC) AS position
+        ${prioritizedCount} AS prioritized_count,
+        ROW_NUMBER() OVER (PARTITION BY project_path ORDER BY ${priority.clause}${recency} DESC, session_id DESC) AS position
       FROM sessions WHERE isArchived = 0
-    ) SELECT ${rowColumns}, total FROM numbered WHERE position <= ? ORDER BY project_path, position`).all(limit) as ProjectSessionPageRow[];
+    ) SELECT ${rowColumns}, total FROM numbered WHERE position <= ? + prioritized_count ORDER BY project_path, position`).all(...priority.bindings, ...priority.bindings, limit) as ProjectSessionPageRow[];
     return rows.map((row) => ({ ...presentRow(row), total: Number(row.total) })) as ProjectSessionPageRow[];
   },
 

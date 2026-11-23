@@ -155,6 +155,23 @@ export function useChatSessionState({
   const [viewHiddenCount, setViewHiddenCount] = useState(0);
   const [pendingUserMessage, setPendingUserMessage] = useState<ChatMessage | null>(null);
   const [searchTarget, setSearchTarget] = useState<SearchRequest | null>(null);
+  // A conversation that kept running while it was closed replays the turns it
+  // gained on open. Pinning to the newest row is right, but following each
+  // arrival in view reads as scrolling through the whole missed backlog, so the
+  // transcript stays hidden until the landing settles and is then revealed
+  // already at the bottom.
+  const [isLandingAtTail, setIsLandingAtTail] = useState(true);
+  const landingAtTailRef = useRef(true);
+  const endLandingAtTail = useCallback(() => {
+    if (!landingAtTailRef.current) return;
+    landingAtTailRef.current = false;
+    setIsLandingAtTail(false);
+  }, []);
+  const beginLandingAtTail = useCallback(() => {
+    if (landingAtTailRef.current) return;
+    landingAtTailRef.current = true;
+    setIsLandingAtTail(true);
+  }, []);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   // The transcript pane is mounted and unmounted under the landing view while
@@ -244,11 +261,12 @@ export function useChatSessionState({
     setSearchTarget(null);
     initialScrollRef.current = true;
     openingSessionRef.current = true;
+    beginLandingAtTail();
     searchInProgressRef.current = false;
     loadedKeyRef.current = null;
     imageStateRef.current = { sessionKey: null, enabled: showImagePreviews };
     resetPagination(true);
-  }, [_onSessionIdle, applySessionState, newSessionTrigger, resetPagination, resetStreamingState, showImagePreviews]);
+  }, [_onSessionIdle, applySessionState, beginLandingAtTail, newSessionTrigger, resetPagination, resetStreamingState, showImagePreviews]);
 
   const sessionActivity = activeSession ? processingSessions?.get(activeSession) || null : null;
   const isProcessing = sessionActivity !== null;
@@ -328,13 +346,14 @@ export function useChatSessionState({
   }, []);
   const scrollToBottomAndReset = useCallback(() => {
     scrollToBottom();
+    endLandingAtTail();
     setHasNewMessagesBelow(false);
     if (allMessagesLoaded) {
       loadedAllRef.current = false;
       setAllMessagesLoaded(false);
       setVisibleMessageCount(FIRST_VISIBLE_COUNT);
     }
-  }, [allMessagesLoaded, scrollToBottom]);
+  }, [allMessagesLoaded, endLandingAtTail, scrollToBottom]);
 
   const loadOlderMessages = useCallback(async () => {
     if (loadingMoreRef.current || historyLoadErrorRef.current || isLoadingMoreMessages || loadedAllRef.current || !hasMoreMessages || !selectedSession || !selectedProject) return false;
@@ -384,6 +403,7 @@ export function useChatSessionState({
     if (!bottom) {
       initialScrollRef.current = false;
       openingSessionRef.current = false;
+      endLandingAtTail();
     }
     if (bottom) setHasNewMessagesBelow(false);
     // The in-flight request guard is enough. Requiring a trip away from the
@@ -395,26 +415,30 @@ export function useChatSessionState({
       return;
     }
     await loadOlderMessages();
-  }, [chatMessages.length, isNearBottom, loadOlderMessages, setFollowing, visibleMessageCount]);
+  }, [chatMessages.length, endLandingAtTail, isNearBottom, loadOlderMessages, setFollowing, visibleMessageCount]);
 
   useEffect(() => {
     if (!searchInProgressRef.current) {
       initialScrollRef.current = true;
       openingSessionRef.current = true;
+      beginLandingAtTail();
       setVisibleMessageCount(FIRST_VISIBLE_COUNT);
     }
     setIsUserScrolledUp(false);
-  }, [selectedProject?.projectId, selectedSession?.id, setIsUserScrolledUp]);
+  }, [beginLandingAtTail, selectedProject?.projectId, selectedSession?.id, setIsUserScrolledUp]);
 
   useEffect(() => {
     if (!isFollowing) {
-      if (!openingSessionRef.current) initialScrollRef.current = false;
+      if (openingSessionRef.current) return;
+      initialScrollRef.current = false;
+      endLandingAtTail();
       return;
     }
     if (!initialScrollRef.current || isLoadingSessionMessages || !scrollContainer) return;
     if (!chatMessages.length || searchInProgressRef.current) {
       initialScrollRef.current = false;
       openingSessionRef.current = false;
+      endLandingAtTail();
       return;
     }
     const node = scrollContainer;
@@ -435,11 +459,12 @@ export function useChatSessionState({
       else {
         initialScrollRef.current = false;
         openingSessionRef.current = false;
+        endLandingAtTail();
       }
     };
     frameId = requestAnimationFrame(settle);
     return () => cancelAnimationFrame(frameId);
-  }, [chatMessages.length, isFollowing, isLoadingSessionMessages, scrollContainer]);
+  }, [chatMessages.length, endLandingAtTail, isFollowing, isLoadingSessionMessages, scrollContainer]);
 
   useEffect(() => {
     if (!selectedProject || !selectedSession) {
@@ -695,6 +720,7 @@ export function useChatSessionState({
     retryOlderMessages,
     hasMoreMessages,
     totalMessages,
+    isLandingAtTail,
     isUserScrolledUp,
     hasNewMessagesBelow,
     setIsUserScrolledUp,

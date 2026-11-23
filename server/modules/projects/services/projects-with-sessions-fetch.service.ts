@@ -3,7 +3,7 @@ import path from 'node:path';
 
 import { projectsDb, sessionsDb } from '@/modules/database/index.js';
 import { pruneListedSessionsWithMissingTranscripts, sessionSynchronizerService } from '@/modules/providers/index.js';
-import { WS_OPEN_STATE, connectedClients } from '@/modules/websocket/index.js';
+import { WS_OPEN_STATE, chatRunRegistry, connectedClients } from '@/modules/websocket/index.js';
 import type { RealtimeClientConnection } from '@/shared/types.js';
 import { AppError } from '@/shared/utils.js';
 
@@ -54,11 +54,26 @@ function sessionSummary(session: SessionRepositoryRow): SessionSummary {
   return summary;
 }
 
-function sessionsPage(projectPath: string, includeArchived: boolean, options: SessionPaginationOptions = {}): ProjectSessionsPageResult {
+/**
+ * Runs in flight right now, from the registry the sidebar's status poll reads.
+ * A project's preview page carries these first and does not count them toward
+ * its limit: the five-row slice must neither hide a conversation that is still
+ * working nor lose recent history because one is running.
+ */
+function runningSessionIds(): string[] {
+  return chatRunRegistry.listRunningRuns().map((run) => run.sessionId);
+}
+
+function sessionsPage(
+  projectPath: string,
+  includeArchived: boolean,
+  options: SessionPaginationOptions = {},
+  prioritizedIds: readonly string[] = [],
+): ProjectSessionsPageResult {
   const { limit, offset } = pagination(options);
   const sessions = includeArchived
     ? sessionsDb.getSessionsByProjectPathIncludingArchivedPage(projectPath, limit, offset)
-    : sessionsDb.getSessionsByProjectPathPage(projectPath, limit, offset);
+    : sessionsDb.getSessionsByProjectPathPage(projectPath, limit, offset, prioritizedIds);
   const total = includeArchived
     ? sessionsDb.countSessionsByProjectPathIncludingArchived(projectPath)
     : sessionsDb.countSessionsByProjectPath(projectPath);
@@ -76,9 +91,9 @@ function publishProgress(progress: ProgressUpdate): void {
   });
 }
 
-function initialSessions(limit: number): Map<string, ProjectSessionsPageResult> {
+function initialSessions(limit: number, prioritizedIds: readonly string[] = []): Map<string, ProjectSessionsPageResult> {
   const pages = new Map<string, ProjectSessionsPageResult>();
-  const rows = sessionsDb.getInitialSessionPagesByProject(limit) as InitialProjectSessionRow[];
+  const rows = sessionsDb.getInitialSessionPagesByProject(limit, prioritizedIds) as InitialProjectSessionRow[];
   for (const row of rows) {
     const rowPath = row.project_path;
     if (!rowPath) continue;
@@ -91,9 +106,12 @@ function initialSessions(limit: number): Map<string, ProjectSessionsPageResult> 
     pages.set(rowPath, {
       sessions: [sessionSummary(row)],
       total: row.total,
-      hasMore: row.total > limit,
+      hasMore: false,
     });
   }
+  // Live conversations come on top of the limit, so the page can hold more
+  // rows than it asked for; "more" is whatever the total still has unshown.
+  for (const page of pages.values()) page.hasMore = page.sessions.length < page.total;
   return pages;
 }
 
@@ -133,7 +151,8 @@ export async function getProjectsWithSessions(options: GetProjectsWithSessionsOp
 
   const projects = projectsDb.getProjectPaths() as Array<{ project_id: string; project_path: string; custom_project_name?: string | null; origin?: 'legacy' | 'explicit' | 'auto' | null; isStarred?: number }>;
   const sessionLimit = Math.min(Math.max(1, options.sessionsLimit ?? initialPageSize), maxPageSize);
-  const initialPages = initialSessions(sessionLimit);
+  const prioritizedIds = runningSessionIds();
+  const initialPages = initialSessions(sessionLimit, prioritizedIds);
   const result: ProjectListItem[] = [];
 
   for (const [index, project] of projects.entries()) {
@@ -145,7 +164,7 @@ export async function getProjectsWithSessions(options: GetProjectsWithSessionsOp
       ? path.basename(projectPath) || projectPath
       : await generateDisplayName(path.basename(projectPath) || projectPath, projectPath));
     const sessions = options.sessionsOffset && options.sessionsOffset > 0
-      ? sessionsPage(projectPath, false, { limit: sessionLimit, offset: options.sessionsOffset })
+      ? sessionsPage(projectPath, false, { limit: sessionLimit, offset: options.sessionsOffset }, prioritizedIds)
       : initialPages.get(projectPath) ?? emptyPage();
     result.push({
       projectId: project.project_id,
@@ -205,7 +224,9 @@ export async function getProjectSessionsPage(projectId: string, options: Session
   const project = projectsDb.getProjectById(projectId);
   if (!project) throw new AppError(`Project "${projectId}" was not found.`, { code: 'PROJECT_NOT_FOUND', statusCode: 404 });
 
-  const sessions = sessionsPage(project.project_path, false, options);
+  // The continuation pages use the same running-first order, so the client's
+  // offset keeps counting through one order instead of re-sorting mid-list.
+  const sessions = sessionsPage(project.project_path, false, options, runningSessionIds());
   const view: ProjectSessionsPageApiView = {
     projectId: project.project_id,
     sessions: sessions.sessions,

@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import { projectsDb, sessionWorktreesDb, sessionsDb } from '@/modules/database/index.js';
 import { getArchivedProjectsWithSessions, getProjectsWithSessions } from '@/modules/projects/services/projects-with-sessions-fetch.service.js';
+import { chatRunRegistry } from '@/modules/websocket/index.js';
 
 // The eager fetch also sweeps sessions whose transcript file vanished, which is
 // a read of the real sessions table. This file never opens a database, so that
@@ -16,19 +17,20 @@ type Stubs = {
   getInitialSessionPagesByProject: typeof sessionsDb.getInitialSessionPagesByProject;
 };
 
-function withStubs(total: number, run: (captured: { limit?: number }) => Promise<void>): Promise<void> {
+function withStubs(total: number, run: (captured: { limit?: number; prioritizedIds?: string[] }) => Promise<void>): Promise<void> {
   const original: Stubs = {
     getProjectPaths: projectsDb.getProjectPaths,
     getInitialSessionPagesByProject: sessionsDb.getInitialSessionPagesByProject,
   };
-  const captured: { limit?: number } = {};
+  const captured: { limit?: number; prioritizedIds?: string[] } = {};
   // custom_project_name is set so getProjectsWithSessions skips filesystem displayName derivation.
   (projectsDb as unknown as { getProjectPaths: () => unknown }).getProjectPaths = () => [
     { project_id: 'p1', project_path: '/ws/p1', custom_project_name: 'p1', isStarred: 0 },
   ];
-  (sessionsDb as unknown as { getInitialSessionPagesByProject: (limit: number) => unknown[] })
-    .getInitialSessionPagesByProject = (limit) => {
+  (sessionsDb as unknown as { getInitialSessionPagesByProject: (limit: number, prioritizedIds: string[]) => unknown[] })
+    .getInitialSessionPagesByProject = (limit, prioritizedIds) => {
       captured.limit = limit;
+      captured.prioritizedIds = [...prioritizedIds];
       return total > 0
         ? [{
             session_id: 's1',
@@ -56,6 +58,58 @@ test('getProjectsWithSessions caps the initial eager session slice at 5 when no 
     assert.equal(projects[0].sessionMeta.total, 42, 'total reflects the full session count for lazy-load');
     assert.equal(projects[0].sessionMeta.hasMore, true, 'hasMore lets the frontend lazy-load the rest');
   });
+});
+
+test('a run in progress is ordered ahead of the rest, so the preview cannot hide it', async () => {
+  const original = chatRunRegistry.listRunningRuns;
+  (chatRunRegistry as unknown as { listRunningRuns: () => unknown[] }).listRunningRuns = () => [
+    { sessionId: 'session-running', provider: 'gjc', startedAt: 1, lastSeq: 0, awaitingInput: false },
+  ];
+  try {
+    await withStubs(42, async (captured) => {
+      await getProjectsWithSessions({ skipSynchronization: true });
+      assert.deepEqual(captured.prioritizedIds, ['session-running'], 'the page is ordered with the live run first');
+    });
+  } finally {
+    (chatRunRegistry as unknown as { listRunningRuns: typeof original }).listRunningRuns = original;
+  }
+});
+
+test('live conversations ride on top of the preview limit instead of consuming it', async () => {
+  const original = {
+    getProjectPaths: projectsDb.getProjectPaths,
+    getInitialSessionPagesByProject: sessionsDb.getInitialSessionPagesByProject,
+    listRunningRuns: chatRunRegistry.listRunningRuns,
+  };
+  (projectsDb as unknown as { getProjectPaths: () => unknown }).getProjectPaths = () => [
+    { project_id: 'p1', project_path: '/ws/p1', custom_project_name: 'p1', isStarred: 0 },
+  ];
+  (chatRunRegistry as unknown as { listRunningRuns: () => unknown[] }).listRunningRuns = () => [
+    { sessionId: 'session-running', provider: 'gjc', startedAt: 1, lastSeq: 0, awaitingInput: false },
+  ];
+  // What the repository returns for a six-session project with one live run:
+  // the run plus the five newest rows, past the default limit of 5.
+  (sessionsDb as unknown as { getInitialSessionPagesByProject: () => unknown[] }).getInitialSessionPagesByProject = () =>
+    ['session-running', 's1', 's2', 's3', 's4', 's5'].map((id, index) => ({
+      session_id: id,
+      provider: 'gjc',
+      project_path: '/ws/p1',
+      custom_name: null,
+      created_at: `2026-01-0${index + 1}T00:00:00.000Z`,
+      updated_at: `2026-01-0${index + 1}T00:00:00.000Z`,
+      total: 6,
+    }));
+
+  try {
+    const projects = await getProjectsWithSessions({ skipSynchronization: true });
+    assert.equal(projects[0].sessions.length, 6, 'the live run does not displace a recent session');
+    assert.equal(projects[0].sessions[0].id, 'session-running', 'the live run stays first');
+    assert.equal(projects[0].sessionMeta.hasMore, false, 'the page holds the whole project, so nothing is left');
+  } finally {
+    projectsDb.getProjectPaths = original.getProjectPaths;
+    sessionsDb.getInitialSessionPagesByProject = original.getInitialSessionPagesByProject;
+    (chatRunRegistry as unknown as { listRunningRuns: typeof original.listRunningRuns }).listRunningRuns = original.listRunningRuns;
+  }
 });
 
 test('getProjectsWithSessions respects an explicit sessionsLimit (no forced cap)', async () => {

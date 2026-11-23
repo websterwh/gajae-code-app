@@ -37,6 +37,8 @@ interface ChatMessagesPaneProps {
   /** Callback ref that publishes the attached pane so scroll behaviour re-binds on every mount. */
   attachScrollContainer: (node: HTMLDivElement | null) => void;
   preserveScrollPosition?: boolean;
+  /** The open is still landing on its newest row; keep the backlog out of sight. */
+  isLandingAtTail?: boolean;
   onWheel: () => void;
   onTouchMove: () => void;
   isLoadingSessionMessages: boolean;
@@ -74,6 +76,7 @@ function ChatMessagesPane({
   scrollContainerRef,
   attachScrollContainer,
   preserveScrollPosition = false,
+  isLandingAtTail = false,
   onWheel,
   onTouchMove,
   isLoadingSessionMessages,
@@ -116,6 +119,9 @@ function ChatMessagesPane({
   );
   const densityRules = toolOutputDensityRules(density);
   const showInlineRunningRow = isProcessing && !densityRules.workBlock;
+  // Layout stays intact (so the landing can still measure and pin the pane);
+  // only the painting of a backlog that is still arriving is held back.
+  const holdLandingPaint = isLandingAtTail && chatMessages.length > 0;
 
   // Keys for the top-level items; each fold assigns its own inside. The key
   // function is not handed down: it is new whenever the list changes, which
@@ -151,7 +157,7 @@ function ChatMessagesPane({
         className="chat-messages-pane relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto pt-3 pb-3 sm:pt-4 sm:pb-4"
       >
         <ChatScrollAnchor scrollContainerRef={scrollContainerRef} sessionKey={sessionKey} enabled={preserveScrollPosition}>
-          <div className="mx-auto w-full max-w-chat space-y-3 px-4 sm:space-y-4">
+          <div className="mx-auto w-full max-w-chat space-y-3 px-4 sm:space-y-4" style={holdLandingPaint ? { visibility: 'hidden' } : undefined}>
             {(isLoadingSessionMessages || isProcessing) && chatMessages.length === 0 ? (
               <div className="mt-8 text-center text-muted-foreground">
                 <div className="flex items-center justify-center space-x-2">

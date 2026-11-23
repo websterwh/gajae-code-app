@@ -512,6 +512,7 @@ test('opening a session lands on its newest row even from a scrolled-up one', as
     await harness.switchSession();
     await act(async () => { await new Promise(resolve => { setTimeout(resolve, 120); }); });
     assert.equal(scrollTop, 900);
+    assert.equal(harness.state().isLandingAtTail, false, 'the transcript is revealed once the landing settles');
   } finally { harness.close(); }
 });
 
