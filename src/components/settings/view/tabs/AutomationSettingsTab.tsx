@@ -164,6 +164,10 @@ export default function AutomationSettingsTab() {
   const [hostControlError, setHostControlError] = useState<string | null>(null);
   const [sshDraft, setSshDraft] = useState({ host: '', port: '22', user: 'root', hostKey: '' });
   const [sshKeyDraft, setSshKeyDraft] = useState('');
+  const [generatedSshPublicKey, setGeneratedSshPublicKey] = useState<string | null>(null);
+  const [generatingSshKeys, setGeneratingSshKeys] = useState(false);
+  const [sshGenerateError, setSshGenerateError] = useState<string | null>(null);
+  const [sshPublicKeyCopied, setSshPublicKeyCopied] = useState(false);
   const [detectedOs, setDetectedOs] = useState<string | null>(null);
   const [detectingHost, setDetectingHost] = useState(false);
   const [detectError, setDetectError] = useState<string | null>(null);
@@ -302,6 +306,55 @@ export default function AutomationSettingsTab() {
     }
     setHostControlError(null);
     applyHostControl(await response.json() as HostControl);
+  };
+
+  // One button for the two halves it can fill: a fresh client key pair, and the
+  // destination's host key read with ssh-keyscan. The host key belongs to the
+  // machine being reached, so it cannot be generated here - scanning it is the
+  // only honest way to fill that box. The current drafts travel with the
+  // request because they save on blur, which races a click.
+  const generateSshKeys = async () => {
+    setGeneratingSshKeys(true);
+    setSshGenerateError(null);
+    setGeneratedSshPublicKey(null);
+    setSshPublicKeyCopied(false);
+    try {
+      const response = await fetch('/api/host/ssh/keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          host: sshDraft.host.trim(),
+          port: Number.parseInt(sshDraft.port, 10) || 22,
+          user: sshDraft.user.trim() || 'root',
+        }),
+      });
+      const payload = await response.json().catch(() => ({})) as {
+        publicKey?: string;
+        hostKeyError?: string;
+        detail?: string;
+        error?: string;
+      };
+      if (!response.ok) {
+        setSshGenerateError(payload.detail || payload.error || t('automation.hostControl.sshGenerateFailed'));
+        return;
+      }
+      if (payload.publicKey) setGeneratedSshPublicKey(payload.publicKey);
+      if (payload.hostKeyError) setSshGenerateError(payload.hostKeyError);
+      const statusResponse = await fetch('/api/host/status');
+      if (statusResponse.ok) applyHostControl(await statusResponse.json() as HostControl);
+    } catch {
+      setSshGenerateError(t('automation.hostControl.sshGenerateFailed'));
+    } finally {
+      setGeneratingSshKeys(false);
+    }
+  };
+
+  const copySshPublicKey = async () => {
+    if (!generatedSshPublicKey) return;
+    try {
+      await navigator.clipboard.writeText(generatedSshPublicKey);
+      setSshPublicKeyCopied(true);
+    } catch { /* Clipboard access can be denied; the text stays selectable. */ }
   };
 
   // Discovery answers "what is actually running this host". The server keeps
@@ -786,6 +839,50 @@ export default function AutomationSettingsTab() {
                       }}
                       className={`${selectClass} sm:w-72`}
                     />
+                  </SettingsRow>
+                  <SettingsRow
+                    label={t('automation.hostControl.sshGenerateTitle')}
+                    description={t('automation.hostControl.sshGenerateDescription')}
+                  >
+                    <div className="flex w-full flex-col gap-2 sm:w-80">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          disabled={generatingSshKeys}
+                          onClick={() => void generateSshKeys()}
+                          className="rounded-lg border border-input px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {generatingSshKeys
+                            ? t('automation.hostControl.sshGenerating')
+                            : t('automation.hostControl.sshGenerate')}
+                        </button>
+                      </div>
+                      {generatedSshPublicKey ? (
+                        <>
+                          <textarea
+                            aria-label={t('automation.hostControl.sshPublicKey')}
+                            value={generatedSshPublicKey}
+                            readOnly
+                            rows={2}
+                            spellCheck={false}
+                            onFocus={(event) => event.currentTarget.select()}
+                            className={`${selectClass} font-mono text-xs`}
+                          />
+                          <div className="flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() => void copySshPublicKey()}
+                              className="rounded-lg border border-input px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+                            >
+                              {sshPublicKeyCopied
+                                ? t('automation.hostControl.sshCopied')
+                                : t('automation.hostControl.sshCopyPublicKey')}
+                            </button>
+                          </div>
+                        </>
+                      ) : null}
+                      {sshGenerateError ? <p role="alert" className="text-xs text-destructive">{sshGenerateError}</p> : null}
+                    </div>
                   </SettingsRow>
                   <SettingsRow
                     label={t('automation.hostControl.sshPrivateKey')}

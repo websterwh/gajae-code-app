@@ -16,6 +16,7 @@ import {
 } from '../../gjc-engine.js';
 
 import { clearSshPrivateKey, sshPrivateKeyPresent, writeSshPrivateKey } from './host-control.secrets.js';
+import { generateSshKeyPair, scanSshHostKey } from './host-control.keys.js';
 import {
   allowsHostCapability,
   dockerSocketPath,
@@ -43,6 +44,23 @@ export type HostProfileStore = {
 };
 
 const defaultProfiles: HostProfileStore = { read: readSavedHostProfile, write: saveHostProfile };
+
+/**
+ * The encrypted SSH key store. Injected like the settings and detection
+ * stores: the real one reads the database, which a routing test has no reason
+ * to open (and which aborts under some runtimes when it is not initialized).
+ */
+export type HostSecretsStore = {
+  keyPresent(): boolean;
+  write(key: string): void;
+  clear(): void;
+};
+
+const defaultSecrets: HostSecretsStore = {
+  keyPresent: sshPrivateKeyPresent,
+  write: writeSshPrivateKey,
+  clear: clearSshPrivateKey,
+};
 
 function refuse(response: Response, status: number, error: string, detail: string): Response {
   return response.status(status).json({ error, detail });
@@ -77,11 +95,13 @@ export function createHostControlRouter({
   client,
   store = defaultStore,
   profiles = defaultProfiles,
+  secrets = defaultSecrets,
   env = process.env,
 }: {
   client?: HostControlClient;
   store?: HostControlStore;
   profiles?: HostProfileStore;
+  secrets?: HostSecretsStore;
   env?: NodeJS.ProcessEnv;
 } = {}): Router {
   const router = Router();
@@ -117,7 +137,7 @@ export function createHostControlRouter({
         port: settings.sshPort,
         user: settings.sshUser,
         hostKey: settings.sshHostKey,
-        keyPresent: sshPrivateKeyPresent(),
+        keyPresent: secrets.keyPresent(),
         writePreauthorized: settings.sshWritePreauthorized,
       },
       host: saved
@@ -237,7 +257,7 @@ export function createHostControlRouter({
         return refuse(response, 400, 'HOST_SETTINGS_INVALID', 'sshPrivateKey must be a private key in text form.');
       }
       if (body.sshPrivateKey.trim().length === 0) {
-        clearSshPrivateKey();
+        secrets.clear();
       } else {
         const key = parseSshPrivateKey(body.sshPrivateKey);
         if (!key) {
@@ -248,7 +268,7 @@ export function createHostControlRouter({
             'sshPrivateKey must be an unencrypted OpenSSH or PEM private key, up to 16 KiB.',
           );
         }
-        writeSshPrivateKey(key);
+        secrets.write(key);
       }
       keyChanged = true;
     }
@@ -285,6 +305,78 @@ export function createHostControlRouter({
     } catch (error) {
       dockerFailure(response, error);
     }
+  }));
+
+  /**
+   * The one action that fills both halves of the SSH connection it can fill:
+   * a fresh client key pair, and — when the address answers — the destination's
+   * host key read by `ssh-keyscan`. The host key is not generated here because
+   * it belongs to the machine being reached; pinning a locally made key would
+   * make every connection fail its host-key check.
+   *
+   * An existing pinned host key is never silently replaced: if the scan
+   * disagrees, the pin is kept and the caller is told, so a changed host is a
+   * decision rather than a race with a button.
+   */
+  router.post('/ssh/keys', asyncHandler(async (request, response) => {
+    if (!hostControlAvailable(env)) {
+      return refuse(response, 409, 'HOST_CONTROL_DISABLED', 'Host control is not enabled for this deployment.');
+    }
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    const patch: Partial<HostControlSettings> = {};
+    if (body.host !== undefined) {
+      const value = typeof body.host === 'string' ? body.host.trim() : undefined;
+      if (value === undefined || (value.length > 0 && !isSshHost(value))) {
+        return refuse(response, 400, 'HOST_SETTINGS_INVALID', 'host must be a hostname or a literal IP address.');
+      }
+      patch.sshHost = value;
+    }
+    if (body.port !== undefined) {
+      const port = parseSshPort(body.port);
+      if (port === undefined) {
+        return refuse(response, 400, 'HOST_SETTINGS_INVALID', 'port must be a whole number between 1 and 65535.');
+      }
+      patch.sshPort = port;
+    }
+    if (body.user !== undefined) {
+      if (!isSshUser(body.user)) {
+        return refuse(response, 400, 'HOST_SETTINGS_INVALID', 'user must be a plain user name, for example root.');
+      }
+      patch.sshUser = body.user;
+    }
+    const settings = Object.keys(patch).length > 0 ? store.write(patch) : store.read();
+    let generated;
+    try {
+      generated = await generateSshKeyPair();
+    } catch (error) {
+      return refuse(
+        response,
+        503,
+        'SSH_KEYGEN_UNAVAILABLE',
+        error instanceof Error ? error.message : 'A key pair could not be generated.',
+      );
+    }
+    secrets.write(generated.privateKey);
+
+    let hostKey = settings.sshHostKey;
+    let scannedHostKey: string | undefined;
+    let hostKeyError: string | undefined;
+    if (!settings.sshHost) {
+      hostKeyError = 'The key pair was generated. Set the SSH address, then generate again to pin its host key.';
+    } else {
+      try {
+        scannedHostKey = await scanSshHostKey(settings.sshHost, settings.sshPort);
+        if (!hostKey) {
+          store.write({ sshHostKey: scannedHostKey });
+          hostKey = scannedHostKey;
+        } else if (hostKey !== scannedHostKey) {
+          hostKeyError = 'The host presented a different key than the pinned one; the pinned key was kept.';
+        }
+      } catch {
+        hostKeyError = 'The host key could not be read with ssh-keyscan. Check the address and paste it manually.';
+      }
+    }
+    return response.json({ publicKey: generated.publicKey, hostKey, scannedHostKey, hostKeyError });
   }));
 
   return router;

@@ -16,7 +16,7 @@ import {
   type HostControlClient,
 } from '../../gjc-engine.js';
 
-import { createHostControlRouter, type HostControlStore, type HostProfileStore } from './host-control.routes.js';
+import { createHostControlRouter as createRouter, type HostControlStore, type HostProfileStore } from './host-control.routes.js';
 import type { SavedHostProfile } from './host-profile.store.js';
 import {
   applyHostControlPatch,
@@ -25,6 +25,13 @@ import {
   type HostCapability,
   type HostControlSettings,
 } from './host-control.settings.js';
+
+// The real stores persist through better-sqlite3, and calling that without the
+// app's database aborts the process with a Bun NAPI fatal. These suites are
+// about routing, so they get in-memory stores - the same seams the app itself
+// uses for settings and detection.
+const createHostControlRouter = (options: Parameters<typeof createRouter>[0] = {}) =>
+  createRouter({ store: fakeStore(), profiles: fakeProfiles(), secrets: fakeSecrets(), ...options });
 
 const ENABLED_ENV = { GAJAE_HOST_CONTROL: '1' } as NodeJS.ProcessEnv;
 
@@ -36,6 +43,16 @@ function fakeStore(initial: Partial<HostControlSettings> = {}): HostControlStore
       settings = applyHostControlPatch(settings, patch);
       return settings;
     },
+  };
+}
+
+/** The SSH key lives in the encrypted config store; tests keep it in a variable. */
+function fakeSecrets() {
+  let key: string | null = null;
+  return {
+    keyPresent: () => key !== null,
+    write: (value: string) => { key = value; },
+    clear: () => { key = null; },
   };
 }
 
