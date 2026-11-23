@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useState, type RefObject } from 'react';
 
+import { markPopupOwnedKeystroke } from '../components/chat/utils/composerAutoFocus';
+
 export type AnchoredPopupPosition = { top?: number; bottom?: number; left: number; maxHeight?: number };
 
 type AnchoredPopupOptions = {
@@ -91,11 +93,29 @@ export function useAnchoredPopup({ open, onClose, anchorRef, popupRef, width, fl
         : (current + step + options.length) % options.length;
       options[next]?.focus();
     };
+    // Typing with focus off a field is aimed at the popup's own filter: option
+    // rows take focus on a click, and touch devices skip the autofocus, so the
+    // character used to land in the composer behind the popup. Capture phase
+    // beats the composer's own type-anywhere handler, and focusing on keydown
+    // puts the character in the search field instead.
+    const routeTyping = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      if (event.key.length !== 1 || event.metaKey || event.ctrlKey || event.altKey) return;
+      const active = document.activeElement;
+      if (active instanceof HTMLElement
+        && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) return;
+      const search = popupRef.current?.querySelector<HTMLInputElement>('input:not([type="checkbox"]):not([type="radio"])');
+      if (!search || search.disabled || search.readOnly) return;
+      markPopupOwnedKeystroke(event);
+      search.focus();
+    };
     document.addEventListener('mousedown', pressOutside);
     document.addEventListener('keydown', keydown);
+    document.addEventListener('keydown', routeTyping, true);
     return () => {
       document.removeEventListener('mousedown', pressOutside);
       document.removeEventListener('keydown', keydown);
+      document.removeEventListener('keydown', routeTyping, true);
     };
   }, [open, onClose, anchorRef, popupRef]);
 

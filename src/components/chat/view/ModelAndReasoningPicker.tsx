@@ -5,6 +5,7 @@ import { Check, ChevronDown, ChevronRight, Loader2, Search } from 'lucide-react'
 
 import { useAnchoredPopup } from '../../../hooks/useAnchoredPopup';
 import { focusSearchInputSafely } from '../../../hooks/useDeviceSettings';
+import { focusComposerTextarea } from '../utils/composerAutoFocus';
 import { isModelSelectionReference, primaryModelSelector } from '../../../../shared/model-selectors';
 import { cn } from '../../../utils/cn';
 import type { ProviderModelOption } from '../../../types/app';
@@ -213,8 +214,8 @@ export async function persistChosenModel(
   if (modelId !== currentValue) await onSelect(modelId);
 }
 
-/** `w-md`, the popup's width, for clamping it to the viewport. */
-const POPUP_WIDTH = 448;
+/** `w-lg`, the popup's width, for clamping it to the viewport. */
+const POPUP_WIDTH = 512;
 
 /**
  * One composer control for the two settings that define the next answer:
@@ -246,6 +247,7 @@ export default function ModelAndReasoningPicker({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
   const returnFocus = useRef(false);
+  const openedOnce = useRef(false);
   const [query, setQuery] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
   /**
@@ -311,10 +313,17 @@ export default function ModelAndReasoningPicker({
       setActiveProvider(null);
       setActiveModel(null);
       setQuery('');
-      if (returnFocus.current) triggerRef.current?.focus();
+      // Closing gives the keyboard back to the conversation: the next thing
+      // typed is a message, not a filter. The trigger is only the fallback for
+      // a surface with no composer to focus.
+      if (openedOnce.current) {
+        openedOnce.current = false;
+        if (!focusComposerTextarea() && returnFocus.current) triggerRef.current?.focus();
+      }
       returnFocus.current = false;
       return;
     }
+    openedOnce.current = true;
     focusSearchInputSafely(searchRef.current);
   }, [open]);
 
@@ -382,7 +391,7 @@ export default function ModelAndReasoningPicker({
       {open && createPortal(
         <div
           ref={popupRef}
-          className="fixed z-80 flex w-md max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-xl"
+          className="fixed z-80 flex w-lg max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-xl"
           style={popupPosition}
         >
           <button
@@ -427,7 +436,7 @@ export default function ModelAndReasoningPicker({
           )}
 
           <div className={cn('flex min-h-0 flex-1 divide-x divide-border/60 border-t border-border/60 pt-1', groups.length === 0 && 'hidden')}>
-            <div className="flex min-h-0 min-w-0 flex-[1.1] flex-col pr-1" role="listbox" aria-label={t('input.modelReasoning.providerTitle')}>
+            <div className="flex min-h-0 min-w-0 flex-[0.85] flex-col pr-1" role="listbox" aria-label={t('input.modelReasoning.providerTitle')}>
               <p className="px-2.5 pt-1 pb-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
                 {t('input.modelReasoning.providerTitle')}
               </p>
@@ -461,7 +470,7 @@ export default function ModelAndReasoningPicker({
               </div>
             </div>
 
-            <div className="flex min-h-0 min-w-0 flex-[1.2] flex-col px-1" role="listbox" aria-label={t('input.modelReasoning.modelTitle')}>
+            <div className="flex min-h-0 min-w-0 flex-[1.75] flex-col px-1" role="listbox" aria-label={t('input.modelReasoning.modelTitle')}>
               <p className="px-2.5 pt-1 pb-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
                 {t('input.modelReasoning.modelTitle')}
               </p>
@@ -486,7 +495,9 @@ export default function ModelAndReasoningPicker({
                         ? model.value
                         : t('input.modelReasoning.signInRequired', { provider: providerDisplayLabel(providerOf(model.value)) })}
                     >
-                      <span className="min-w-0 flex-1 truncate">{model.label}</span>
+                      {/* Two lines instead of one truncated one: model ids stay
+                          distinguishable in a column this narrow. */}
+                      <span className="line-clamp-2 min-w-0 flex-1 leading-snug wrap-break-word">{model.label}</span>
                       {isSelected && <Check className="size-3.5 shrink-0 text-primary" />}
                     </button>
                   );
@@ -494,7 +505,7 @@ export default function ModelAndReasoningPicker({
               </div>
             </div>
 
-            <div className="flex min-h-0 min-w-0 flex-[0.9] flex-col pl-1" role="listbox" aria-label={t('input.modelReasoning.reasoningTitle')}>
+            <div className="flex min-h-0 min-w-0 flex-[0.8] flex-col pl-1" role="listbox" aria-label={t('input.modelReasoning.reasoningTitle')}>
               <p className="px-2.5 pt-1 pb-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
                 {t('input.modelReasoning.reasoningTitle')}
               </p>

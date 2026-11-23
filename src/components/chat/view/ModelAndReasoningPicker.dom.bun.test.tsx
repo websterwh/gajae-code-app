@@ -240,6 +240,18 @@ for (const query of ['', 'astra']) {
   });
 }
 
+test('closing the picker hands the keyboard back to the chat composer', async () => {
+  render(createElement('div', { 'data-composer-root': '' }, createElement('textarea', { 'aria-label': 'Composer' })));
+  const { trigger, search } = await openPicker();
+  fireEvent.change(search, { target: { value: 'astra' } });
+
+  fireEvent.keyDown(search, { key: 'Escape' });
+  fireEvent.keyDown(search, { key: 'Escape' });
+
+  assert.equal(trigger.getAttribute('aria-expanded'), 'false');
+  assert.equal(document.activeElement, screen.getByLabelText('Composer'));
+});
+
 test('other keys leave the popup open and outside clicks dismiss without stealing focus', async () => {
   const { trigger, search } = await openPicker();
   fireEvent.keyDown(search, { key: 'ArrowDown' });

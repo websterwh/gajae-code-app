@@ -6,6 +6,7 @@ import { Boxes, Check, ChevronDown, ChevronRight, Loader2, Search } from 'lucide
 import { useAnchoredPopup } from '../../../hooks/useAnchoredPopup';
 import { focusSearchInputSafely } from '../../../hooks/useDeviceSettings';
 import { primaryModelSelector } from '../../../../shared/model-selectors';
+import { focusComposerTextarea } from '../utils/composerAutoFocus';
 import { cn } from '../../../utils/cn';
 import type { ProviderModelOption } from '../../../types/app';
 
@@ -171,6 +172,7 @@ export default function AgentConfigurationPicker({ value, options, loading = fal
   const rootRef = useRef<HTMLDivElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const openedOnce = useRef(false);
   // Left-anchored and clamped like the model and skill popups: a
   // right-anchored w-96 popup grows left off the viewport on phones. The role
   // summary makes it taller than the model picker, so it is bounded to the
@@ -197,7 +199,16 @@ export default function AgentConfigurationPicker({ value, options, loading = fal
   // Opening lands on the active preset's group so the current choice is one
   // glance away instead of behind a collapsed row.
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      // Closing hands the keyboard back to the conversation rather than to the
+      // trigger button, so the next keystroke starts the message.
+      if (openedOnce.current) {
+        openedOnce.current = false;
+        focusComposerTextarea();
+      }
+      return;
+    }
+    openedOnce.current = true;
     setQuery('');
     setExpandedGroup(selected?.group || null);
     focusSearchInputSafely(searchRef.current);
