@@ -5,6 +5,7 @@ import type { NavigateFunction } from 'react-router-dom';
 import type { ServerEvent } from '../contexts/WebSocketContext';
 import { api, authenticatedFetch } from '../utils/api';
 import { readPersistedProjectId, useAppShellStore } from '../stores/useAppShellStore';
+import { useQuickChatStore } from '../stores/useQuickChatStore';
 import { useSessionAttentionStore } from '../stores/useSessionAttentionStore';
 import type { LLMProvider, LoadingProgress, Project, ProjectSession } from '../types/app';
 
@@ -164,6 +165,9 @@ export function useProjectsState({ sessionId, navigate, subscribe, isMobile, act
     const now = new Date().toISOString();
     const session: ProjectSession = { id, summary: summary ?? '', messageCount: 0, createdAt: now, created_at: now, updated_at: now, lastActivity: now, __provider: provider, __projectId: project.projectId };
     const event: SessionUpsert = { kind: 'session_upserted', sessionId: id, provider, session, project: { projectId: project.projectId, path: project.path || project.fullPath, fullPath: project.fullPath || project.path || '', displayName: project.displayName, isStarred: Boolean(project.isStarred), isArchived: Boolean(project.isArchived), origin: project.origin }, timestamp: now };
+    // A quick chat learns its session id here: the first turn is what creates
+    // the row, and the row is what the sidebar's discard action deletes.
+    useQuickChatStore.getState().attachSession(project.projectId, id);
     client.setQueryData<Project[]>(PROJECTS_QUERY_KEY, (cached) => updateProjectCache(cached ?? [], event));
     setSelectedProject((current) => current?.projectId === project.projectId ? applySessionUpsert(current, event) : current);
     setSelectedSession((current) => current?.id === id ? { ...current, ...session } : session);

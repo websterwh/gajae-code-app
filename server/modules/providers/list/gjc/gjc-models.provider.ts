@@ -468,6 +468,46 @@ async function getGjcPresetCatalog(
   return { catalog, configuredProfiles, configuredCustom };
 }
 
+/**
+ * Models the user declared themselves: `config.yml` role selectors and
+ * `models.yml` custom providers and profiles. The runtime only reports what a
+ * stored credential can reach, so a deliberately configured model must not
+ * disappear from the picker just because the runtime did not list it.
+ */
+function configuredModelOptions(
+  catalog: ProviderModelsDefinition,
+  profiles: ParsedProfile[],
+  custom: { models: string[] },
+): RuntimeModelOption[] {
+  const selectors = new Set<string>();
+  const current = catalog.OPTIONS.find((option) => option.value === 'default');
+  for (const selector of Object.values(current?.roles ?? {})) {
+    if (typeof selector === 'string') selectors.add(selector.trim());
+  }
+  for (const profile of profiles) {
+    for (const selector of Object.values(profile.roles)) {
+      if (typeof selector === 'string') selectors.add(selector.trim());
+    }
+  }
+  for (const model of custom.models) selectors.add(model);
+  return [...selectors]
+    .filter((selector) => /^[^\s/]+\/[^\s/]+$/u.test(selector))
+    .map((selector) => ({
+      value: selector,
+      label: selector.slice(selector.indexOf('/') + 1),
+      effort: { values: [] },
+    }));
+}
+
+function withoutDuplicateModels(models: RuntimeModelOption[]): RuntimeModelOption[] {
+  const seen = new Set<string>();
+  return models.filter((model) => {
+    if (seen.has(model.value)) return false;
+    seen.add(model.value);
+    return true;
+  });
+}
+
 export class GjcProviderModels implements IProviderModels {
   constructor(
     private readonly homeDir: string = os.homedir(),
@@ -501,9 +541,15 @@ export class GjcProviderModels implements IProviderModels {
 
   async getSupportedModels(): Promise<ProviderModelsDefinition> {
     const runtimeCatalog = await this.loadRuntimeModels?.().catch(() => undefined);
-    const { catalog } = await getGjcPresetCatalog(this.homeDir, runtimeCatalog);
+    const { catalog, configuredProfiles, configuredCustom } = await getGjcPresetCatalog(this.homeDir, runtimeCatalog);
     const base = catalog.OPTIONS.length > 1 ? catalog : GJC_FALLBACK_MODELS;
-    const models = parseRuntimeModels(runtimeCatalog)
+    const runtimeModels = parseRuntimeModels(runtimeCatalog);
+    // A runtime that answered "nothing" means nobody is signed in; there is
+    // nothing for a configured model to run on, so the list stays empty.
+    const configured = runtimeModels.length > 0
+      ? configuredModelOptions(catalog, configuredProfiles, configuredCustom)
+      : [];
+    const models = withoutDuplicateModels([...runtimeModels, ...configured])
       .map((model) => ({
         value: model.value,
         label: model.label,

@@ -52,10 +52,23 @@ test('a project whose name matches keeps every session, so the user can browse i
   assert.equal(emptyProject.sessionCount, 0);
 });
 
-test('hits across projects are all kept, each under its own project', () => {
-  const result = run('re', ['w2']);
+test('body hits across projects are all kept, each under its own project', () => {
+  const result = run('deploy', ['w2', 'a1']);
   assert.deepEqual(result.projects.map((project) => project.projectId), ['web', 'api']);
-  assert.deepEqual(result.sessionsFor(projects[0]).map((entry) => entry.id), ['w1', 'w2']);
+  assert.deepEqual(result.sessionsFor(projects[0]).map((entry) => entry.id), ['w2']);
   assert.deepEqual(result.sessionsFor(projects[1]).map((entry) => entry.id), ['a1']);
   assert.deepEqual(result.sessionsFor(projects[2]), []);
+});
+
+test('a name match wins outright, so body hits never join the list later', () => {
+  // Searching a workspace named "server" must not keep filling with every
+  // conversation that merely mentions the word once the body search answers.
+  const result = run('payments', ['w1', 'a2']);
+  assert.deepEqual(result.projects.map((project) => project.projectId), ['api']);
+  assert.deepEqual(result.sessionsFor(projects[1]).map((entry) => entry.id), ['a1', 'a2']);
+  assert.equal(result.sessionCount, 2);
+
+  const byTitle = run('login', ['a1']);
+  assert.deepEqual(byTitle.projects.map((project) => project.projectId), ['web']);
+  assert.deepEqual(byTitle.sessionsFor(projects[0]).map((entry) => entry.id), ['w1']);
 });

@@ -114,6 +114,8 @@ router.post('/github-token', authenticateToken, asyncHandler(async (req, res) =>
     githubTokensDb.deleteGithubToken(userId, existing.id);
   }
   githubTokensDb.createGithubToken(userId, 'gajae-code-app', token, 'Saved from Git settings');
+  // A new token can see a different set of repositories than the old one.
+  repositoryCache.delete(userId);
   await applyGithubToken(token);
   console.log(`GitHub token saved for user ${userId}; git, gh and agents now use it.`);
   res.json({ success: true, connected: true });
@@ -124,6 +126,7 @@ router.delete('/github-token', authenticateToken, asyncHandler(async (req, res) 
   for (const existing of githubTokensDb.getGithubTokens(userId)) {
     githubTokensDb.deleteGithubToken(userId, existing.id);
   }
+  repositoryCache.delete(userId);
   await clearGithubToken();
   res.json({ success: true, connected: false });
 }));
@@ -150,25 +153,55 @@ function repositoryScore(query, repository) {
   return score;
 }
 
-async function fetchGithubRepositories(token) {
-  const response = await fetch('https://api.github.com/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator,organization_member', {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/vnd.github+json',
-      'User-Agent': 'gajae-code-app',
+const REPOSITORY_PAGE_SIZE = 100;
+// A page budget keeps an account with thousands of repositories from turning
+// one request into a minute of waiting; 1000 repositories is well past the
+// point where the picker's search stops being useful.
+const REPOSITORY_MAX_PAGES = 10;
+const REPOSITORY_FETCH_BUDGET_MS = 8000;
+const REPOSITORY_RESULT_LIMIT = 20;
+
+async function fetchGithubRepositoryPage(token, page) {
+  const response = await fetch(
+    `https://api.github.com/user/repos?per_page=${REPOSITORY_PAGE_SIZE}&page=${page}&sort=updated&affiliation=owner,collaborator,organization_member`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'User-Agent': 'gajae-code-app',
+      },
+      signal: AbortSignal.timeout(8000),
     },
-    signal: AbortSignal.timeout(8000),
-  });
+  );
   if (!response.ok) {
     throw new Error(response.status === 401
       ? 'GitHub rejected the saved token.'
       : `GitHub returned ${response.status}.`);
   }
-  return await response.json();
+  const batch = await response.json();
+  return Array.isArray(batch) ? batch : [];
+}
+
+/**
+ * Every repository the account owns or collaborates on, across pages. The
+ * picker searches this list, so a fork that has not been pushed to recently
+ * must still be in it rather than falling off after the first page.
+ */
+async function fetchGithubRepositories(token) {
+  const repositories = [];
+  const deadline = Date.now() + REPOSITORY_FETCH_BUDGET_MS;
+  for (let page = 1; page <= REPOSITORY_MAX_PAGES; page += 1) {
+    const batch = await fetchGithubRepositoryPage(token, page);
+    repositories.push(...batch);
+    if (batch.length < REPOSITORY_PAGE_SIZE || Date.now() >= deadline) break;
+  }
+  return repositories;
 }
 
 // Backs the repository picker in add-workspace. One listing per minute is
-// enough: the list only needs to be current when a workspace is being added.
+// enough: the list only needs to be current while a workspace is being added,
+// and the typed text is matched against the whole list rather than the rows a
+// previous search happened to return.
 router.get('/github-repositories', authenticateToken, asyncHandler(async (req, res) => {
   const userId = req.user.id;
   const token = githubTokensDb.getActiveGithubToken(userId);
@@ -180,12 +213,15 @@ router.get('/github-repositories', authenticateToken, asyncHandler(async (req, r
       ? cached.repositories
       : await fetchGithubRepositories(token);
     repositoryCache.set(userId, { at: Date.now(), repositories });
-    const data = repositories
+    const ranked = repositories
       .map((repository) => ({ repository, score: repositoryScore(query, repository) }))
-      .filter(({ score }) => score >= 0)
-      .sort((first, second) => second.score - first.score
-        || String(first.repository.full_name).localeCompare(String(second.repository.full_name)))
-      .slice(0, 20)
+      .filter(({ score }) => score >= 0);
+    if (query) {
+      ranked.sort((first, second) => second.score - first.score
+        || String(first.repository.full_name).localeCompare(String(second.repository.full_name)));
+    }
+    const data = ranked
+      .slice(0, REPOSITORY_RESULT_LIMIT)
       .map(({ repository }) => ({
         fullName: repository.full_name,
         name: repository.name,

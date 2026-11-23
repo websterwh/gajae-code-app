@@ -47,7 +47,7 @@ const runnableByCodex: ProviderModelOption[] = [
 
 const signInHint = 'Sign in to {{provider}} in Settings to use this preset';
 
-async function mountPicker({
+async function makePicker({
   modelOptions,
   availabilityKnown,
 }: {
@@ -69,19 +69,27 @@ async function mountPicker({
       },
     },
   });
-  return render(
+  return (openTrigger: number) => (
     <I18nextProvider i18n={i18n}>
       <AgentConfigurationPicker
         value="default"
         options={options}
         modelOptions={modelOptions}
         availabilityKnown={availabilityKnown}
-        openTrigger={1}
+        openTrigger={openTrigger}
         iconOnly
         onSelect={() => undefined}
       />
-    </I18nextProvider>,
+    </I18nextProvider>
   );
+}
+
+/** Mounted closed, then opened the way `/model` opens it: by incrementing. */
+async function mountPicker(args: Parameters<typeof makePicker>[0]) {
+  const tree = await makePicker(args);
+  const view = render(tree(0));
+  view.rerender(tree(1));
+  return view;
 }
 
 const row = (label: string) => screen.getByText(label).closest('button')!;
@@ -122,6 +130,24 @@ test('unknown availability keeps every preset lit and selectable', async () => {
     assert.equal(lit(row(label)), true, `${label} must stay lit while availability is unknown`);
   }
   assert.equal(screen.queryByTitle(signInHint.replace('{{provider}}', 'Anthropic')), null);
+});
+
+test('a trigger that did not just increment does not reopen the popup', async () => {
+  // The /model counter lives with the composer state, which outlives this
+  // picker, so it is still non-zero when the composer remounts for a new chat
+  // or another session. Mounting with that value must not look like a second
+  // /model.
+  const tree = await makePicker({ modelOptions: [], availabilityKnown: false });
+  const mounted = render(tree(1));
+  assert.equal(screen.queryByLabelText('input.agentConfiguration.search'), null);
+  mounted.unmount();
+
+  const remounted = render(tree(1));
+  assert.equal(screen.queryByLabelText('input.agentConfiguration.search'), null);
+
+  // An increment while mounted still opens it.
+  remounted.rerender(tree(2));
+  assert.ok(screen.getByLabelText('input.agentConfiguration.search'));
 });
 
 test('a runtime answer with no models dims every preset', async () => {

@@ -236,6 +236,9 @@ test('runtime catalog exposes every model available to an active subscription', 
   assert.deepEqual(catalog.MODELS?.map((model) => model.value), [
     'cursor/gpt-5.6-sol-high',
     'cursor/unreferenced-model',
+    // Configured in config.yml; the runtime did not report it, but the user
+    // asked for it, so the picker must still offer it.
+    'openai-codex/gpt-5.6-sol:medium',
   ]);
   assert.equal(catalog.MODELS?.[0]?.effort?.default, 'high');
 });

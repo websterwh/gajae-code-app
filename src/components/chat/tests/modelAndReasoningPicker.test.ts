@@ -287,6 +287,7 @@ test('the search narrows providers by name and models by label or id, and drops 
     { value: 'openai-codex/gpt-5.6-sol', label: 'GPT-5.6 Sol' },
     { value: 'anthropic/claude-opus-5', label: 'Anthropic Opus 5' },
     { value: 'zai/glm-5.3', label: 'GLM-5.3' },
+    { value: 'google-antigravity/gemini-3.8-flash', label: 'Gemini 3.8 Flash' },
   ]);
 
   assert.equal(filterSessionModelGroups(groups, '  '), groups, 'a blank query changes nothing');
@@ -296,5 +297,15 @@ test('the search narrows providers by name and models by label or id, and drops 
   assert.deepEqual(filterSessionModelGroups(groups, 'terra').map((group) => [group.group, group.models.map((model) => model.value)]), [['openai-codex', ['openai-codex/gpt-5.6-terra']]]);
   // Ids count too, case-insensitively.
   assert.deepEqual(filterSessionModelGroups(groups, 'OPUS').flatMap((group) => group.models.map((model) => model.value)), ['anthropic/claude-opus-5']);
+  // Fuzzy, word by word: a provider fragment and a model fragment combine, and
+  // the words do not have to touch or be spelled out in full.
+  assert.deepEqual(
+    filterSessionModelGroups(groups, 'antigrav 3.8').flatMap((group) => group.models.map((model) => model.value)),
+    ['google-antigravity/gemini-3.8-flash'],
+  );
+  assert.deepEqual(
+    filterSessionModelGroups(groups, 'gmn 38').flatMap((group) => group.models.map((model) => model.value)),
+    ['google-antigravity/gemini-3.8-flash'],
+  );
   assert.deepEqual(filterSessionModelGroups(groups, 'nothing-like-this'), []);
 });

@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
 import type { TFunction } from 'i18next';
+import { Trash2, Zap } from 'lucide-react';
 
 import { ScrollArea } from '../../../shared/view/ui';
+import { useQuickChatStore } from '../../../stores/useQuickChatStore';
+import { api } from '../../../utils/api';
 import { useSidebarFilter } from '../hooks/useSidebarFilter';
-import type { ArchivedProjectListItem, ArchivedSessionListItem } from '../types/types';
+import type { ArchivedProjectListItem, ArchivedSessionListItem, SessionWithProvider } from '../types/types';
 import { collectWorkRows, countWorkRows } from '../utils/workList';
 
 import SidebarArchiveContent from './SidebarArchiveContent';
@@ -94,6 +97,18 @@ export default function SidebarContent({
   const filterInputRef = filter.inputRef;
   const filterQuery = filter.query;
   const noConversationOpen = projectListProps.selectedSession === null;
+  const quickChat = useQuickChatStore((state) => state.quickChat);
+  // The disposable chat only earns a row once its first turn created a session;
+  // before that it is just the new conversation the composer is showing.
+  const quickChatTarget = (() => {
+    const sessionId = quickChat?.sessionId;
+    if (!sessionId) return null;
+    for (const project of availableProjects) {
+      const session = (project.sessions ?? []).find((entry) => String(entry.id) === sessionId);
+      if (session) return { project, session: session as SessionWithProvider };
+    }
+    return null;
+  })();
 
   // With no conversation open there is nowhere else for a keystroke to go, so
   // typing starts a conversation search. It is deliberately only that case: a
@@ -139,11 +154,34 @@ export default function SidebarContent({
     },
   };
 
+  // The previous disposable chat goes when any new chat starts: that is the
+  // whole point of a quick chat, and it is why starting one needs no cleanup
+  // habit. Its own trash button in the row does the same on demand.
+  const discardQuickChat = () => {
+    const active = useQuickChatStore.getState().quickChat;
+    useQuickChatStore.getState().clear();
+    if (!active?.sessionId) return;
+    void api.deleteSession(active.sessionId, true)
+      .catch(() => undefined)
+      .finally(() => onRefresh());
+  };
+
   const createSession = () => {
     const project = selectedProjectIsAvailable ? selectedProject : availableProjects[0];
     if (!project) {
       return;
     }
+    discardQuickChat();
+    projectListProps.onNewSession(project);
+  };
+
+  const createQuickChat = () => {
+    const project = selectedProjectIsAvailable ? selectedProject : availableProjects[0];
+    if (!project) {
+      return;
+    }
+    discardQuickChat();
+    useQuickChatStore.getState().start(project.projectId, projectListProps.selectedSession?.id ?? null);
     projectListProps.onNewSession(project);
   };
 
@@ -166,9 +204,32 @@ export default function SidebarContent({
           {canCreateSession && (
             <SidebarNavigationTabs
               onCreateSession={createSession}
+              onCreateQuickChat={createQuickChat}
               t={t}
             />
           )}
+          {quickChatTarget ? (
+            <div className="mx-2 mb-2 flex items-center gap-1 rounded-lg border border-border bg-card/60 pl-2.5">
+              <Zap className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+              <button
+                type="button"
+                onClick={() => listProps.onSessionSelect(quickChatTarget.session, quickChatTarget.project.projectId)}
+                className="min-w-0 flex-1 truncate py-1.5 text-left text-xs font-medium text-foreground"
+                title="Quick chat — deleted when you start another chat"
+              >
+                Quick chat
+              </button>
+              <button
+                type="button"
+                onClick={discardQuickChat}
+                aria-label="Delete quick chat"
+                title="Delete quick chat"
+                className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                <Trash2 className="size-3.5" aria-hidden />
+              </button>
+            </div>
+          ) : null}
           {hasProjects && <SidebarFilterInput value={filterQuery} onChange={setFilterQuery} inputRef={filterInputRef} t={t} />}
         </>
       )}

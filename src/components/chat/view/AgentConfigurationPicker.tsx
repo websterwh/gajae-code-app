@@ -190,10 +190,16 @@ export default function AgentConfigurationPicker({ value, options, loading = fal
     [options, value],
   );
 
+  // The counter lives with the composer state, which outlives this picker's
+  // mounts. So a mount carrying an old value is not a new `/model`: without
+  // this ref, one `/model` typed earlier would reopen the popup every time the
+  // composer came back, for a new chat or another session.
+  const seenTrigger = useRef(openTrigger ?? 0);
   useEffect(() => {
-    if (openTrigger) {
-      setOpen(true);
-    }
+    const next = openTrigger ?? 0;
+    if (next === seenTrigger.current) return;
+    seenTrigger.current = next;
+    if (next > 0) setOpen(true);
   }, [openTrigger]);
 
   // Opening lands on the active preset's group so the current choice is one

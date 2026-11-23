@@ -61,7 +61,7 @@ function normalizeNotificationPreferences(value?: Partial<NotificationPreference
 export function useSettingsController({ isOpen, initialTab }: UseSettingsControllerArgs) {
   const [activeTab, setActiveTab] = useState<SettingsMainTab>(() => chooseTab(initialTab));
   const [saveStatus, setSaveStatus] = useState<'success' | 'error' | null>(null);
-  const [projectSortOrder, setProjectSortOrder] = useState<ProjectSortOrder>('name');
+  const [projectSortOrder, setProjectSortOrder] = useState<ProjectSortOrder>('date');
   const [interfaceFontSize, setInterfaceFontSize] = useState(readInterfaceFontSize);
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferencesState>(notificationDefaults);
   const saveTimer = useRef<number | null>(null);
@@ -70,7 +70,7 @@ export function useSettingsController({ isOpen, initialTab }: UseSettingsControl
   const loadSettings = useCallback(async () => {
     try {
       const saved = decodeStoredValue<StoredProjectSettings>(localStorage.getItem('claude-settings'), {});
-      setProjectSortOrder(saved.projectSortOrder === 'date' ? 'date' : 'name');
+      setProjectSortOrder(saved.projectSortOrder === 'name' ? 'name' : 'date');
       try {
         const response = await authenticatedFetch('/api/settings/notification-preferences');
         if (!response.ok) {

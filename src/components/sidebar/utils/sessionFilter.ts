@@ -5,7 +5,10 @@ export type SessionFilterInput = {
   query: string;
   projects: Project[];
   getProjectSessions: (project: Project) => SessionWithProvider[];
-  /** Sessions whose message bodies matched, from the server-side search. */
+  /**
+   * Sessions whose message bodies matched, from the server-side search. Used
+   * only when no project name or session title matches the query.
+   */
   messageMatchIds: ReadonlySet<string>;
 };
 
@@ -27,10 +30,12 @@ const contains = (haystack: string, needle: string) => haystack.toLocaleLowerCas
 /**
  * Narrows the project tree to what matches the query.
  *
- * A session matches on its title or because the server found the words in its
- * messages. A project whose own name matches keeps all of its sessions, since
- * the user is evidently looking for the project. Projects with nothing left
- * to show are dropped entirely.
+ * A name match - the project's own name or a session title - wins outright.
+ * Conversation bodies are only consulted when the query names nothing the
+ * user has, so searching a workspace called "server" does not keep pulling in
+ * conversations that merely mention the word. A project whose name matches
+ * keeps all of its sessions, since the user is evidently looking for the
+ * project. Projects with nothing left to show are dropped entirely.
  */
 export function filterSessions({ query, projects, getProjectSessions, messageMatchIds }: SessionFilterInput): SessionFilterResult {
   const needle = normalizeFilterQuery(query);
@@ -38,26 +43,46 @@ export function filterSessions({ query, projects, getProjectSessions, messageMat
     return { needle, active: false, projects, sessionsFor: getProjectSessions, sessionCount: 0 };
   }
 
-  const kept = new Map<string, SessionWithProvider[]>();
-  const matchedProjects: Project[] = [];
-  let sessionCount = 0;
+  const named = new Map<string, SessionWithProvider[]>();
+  const namedProjects: Project[] = [];
+  let namedCount = 0;
   for (const project of projects) {
     const sessions = getProjectSessions(project);
     const projectMatches = contains(project.displayName || project.projectId, needle);
     const matching = projectMatches
       ? sessions
-      : sessions.filter((session) => messageMatchIds.has(session.id) || contains(sessionTitle(session), needle));
+      : sessions.filter((session) => contains(sessionTitle(session), needle));
     if (!projectMatches && matching.length === 0) continue;
-    kept.set(project.projectId, matching);
-    matchedProjects.push(project);
-    sessionCount += matching.length;
+    named.set(project.projectId, matching);
+    namedProjects.push(project);
+    namedCount += matching.length;
+  }
+  if (namedProjects.length > 0) {
+    return {
+      needle,
+      active: true,
+      projects: namedProjects,
+      sessionsFor: (project) => named.get(project.projectId) ?? [],
+      sessionCount: namedCount,
+    };
+  }
+
+  const bodied = new Map<string, SessionWithProvider[]>();
+  const bodiedProjects: Project[] = [];
+  let bodiedCount = 0;
+  for (const project of projects) {
+    const matching = getProjectSessions(project).filter((session) => messageMatchIds.has(session.id));
+    if (matching.length === 0) continue;
+    bodied.set(project.projectId, matching);
+    bodiedProjects.push(project);
+    bodiedCount += matching.length;
   }
 
   return {
     needle,
     active: true,
-    projects: matchedProjects,
-    sessionsFor: (project) => kept.get(project.projectId) ?? [],
-    sessionCount,
+    projects: bodiedProjects,
+    sessionsFor: (project) => bodied.get(project.projectId) ?? [],
+    sessionCount: bodiedCount,
   };
 }

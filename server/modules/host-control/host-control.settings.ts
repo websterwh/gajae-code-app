@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+
 import { appConfigDb } from '@/modules/database/index.js';
 
 import {
@@ -29,6 +31,9 @@ import { readSshPrivateKey } from './host-control.secrets.js';
  * here, and its private key is stored encrypted (see `host-control.secrets`).
  */
 const CONFIG_KEY = 'host.control.v1';
+
+/** The two capabilities answered over SSH; everything else needs the socket. */
+const SSH_ONLY_CAPABILITIES: ReadonlySet<HostCapability> = new Set(['hostRead', 'hostWrite']);
 
 const TRUTHY = new Set(['1', 'true', 'yes', 'on']);
 
@@ -215,17 +220,20 @@ export function resolveSshTarget(
  * The worker receives this snapshot and enforces it on every call; a settings
  * change takes effect on the next turn, not inside a run already in flight.
  *
- * The SSH capabilities stay in the list even when the endpoint is incomplete:
- * the tool then says what is missing, which is more useful than a switch that
- * silently disappeared.
+ * A transport this deployment does not have contributes nothing: without the
+ * Docker socket the Docker capabilities are dropped, and without a complete
+ * SSH endpoint the SSH ones are. When that leaves no capability at all the run
+ * gets no host tool, rather than one whose every call fails.
  */
 export function readHostControlRunPolicy(env: NodeJS.ProcessEnv = process.env): HostControlRunPolicy | undefined {
   if (!hostControlAvailable(env)) return undefined;
   const settings = readHostControlSettings();
   if (!settings.enabled) return undefined;
-  const capabilities = HOST_CAPABILITIES.filter((name) => settings[name]);
-  if (capabilities.length === 0) return undefined;
   const ssh = resolveSshTarget(settings, env);
+  const dockerPresent = existsSync(dockerSocketPath(env));
+  const capabilities = HOST_CAPABILITIES.filter((name) => settings[name]
+    && (SSH_ONLY_CAPABILITIES.has(name) ? Boolean(ssh) : dockerPresent));
+  if (capabilities.length === 0) return undefined;
   return {
     socketPath: dockerSocketPath(env),
     capabilities,

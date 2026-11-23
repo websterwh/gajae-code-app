@@ -41,7 +41,7 @@ const repositoryScore = (query: string, repository: GithubRepository): number =>
   return score;
 };
 
-/** Filtering happens here, not on the server: typing must never wait on a request. */
+/** Re-filters the rows on screen so a keystroke narrows them before the server answers. */
 const filterRepositories = (repositories: GithubRepository[], query: string): GithubRepository[] => {
   const needle = query.trim();
   if (needle === '') return repositories;
@@ -79,19 +79,34 @@ export default function ProjectCreationWizard({
 
   useEffect(() => () => stopWatching.current?.(), []);
 
-  // The listing is fetched once and filtered in the browser, so a keystroke
-  // re-ranks it immediately instead of waiting on GitHub round trips.
+  // The server matches the typed text against the account's whole repository
+  // list and returns only the best rows, so a search reaches every repository
+  // instead of the handful that happened to load first.
   useEffect(() => {
-    if (mode !== 'github' || repositories.length > 0) return undefined;
-    setLoadingRepos(true);
-    void listGithubRepositories('')
-      .then(setRepositories)
-      .catch((reason: unknown) => {
-        setError(reason instanceof Error ? reason.message : 'Repositories could not be loaded.');
-      })
-      .finally(() => setLoadingRepos(false));
-    return undefined;
-  }, [mode, repositories.length]);
+    if (mode !== 'github') return undefined;
+    const query = repoQuery.trim();
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      setLoadingRepos(true);
+      void listGithubRepositories(query)
+        .then((found) => {
+          if (cancelled) return;
+          setRepositories(found);
+          setError(null);
+        })
+        .catch((reason: unknown) => {
+          if (cancelled) return;
+          setError(reason instanceof Error ? reason.message : 'Repositories could not be loaded.');
+        })
+        .finally(() => {
+          if (!cancelled) setLoadingRepos(false);
+        });
+    }, query === '' ? 0 : 200);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [mode, repoQuery]);
 
   const visibleRepositories = useMemo(
     () => filterRepositories(repositories, repoQuery),
@@ -229,7 +244,7 @@ export default function ProjectCreationWizard({
               />
 
               <div className="max-h-48 overflow-y-auto rounded-lg border border-border">
-                {loadingRepos ? (
+                {loadingRepos && visibleRepositories.length === 0 ? (
                   <p role="status" className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
                     <Loader2 className="size-3 animate-spin" aria-hidden />
                     Loading repositories…

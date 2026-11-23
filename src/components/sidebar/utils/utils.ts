@@ -22,9 +22,10 @@ const providerFor = (session: ProjectSession): LLMProvider => {
   return typeof candidate === 'string' && candidate.trim() ? candidate as LLMProvider : 'gjc';
 };
 
+/** Most recently used first unless the user asked for alphabetical. */
 export const readProjectSortOrder = (): ProjectSortOrder => {
   const settings = readStorageJson(settingsKey);
-  return typeof settings === 'object' && settings !== null && (settings as { projectSortOrder?: unknown }).projectSortOrder === 'date' ? 'date' : 'name';
+  return typeof settings === 'object' && settings !== null && (settings as { projectSortOrder?: unknown }).projectSortOrder === 'name' ? 'name' : 'date';
 };
 
 export const readLegacyStarredProjectIds = (): string[] => {

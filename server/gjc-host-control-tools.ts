@@ -39,7 +39,31 @@ import {
  * it at all.
  */
 
-const hostSchema = z.discriminatedUnion('action', [
+/**
+ * The actions this run is offered. SSH actions exist only when the endpoint is
+ * configured: a deployment without SSH must not advertise a path that can only
+ * fail. Docker actions stay listed because the policy itself only reaches here
+ * when the socket exists, and their individual switches answer at call time.
+ */
+export function hostSchemaFor(policy: HostControlRunPolicy) {
+  const sshActions = policy.ssh
+    ? [
+      z.strictObject({
+        action: z.literal('ssh'),
+        verb: z.string().min(1).max(64),
+        target: z.string().min(1).max(64).optional(),
+      }),
+      z.strictObject({
+        action: z.literal('host_shell'),
+        command: z.string().min(1).max(8192),
+        timeoutMs: z.number().int().min(1_000).max(300_000).optional(),
+      }),
+    ]
+    : [];
+  return z.discriminatedUnion('action', [...dockerActions, ...sshActions] as any);
+}
+
+const dockerActions = [
   z.strictObject({ action: z.literal('info') }),
   z.strictObject({ action: z.literal('containers') }),
   z.strictObject({ action: z.literal('discovery') }),
@@ -55,17 +79,7 @@ const hostSchema = z.discriminatedUnion('action', [
     container: z.string().min(1).max(128),
     path: z.string().min(1).max(4096),
   }),
-  z.strictObject({
-    action: z.literal('ssh'),
-    verb: z.string().min(1).max(64),
-    target: z.string().min(1).max(64).optional(),
-  }),
-  z.strictObject({
-    action: z.literal('host_shell'),
-    command: z.string().min(1).max(8192),
-    timeoutMs: z.number().int().min(1_000).max(300_000).optional(),
-  }),
-]);
+];
 
 function textResult(text: string, details?: Record<string, unknown>) {
   return { content: [{ type: 'text' as const, text }], ...(details ? { details } : {}) };
@@ -85,9 +99,9 @@ function describe(policy: HostControlRunPolicy): string {
     'info reads daemon facts, containers lists every container with image, state, mounts and compose labels, and discovery derives the host picture: which OS or appliance the daemon runs on (Unraid, MOS, Proxmox VE, OpenMediaVault, CasaOS, ZimaOS) with its evidence, compose stacks, containers that mount the daemon socket, and unmanaged containers.',
     `exec runs one fixed verb inside the named container - there is no command string: ${verbs}. read_file reads one absolute path out of that container (files up to 256 KiB, directories list).`,
     'Start with containers to find the name, then exec with network or processes, or read_file on the mounted configuration. Do not guess a container name; the list is authoritative.',
-    policy.ssh
-      ? `ssh runs one fixed verb on ${policy.ssh.user}@${policy.ssh.host}:${policy.ssh.port} over SSH, pinned to the host key the operator saved - no command string is involved: ${sshVerbs}. A read verb runs immediately; a write verb asks the user for approval before it runs${policy.sshWritePreauthorized ? ', except that the operator pre-authorized host writes in Settings' : ', even in a trusted permission mode'}. host_shell is the general path: it runs the shell command you write on that host as ${policy.ssh.user} - edit a file, install a package, drive compose, restart what no verb names. The command is passed unchanged as one argument to sh on the remote host, so heredocs and pipes work. It counts as a host write: it needs the hostWrite switch and asks the user for approval showing the exact command${policy.sshWritePreauthorized ? ', unless the operator pre-authorized host writes' : ', in every permission mode'}. Prefer the fixed verbs for reads, because those run without a question. Output is capped at 64 KiB; pass timeoutMs (up to 5 minutes) for slow work.`
-      : 'ssh and host_shell are not configured for this deployment: no address, key or pinned host key is saved in Settings → Automation.',
+    ...(policy.ssh
+      ? [`ssh runs one fixed verb on ${policy.ssh.user}@${policy.ssh.host}:${policy.ssh.port} over SSH, pinned to the host key the operator saved - no command string is involved: ${sshVerbs}. A read verb runs immediately; a write verb asks the user for approval before it runs${policy.sshWritePreauthorized ? ', except that the operator pre-authorized host writes in Settings' : ', even in a trusted permission mode'}. host_shell is the general path: it runs the shell command you write on that host as ${policy.ssh.user} - edit a file, install a package, drive compose, restart what no verb names. The command is passed unchanged as one argument to sh on the remote host, so heredocs and pipes work. It counts as a host write: it needs the hostWrite switch and asks the user for approval showing the exact command${policy.sshWritePreauthorized ? ', unless the operator pre-authorized host writes' : ', in every permission mode'}. Prefer the fixed verbs for reads, because those run without a question. Output is capped at 64 KiB; pass timeoutMs (up to 5 minutes) for slow work.`]
+      : []),
   ].join(' ');
 }
 
@@ -166,14 +180,16 @@ export function createHostControlTool(
     }
   };
 
+  const schema = hostSchemaFor(policy);
+
   return {
     name: 'host',
     label: 'Host',
     description: describe(policy),
-    parameters: hostSchema as any,
+    parameters: schema,
     concurrency: 'exclusive',
     async execute(_toolCallId: string, rawParams: unknown) {
-      const params = hostSchema.parse(rawParams);
+      const params = schema.parse(rawParams);
       switch (params.action) {
         case 'info':
           requireCapability('facts');

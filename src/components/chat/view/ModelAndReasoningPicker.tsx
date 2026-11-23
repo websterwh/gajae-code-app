@@ -140,13 +140,36 @@ export function deriveSessionModelOptions(
  * match. Groups left with nothing disappear, so the provider column is the
  * list of places where something matched.
  */
+/** Case-insensitive subsequence match, so "antigrav" finds "antigravity". */
+const fuzzyIncludes = (haystack: string, needle: string): boolean => {
+  let cursor = 0;
+  for (const character of needle) {
+    const found = haystack.indexOf(character, cursor);
+    if (found === -1) return false;
+    cursor = found + 1;
+  }
+  return true;
+};
+
+/**
+ * Every whitespace-separated word must match one field, which is what lets
+ * "antigrav 3.8" find "google-antigravity/gemini-3.8-flash": the provider
+ * answers one word and the model label the other. Matching each word against a
+ * single field rather than their concatenation keeps a word from being spelled
+ * out across unrelated text. Nothing is hard-coded per provider.
+ */
+const matchesEveryWord = (fields: readonly string[], words: readonly string[]): boolean => {
+  const lowered = fields.map((field) => field.toLowerCase());
+  return words.every((word) => lowered.some((field) => fuzzyIncludes(field, word)));
+};
+
 export function filterSessionModelGroups(groups: SessionModelGroup[], query: string): SessionModelGroup[] {
-  const needle = query.trim().toLowerCase();
-  if (!needle) return groups;
-  const matches = (text: string) => text.toLowerCase().includes(needle);
+  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return groups;
   return groups.flatMap((group) => {
-    if (matches(providerDisplayLabel(group.group)) || matches(group.group)) return [group];
-    const models = group.models.filter((model) => matches(model.label) || matches(model.value));
+    const provider = [providerDisplayLabel(group.group), group.group];
+    if (matchesEveryWord(provider, words)) return [group];
+    const models = group.models.filter((model) => matchesEveryWord([...provider, model.label, model.value], words));
     return models.length ? [{ ...group, models }] : [];
   });
 }

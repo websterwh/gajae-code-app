@@ -7,6 +7,8 @@ import type { SidebarProjectListProps } from '../view/SidebarProjectList';
 /** Typing pauses this long before the tree re-filters, matching the palette. */
 export const FILTER_DEBOUNCE_MS = 150;
 
+const NO_MESSAGE_MATCHES: ReadonlySet<string> = new Set();
+
 type SidebarFilter = {
   query: string;
   setQuery: (value: string) => void;
@@ -44,14 +46,27 @@ export function useSidebarFilter(source: SidebarProjectListProps): SidebarFilter
   }, [query]);
 
   const active = normalizeFilterQuery(debouncedQuery).length > 0;
-  const messageMatches = useConversationMessageSearch(debouncedQuery, active);
-
-  const filtered = filterSessions({
+  // Name matches decide first, and the body search only runs when the query
+  // names nothing the user has. A workspace called "server" therefore shows
+  // on its own instead of gaining conversations that mention the word a second
+  // later, once the server-side search answers.
+  const named = filterSessions({
     query: debouncedQuery,
     projects: source.filteredProjects,
     getProjectSessions: source.getProjectSessions,
-    messageMatchIds: new Set(messageMatches.map((match) => match.sessionId)),
+    messageMatchIds: NO_MESSAGE_MATCHES,
   });
+  const searchBodies = active && named.projects.length === 0;
+  const messageMatches = useConversationMessageSearch(debouncedQuery, searchBodies);
+
+  const filtered = searchBodies
+    ? filterSessions({
+      query: debouncedQuery,
+      projects: source.filteredProjects,
+      getProjectSessions: source.getProjectSessions,
+      messageMatchIds: new Set(messageMatches.map((match) => match.sessionId)),
+    })
+    : named;
 
   const listProps: SidebarProjectListProps = filtered.active
     ? { ...source, filteredProjects: filtered.projects, getProjectSessions: filtered.sessionsFor, forceExpanded: true }

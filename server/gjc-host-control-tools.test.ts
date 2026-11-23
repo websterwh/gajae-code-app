@@ -67,6 +67,12 @@ function fakeClient(): { client: HostControlClient; calls: string[] } {
   return { client, calls };
 }
 
+/** The action names a tool offers, read off its discriminated-union schema. */
+function actionNames(tool: { parameters?: unknown }): string[] {
+  const options = (tool.parameters as { options?: Array<{ shape?: { action?: { value?: unknown } } }> } | undefined)?.options ?? [];
+  return options.map((option) => String(option.shape?.action?.value));
+}
+
 function policy(overrides: Partial<HostControlRunPolicy> = {}): HostControlRunPolicy {
   return {
     socketPath: '/var/run/docker.sock',
@@ -262,20 +268,20 @@ test('pre-authorized host writes skip the shell question too', async () => {
   assert.deepEqual(commands, ['docker compose up -d']);
 });
 
-test('host_shell needs the write switch and a configured endpoint', async () => {
+test('host_shell needs the write switch', async () => {
   const commands: string[] = [];
   const readOnly = createHostControlTool(policy({ capabilities: ['hostRead'], ssh: sshTarget }), { run: sshRun(commands) });
   await assert.rejects(
     run(readOnly, { action: 'host_shell', command: 'uptime' }),
     /hostWrite capability is off/u,
   );
-
-  const unconfigured = createHostControlTool(policy({ capabilities: ['hostWrite'] }), { run: sshRun(commands) });
-  await assert.rejects(run(unconfigured, { action: 'host_shell', command: 'uptime' }), /SSH access is not configured/u);
   assert.deepEqual(commands, []);
 });
 
-test('ssh says what is missing instead of failing on the host', async () => {
-  const tool = createHostControlTool(policy({ capabilities: ['hostRead'] }), { run: sshRun([]) });
-  await assert.rejects(run(tool, { action: 'ssh', verb: 'host.disk' }), /SSH access is not configured/u);
+test('a deployment without SSH is not offered the SSH actions at all', () => {
+  const tool = createHostControlTool(policy({ capabilities: ['facts', 'hostRead', 'hostWrite'] }), {});
+  // The schema is the surface the model sees: no ssh, no host_shell.
+  assert.deepEqual(actionNames(tool), ['info', 'containers', 'discovery', 'restart', 'container_action', 'exec', 'read_file']);
+  assert.equal(tool.description.includes('host_shell'), false);
+  assert.equal(tool.description.includes('ssh'), false);
 });
