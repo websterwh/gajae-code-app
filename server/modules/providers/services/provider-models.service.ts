@@ -1,4 +1,5 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import path from 'node:path';
 
 import { providerRegistry } from '@/modules/providers/provider.registry.js';
@@ -18,7 +19,7 @@ import { readProviderSessionActiveModelChange, writeProviderSessionActiveModelCh
 export const PROVIDER_MODELS_CACHE_TTL_MS = 3 * 24 * 60 * 60 * 1000;
 const PROVIDER_MODELS_CACHE_VERSION = 12;
 
-type ProviderModelsServiceDependencies = { resolveProvider?: (provider: LLMProvider) => Pick<IProvider, 'models'>; cachePath?: string; activeModelChangesPath?: string; now?: () => number };
+type ProviderModelsServiceDependencies = { resolveProvider?: (provider: LLMProvider) => Pick<IProvider, 'models'>; cachePath?: string; legacyCachePath?: string; activeModelChangesPath?: string; now?: () => number };
 type ProviderModelsOptions = { bypassCache?: boolean };
 type ProviderModelsCacheEntry = { updatedAt: number; expiresAt: number; models: ProviderModelsDefinition };
 type ProviderModelsCacheFile = { version: number; entries: Record<string, ProviderModelsCacheEntry> };
@@ -31,8 +32,12 @@ type ProviderModelsCacheFile = { version: number; entries: Record<string, Provid
  */
 const defaultCacheLocation = (): string => path.join(path.dirname(getDatabasePath()), 'provider-models-cache.json');
 
-// `~/.gajae-app/provider-models-cache.json` was this file's old home, and
-// removing the reference here does not remove it from an existing install.
+/**
+ * Where the cache lived before it moved beside the database. An upgrade reads
+ * it once, so the first model picker after the move opens on the catalog the
+ * previous build had already fetched instead of a cold provider listing.
+ */
+const legacyCacheLocation = (): string => path.join(homedir(), '.gajae-app', 'provider-models-cache.json');
 
 const hasModelOptionShape = (candidate: unknown): candidate is ProviderModelsDefinition['OPTIONS'][number] => {
   if (!candidate || typeof candidate !== 'object') return false;
@@ -77,19 +82,22 @@ const cacheDetails = (entry: ProviderModelsCacheEntry, source: ProviderModelsCac
 export const createProviderModelsService = (dependencies: ProviderModelsServiceDependencies = {}) => {
   const locateProvider = dependencies.resolveProvider ?? providerRegistry.resolveProvider;
   const fileName = dependencies.cachePath ?? defaultCacheLocation();
+  // A caller that names its own cache path (a test) must not also read the
+  // cache of the machine it happens to run on.
+  const legacyFileName = dependencies.legacyCachePath
+    ?? (dependencies.cachePath ? undefined : legacyCacheLocation());
   const clock = dependencies.now ?? Date.now;
   const remembered = new Map<LLMProvider, ProviderModelsCacheEntry>();
+  const origins = new Map<LLMProvider, 'memory' | 'disk'>();
   const fetching = new Map<LLMProvider, Promise<ProviderModelsResult>>();
   let diskRead: Promise<void> | undefined;
   let diskWasRead = false;
 
   const usable = (provider: LLMProvider, time: number, source: ProviderModelsCacheInfo['source']): ProviderModelsResult | undefined => {
     const entry = remembered.get(provider);
-    if (!entry) return undefined;
-    if (entry.expiresAt <= time) {
-      remembered.delete(provider);
-      return undefined;
-    }
+    // An aged-out entry is kept rather than dropped: it is still the last
+    // catalog that was true, and serving it beats a cold provider listing.
+    if (!entry || entry.expiresAt <= time) return undefined;
     return { models: entry.models, cache: cacheDetails(entry, source) };
   };
 
@@ -105,8 +113,9 @@ export const createProviderModelsService = (dependencies: ProviderModelsServiceD
 
   const writeCache = async (): Promise<void> => {
     try {
-      const time = clock();
-      const entries = Object.fromEntries([...remembered].filter(([, entry]) => entry.expiresAt > time));
+      // Expired entries are written too: after a long gap the next start has
+      // something to answer with while a fresh catalog loads behind it.
+      const entries = Object.fromEntries(remembered);
       await mkdir(path.dirname(fileName), { recursive: true });
       await writeFile(fileName, `${JSON.stringify({ version: PROVIDER_MODELS_CACHE_VERSION, entries }, null, 2)}\n`, 'utf8');
     } catch (error) {
@@ -117,11 +126,25 @@ export const createProviderModelsService = (dependencies: ProviderModelsServiceD
   const readCacheOnce = async (): Promise<void> => {
     if (diskWasRead) return;
     diskRead ??= (async () => {
-      const time = clock();
       for (const [key, entry] of Object.entries(await deserializeCache(fileName))) {
-        if (entry.expiresAt > time) remembered.set(key as LLMProvider, entry);
+        remembered.set(key as LLMProvider, entry);
+        origins.set(key as LLMProvider, 'disk');
+      }
+      // The old home directory is where every install before the move keeps
+      // its catalog. Reading it here is what stops an upgrade from paying for
+      // a cold listing; the adopted entries are written to the new home once.
+      let adopted = false;
+      if (legacyFileName && legacyFileName !== fileName) {
+        for (const [key, entry] of Object.entries(await deserializeCache(legacyFileName))) {
+          const provider = key as LLMProvider;
+          if (remembered.has(provider)) continue;
+          remembered.set(provider, entry);
+          origins.set(provider, 'disk');
+          adopted = true;
+        }
       }
       diskWasRead = true;
+      if (adopted) await writeCache();
     })().finally(() => { diskRead = undefined; });
     await diskRead;
   };
@@ -131,6 +154,7 @@ export const createProviderModelsService = (dependencies: ProviderModelsServiceD
       const updatedAt = clock();
       const entry = { updatedAt, expiresAt: updatedAt + PROVIDER_MODELS_CACHE_TTL_MS, models };
       remembered.set(provider, entry);
+      origins.set(provider, 'memory');
       await writeCache();
       return { models, cache: cacheDetails(entry, 'fresh') };
     }).finally(() => { fetching.delete(provider); });
@@ -149,6 +173,15 @@ export const createProviderModelsService = (dependencies: ProviderModelsServiceD
     await readCacheOnce();
     const fromDisk = usable(provider, clock(), 'disk');
     if (fromDisk && !await sourceHasChanged(provider, fromDisk)) return fromDisk;
+    // A catalog that has aged out is still a true catalog. Answer with it and
+    // let the refresh run behind the answer, so a restart or a long gap costs
+    // nothing on screen. Only an expired entry is used this way: a catalog
+    // invalidated by a sign-in still reloads before the caller sees it.
+    const expired = remembered.get(provider);
+    if (expired && expired.expiresAt <= clock()) {
+      void retrieve(provider).catch(() => undefined);
+      return { models: expired.models, cache: cacheDetails(expired, origins.get(provider) ?? 'disk') };
+    }
     return fetching.get(provider) ?? retrieve(provider);
   };
 
@@ -182,6 +215,7 @@ export const createProviderModelsService = (dependencies: ProviderModelsServiceD
      */
     async reloadProviderModels(provider: LLMProvider): Promise<ProviderModelsResult> {
       remembered.clear();
+      origins.clear();
       fetching.clear();
       diskRead = undefined;
       diskWasRead = false;
@@ -189,6 +223,7 @@ export const createProviderModelsService = (dependencies: ProviderModelsServiceD
     },
     clearCache(): void {
       remembered.clear();
+      origins.clear();
       fetching.clear();
       diskRead = undefined;
       diskWasRead = false;

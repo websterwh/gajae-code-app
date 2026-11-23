@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -121,7 +121,13 @@ test('provider models are cached for the three-day ttl', async () => {
     await service.getProviderModels('gjc');
     assert.equal(loadCount, 1);
 
+    // Past the TTL the aged catalog is answered at once and the refresh runs
+    // behind it, so a restart never makes the picker wait on a cold listing.
     currentTime += 2;
+    const stale = await service.getProviderModels('gjc');
+    assert.equal(stale.models.DEFAULT, 'gjc-1');
+    assert.equal(stale.cache.source, 'memory');
+
     const refreshed = await service.getProviderModels('gjc');
     assert.equal(loadCount, 2);
     assert.equal(refreshed.models.DEFAULT, 'gjc-2');
@@ -205,6 +211,9 @@ test('the default catalog cache lives beside the app database', async () => {
 
   try {
     const service = createProviderModelsService({
+      // The default legacy path is the real $HOME, which this test has no claim
+      // on; the subject here is only where the primary cache is written.
+      legacyCachePath: path.join(tempRoot, 'absent', 'provider-models-cache.json'),
       resolveProvider: () => ({
         models: {
           getSupportedModels: async () => createModels('beside-database'),
@@ -546,6 +555,93 @@ test('a catalog whose sources changed is refetched instead of served stale', asy
     const afterEdit = await service.getProviderModels('gjc');
     assert.equal(afterEdit.models.DEFAULT, 'second');
     assert.equal(reads, 2);
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('an expired catalog on disk is served while a fresh one loads behind it', async () => {
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'provider-model-cache-expired-'));
+  const cachePath = path.join(tempRoot, 'models-cache.json');
+  const now = 10 * PROVIDER_MODELS_CACHE_TTL_MS;
+  let loads = 0;
+
+  try {
+    await writeFile(cachePath, JSON.stringify({
+      version: 12,
+      entries: {
+        gjc: { updatedAt: 1_000, expiresAt: 2_000, models: createModels('aged-catalog') },
+      },
+    }), 'utf8');
+    const service = createProviderModelsService({
+      cachePath,
+      legacyCachePath: path.join(tempRoot, 'no-legacy.json'),
+      now: () => now,
+      resolveProvider: () => ({
+        models: {
+          getSupportedModels: async () => {
+            loads += 1;
+            return createModels('fresh-catalog');
+          },
+          getCurrentActiveModel: async () => createCurrentActiveModel('active'),
+          changeActiveModel: async (input: ProviderChangeActiveModelInput) => createSessionActiveModelChange('gjc', input),
+        },
+      }),
+    });
+
+    const aged = await service.getProviderModels('gjc');
+    assert.equal(aged.models.DEFAULT, 'aged-catalog');
+    assert.equal(aged.cache.source, 'disk');
+
+    // The request behind the answer replaces it.
+    const fresh = await service.getProviderModels('gjc');
+    assert.equal(fresh.models.DEFAULT, 'fresh-catalog');
+    assert.equal(loads, 1);
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('an upgrade adopts the catalog left beside the old home directory', async () => {
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'provider-model-cache-legacy-'));
+  const cachePath = path.join(tempRoot, 'data', 'provider-models-cache.json');
+  const legacyCachePath = path.join(tempRoot, 'home', '.gajae-app', 'provider-models-cache.json');
+  const now = 1_000;
+  let loads = 0;
+
+  try {
+    await mkdir(path.dirname(legacyCachePath), { recursive: true });
+    await writeFile(legacyCachePath, JSON.stringify({
+      version: 12,
+      entries: {
+        gjc: { updatedAt: now, expiresAt: now + PROVIDER_MODELS_CACHE_TTL_MS, models: createModels('from-old-home') },
+      },
+    }), 'utf8');
+    const service = createProviderModelsService({
+      cachePath,
+      legacyCachePath,
+      now: () => now + 1,
+      resolveProvider: () => ({
+        models: {
+          getSupportedModels: async () => {
+            loads += 1;
+            return createModels('network-catalog');
+          },
+          getCurrentActiveModel: async () => createCurrentActiveModel('active'),
+          changeActiveModel: async (input: ProviderChangeActiveModelInput) => createSessionActiveModelChange('gjc', input),
+        },
+      }),
+    });
+
+    const models = await service.getProviderModels('gjc');
+    assert.equal(models.models.DEFAULT, 'from-old-home');
+    assert.equal(models.cache.source, 'disk');
+    assert.equal(loads, 0);
+
+    // Adopting writes the entry to the new location, so the next start does
+    // not need the old file at all.
+    const moved = JSON.parse(await readFile(cachePath, 'utf8'));
+    assert.equal(moved.entries.gjc.models.DEFAULT, 'from-old-home');
   } finally {
     await rm(tempRoot, { recursive: true, force: true });
   }
