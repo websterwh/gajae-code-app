@@ -118,18 +118,33 @@ function ChatInterface({
   const appendSessionMessage = session.addMessage;
   const retryFailedTurn = useCallback(() => {
     const sessionId = session.currentSessionId ?? selectedSession?.id ?? null;
-    if (!sessionId || session.isProcessing) return;
+    const notice = (content: string) => appendSessionMessage({
+      type: 'system', isSystemNotice: true, noticeLevel: 'info', content, timestamp: new Date(),
+    });
+    if (!sessionId) return;
+    // Retrying sends a frame with no visible body of its own, so every path
+    // says something in the transcript: silence read as the command doing
+    // nothing at all.
+    if (session.isProcessing) {
+      notice('Retry is waiting: this turn is still running. Send /retry again once it finishes.');
+      return;
+    }
     const content = [...session.chatMessages]
       .reverse()
       .find((message) => message.type === 'user' && String(message.content ?? '').trim().length > 0)?.content;
-    if (content === undefined || content === null) return;
+    if (content === undefined || content === null) {
+      notice('Nothing to retry yet: this conversation has no message from you.');
+      return;
+    }
     // A disconnected socket used to make this a silent no-op: the frame was
     // dropped and nothing appeared anywhere, so the click looked broken rather
     // than the connection. Say what actually happened.
     const accepted = sendMessage({ type: 'chat.send', sessionId, content: String(content), options: { retryLastTurn: true } });
     if (accepted === false) {
       appendSessionMessage({ type: 'error', content: 'Not sent: the chat socket is not connected. Reconnect, then retry.', timestamp: new Date() });
+      return;
     }
+    notice('Retrying the last turn.');
   }, [appendSessionMessage, selectedSession?.id, sendMessage, session.chatMessages, session.currentSessionId, session.isProcessing]);
 
   const composer = useChatComposerState({

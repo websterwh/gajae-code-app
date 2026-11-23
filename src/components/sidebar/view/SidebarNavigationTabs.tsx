@@ -40,7 +40,7 @@ export default function SidebarNavigationTabs({
             className="flex size-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground outline-hidden transition-colors hover:bg-accent/70 hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring"
             onClick={onCreateQuickChat}
             aria-label="Quick chat"
-            title="Quick chat — deleted when you start another chat"
+            title="Quick chat — deleted when you leave this chat"
           >
             <Zap className="stroke-1.8 size-4.5" aria-hidden />
           </button>

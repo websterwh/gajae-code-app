@@ -6,6 +6,7 @@ import { Button } from '../../shared/view/ui';
 
 import ErrorBanner from './components/ErrorBanner';
 import WorkspacePathField from './components/WorkspacePathField';
+import { joinFolderPath } from './utils/pathUtils';
 import {
   createProjectRequest,
   listGithubRepositories,
@@ -17,6 +18,8 @@ import {
 type ProjectCreationWizardProps = {
   onClose: () => void;
   onProjectCreated?: (project?: Record<string, unknown>) => void;
+  /** Path of the workspace the user is working in; a clone lands inside it. */
+  workspaceRoot?: string;
 };
 
 type Mode = 'folder' | 'github';
@@ -62,6 +65,7 @@ const tabClass = (active: boolean): string => (
 export default function ProjectCreationWizard({
   onClose,
   onProjectCreated,
+  workspaceRoot,
 }: ProjectCreationWizardProps) {
   const { t } = useTranslation();
   const [mode, setMode] = useState<Mode>('folder');
@@ -76,8 +80,22 @@ export default function ProjectCreationWizard({
   const [cloneTarget, setCloneTarget] = useState('');
   const [cloneProgress, setCloneProgress] = useState<string | null>(null);
   const stopWatching = useRef<(() => void) | null>(null);
+  // The last path this form filled in itself. A repository choice rewrites the
+  // target only while it is still that suggestion (or empty), so a path the
+  // user typed survives picking another repository.
+  const suggestedCloneTarget = useRef<string | null>(null);
 
   useEffect(() => () => stopWatching.current?.(), []);
+
+  useEffect(() => {
+    if (!selectedRepo) return;
+    const root = workspaceRoot?.trim();
+    const suggested = root ? joinFolderPath(root, selectedRepo.name) : selectedRepo.name;
+    setCloneTarget((current) => (
+      current.trim() === '' || current === suggestedCloneTarget.current ? suggested : current
+    ));
+    suggestedCloneTarget.current = suggested;
+  }, [selectedRepo, workspaceRoot]);
 
   // The server matches the typed text against the account's whole repository
   // list and returns only the best rows, so a search reaches every repository

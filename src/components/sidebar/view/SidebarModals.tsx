@@ -18,6 +18,8 @@ type SidebarModalsProps = {
   showNewProject: boolean;
   onCloseNewProject: () => void;
   onProjectCreated: () => void;
+  /** The workspace the clone form should default its target inside. */
+  workspaceRoot?: string;
   sessionDeleteConfirmation: SessionDeleteConfirmation | null;
   onCancelDeleteSession: () => void;
   onConfirmDeleteSession: (hardDelete?: boolean, discardWorktree?: boolean) => void;
@@ -48,6 +50,7 @@ export default function SidebarModals({
   showNewProject,
   onCloseNewProject,
   onProjectCreated,
+  workspaceRoot,
   sessionDeleteConfirmation,
   onCancelDeleteSession,
   onConfirmDeleteSession,
@@ -69,6 +72,7 @@ export default function SidebarModals({
           <ProjectCreationWizard
             onClose={onCloseNewProject}
             onProjectCreated={onProjectCreated}
+            workspaceRoot={workspaceRoot}
           />,
           document.body,
         )}

@@ -134,6 +134,11 @@ export function useChatSessionState({
 }: Props) {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(selectedSession?.id || null);
   const [isLoadingSessionMessages, setIsLoadingSessionMessages] = useState(false);
+  // Which session's first page the hook has already received. Until then a
+  // selected conversation is *opening*, not empty: the loading flag alone is
+  // false on the render that switches sessions, which flashed "no messages"
+  // between the opening spinner and the one the fetch starts.
+  const [firstPageSessionKey, setFirstPageSessionKey] = useState<string | null>(null);
   const [isLoadingMoreMessages, setIsLoadingMoreMessages] = useState(false);
   const [historyLoadError, setHistoryLoadError] = useState(false);
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
@@ -262,6 +267,7 @@ export function useChatSessionState({
     initialScrollRef.current = true;
     openingSessionRef.current = true;
     beginLandingAtTail();
+    setFirstPageSessionKey(null);
     searchInProgressRef.current = false;
     loadedKeyRef.current = null;
     imageStateRef.current = { sessionKey: null, enabled: showImagePreviews };
@@ -302,6 +308,14 @@ export function useChatSessionState({
       ? converted.slice(0, converted.length - viewHiddenCount)
       : converted;
   }, [pendingUserMessage, storedMessages, viewHiddenCount]);
+
+  const firstPageKey = activeSession ? `${activeSession}:${selectedProject?.projectId ?? ''}` : null;
+  const isOpeningFirstPage = firstPageKey !== null
+    && chatMessages.length === 0
+    && firstPageSessionKey !== firstPageKey;
+  // Everything below treats "no transcript yet" as loading: the landing holds
+  // until the first page lands instead of settling on an empty pane.
+  const sessionMessagesPending = isLoadingSessionMessages || isOpeningFirstPage;
 
   const addMessage = useCallback((message: ChatMessage) => {
     if (!activeSessionRef.current) {
@@ -434,7 +448,7 @@ export function useChatSessionState({
       endLandingAtTail();
       return;
     }
-    if (!initialScrollRef.current || isLoadingSessionMessages || !scrollContainer) return;
+    if (!initialScrollRef.current || sessionMessagesPending || !scrollContainer) return;
     if (!chatMessages.length || searchInProgressRef.current) {
       initialScrollRef.current = false;
       openingSessionRef.current = false;
@@ -455,7 +469,11 @@ export function useChatSessionState({
         unchanged = 0;
       }
       frames += 1;
-      if (unchanged < 3 && frames < 60) frameId = requestAnimationFrame(settle);
+      // A live session's transcript keeps growing while it streams, so waiting
+      // for the height to stop moving could keep the pane hidden for a full
+      // second. Two still frames are enough to have landed; follow-scroll keeps
+      // pinning the pane afterwards, so a later growth does not park it.
+      if (unchanged < 2 && frames < 12) frameId = requestAnimationFrame(settle);
       else {
         initialScrollRef.current = false;
         openingSessionRef.current = false;
@@ -464,7 +482,7 @@ export function useChatSessionState({
     };
     frameId = requestAnimationFrame(settle);
     return () => cancelAnimationFrame(frameId);
-  }, [chatMessages.length, endLandingAtTail, isFollowing, isLoadingSessionMessages, scrollContainer]);
+  }, [chatMessages.length, endLandingAtTail, isFollowing, scrollContainer, sessionMessagesPending]);
 
   useEffect(() => {
     if (!selectedProject || !selectedSession) {
@@ -491,6 +509,7 @@ export function useChatSessionState({
     };
     if (loadedKeyRef.current === key && sessionStore.has(sessionId) && !sessionStore.isStale(sessionId)) {
       subscribe();
+      setFirstPageSessionKey(key);
       if (refreshImages) void sessionStore.refreshFromServer(sessionId, { includeImages: true });
       return;
     }
@@ -510,6 +529,7 @@ export function useChatSessionState({
     setCurrentSessionId(sessionId);
     subscribe();
     loadedKeyRef.current = key;
+    setFirstPageSessionKey(null);
     setIsLoadingSessionMessages(true);
     const requestView = requestViewRef.current;
     sessionStore.fetchFromServer(sessionId, { limit: PAGE_SIZE, offset: 0, includeImages: showImagePreviews })
@@ -520,10 +540,15 @@ export function useChatSessionState({
           setTotalMessages(window.total);
           if (window.tokenUsage) setTokenBudget(window.tokenUsage as Record<string, unknown>);
         }
+        setFirstPageSessionKey(key);
         setIsLoadingSessionMessages(false);
       })
       .catch(() => {
-        if (requestViewRef.current === requestView) setIsLoadingSessionMessages(false);
+        if (requestViewRef.current !== requestView) return;
+        // A failed open still ends its loading state; the empty view plus the
+        // history retry is the honest result, not a spinner forever.
+        setFirstPageSessionKey(key);
+        setIsLoadingSessionMessages(false);
       });
   }, [applySessionState, currentSessionId, resetPagination, resetStreamingState, selectedProject, selectedSession, sendMessage, sessionStore, showImagePreviews, statusCheckSentAtRef, ws]);
 
@@ -714,7 +739,7 @@ export function useChatSessionState({
     canAbortSession,
     currentSessionId,
     setCurrentSessionId,
-    isLoadingSessionMessages,
+    isLoadingSessionMessages: sessionMessagesPending,
     isLoadingMoreMessages,
     historyLoadError,
     retryOlderMessages,

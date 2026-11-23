@@ -143,6 +143,7 @@ function Sidebar(props: SidebarProps) {
     <>
       <SidebarModals
         projects={projects}
+        workspaceRoot={selectedProject?.fullPath ?? visibleProjects[0]?.fullPath}
         showSettings={showSettings}
         settingsInitialTab={settingsInitialTab}
         onCloseSettings={() => setShowSettings(false)}

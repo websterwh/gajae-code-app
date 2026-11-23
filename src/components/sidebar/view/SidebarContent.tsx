@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TFunction } from 'i18next';
 import { Trash2, Zap } from 'lucide-react';
 
@@ -154,24 +154,34 @@ export default function SidebarContent({
     },
   };
 
-  // The previous disposable chat goes when any new chat starts: that is the
-  // whole point of a quick chat, and it is why starting one needs no cleanup
-  // habit. Its own trash button in the row does the same on demand.
-  const discardQuickChat = () => {
-    const active = useQuickChatStore.getState().quickChat;
+  // The disposable chat is deleted when its conversation is left, and only
+  // then: opening the same page in another window and starting a chat there is
+  // not a reason to lose it. Its own trash button in the row deletes on demand.
+  const discardQuickChat = useCallback((active = useQuickChatStore.getState().quickChat) => {
     useQuickChatStore.getState().clear();
     if (!active?.sessionId) return;
     void api.deleteSession(active.sessionId, true)
       .catch(() => undefined)
       .finally(() => onRefresh());
-  };
+  }, [onRefresh]);
+
+  // A move away from the open quick chat deletes it. Merely restoring it from
+  // storage on mount, or staying on it, does nothing.
+  const previousSelectedSessionId = useRef<string | null>(projectListProps.selectedSession?.id ?? null);
+  useEffect(() => {
+    const selected = projectListProps.selectedSession?.id ?? null;
+    const previous = previousSelectedSessionId.current;
+    previousSelectedSessionId.current = selected;
+    const active = useQuickChatStore.getState().quickChat;
+    if (!active?.sessionId || active.sessionId !== previous || active.sessionId === selected) return;
+    discardQuickChat(active);
+  }, [discardQuickChat, projectListProps.selectedSession?.id]);
 
   const createSession = () => {
     const project = selectedProjectIsAvailable ? selectedProject : availableProjects[0];
     if (!project) {
       return;
     }
-    discardQuickChat();
     projectListProps.onNewSession(project);
   };
 
@@ -180,7 +190,6 @@ export default function SidebarContent({
     if (!project) {
       return;
     }
-    discardQuickChat();
     useQuickChatStore.getState().start(project.projectId, projectListProps.selectedSession?.id ?? null);
     projectListProps.onNewSession(project);
   };
@@ -215,13 +224,13 @@ export default function SidebarContent({
                 type="button"
                 onClick={() => listProps.onSessionSelect(quickChatTarget.session, quickChatTarget.project.projectId)}
                 className="min-w-0 flex-1 truncate py-1.5 text-left text-xs font-medium text-foreground"
-                title="Quick chat — deleted when you start another chat"
+                title="Quick chat — deleted when you leave this chat"
               >
                 Quick chat
               </button>
               <button
                 type="button"
-                onClick={discardQuickChat}
+                onClick={() => discardQuickChat()}
                 aria-label="Delete quick chat"
                 title="Delete quick chat"
                 className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
