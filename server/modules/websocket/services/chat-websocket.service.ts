@@ -300,6 +300,10 @@ function subscribeChat(ws: WebSocket, data: AnyRecord, dependencies: ChatWebSock
     const lastSeq = typeof rawSequence === 'number' && Number.isSafeInteger(rawSequence) && rawSequence >= 0 ? rawSequence : 0;
     const run = chatRunRegistry.getRun(sessionId);
     const isProcessing = chatRunRegistry.isProcessing(sessionId);
+    // A completed run is retained briefly so a client that reconnects with a
+    // cursor can receive the terminal frames it missed. A fresh page has no
+    // cursor and reconciles from the transcript instead of replaying the run.
+    const replayable = isProcessing || (run?.status === 'completed' && lastSeq > 0);
     if (isProcessing) chatRunRegistry.attachConnection(sessionId, ws);
 
     const approvalScope = run?.provider === 'gjc' ? run.appSessionId : run?.providerSessionId;
@@ -308,7 +312,7 @@ function subscribeChat(ws: WebSocket, data: AnyRecord, dependencies: ChatWebSock
       return record ? { ...record, sessionId } : approval;
     });
     sendFrame(ws, { kind: 'chat_subscribed', sessionId, isProcessing, replayGeneration: run?.replayGeneration ?? null, lastSeq: run?.lastSeq ?? 0, pendingPermissions, timestamp: new Date().toISOString() });
-    if (isProcessing) {
+    if (replayable) {
       for (const event of chatRunRegistry.replayEvents(sessionId, lastSeq, request.replayGeneration)) sendFrame(ws, event);
     }
   }

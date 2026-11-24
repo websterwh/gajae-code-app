@@ -201,6 +201,16 @@ test('repeated subscription replay finalizes an answer once and accepts a new ru
   assert.equal(view.result.current.getMessages('visible').filter(row => row.content === 'The answer.').length, 2);
 });
 
+test('an idle subscription reconciles a completion missed while the socket was down', () => {
+  const { calls, send } = mount();
+  send({ kind: 'stream_delta', sessionId: 'visible', content: 'Almost done' });
+  send({ kind: 'chat_subscribed', sessionId: 'visible', isProcessing: false });
+
+  assert.ok(calls.some(([name, id, status]) => name === 'setStatus' && id === 'visible' && status === 'idle'));
+  assert.ok(calls.some(([name, id]) => name === 'refreshFromServer' && id === 'visible'));
+  assert.ok(calls.some(([name, id]) => name === 'onSessionIdle' && id === 'visible'));
+});
+
 test('subscription high-water does not consume replay, and obsolete generations cannot change content or status', () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const view = renderHook(useSessionStore, {

@@ -134,7 +134,15 @@ export function useChatRealtimeHandlers({
         if (event.isProcessing) {
           onSessionProcessing?.(sessionId);
         } else {
+          // A completion that landed while the socket was down leaves the slot
+          // marked streaming. The idle subscription is the signal to reconcile
+          // once, instead of showing a finished turn as still running.
+          const wasStreaming = sessionStore.getSessionSlot(sessionId)?.status === 'streaming';
           onSessionIdle?.(sessionId, { ifStartedBefore: statusCheckSentAtRef.current.get(sessionId) });
+          if (wasStreaming) {
+            sessionStore.setStatus(sessionId, 'idle');
+            if (sessionId === visible) void sessionStore.refreshFromServer(sessionId);
+          }
         }
         if (sessionId === visible && Array.isArray(event.pendingPermissions)) {
           const next = event.pendingPermissions as PendingPermissionRequest[];

@@ -161,6 +161,53 @@ test('real websocket reconnect scopes replay to each chat.send run and survives 
   });
 });
 
+test('chat.subscribe replays a completed run for a reconnecting cursor', async () => {
+  const originalSocket = new FakeWebSocket();
+  const reconnectingSocket = new FakeWebSocket();
+  const freshSocket = new FakeWebSocket();
+  const sessionId = 'completed-run-replay';
+
+  try {
+    const run = chatRunRegistry.startRun({
+      appSessionId: sessionId,
+      provider: 'gjc',
+      providerSessionId: null,
+      connection: originalSocket as unknown as WebSocket,
+      userId: 'user-1',
+    });
+    assert.ok(run);
+    run.writer.send({ kind: 'stream_delta', content: 'Finished answer' });
+    run.writer.send({ kind: 'complete', exitCode: 0 });
+
+    const dependencies = {
+      spawnFns: {} as never,
+      abortFns: {} as never,
+      resolveToolApproval() {},
+      getPendingApprovalsForSession: () => [],
+    };
+    const subscribe = async (socket: FakeWebSocket, lastSeq: number) => {
+      handleChatConnection(socket as unknown as WebSocket, { user: { id: 'user-1' } } as never, dependencies);
+      socket.emit('message', JSON.stringify({
+        type: 'chat.subscribe',
+        sessions: [{ sessionId, replayGeneration: run.replayGeneration, lastSeq }],
+      }));
+      await flushMessages();
+      return socket.sent.filter((frame) => frame.sessionId === sessionId).map((frame) => frame.kind);
+    };
+
+    assert.deepEqual(await subscribe(reconnectingSocket, 1), ['chat_subscribed', 'complete']);
+    assert.equal(reconnectingSocket.sent.find((frame) => frame.kind === 'chat_subscribed')?.isProcessing, false);
+    // A fresh page has no cursor and reads the transcript instead of replaying it.
+    assert.deepEqual(await subscribe(freshSocket, 0), ['chat_subscribed']);
+  } finally {
+    originalSocket.emit('close');
+    reconnectingSocket.emit('close');
+    freshSocket.emit('close');
+    chatRunRegistry.clearAll();
+    connectedClients.clear();
+  }
+});
+
 test('chat.subscribe recovers GJC approvals from the app session scope', async () => {
   const originalConnection = new FakeWebSocket();
   const reconnectingSocket = new FakeWebSocket();
