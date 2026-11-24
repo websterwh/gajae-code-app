@@ -7,6 +7,7 @@ import { projectsDb, sessionsDb } from '@/modules/database/index.js';
 import { providerRegistry } from '@/modules/providers/provider.registry.js';
 import { resolveSessionProjectPath } from '@/modules/providers/services/session-project-path.service.js';
 import { releaseWorktreeSession, sessionTranscriptWorkspace } from '@/modules/providers/services/session-worktrees.service.js';
+import { createQuickChatWorkspace, removeQuickChatWorkspace } from '@/modules/providers/services/quick-chat-workspace.service.js';
 import { chatRunRegistry } from '@/modules/websocket/index.js';
 import type { FetchHistoryOptions, FetchHistoryResult, LLMProvider, NormalizedMessage } from '@/shared/types.js';
 import { boundToolResultDetails, prepareMessagesForTransport } from '@/shared/tool-output-transport.js';
@@ -118,6 +119,23 @@ export const sessionsService = {
     const sessionId = randomUUID();
     sessionsDb.createAppSession(sessionId, provider, project);
     return { sessionId, provider, projectPath: project };
+  },
+
+  /**
+   * A quick chat's first turn gets its own throwaway folder instead of the
+   * project the sidebar was showing. The session row points at that folder so
+   * the run's cwd is the disposable workspace, and a hard delete removes it.
+   */
+  async createQuickChatSession(provider: LLMProvider): Promise<CreateAppSessionResult> {
+    const sessionId = randomUUID();
+    const projectPath = await createQuickChatWorkspace(sessionId);
+    try {
+      sessionsDb.createAppSession(sessionId, provider, projectPath);
+    } catch (error) {
+      await removeQuickChatWorkspace(sessionId, projectPath);
+      throw error;
+    }
+    return { sessionId, provider, projectPath };
   },
 
   /**
@@ -244,6 +262,9 @@ export const sessionsService = {
     await releaseWorktreeSession(sessionId, { discardWorktree: options.discardWorktree });
     const deletedFromDisk = options.deletedFromDisk && row.jsonl_path ? await unlinkWhenPresent(row.jsonl_path) : false;
     if (!sessionsDb.deleteSessionById(sessionId)) throw sessionNotFound(sessionId);
+    // A quick chat's folder was created for this session alone; without this,
+    // every temporary conversation left a directory behind in the workspace root.
+    await removeQuickChatWorkspace(sessionId, row.project_path);
     return { sessionId, action: 'deleted', deletedFromDisk };
   },
 

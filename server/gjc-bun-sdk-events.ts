@@ -2,6 +2,7 @@ import { stripVTControlCharacters } from 'node:util';
 
 import { normalizeGjcGoal } from '../shared/gjc-goal.js';
 
+import { classifyGjcRunFailure, type GjcRunFailureKind } from './gjc-run-failure.js';
 import type { GjcSessionSnapshot } from './gjc-session-state.js';
 import type { GjcWorkerWriter } from './gjc-worker.js';
 
@@ -47,6 +48,8 @@ export type SdkRunState = {
   abortPending: boolean;
   terminalEmitted: boolean;
   finalError: boolean;
+  /** Classified cause of a failed turn, carried by its terminal frame. */
+  failureKind?: GjcRunFailureKind | null;
 };
 
 const object = (value: unknown): value is RecordValue => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -226,6 +229,7 @@ export function forwardSdkEvent(
       const errorMessage = notice(message.errorMessage);
       if (message.stopReason === 'error') {
         state.finalError = true;
+        state.failureKind = classifyGjcRunFailure(errorMessage);
         // The provider's own reason is what tells the user whether to retry,
         // re-authenticate, or shorten the prompt. Only fall back to the fixed
         // string when the SDK supplied nothing.
@@ -322,6 +326,7 @@ export function forwardSdkEvent(
       // by the response that follows it. The payload fields are `success` and
       // `finalError`.
       if (event.success === false) {
+        state.failureKind = state.failureKind ?? classifyGjcRunFailure(event.finalError);
         systemNotice(writer, 'error', notice(event.finalError) || 'Retries were exhausted and the request failed.');
       }
       return;
@@ -411,7 +416,9 @@ export function forwardPromptTerminal(writer: GjcWorkerWriter, state: SdkRunStat
   state.terminalEmitted = true;
   if (error !== undefined || state.finalError) {
     if (!state.finalError) writer.send({ kind: 'error', content: 'GJC run failed.' });
-    writer.send({ kind: 'complete', exitCode: 1 });
+    // The cause rides the terminal frame so the worker can settle the response
+    // with it; the provider's own text stays in the transcript row.
+    writer.send({ kind: 'complete', exitCode: 1, ...(state.failureKind ? { failureKind: state.failureKind } : {}) });
     return;
   }
   writer.send({ kind: 'complete', exitCode: 0 });

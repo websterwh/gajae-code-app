@@ -5,6 +5,7 @@ import type { DropEvent } from 'react-dropzone';
 import { useTranslation } from 'react-i18next';
 
 import { useAppShellStore } from '../../../stores/useAppShellStore';
+import { useQuickChatStore } from '../../../stores/useQuickChatStore';
 import { usePaletteOps } from '../../../stores/usePaletteOpsStore';
 import { beginComposerOperation, finishComposerOperation, invalidateComposerFreeze, isComposerFrozen, isComposerSealed, subscribeComposerFreeze } from '../../../shared/composerFreeze';
 import type { MarkSessionProcessing } from '../../../hooks/useSessionProtection';
@@ -222,14 +223,28 @@ export function useChatComposerState(args: UseChatComposerStateArgs) {
   const allocate = useCallback(async (summary: string | null, text: string, isCurrent: () => boolean): Promise<{ id: string; context?: SessionEstablishedContext } | null> => {
     let id = selectedSession ? (selectedSession.__provider === 'gjc' ? selectedSession.id : null) : currentSessionId;
     if (id) return { id };
-    const target = await resolveForSend(text);
+    // A quick chat starts in its own throwaway folder, never in the project
+    // the sidebar happens to show and never in a managed worktree of it. Its
+    // folder is allocated and deleted on the server, with the session.
+    const activeQuickChat = useQuickChatStore.getState().quickChat;
+    const startsQuickChat = Boolean(activeQuickChat
+      && !activeQuickChat.sessionId
+      && !currentSessionId
+      && activeQuickChat.projectId === selectedProject?.projectId);
+    const target = startsQuickChat ? null : await resolveForSend(text);
     if (!isCurrent()) return null;
     const project = target ? await descend(target) : selectedProject;
     if (!isCurrent()) return null;
-    // The worktree route allocates the session and its managed checkout in one
-    // transaction; the ordinary route binds the session to the project itself.
-    // Both return the same `sessionId`, so nothing downstream branches on this.
-    const response = await authenticatedFetch(useWorktree ? '/api/providers/worktree-sessions' : '/api/providers/sessions', { method: 'POST', body: JSON.stringify({ provider: 'gjc', projectPath: project?.fullPath || project?.path || '' }) });
+    // The quick-chat route allocates the session and its disposable folder in
+    // one step; the worktree route allocates the session and its managed
+    // checkout. The ordinary route binds the session to the project itself.
+    // All return the same `sessionId`, so nothing downstream branches on this.
+    const response = await authenticatedFetch(
+      startsQuickChat ? '/api/providers/quick-chat-sessions'
+        : useWorktree ? '/api/providers/worktree-sessions'
+          : '/api/providers/sessions',
+      { method: 'POST', body: JSON.stringify({ provider: 'gjc', projectPath: project?.fullPath || project?.path || '' }) },
+    );
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
       throw new Error(typeof body.error === 'string' ? body.error : body.error?.message ?? `Failed to create session (${response.status})`);

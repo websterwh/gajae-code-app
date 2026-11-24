@@ -1131,6 +1131,39 @@ test('forwards one worker terminal event without synthesizing a duplicate', asyn
   assert.equal(failures, 1);
 });
 
+test('a failed turn on a successful start response is the run\'s failure, never the worker\'s', async () => {
+  const child = new FakeChild();
+  const peer = new FakePeer(child);
+  replyToHandshake(peer);
+  const supervisor = new GjcWorkerSupervisor(runtime(child, 'app-turn-failed'));
+  const run = spawn(supervisor, 'hello', {}, { send() {} });
+  const start = await peer.waitFor('session.start');
+
+  peer.event('app-turn-failed', start.id, 'turn.failed', { message: { kind: 'complete', exitCode: 1 } });
+  peer.respond(start);
+
+  await assert.rejects(
+    run,
+    (error: unknown) => error instanceof Error && error.message === 'GJC run failed.',
+  );
+});
+
+test('a usage-limit start failure names the limit instead of the worker', async () => {
+  const child = new FakeChild();
+  const peer = new FakePeer(child);
+  replyToHandshake(peer);
+  const supervisor = new GjcWorkerSupervisor(runtime(child, 'app-usage-limit'));
+  const run = spawn(supervisor, 'hello', {}, { send() {} });
+  const start = await peer.waitFor('session.start');
+
+  peer.respond(start, { ok: false, error: { code: 'usage_limit', message: 'safe' } });
+
+  await assert.rejects(
+    run,
+    (error: unknown) => error instanceof Error && /usage limit was reached/.test(error.message),
+  );
+});
+
 test('runtime-owned goal stops preserve aborted outcomes and emit one truthful chat terminal', async () => {
   for (const aborted of [true, 'true'] as const) {
     const child = new FakeChild();

@@ -27,6 +27,13 @@ import {
   isGjcAsideUnavailableError,
 } from './gjc-browser-backend.js';
 import { GJC_CLEANUP_UNCONFIRMED_CODE, GJC_CLEANUP_UNCONFIRMED_MESSAGE, isGjcCleanupUnconfirmedError } from './gjc-cleanup-error.js';
+import {
+  classifyGjcRunFailure,
+  gjcRunFailure,
+  GJC_RUN_FAILED_CODE,
+  GJC_RUN_FAILED_MESSAGE,
+  type GjcRunFailureKind,
+} from './gjc-run-failure.js';
 
 export type GjcWorkerWriter = {
   send(value: unknown): void;
@@ -96,6 +103,8 @@ type Run = {
   active: boolean;
   abortHandle?: string;
   providerSessionId?: string;
+  /** Set once a failed terminal was forwarded; undefined means none arrived. */
+  terminalFailureKind?: GjcRunFailureKind | null;
   credential?: { kind: 'stored'; providerId: string; credentialId: number };
   model?: string;
   abortPromise?: Promise<boolean>;
@@ -520,6 +529,7 @@ export class GjcWorkerHost {
     let invalidPermissions = false;
     let modelUnresolved = false;
     let asideUnavailable = false;
+    let failureKind: GjcRunFailureKind | null = null;
     try {
       const spawned = this.#runtime!.spawnGjc(input.message, {
         ...options(input.options)!,
@@ -543,20 +553,21 @@ export class GjcWorkerHost {
       invalidPermissions = isGjcRunPermissionsError(error);
       modelUnresolved = isGjcModelResolutionError(error);
       asideUnavailable = isGjcAsideUnavailableError(error);
+      failureKind = classifyGjcRunFailure(error instanceof Error ? error.message : String(error));
       this.#poisonOnCleanupFailure(error);
       this.#diagnose(`run ${run.runId} failed`, error);
     } finally {
-      await this.#settleStart(request, run, { completed, invalidPermissions, modelUnresolved, asideUnavailable });
+      await this.#settleStart(request, run, { completed, invalidPermissions, modelUnresolved, asideUnavailable, failureKind });
     }
   }
 
   async #settleStart(
     request: Extract<GjcWorkerRequestFrame, { sessionId: string }>,
     run: Run,
-    status: { completed: boolean; invalidPermissions: boolean; modelUnresolved: boolean; asideUnavailable: boolean },
+    status: { completed: boolean; invalidPermissions: boolean; modelUnresolved: boolean; asideUnavailable: boolean; failureKind: GjcRunFailureKind | null },
   ): Promise<void> {
     let { completed } = status;
-    const { invalidPermissions, modelUnresolved, asideUnavailable } = status;
+    const { invalidPermissions, modelUnresolved, asideUnavailable, failureKind } = status;
     if (this.#cleanupUnconfirmed) {
       this.#response(request, failure(GJC_CLEANUP_UNCONFIRMED_CODE, GJC_CLEANUP_UNCONFIRMED_MESSAGE));
       return;
@@ -585,14 +596,20 @@ export class GjcWorkerHost {
       return;
     }
     this.#event(run, 'worker.status', { processId: null });
+    // A failed terminal can arrive on a run the runtime considered completed
+    // (the SDK resolves after emitting its failure). That is the run's failure,
+    // never the worker's: the response carries the classified cause, so the
+    // chat no longer reports "GJC worker failed." for a healthy worker.
+    const terminal = run.terminalFailureKind === undefined ? null : gjcRunFailure(run.terminalFailureKind);
+    const cause = terminal ?? (failureKind ? gjcRunFailure(failureKind) : null);
     const failed = invalidPermissions
       ? failure(GJC_INVALID_PERMISSIONS_CODE, GJC_INVALID_PERMISSIONS_MESSAGE)
       : modelUnresolved
         ? failure(GJC_MODEL_UNRESOLVED_CODE, GJC_MODEL_UNRESOLVED_MESSAGE)
         : asideUnavailable
           ? failure(GJC_ASIDE_UNAVAILABLE_CODE, GJC_ASIDE_UNAVAILABLE_MESSAGE)
-          : failure('run_failed', 'GJC run failed.');
-    this.#response(request, completed ? success(result) : failed);
+          : failure(cause?.code ?? GJC_RUN_FAILED_CODE, cause?.message ?? GJC_RUN_FAILED_MESSAGE);
+    this.#response(request, completed && !terminal ? success(result) : failed);
     run.active = false;
     if (this.#runs.get(run.runId) === run) this.#runs.delete(run.runId);
     run.resolveCompletion();
@@ -623,7 +640,13 @@ export class GjcWorkerHost {
     // Unmapped kinds fall through to message.completed, so the authoritative
     // delegation settlement signal needs its own explicit mapping.
     else if (message.kind === 'delegation_updated') method = 'delegation.updated';
-    else if (message.kind === 'complete') method = message.exitCode === 0 ? 'turn.completed' : 'turn.failed';
+    else if (message.kind === 'complete') {
+      method = message.exitCode === 0 ? 'turn.completed' : 'turn.failed';
+      if (message.exitCode !== 0) {
+        const kind = message.failureKind;
+        run.terminalFailureKind = kind === 'usage_limit' || kind === 'auth' ? kind : null;
+      }
+    }
     this.#event(run, method, { message });
   }
   /**

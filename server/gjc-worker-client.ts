@@ -210,6 +210,9 @@ const WORKER_NOT_STARTED = 'GJC worker did not finish starting in time. Send the
 const WORKER_RESTART_BLOCKED = 'GJC worker could not be restarted after a failed shutdown. Restart the app server.';
 const CLEANUP_UNCONFIRMED_FAILURE = `${GJC_CLEANUP_UNCONFIRMED_MESSAGE} Restart the app server.`;
 const RUN_FAILED = 'GJC run failed.';
+/** Codes the worker sends for a classified run failure; the text stays here. */
+const USAGE_LIMIT_CODE = 'usage_limit';
+const AUTH_FAILED_CODE = 'auth_failed';
 /**
  * `worker.initialize` covers the whole SDK bootstrap (model registry build and
  * online model discovery), measured at 4-8 s on a loaded developer machine. The
@@ -233,6 +236,12 @@ function runFailureMessage(response: GjcWorkerResponsePayload): string {
   // The worker is alive here; the run itself was refused or failed, so blaming
   // the worker (the generic text) sent operators after the wrong process.
   if (!response.ok && response.error.code === 'run_failed') return RUN_FAILED;
+  if (!response.ok && response.error.code === USAGE_LIMIT_CODE) {
+    return "The provider's usage limit was reached. Wait for it to reset or switch models.";
+  }
+  if (!response.ok && response.error.code === AUTH_FAILED_CODE) {
+    return 'The provider rejected the saved sign-in. Sign in again.';
+  }
   return SAFE_FAILURE;
 }
 
@@ -1154,7 +1163,15 @@ export class GjcWorkerSupervisor {
         run.aborted = true;
         this.activityChanged();
       }
-      this.finish(run, run.terminalFailed || !response.ok, runFailureMessage(response));
+      // A forwarded failed terminal is the run's failure even when the start
+      // response was successful: a usage limit resolves the runtime's promise
+      // while the turn has already failed, and the generic text blamed a
+      // worker that was healthy.
+      this.finish(
+        run,
+        run.terminalFailed || !response.ok,
+        run.terminalFailed && response.ok ? RUN_FAILED : runFailureMessage(response),
+      );
     } catch (error) {
       // workerFailed owns terminal settlement for a run whose request reached
       // the worker; a run that never started is settled here, even while a reap

@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
 import SessionProviderLogo from '../../llm-logo-provider/SessionProviderLogo';
+import { useQuickChatStore } from '../../../stores/useQuickChatStore';
 import type { Project, ProjectSession } from '../../../types/app';
 
 type MainContentTitleProps = {
@@ -21,6 +22,12 @@ export default function MainContentTitle({
   selectedSession,
 }: MainContentTitleProps) {
   const { t } = useTranslation();
+  const quickChat = useQuickChatStore((state) => state.quickChat);
+  // A quick chat runs in its own disposable folder; naming the project it was
+  // launched from would claim the chat is working in that folder.
+  const disposable = Boolean(quickChat
+    && quickChat.projectId === selectedProject.projectId
+    && (!selectedSession || quickChat.sessionId === selectedSession.id));
 
   return (
     <div className="scrollbar-hide flex min-w-0 flex-1 items-center gap-2 overflow-x-auto">
@@ -36,12 +43,12 @@ export default function MainContentTitle({
             <h2 title={getSessionTitle(selectedSession)} className="truncate text-sm leading-tight font-semibold text-foreground">
               {getSessionTitle(selectedSession)}
             </h2>
-            <div className="truncate text-[11px] leading-tight text-muted-foreground">{selectedProject.displayName}</div>
+            {!disposable && <div className="truncate text-[11px] leading-tight text-muted-foreground">{selectedProject.displayName}</div>}
           </div>
         ) : (
           <div className="min-w-0">
             <h2 className="text-base leading-tight font-semibold text-foreground">{t('mainContent.newSession')}</h2>
-            <div className="truncate text-xs leading-tight text-muted-foreground">{selectedProject.displayName}</div>
+            {!disposable && <div className="truncate text-xs leading-tight text-muted-foreground">{selectedProject.displayName}</div>}
           </div>
         )}
       </div>

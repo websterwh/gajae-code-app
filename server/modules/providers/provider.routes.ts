@@ -184,6 +184,14 @@ router.post('/sessions/:sessionId/branch', asyncHandler(async (req: Request, res
   res.status(201).json(createApiSuccessResponse(await sessionsService.branchSession(sessionFrom(req.params.sessionId), entryId)));
 }));
 
+// A quick chat allocates the session and its disposable folder together; the
+// composer's projectPath is not used, because that is the workspace the chat
+// must not run in.
+router.post('/quick-chat-sessions', asyncHandler(async (req: Request, res: Response) => {
+  providerFrom(objectBody(req.body).provider);
+  res.status(201).json(createApiSuccessResponse(await sessionsService.createQuickChatSession('gjc')));
+}));
+
 router.post('/worktree-sessions', asyncHandler(async (req: Request, res: Response) => {
   const body = objectBody(req.body);
   providerFrom(body.provider);

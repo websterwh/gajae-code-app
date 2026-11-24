@@ -293,6 +293,16 @@ test('auto-retry surfaces the attempt, the delay, and the reason', () => {
   assert.match(text, /overloaded/);
 });
 
+test('a usage-limit failure is classified on the terminal frame', () => {
+  const { messages, state, writer } = collector();
+  forwardSdkEvent({ type: 'auto_retry_end', success: false, attempt: 5, finalError: 'usage limit reached' }, writer, state);
+  forwardPromptTerminal(writer, state, new Error('usage limit reached'));
+
+  const terminal = first(messages, 'complete');
+  assert.equal(terminal?.exitCode, 1);
+  assert.equal(terminal?.failureKind, 'usage_limit');
+});
+
 test('only an exhausted retry leaves a row behind', () => {
   // The SDK names these `success` and `finalError`.
   assert.equal(all(forward([{ type: 'auto_retry_end', success: true, attempt: 2 }]).messages, 'system_notice').length, 0);
