@@ -39,6 +39,8 @@ export function useVoiceInput(
   ownerKey = '',
 ) {
   const [state, setState] = useState<VoiceInputState>('idle');
+  // 0..1 microphone level while recording, for the composer's live indicator.
+  const [level, setLevel] = useState(0);
   const recording = useRef<Recording | null>(null);
   const owner = useRef<object | null>(null);
 
@@ -46,6 +48,7 @@ export function useVoiceInput(
     const visit = {};
     owner.current = visit;
     setState('idle');
+    setLevel(0);
     return () => {
       owner.current = null;
       const prior = recording.current;
@@ -70,7 +73,52 @@ export function useVoiceInput(
     const session: Recording = { phase: 'starting', stop, depart() { stop(); releaseMicrophone(); } };
     const isVisible = () => owner.current === visit && recording.current === session;
     const report = (message: string) => { if (isVisible()) onError?.(message); };
-    const releaseMicrophone = () => { stream?.getTracks().forEach((track) => track.stop()); stream = null; };
+    // The level meter reads the same stream the recorder writes, so it never
+    // captures a second time. Every piece is optional: a browser without Web
+    // Audio (or a test double without it) simply keeps the level at zero.
+    let audioContext: AudioContext | null = null;
+    let analyser: AnalyserNode | null = null;
+    let meterFrame = 0;
+    const releaseMeter = () => {
+      if (meterFrame) cancelAnimationFrame(meterFrame);
+      meterFrame = 0;
+      analyser = null;
+      if (audioContext) { void audioContext.close().catch(() => {}); audioContext = null; }
+      if (isVisible()) setLevel(0);
+    };
+    const releaseMicrophone = () => { releaseMeter(); stream?.getTracks().forEach((track) => track.stop()); stream = null; };
+    const startMeter = (captured: MediaStream) => {
+      if (typeof window === 'undefined' || typeof requestAnimationFrame !== 'function') return;
+      const Ctor = window.AudioContext
+        ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!Ctor) return;
+      try {
+        audioContext = new Ctor();
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 512;
+        analyser.smoothingTimeConstant = 0.6;
+        audioContext.createMediaStreamSource(captured).connect(analyser);
+      } catch {
+        // A locked-down or mocked audio stack must not stop the recording.
+        releaseMeter();
+        return;
+      }
+      const meterNode = analyser;
+      if (!meterNode) return;
+      const samples = new Uint8Array(meterNode.fftSize);
+      const tick = () => {
+        if (finished) return;
+        meterNode.getByteTimeDomainData(samples);
+        let power = 0;
+        for (const sample of samples) {
+          const centered = (sample - 128) / 128;
+          power += centered * centered;
+        }
+        if (isVisible()) setLevel(Math.min(1, Math.sqrt(power / samples.length) * 4));
+        meterFrame = requestAnimationFrame(tick);
+      };
+      meterFrame = requestAnimationFrame(tick);
+    };
     const phase = (next: VoiceInputState) => { session.phase = next; if (isVisible()) setState(next); };
     const finish = () => {
       if (finished) return;
@@ -146,6 +194,7 @@ export function useVoiceInput(
       };
 
       recorder.start();
+      startMeter(stream);
       phase('recording');
     } catch (error) {
       const microphoneError = error as { name?: string; message?: string };
@@ -158,5 +207,5 @@ export function useVoiceInput(
   const stop = (opts?: { send?: boolean }) => recording.current?.stop(opts?.send);
   const toggle = () => { if (!recording.current) void begin(); else recording.current.stop(); };
 
-  return { state, toggle, stop };
+  return { state, level, toggle, stop };
 }

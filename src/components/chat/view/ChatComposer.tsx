@@ -254,7 +254,7 @@ export default function ChatComposer({
     if (voiceErrorTimer.current) clearTimeout(voiceErrorTimer.current);
   }, []);
   const noopTranscript = useCallback(() => {}, []);
-  const { state: voiceState, toggle: voiceToggle, stop: voiceStop } = useVoiceInput(
+  const { state: voiceState, level: voiceLevel, toggle: voiceToggle, stop: voiceStop } = useVoiceInput(
     onVoiceTranscript ?? noopTranscript,
     handleVoiceError,
     voiceOwnerKey,
@@ -481,7 +481,7 @@ export default function ChatComposer({
             </PromptInputButton>
 
             {onVoiceTranscript && voiceAvailable && (
-              <VoiceInputButton state={voiceState} onToggle={voiceToggle} errorMsg={voiceError} disabled={composerFrozen} />
+              <VoiceInputButton state={voiceState} level={voiceLevel} onToggle={voiceToggle} errorMsg={voiceError} disabled={composerFrozen} />
             )}
 
             <ModelAndReasoningPicker
