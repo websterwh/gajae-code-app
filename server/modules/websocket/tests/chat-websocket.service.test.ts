@@ -373,6 +373,47 @@ test('chat.send forwards only the browser\'s own UI options, never session or to
   });
 });
 
+test('chat.send forwards a side-chat handoff to the worker without a prose prompt', async () => {
+  await withIsolatedDatabase(async () => {
+    sessionsDb.createAppSession('btw-handoff-session', 'gjc', '/workspace/btw-project');
+    const socket = new FakeWebSocket();
+    let receivedCommand: string | undefined;
+    let receivedOptions: Record<string, unknown> | undefined;
+    const exchanges = [
+      { question: 'Should we use a queue?', answer: 'A queue keeps the turn sequential.' },
+      { question: 'What about retries?', answer: 'Retry only after the current turn settles.' },
+    ];
+
+    handleChatConnection(socket as unknown as WebSocket, { user: { id: 'user-1' } } as never, {
+      spawnFns: {
+        gjc: (command, options, writer) => {
+          receivedCommand = command;
+          receivedOptions = options;
+          (writer as { sendComplete(options: { exitCode: number }): void }).sendComplete({ exitCode: 0 });
+          return Promise.resolve();
+        },
+      },
+      abortFns: { gjc: async () => false },
+      resolveToolApproval() {},
+      getPendingApprovalsForSession: () => [],
+      resolveSessionModel: async () => 'pinned-model',
+    });
+
+    socket.emit('message', JSON.stringify({
+      type: 'chat.send',
+      sessionId: 'btw-handoff-session',
+      content: '',
+      options: { btwHandoff: exchanges },
+    }));
+    await flushMessages();
+    await flushMessages();
+
+    assert.equal(receivedCommand, '', 'the handoff is a custom message, not a prose prompt');
+    assert.deepEqual(receivedOptions?.btwHandoff, exchanges);
+    socket.emit('close');
+  });
+});
+
 test('chat.send refuses the turn when the session model cannot be resolved', async () => {
   // A resume session's model is pinned. Falling back to the browser's model on
   // a storage failure would let a client repin a session it is only resuming.

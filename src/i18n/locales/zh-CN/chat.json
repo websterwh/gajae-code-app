@@ -80,7 +80,13 @@
     "thinking": "思考中…",
     "error": "侧边聊天失败。",
     "usage": "用法：/btw <问题>",
-    "noSession": "请先发送一条消息：目前还没有可供侧边聊天使用的对话上下文。"
+    "noSession": "请先发送一条消息：目前还没有可供侧边聊天使用的对话上下文。",
+    "handoff": "移交到聊天",
+    "handoffFailed": "无法将此侧边聊天移交到主聊天。",
+    "handoffEmpty": "此侧边聊天没有可移交的已完成回答。",
+    "handoffBusy": "请等待当前回合结束，再移交侧边聊天。",
+    "handoffDisconnected": "未移交：聊天连接未建立。",
+    "handedOff": "侧边聊天已移交到聊天。"
   },
   "input": {
     "placeholder": "询问{{provider}}，使用/发送命令，或@添加文件……",

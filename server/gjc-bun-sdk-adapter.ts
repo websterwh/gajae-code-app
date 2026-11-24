@@ -3,6 +3,11 @@ import { realpath } from 'node:fs/promises';
 
 import { createAgentSession, discoverAuthStorage, type AutomationTools } from '@gajae-code/coding-agent/sdk/session';
 import type { BtwConversationScope } from '@gajae-code/coding-agent/sdk/btw';
+import {
+  BTW_HANDOFF_MESSAGE_TYPE,
+  renderBtwHandoffMessage,
+  type BtwTextExchange,
+} from '@gajae-code/coding-agent/session/btw-contract';
 import { resolveBrowserBackend } from '@gajae-code/coding-agent/browser-backend';
 import { ModelRegistry } from '@gajae-code/coding-agent/config/model-registry';
 import { mergeModelProfiles, resolveProfileBindings } from '@gajae-code/coding-agent/config/model-profiles';
@@ -124,6 +129,12 @@ export type SdkRunConfig = {
    */
   btw?: { question: string; exchanges: BtwExchange[] };
   /**
+   * Completed `/btw` exchanges handed to the main session as one
+   * `btw-handoff` custom message. This is a normal tool-using turn, unlike
+   * `btw`, and the message is persisted and shown as a one-line marker.
+   */
+  btwHandoff?: BtwExchange[];
+  /**
    * The project's permission policy. Absent means the app did not decide, and
    * the runtime keeps its own default (guarded tools run unprompted); present
    * means the session is switched to `prompt` mode and this policy answers.
@@ -238,6 +249,13 @@ type ActiveRun = {
     readonly isStreaming?: boolean;
     createBtwConversationScope(instruction: string): BtwConversationScope;
     releaseBtwConversationScope(scope: BtwConversationScope): void;
+    promptCustomMessage(message: {
+      customType: string;
+      content: string;
+      display: boolean;
+      details?: unknown;
+      attribution?: 'user' | 'agent';
+    }): Promise<void>;
     runEphemeralTurn(args: {
       purpose: 'btw';
       turn: { question: string; scope: BtwConversationScope };
@@ -522,25 +540,30 @@ function exactCredentialRef(value: unknown): value is ExactCredentialRef {
     && RUNTIME_CREDENTIAL_ENV_VARS.has(value.envVar);
 }
 
-type BtwExchange = { question: string; answer: string };
+type BtwExchange = BtwTextExchange;
 
 const BTW_MAX_QUESTION_BYTES = 16 * 1024;
 const BTW_MAX_CONTEXT_BYTES = 64 * 1024;
 const BTW_MAX_EXCHANGES = 12;
 
-/** Mirrors the runtime's `btw.ask` contract; the app refuses instead of admitting bad work. */
-function validBtwConfig(value: unknown): value is NonNullable<SdkRunConfig['btw']> {
-  if (!object(value) || typeof value.question !== 'string' || !value.question.trim()
-    || Buffer.byteLength(value.question, 'utf8') > BTW_MAX_QUESTION_BYTES) return false;
-  if (!Array.isArray(value.exchanges) || value.exchanges.length > BTW_MAX_EXCHANGES) return false;
+function validBtwExchanges(value: unknown, allowEmpty: boolean): value is BtwExchange[] {
+  if (!Array.isArray(value) || (!allowEmpty && value.length === 0) || value.length > BTW_MAX_EXCHANGES) return false;
   let bytes = 0;
-  for (const exchange of value.exchanges) {
+  for (const exchange of value) {
     if (!object(exchange) || typeof exchange.question !== 'string' || typeof exchange.answer !== 'string') return false;
     if (!exchange.question.trim()) return false;
     bytes += Buffer.byteLength(exchange.question, 'utf8') + Buffer.byteLength(exchange.answer, 'utf8');
     if (bytes > BTW_MAX_CONTEXT_BYTES) return false;
   }
   return true;
+}
+
+/** Mirrors the runtime's `btw.ask` contract; the app refuses instead of admitting bad work. */
+function validBtwConfig(value: unknown): value is NonNullable<SdkRunConfig['btw']> {
+  return object(value)
+    && typeof value.question === 'string' && Boolean(value.question.trim())
+    && Buffer.byteLength(value.question, 'utf8') <= BTW_MAX_QUESTION_BYTES
+    && validBtwExchanges(value.exchanges, true);
 }
 
 function configFromOptions(value: Record<string, unknown>): SdkRunConfig {
@@ -568,6 +591,8 @@ function configFromOptions(value: Record<string, unknown>): SdkRunConfig {
     || (candidate.hostControl !== undefined && !isHostControlRunPolicy(candidate.hostControl))
     || (candidate.retryLastTurn !== undefined && typeof candidate.retryLastTurn !== 'boolean')
     || (candidate.btw !== undefined && !validBtwConfig(candidate.btw))
+    || (candidate.btwHandoff !== undefined && !validBtwExchanges(candidate.btwHandoff, false))
+    || (candidate.btw !== undefined && candidate.btwHandoff !== undefined)
   ) throw new Error(FAILURE);
   // A malformed policy block throws GjcRunPermissionsError, which keeps its
   // `invalid_permissions` code so the worker can answer with that code and the
@@ -1674,6 +1699,23 @@ export class GjcBunSdkAdapter implements GjcWorkerRuntime {
           } finally {
             result.session.releaseBtwConversationScope(scope);
           }
+          return;
+        }
+        if (config.btwHandoff) {
+          // The runtime's `promptCustomMessage` is what `/btw-handoff` uses:
+          // one displayed custom message carrying the completed exchanges,
+          // followed by an ordinary turn with the normal tools. The custom
+          // message is what the transcript renders as the handoff marker;
+          // `renderBtwHandoffMessage` keeps the payload nonce-framed exactly
+          // as the CLI does. The run itself provides cancellation and terminal
+          // ownership, so no side-chat scope is needed here.
+          await result.session.promptCustomMessage({
+            customType: BTW_HANDOFF_MESSAGE_TYPE,
+            content: renderBtwHandoffMessage(config.btwHandoff),
+            display: true,
+            details: { exchangeCount: config.btwHandoff.length },
+            attribution: 'user',
+          });
           return;
         }
         let promptMessage: string | null = message;

@@ -80,7 +80,13 @@
     "thinking": "Sto pensando…",
     "error": "Chat laterale non riuscita.",
     "usage": "Uso: /btw <domanda>",
-    "noSession": "Invia prima un messaggio: non c’è ancora un contesto per una chat laterale."
+    "noSession": "Invia prima un messaggio: non c’è ancora un contesto per una chat laterale.",
+    "handoff": "Passa alla chat",
+    "handoffFailed": "Impossibile passare questa chat laterale alla chat principale.",
+    "handoffEmpty": "Questa chat laterale non ha una risposta completata da passare.",
+    "handoffBusy": "Attendi la fine del turno corrente, poi passa la chat laterale.",
+    "handoffDisconnected": "Non passata: la connessione della chat non è attiva.",
+    "handedOff": "Chat laterale passata alla chat."
   },
   "input": {
     "placeholder": "Chiedi {{provider}}, usa / per i comandi o @ per aggiungere file...",

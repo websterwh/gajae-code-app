@@ -80,7 +80,13 @@
     "thinking": "Denkt nach…",
     "error": "Seiten-Chat fehlgeschlagen.",
     "usage": "Verwendung: /btw <Frage>",
-    "noSession": "Sende zuerst eine Nachricht: Es gibt noch keinen Gesprächskontext für einen Seiten-Chat."
+    "noSession": "Sende zuerst eine Nachricht: Es gibt noch keinen Gesprächskontext für einen Seiten-Chat.",
+    "handoff": "An Chat übergeben",
+    "handoffFailed": "Dieser Seiten-Chat konnte nicht an den Haupt-Chat übergeben werden.",
+    "handoffEmpty": "Dieser Seiten-Chat hat keine abgeschlossene Antwort zum Übergeben.",
+    "handoffBusy": "Warte, bis der aktuelle Durchlauf beendet ist, und übergib dann den Seiten-Chat.",
+    "handoffDisconnected": "Nicht übergeben: Die Chat-Verbindung ist nicht verbunden.",
+    "handedOff": "Seiten-Chat an den Chat übergeben."
   },
   "input": {
     "placeholder": "Fragen Sie {{provider}}, verwenden Sie / für Befehle oder @, um Dateien hinzuzufügen ...",

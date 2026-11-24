@@ -6,12 +6,14 @@ import { authenticatedFetch } from '../../../utils/api';
 
 import { Markdown } from './Markdown';
 
-type BtwExchange = { question: string; answer: string };
+export type BtwExchange = { question: string; answer: string };
 
 interface BtwPanelProps {
   question: string;
   sessionId: string | null;
   onClose: () => void;
+  /** Hands completed exchanges to the main session; false keeps this panel open. */
+  onHandoff: (exchanges: BtwExchange[]) => boolean;
 }
 
 type BtwStreamEvent =
@@ -27,7 +29,7 @@ type BtwStreamEvent =
  * in this component until the drawer closes. Esc closes and discards it, as
  * the TUI panel does.
  */
-export default function BtwPanel({ question, sessionId, onClose }: BtwPanelProps) {
+export default function BtwPanel({ question, sessionId, onClose, onHandoff }: BtwPanelProps) {
   const { t } = useTranslation('chat');
   const [exchanges, setExchanges] = useState<BtwExchange[]>([]);
   const [asked, setAsked] = useState(question);
@@ -212,7 +214,21 @@ export default function BtwPanel({ question, sessionId, onClose }: BtwPanelProps
           placeholder={t('btw.placeholder', { defaultValue: 'Ask a side question…' })}
           className="w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-hidden focus:ring-2 focus:ring-ring"
         />
-        <div className="mt-2 flex justify-end">
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              if (thinking || exchanges.length === 0) return;
+              setError('');
+              if (!onHandoff(exchanges)) {
+                setError(t('btw.handoffFailed', { defaultValue: 'Could not hand off this side chat to the main chat.' }));
+              }
+            }}
+            disabled={thinking || exchanges.length === 0}
+            className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {t('btw.handoff', { defaultValue: 'Hand off to chat' })}
+          </button>
           <button
             type="submit"
             disabled={thinking || !followUp.trim()}

@@ -28,7 +28,7 @@ import GoalControls from './GoalControls';
 import ChatComposer from './ChatComposer';
 import ChatMessagesPane from './ChatMessagesPane';
 import CommandResultModal from './CommandResultModal';
-import BtwPanel from './BtwPanel';
+import BtwPanel, { type BtwExchange } from './BtwPanel';
 import { isReasoningEffort, readReasoningEffort, rememberReasoningEffort, type ReasoningEffort } from './reasoningEffort';
 
 function ComposerSurface(props: ComponentProps<typeof ChatComposer>) {
@@ -168,6 +168,35 @@ function ChatInterface({
     setBtwQuestion(trimmed);
     setBtwKey((key) => key + 1);
   }, [appendSessionMessage, selectedSession?.id, session.currentSessionId, t]);
+
+  const handoffSideChat = useCallback((exchanges: BtwExchange[]) => {
+    const sessionId = session.currentSessionId || selectedSession?.id || null;
+    const notice = (content: string, level: 'info' | 'warning' | 'error') => appendSessionMessage({
+      type: level === 'error' ? 'error' : 'system', isSystemNotice: level !== 'error', noticeLevel: level, content, timestamp: new Date(),
+    });
+    if (!sessionId || exchanges.length === 0) {
+      notice(t('btw.handoffEmpty', { defaultValue: 'This side chat has no completed answer to hand off.' }), 'error');
+      return false;
+    }
+    if (session.isProcessing) {
+      notice(t('btw.handoffBusy', { defaultValue: 'Wait for the current turn to finish, then hand off the side chat.' }), 'warning');
+      return false;
+    }
+    const accepted = sendMessage({
+      type: 'chat.send',
+      sessionId,
+      content: '',
+      options: { btwHandoff: exchanges },
+    });
+    if (accepted === false) {
+      notice(t('btw.handoffDisconnected', { defaultValue: 'Not handed off: the chat socket is not connected.' }), 'error');
+      return false;
+    }
+    notice(t('btw.handedOff', { defaultValue: 'Side chat handed off to chat.' }), 'info');
+    onSessionProcessing?.(sessionId, { statusText: null, canInterrupt: true });
+    setBtwQuestion(null);
+    return true;
+  }, [appendSessionMessage, onSessionProcessing, selectedSession?.id, sendMessage, session.currentSessionId, session.isProcessing, t]);
 
   const composer = useChatComposerState({
     executionCwd: sessionLocation.data?.cwd,
@@ -528,6 +557,7 @@ function ChatInterface({
           question={btwQuestion}
           sessionId={session.currentSessionId || selectedSession?.id || null}
           onClose={() => setBtwQuestion(null)}
+          onHandoff={handoffSideChat}
         />
       )}
       <OAuthLoginDialog

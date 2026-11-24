@@ -80,7 +80,13 @@
     "thinking": "思考中…",
     "error": "側邊聊天失敗。",
     "usage": "用法：/btw <問題>",
-    "noSession": "請先傳送一則訊息：目前還沒有可供側邊聊天使用的對話內容。"
+    "noSession": "請先傳送一則訊息：目前還沒有可供側邊聊天使用的對話內容。",
+    "handoff": "移交到聊天",
+    "handoffFailed": "無法將此側邊聊天移交到主聊天。",
+    "handoffEmpty": "此側邊聊天沒有可移交的已完成回答。",
+    "handoffBusy": "請等待目前回合結束，再移交側邊聊天。",
+    "handoffDisconnected": "未移交：聊天連線未建立。",
+    "handedOff": "側邊聊天已移交到聊天。"
   },
   "input": {
     "placeholder": "請問 {{provider}}，使用 / 進行指令，或 @ 添加檔案…",

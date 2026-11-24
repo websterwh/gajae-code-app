@@ -54,6 +54,27 @@ export function readGjcTranscriptMessage(value: unknown): AnyRecord | null {
     return document ? { role: 'user', content: document } : null;
   }
 
+  // `/btw-handoff` is a displayed user message whose model-facing body is a
+  // framed transcript of the side chat. Showing that body would dump the whole
+  // discussion into the main chat, so history keeps only the same one-line
+  // marker the CLI renders; the full message remains in the transcript and is
+  // still what the model receives.
+  if (entry.customType === 'btw-handoff') {
+    if (entry.display !== true || entry.attribution !== 'user') return null;
+    const details = readObjectRecord(entry.details);
+    const count = typeof details?.exchangeCount === 'number'
+      && Number.isSafeInteger(details.exchangeCount)
+      && details.exchangeCount > 0
+      ? details.exchangeCount
+      : null;
+    return {
+      role: 'user',
+      content: count === null
+        ? 'Side chat handed off to chat.'
+        : `Side chat handed off to chat (${count} ${count === 1 ? 'exchange' : 'exchanges'}).`,
+    };
+  }
+
   if (
     entry.customType !== 'skill-prompt'
     || entry.display !== true

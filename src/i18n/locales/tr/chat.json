@@ -80,7 +80,13 @@
     "thinking": "Düşünüyor…",
     "error": "Yan sohbet başarısız oldu.",
     "usage": "Kullanım: /btw <soru>",
-    "noSession": "Önce bir mesaj gönder: yan sohbet için henüz konuşma bağlamı yok."
+    "noSession": "Önce bir mesaj gönder: yan sohbet için henüz konuşma bağlamı yok.",
+    "handoff": "Sohbete devret",
+    "handoffFailed": "Bu yan sohbet ana sohbete devredilemedi.",
+    "handoffEmpty": "Bu yan sohbette devredilecek tamamlanmış bir yanıt yok.",
+    "handoffBusy": "Geçerli tur bitene kadar bekleyip yan sohbeti devredin.",
+    "handoffDisconnected": "Devredilmedi: sohbet bağlantısı kurulu değil.",
+    "handedOff": "Yan sohbet sohbete devredildi."
   },
   "input": {
     "placeholder": "'ya sorun, komutlar için / tuşunu veya dosya eklemek için @ tuşunu kullanın… {{provider}}",

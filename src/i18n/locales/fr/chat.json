@@ -80,7 +80,13 @@
     "thinking": "Réflexion…",
     "error": "La conversation parallèle a échoué.",
     "usage": "Utilisation : /btw <question>",
-    "noSession": "Envoie d’abord un message : il n’y a pas encore de contexte pour une conversation parallèle."
+    "noSession": "Envoie d’abord un message : il n’y a pas encore de contexte pour une conversation parallèle.",
+    "handoff": "Transférer au chat",
+    "handoffFailed": "Impossible de transférer cette conversation parallèle au chat principal.",
+    "handoffEmpty": "Cette conversation parallèle n’a aucune réponse terminée à transférer.",
+    "handoffBusy": "Attendez la fin du tour en cours, puis transférez la conversation parallèle.",
+    "handoffDisconnected": "Non transféré : la connexion du chat n’est pas établie.",
+    "handedOff": "Conversation parallèle transférée au chat."
   },
   "input": {
     "placeholder": "Demandez {{provider}}, utilisez / pour les commandes, ou @ pour ajouter des fichiers…",

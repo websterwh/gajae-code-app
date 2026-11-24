@@ -23,6 +23,13 @@ const handoff = (overrides: Entry = {}): Entry => ({
 const answer = (id: string, parentId: string): Entry => ({
   type: 'message', id, parentId, message: { role: 'assistant', content: id, stopReason: 'stop' },
 });
+const btwHandoff = (overrides: Entry = {}): Entry => ({
+  type: 'custom_message', id: 'btw-handoff', parentId: 'config',
+  customType: 'btw-handoff', display: true, attribution: 'user',
+  content: '<btw-handoff nonce="abc">full framed side-chat payload</btw-handoff nonce="abc">',
+  details: { exchangeCount: 2 },
+  ...overrides,
+});
 const encode = (entries: unknown[], start = 0): string => `${entries.map((entry, index) => JSON.stringify(
   entry && typeof entry === 'object' && !Array.isArray(entry)
     ? { timestamp: new Date(Date.UTC(2026, 10, 12, 0, 0, start + index)).toISOString(), ...entry }
@@ -78,6 +85,28 @@ test('a handoff document is the visible first message and the session title', as
     assert.equal(await synchronizer.synchronizeFile(filePath), APP_ID);
     assert.equal(sessionsDb.getSessionById(APP_ID)?.custom_name, 'Goal Continue the trainer integration');
   });
+});
+
+test('a side-chat handoff shows a one-line marker instead of its framed payload', async () => {
+  await withFixture([btwHandoff(), answer('reply', 'btw-handoff')], async ({ provider }) => {
+    const history = await provider.fetchHistory(APP_ID);
+    assert.deepEqual(history.messages.map(({ role, content }) => ({ role, content })), [
+      { role: 'user', content: 'Side chat handed off to chat (2 exchanges).' },
+      { role: 'assistant', content: 'reply' },
+    ]);
+  });
+});
+
+test('a side-chat handoff is ignored unless it is a displayed user message', async () => {
+  for (const [label, overrides] of [
+    ['hidden', { display: false }],
+    ['agent-attributed', { attribution: 'agent' }],
+  ] as const) {
+    await withFixture([btwHandoff(overrides), answer('reply', 'btw-handoff')], async ({ provider }) => {
+      const history = await provider.fetchHistory(APP_ID);
+      assert.deepEqual(history.messages.map(({ content }) => content), ['reply'], label);
+    });
+  }
 });
 
 test('a handoff without a document stays out of history and title', async () => {

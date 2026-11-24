@@ -80,7 +80,13 @@
     "thinking": "Thinking…",
     "error": "Side chat failed.",
     "usage": "Usage: /btw <question>",
-    "noSession": "Send a message first: there is no conversation context for a side chat yet."
+    "noSession": "Send a message first: there is no conversation context for a side chat yet.",
+    "handoff": "Hand off to chat",
+    "handoffFailed": "Could not hand off this side chat to the main chat.",
+    "handoffEmpty": "This side chat has no completed answer to hand off.",
+    "handoffBusy": "Wait for the current turn to finish, then hand off the side chat.",
+    "handoffDisconnected": "Not handed off: the chat socket is not connected.",
+    "handedOff": "Side chat handed off to chat."
   },
   "input": {
     "placeholder": "Ask {{provider}}, use / for commands, or @ to add files…",
