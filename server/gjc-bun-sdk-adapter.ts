@@ -141,9 +141,9 @@ export type SdkRunConfig = {
    */
   permissions?: GjcRunPermissions;
   /**
-   * Re-run the turn the transcript ends on instead of adding another one.
-   * The resume path drops the failed tail before prompting, which is what
-   * GJC's `/retry` does to its own conversation.
+   * Ask the runtime to retry the turn the transcript already ends on. The
+   * runtime removes only the failed assistant tail and resumes the existing
+   * turn, which is what GJC's `/retry` does in the CLI. Nothing is re-prompted.
    */
   retryLastTurn?: boolean;
 };
@@ -277,26 +277,6 @@ type ActiveRun = {
   appSessionId?: string;
   delegation?: GjcDelegationExecutor;
 };
-
-/**
- * `/retry`'s first step: keep the conversation up to, but not including, the
- * turn the transcript ends on. The prompt that follows re-issues that turn,
- * so a retry never stacks a second copy of the message under the failure.
- * The rewrite carries the same history marker the runtime's own retry uses,
- * so both the resumed context and the transcript see one turn.
- */
-function dropFailedTurn(session: Awaited<ReturnType<typeof createAgentSession>>['session']): void {
-  let lastUserIndex = -1;
-  for (const [index, message] of session.agent.state.messages.entries()) {
-    if (message.role === 'user') lastUserIndex = index;
-  }
-  // Nothing user-authored survived the resume, so the prompt below is the
-  // whole turn, exactly as a first send would be.
-  if (lastUserIndex < 0) return;
-  session.agent.replaceMessages(session.agent.state.messages.slice(0, lastUserIndex), {
-    historyRewrite: { reason: 'retry', preserveSeededPrefix: true },
-  });
-}
 
 const FAILURE = 'GJC SDK configuration is invalid.';
 
@@ -1718,14 +1698,15 @@ export class GjcBunSdkAdapter implements GjcWorkerRuntime {
           });
           return;
         }
-        let promptMessage: string | null = message;
-        if (config.goalCommand) {
+        const retryLastTurn = config.retryLastTurn === true;
+        let promptMessage: string | null = retryLastTurn ? null : message;
+        if (!retryLastTurn && config.goalCommand) {
           const goal = await goals!.control(config.goalCommand);
           promptMessage = config.goalCommand.operation === 'create' || config.goalCommand.operation === 'resume'
             ? `Work on this goal: ${goal.goal!.objective}`
             : null;
         }
-        const commandMatch = /^\/([^\s]+)(?:\s+(.*))?$/.exec(message.trim());
+        const commandMatch = retryLastTurn ? null : /^\/([^\s]+)(?:\s+(.*))?$/.exec(message.trim());
         const commandName = commandMatch?.[1];
         if (commandName && GJC_APP_BUILTIN_COMMAND_NAMES.has(commandName)) {
           const requestedExportPath = commandName === 'export' ? commandMatch?.[2]?.trim() : '';
@@ -1818,9 +1799,22 @@ export class GjcBunSdkAdapter implements GjcWorkerRuntime {
         if (activeRun.abortState !== 'idle') promptMessage = null;
         let promptError: unknown;
         try {
-          if (promptMessage !== null) {
+          if (retryLastTurn) {
+            // Use the runtime's own retry rather than trimming the transcript
+            // and prompting the old text again. It retries an interrupted tail
+            // as well as a failed assistant response, and leaves the user turn
+            // and every completed tool call in place.
+            if (activeRun.abortState === 'idle') {
+              this.#assertHealthy();
+              if (!(await result.session.retry())) {
+                throw Object.assign(new Error('There is no failed or interrupted turn to retry.'), {
+                  code: 'nothing_to_retry',
+                });
+              }
+              await result.session.waitForIdle();
+            }
+          } else if (promptMessage !== null) {
             this.#assertHealthy();
-            if (config.retryLastTurn) dropFailedTurn(result.session);
             // Attachments ride as an <images_input> block: the title above used
             // the bare user text, the model reads the files its own way.
             await result.session.prompt(appendImagesInputTag(promptMessage, config.images));

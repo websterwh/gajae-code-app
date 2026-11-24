@@ -117,12 +117,10 @@ function ChatInterface({
     onNavigateToSession?.(id);
   }, [onNavigateToSession, onSessionEstablished, setCurrentSessionId]);
 
-  // GJC's own `/retry`: the runtime drops the failed tail from the resumed
-  // conversation and issues the same prompt again, so a retry re-runs the turn
-  // instead of stacking a second copy of it, and the session's pinned model
-  // still answers it. This is not limited to a transcript that ends in an
-  // error: a turn cut off when a provider ran out of usage is retried after
-  // switching models, and the last row is then an ordinary assistant message.
+  // GJC's own `/retry`: the runtime removes the failed assistant tail from the
+  // resumed conversation and continues the turn that is already there. The app
+  // does not send the old user text again, so retrying cannot duplicate the
+  // prompt or discard completed tool calls.
   const appendSessionMessage = session.addMessage;
   const retryFailedTurn = useCallback(() => {
     const sessionId = session.currentSessionId ?? selectedSession?.id ?? null;
@@ -137,23 +135,16 @@ function ChatInterface({
       notice('Retry is waiting: this turn is still running. Send /retry again once it finishes.');
       return;
     }
-    const content = [...session.chatMessages]
-      .reverse()
-      .find((message) => message.type === 'user' && String(message.content ?? '').trim().length > 0)?.content;
-    if (content === undefined || content === null) {
-      notice('Nothing to retry yet: this conversation has no message from you.');
-      return;
-    }
     // A disconnected socket used to make this a silent no-op: the frame was
     // dropped and nothing appeared anywhere, so the click looked broken rather
     // than the connection. Say what actually happened.
-    const accepted = sendMessage({ type: 'chat.send', sessionId, content: String(content), options: { retryLastTurn: true } });
+    const accepted = sendMessage({ type: 'chat.send', sessionId, content: '', options: { retryLastTurn: true } });
     if (accepted === false) {
       appendSessionMessage({ type: 'error', content: 'Not sent: the chat socket is not connected. Reconnect, then retry.', timestamp: new Date() });
       return;
     }
     notice('Retrying the last turn.');
-  }, [appendSessionMessage, selectedSession?.id, sendMessage, session.chatMessages, session.currentSessionId, session.isProcessing]);
+  }, [appendSessionMessage, selectedSession?.id, sendMessage, session.currentSessionId, session.isProcessing]);
 
   const openSideChat = useCallback((question: string) => {
     const trimmed = question.trim();

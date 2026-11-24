@@ -182,6 +182,9 @@ class FakeAgentSession {
   disposeError: Error | undefined;
   disposeDeferred: Deferred<void> | undefined;
   promptCalls = 0;
+  retryCalls = 0;
+  waitForIdleCalls = 0;
+  retrySucceeds = true;
   /** Messages that arrived while a turn was already running. */
   readonly steeredMessages: string[] = [];
   /** Which queue each of those messages asked for. */
@@ -227,6 +230,13 @@ class FakeAgentSession {
     this.#turnInFlight = true;
     this.promptStarted.resolve();
     return this.#prompt.promise;
+  }
+  async retry(): Promise<boolean> {
+    this.retryCalls += 1;
+    return this.retrySucceeds;
+  }
+  async waitForIdle(): Promise<void> {
+    this.waitForIdleCalls += 1;
   }
   async abort(): Promise<void> {
     this.abortStarted.resolve();
@@ -518,6 +528,24 @@ test('golden protocol order: session, stream, tool, ask, usage, terminal, respon
     assert.deepEqual(methods(f.frames), ['session.created', 'message.delta', 'message.delta', 'tool.started', 'tool.completed', 'ask.presented', 'message.completed', 'usage.updated', 'usage.updated', 'turn.completed', 'worker.status']);
     assert.equal(methods(f.frames).filter((method) => method === 'turn.completed').length, 1);
     assert.equal(response(f.frames, 'golden').payload instanceof Object, true);
+  } finally { await f.close(); }
+});
+
+test('retry asks the SDK to retry the existing turn instead of prompting again', async () => {
+  const f = await fixture();
+  try {
+    const run = f.host.handle(request('session.start', 'retry-existing-turn', {
+      message: '',
+      options: { ...f.options, retryLastTurn: true },
+    }));
+    const session = await firstSession(f.sessions);
+    await run;
+
+    assert.equal(session.retryCalls, 1);
+    assert.equal(session.waitForIdleCalls, 1);
+    assert.equal(session.promptCalls, 0);
+    assert.deepEqual(session.promptTexts, []);
+    assert.equal((response(f.frames, 'retry-existing-turn').payload as { ok: boolean }).ok, true);
   } finally { await f.close(); }
 });
 
