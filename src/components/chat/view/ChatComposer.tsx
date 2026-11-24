@@ -287,11 +287,9 @@ export default function ChatComposer({
   const canSteer = canQueueDraft
     && attachedImages.length === 0
     && isAutoSendable(classifyCommandInput(input));
-  const submitHint = canQueueDraft
-    ? t('input.hintText.queue')
-    : sendByCtrlEnter
-      ? t('input.hintText.ctrlEnter')
-      : t('input.hintText.enter');
+  const submitHint = sendByCtrlEnter
+    ? t('input.hintText.ctrlEnter')
+    : t('input.hintText.enter');
   // While a run is in flight the primary button is Stop, as in Codex and
   // Cursor: there is no status strip above the composer, the run's progress
   // lives in the transcript, and Escape does the same thing as this button.
@@ -547,7 +545,7 @@ export default function ChatComposer({
               <PromptInputButton
                 onClick={queueDraft}
                 disabled={composerFrozen}
-                tooltip={{ content: t('input.queue.sendNext') }}
+                tooltip={{ content: t('input.hintText.queue') }}
                 aria-label={t('input.queue.sendNext')}
                 data-run-control="queue"
                 className="shrink-0 rounded-full border border-border/70 bg-background/70 text-muted-foreground hover:border-primary/30 hover:text-foreground"
@@ -601,17 +599,29 @@ export default function ChatComposer({
         </PromptInputFooter>
         {/* Opacity keeps the hint's space while typing. Give it its own row so
             even invisible translated text cannot squeeze the toolbar. */}
-        {(canQueueDraft || sendByCtrlEnter) && (
+        {sendByCtrlEnter && (
           <div
             data-slot="prompt-input-submit-hint"
             className={`hidden min-w-0 px-3 pb-2 text-right text-xs wrap-anywhere text-muted-foreground/50 transition-opacity duration-200 lg:block ${
-              input.trim() && !canQueueDraft ? 'opacity-0' : 'opacity-100'
+              input.trim() ? 'opacity-0' : 'opacity-100'
             }`}
           >
             {submitHint}
           </div>
         )}
       </PromptInput>
+        {/* Queue help rides in the composer's bottom padding. Keeping it out of
+            the form means a live draft cannot grow the composer while a run is
+            active, which made the whole block jump when voice inserted text. */}
+        {canQueueDraft && (
+          <div
+            data-slot="prompt-input-queue-hint"
+            aria-live="polite"
+            className="pointer-events-none absolute top-full right-3 hidden pt-1 text-right text-[11px] leading-3 text-muted-foreground/60 lg:block"
+          >
+            {t('input.hintText.queue')}
+          </div>
+        )}
       </div>}
     </div>
   );

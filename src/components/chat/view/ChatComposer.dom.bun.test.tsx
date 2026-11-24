@@ -163,6 +163,25 @@ for (const language of ['en', 'ko']) {
   });
 }
 
+for (const sendByCtrlEnter of [false, true]) {
+  test(`a spoken draft during a run shows queue help without growing the composer with Ctrl+Enter ${sendByCtrlEnter}`, async () => {
+    await i18n.changeLanguage('en');
+    const view = render(composer(composerProps({ input: 'spoken text', isLoading: true, sendByCtrlEnter })));
+    const form = slot(view.container, '');
+    const footer = slot(form, 'footer');
+    const hint = view.getByText(english.input.hintText.queue);
+
+    assert.equal(form.contains(hint), false, 'queue help must not add a row inside the composer');
+    assert.equal(hint.parentElement === form.parentElement, true, 'queue help lives beside the form');
+    assert.ok(hint.classList.contains('absolute'), 'queue help must not participate in layout height');
+    assert.ok(hint.classList.contains('top-full'), 'queue help uses the existing bottom padding');
+    if (!sendByCtrlEnter) {
+      assert.equal(footer.nextElementSibling, null, 'default Enter mode keeps the form height unchanged');
+    }
+    assert.ok(within(footer).getByRole('button', { name: english.input.queue.sendNext }));
+  });
+}
+
 test('model and permission slots retain bounded sizing as metadata loads beside a hidden hint', async () => {
   await i18n.changeLanguage('en');
   const props = composerProps({ input: 'Draft message' });
@@ -220,11 +239,11 @@ for (const sendByCtrlEnter of [false, true]) {
       assert.deepEqual(buttons.map((button) => button.getAttribute('type')), state.labels.map(() => state.isLoading ? 'button' : 'submit'));
       assert.equal(buttons.some((button) => button.hasAttribute('disabled')), !state.isLoading && !state.input);
 
-      if (sendByCtrlEnter || (state.isLoading && state.input)) {
-        const hintText = state.isLoading && state.input ? english.input.hintText.queue : english.input.hintText.ctrlEnter;
-        const hint = within(form).getByText(hintText);
-        assert.equal(hint.parentElement?.getAttribute('data-slot'), 'prompt-input', 'queue help must not consume action width either');
+      if (sendByCtrlEnter) {
+        const hint = within(form).getByText(english.input.hintText.ctrlEnter);
+        assert.equal(hint.parentElement?.getAttribute('data-slot'), 'prompt-input', 'shortcut help must not consume action width either');
         assert.equal(footer.nextElementSibling === hint, true);
+        assert.equal(hint.classList.contains(state.input.trim() ? 'opacity-0' : 'opacity-100'), true);
       } else {
         assert.equal(footer.nextElementSibling, null, 'default Enter mode keeps its existing idle appearance');
       }
