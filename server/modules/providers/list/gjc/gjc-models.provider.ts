@@ -2,6 +2,7 @@ import { readFile, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
+import { GJC_COPILOT_AUTO_MODEL_ID } from '@/shared/copilot-auto.js';
 import { GJC_BUILTIN_MODEL_PROFILES } from '@/modules/providers/list/gjc/gjc-builtin-model-profiles.js';
 import type { IProviderModels } from '@/shared/interfaces.js';
 import type {
@@ -544,12 +545,23 @@ export class GjcProviderModels implements IProviderModels {
     const { catalog, configuredProfiles, configuredCustom } = await getGjcPresetCatalog(this.homeDir, runtimeCatalog);
     const base = catalog.OPTIONS.length > 1 ? catalog : GJC_FALLBACK_MODELS;
     const runtimeModels = parseRuntimeModels(runtimeCatalog);
+    // Auto is a routing mode, not a model Copilot's catalog exposes. Offer it
+    // only when the runtime can actually reach Copilot, and keep it first in
+    // the provider group so a Student/Free account has an explicit choice.
+    const copilotAuto = runtimeModels.some((model) => model.value.startsWith('github-copilot/'))
+      ? [{
+          value: GJC_COPILOT_AUTO_MODEL_ID,
+          label: 'Auto',
+          group: 'github-copilot',
+          effort: { values: [] },
+        } satisfies RuntimeModelOption]
+      : [];
     // A runtime that answered "nothing" means nobody is signed in; there is
     // nothing for a configured model to run on, so the list stays empty.
     const configured = runtimeModels.length > 0
       ? configuredModelOptions(catalog, configuredProfiles, configuredCustom)
       : [];
-    const models = withoutDuplicateModels([...runtimeModels, ...configured])
+    const models = withoutDuplicateModels([...copilotAuto, ...runtimeModels, ...configured])
       .map((model) => ({
         value: model.value,
         label: model.label,

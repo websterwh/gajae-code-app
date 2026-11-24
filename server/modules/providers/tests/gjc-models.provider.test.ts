@@ -497,6 +497,45 @@ test('proxyProvider and proxyMode: always rewrites built-in preset role selector
   assert.ok(modelValues.includes('test-proxy/gpt-6-astra'));
 });
 
+test('Copilot Auto is offered first when the runtime exposes Copilot models', async (t) => {
+  const homeDir = await mkdtemp(path.join(os.tmpdir(), 'gajae-copilot-auto-catalog-'));
+  t.after(() => rm(homeDir, { recursive: true, force: true }));
+
+  const catalog = await new GjcProviderModels(homeDir, async () => ({
+    ok: true,
+    result: {
+      models: [
+        { value: 'github-copilot/gpt-5.6-luna', label: 'GPT-5.6 Luna', group: 'github-copilot', effort: { values: [] } },
+        { value: 'anthropic/claude-sonnet-5', label: 'Claude Sonnet 5', group: 'anthropic', effort: { values: [] } },
+      ],
+    },
+  })).getSupportedModels();
+
+  assert.deepEqual(catalog.MODELS?.[0], {
+    value: 'github-copilot/auto',
+    label: 'Auto',
+    group: 'github-copilot',
+    effort: { values: [] },
+  });
+  assert.equal(catalog.MODELS?.filter((model) => model.value === 'github-copilot/auto').length, 1);
+});
+
+test('Copilot Auto is not offered when no Copilot model is available', async (t) => {
+  const homeDir = await mkdtemp(path.join(os.tmpdir(), 'gajae-copilot-auto-catalog-absent-'));
+  t.after(() => rm(homeDir, { recursive: true, force: true }));
+
+  const catalog = await new GjcProviderModels(homeDir, async () => ({
+    ok: true,
+    result: {
+      models: [
+        { value: 'anthropic/claude-sonnet-5', label: 'Claude Sonnet 5', group: 'anthropic', effort: { values: [] } },
+      ],
+    },
+  })).getSupportedModels();
+
+  assert.equal(catalog.MODELS?.some((model) => model.value === 'github-copilot/auto'), false);
+});
+
 test('proxyProvider with proxyMode: fallback preserves directly authenticated provider selectors', async (t) => {
   const homeDir = await mkdtemp(path.join(os.tmpdir(), 'gajae-model-proxy-fallback-'));
   t.after(() => rm(homeDir, { recursive: true, force: true }));

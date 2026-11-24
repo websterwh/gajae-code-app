@@ -36,6 +36,7 @@ import type { ProviderQuotaSnapshot } from '../shared/providerQuota.js';
 
 import { appendImagesInputTag } from './shared/image-attachments.js';
 import { GjcBunOAuthController, type GjcBunOAuthControllerOptions, type GjcOAuthActivitySnapshot } from './gjc-bun-oauth-controller.js';
+import { GJC_COPILOT_AUTO_MODEL_ID, copilotAutoModelApi, resolveCopilotAutoSelection, withCopilotAutoSession } from './shared/copilot-auto.js';
 import { GJC_APP_BUILTIN_COMMAND_NAMES } from './gjc-command-surface.generated.js';
 import type { GjcWorkerOAuthRuntime, GjcWorkerRuntime, GjcWorkerWriter } from './gjc-worker.js';
 import type { GjcBranchedSession, GjcWorkerActivity, JsonObject } from './gjc-worker-protocol.js';
@@ -820,6 +821,50 @@ async function credentialFor(
   };
 }
 
+async function resolveCopilotAutoModel(
+  authStorage: AuthStorage,
+  modelRegistry: ModelRegistry,
+  credential: ExactCredentialRef,
+  prompt: string,
+  hasImage: boolean,
+): Promise<Model> {
+  const representative = modelRegistry.getAvailable().find((model) => model.provider === 'github-copilot');
+  if (!representative) throw new GjcModelResolutionError();
+
+  // Route with the same account the run would use. `credentialFor` owns the
+  // stored-row pin and the runtime-env fallback; disposing it after routing
+  // lets the regular session path resolve the selected model itself.
+  const autoCredential = await credentialFor(authStorage, credential, representative, modelRegistry);
+  try {
+    const apiKey = await modelRegistry.getApiKey(
+      representative,
+      undefined,
+      autoCredential.credentialSelector
+        ? { credentialSelector: autoCredential.credentialSelector.selector }
+        : {},
+    );
+    if (!apiKey) throw new GjcModelResolutionError();
+
+    const selection = await resolveCopilotAutoSelection({
+      apiKey,
+      prompt,
+      hasImage,
+      baseUrl: representative.baseUrl,
+    });
+    const selector = selection.modelId.startsWith('github-copilot/')
+      ? selection.modelId
+      : `github-copilot/${selection.modelId}`;
+    const model = await modelForWithRefresh(modelRegistry, selector);
+    const routedModel: Model = copilotAutoModelApi(selection) === 'openai-responses'
+      && model.api === 'openai-completions'
+      ? { ...model, api: 'openai-responses' }
+      : model;
+    return withCopilotAutoSession(routedModel, selection);
+  } finally {
+    autoCredential.dispose();
+  }
+}
+
 async function resumeManager(providerSessionId: string, sessionRoot: string): Promise<SessionManager> {
   const matches = (await SessionManager.list('', sessionRoot)).filter((session) => session.id === providerSessionId);
   if (matches.length !== 1) throw new Error(FAILURE);
@@ -1451,7 +1496,15 @@ export class GjcBunSdkAdapter implements GjcWorkerRuntime {
       const hostTools = config.hostControl
         ? [createHostControlTool(config.hostControl, { ui: askController.uiContext })]
         : [];
-      const model = await modelForWithRefresh(this.modelRegistry, configuredModelId);
+      const model = configuredModelId === GJC_COPILOT_AUTO_MODEL_ID
+        ? await resolveCopilotAutoModel(
+          this.authStorage,
+          this.modelRegistry,
+          config.credential,
+          message,
+          Array.isArray(config.images) && config.images.length > 0,
+        )
+        : await modelForWithRefresh(this.modelRegistry, configuredModelId);
       const resolvedCredential = await credentialFor(this.authStorage, config.credential, model, this.modelRegistry);
       let delegation: GjcDelegationExecutor | undefined;
       try {

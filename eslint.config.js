@@ -112,6 +112,7 @@ const backendFiles = [
     pattern: [
       'server/shared/utils.{js,ts}',
       'server/shared/frontmatter.ts',
+      'server/shared/copilot-auto.ts',
       'server/shared/claude-cli-path.ts',
       'server/shared/image-attachments.ts',
       'server/shared/tool-output-transport.ts',
