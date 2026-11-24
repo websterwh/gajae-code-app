@@ -33,7 +33,7 @@ export UV_TOOLS="${UV_TOOLS:-}"
 export PIP_PACKAGES="${PIP_PACKAGES:-}"
 export NPM_PACKAGES="${NPM_PACKAGES:-}"
 export GITHUB_APPS="${GITHUB_APPS:-}"
-export AUTO_UPDATE_PACKAGES="${AUTO_UPDATE_PACKAGES:-true}"
+export AUTO_UPDATE="${AUTO_UPDATE:-true}"
 export POST_COMMANDS="${POST_COMMANDS:-}"
 # SSH Configuration
 export SSH_ENABLE="${SSH_ENABLE:-false}"
@@ -84,36 +84,17 @@ mempalace_root="${gjc_config_root}/mempalace"
 mkdir -p "${mempalace_root}"
 ln -sfn "${mempalace_root}" /root/.mempalace
 export MEMPALACE_CONFIG_DIR="${MEMPALACE_CONFIG_DIR:-${mempalace_root}}"
-# MemPalace is a built-in memory provider now, not an MCP catalog entry, so the
-# image installs it itself. uv reuses the cached wheel on later boots.
-if [ "${INSTALL_MEMPALACE:-true}" = "true" ] && command -v uv >/dev/null 2>&1; then
-    if [ ! -x "${UV_TOOL_BIN_DIR}/mempalace" ]; then
-        if uv tool install -q mempalace; then
-            echo "[mempalace] Installed the built-in memory provider."
-        else
-            echo "[mempalace] Install failed; Settings > Memory can retry on the next boot." >&2
-        fi
-    elif [ "${AUTO_UPDATE_PACKAGES:-true}" = "true" ]; then
-        uv tool upgrade -q mempalace >/dev/null 2>&1 || true
+# MemPalace is installed, enabled and updated from Settings > Memory. The
+# paths stay here so that install writes the binary and palace onto the mounted
+# config instead of the container layer. A login shell rebuilds PATH from
+# /etc/profile, and /data/bin is on the generated path, so linking the console
+# scripts there also makes them resolve in /run and SSH shells.
+mkdir -p /data/bin
+for tool in mempalace mempalace-mcp; do
+    if [ -x "${UV_TOOL_BIN_DIR}/${tool}" ] && [ ! -e "/data/bin/${tool}" ]; then
+        ln -sfn "${UV_TOOL_BIN_DIR}/${tool}" "/data/bin/${tool}"
     fi
-    # A login shell rebuilds PATH from /etc/profile before it reads the persisted
-    # profile, and /data/bin is on every generated path. Linking the console
-    # scripts there as well makes `mempalace` resolve in /run and SSH shells
-    # without depending on how the profile was seeded.
-    mkdir -p /data/bin
-    for tool in mempalace mempalace-mcp; do
-        if [ -x "${UV_TOOL_BIN_DIR}/${tool}" ] && [ ! -e "/data/bin/${tool}" ]; then
-            ln -sfn "${UV_TOOL_BIN_DIR}/${tool}" "/data/bin/${tool}"
-        fi
-    done
-fi
-# The autosave hook lives beside the agent's sessions. An existing file is kept
-# as-is so a local edit is never overwritten by a redeploy.
-agent_root="${GJC_WORKER_AGENT_DIR:-${gjc_config_root}/agent}"
-if [ ! -f "${agent_root}/hooks/post/mempalace-autosave.ts" ] && [ -f /usr/local/share/gajae-app/mempalace-autosave.ts ]; then
-    mkdir -p "${agent_root}/hooks/post"
-    cp /usr/local/share/gajae-app/mempalace-autosave.ts "${agent_root}/hooks/post/mempalace-autosave.ts"
-fi
+done
 # ==============================================================================
 # Directory & Cache Preparation
 # ==============================================================================
@@ -359,7 +340,7 @@ provision_apt() {
             rm -f "$saved_hash_file"
             echo "==> [APT] Finished with failures; they are retried on the next boot." >&2
         fi
-    elif [ "${AUTO_UPDATE_PACKAGES}" = "true" ] || [ "${AUTO_UPDATE_PACKAGES}" = "1" ]; then
+    elif [ "${AUTO_UPDATE}" = "true" ] || [ "${AUTO_UPDATE}" = "1" ]; then
         echo "==> [APT] Checking for updates on installed packages..."
         apt-get update -qq || true
         local upgradable
@@ -401,6 +382,12 @@ provision_gjc_cli() {
     fi
 
     local standalone_bin="/data/bin/gjc-standalone"
+    # AUTO_UPDATE=false stops replacing a working CLI, but a missing binary is
+    # still installed and the wrapper below is always refreshed.
+    local auto_update=true
+    if [ "${AUTO_UPDATE:-true}" != "true" ] && [ "${AUTO_UPDATE:-true}" != "1" ]; then
+        auto_update=false
+    fi
     local latest_release
     latest_release="$(curl -fsSL -H "User-Agent: GJC-Installer" "https://api.github.com/repos/Yeachan-Heo/gajae-code/releases/latest" 2>/dev/null || true)"
     local download_url
@@ -416,7 +403,11 @@ provision_gjc_cli() {
     # Checking only whether the file exists froze every existing install on its
     # first download; the release tag has to be compared on every boot.
     if [ -n "$tag" ] && [ -n "$download_url" ] && [ "$download_url" != "null" ]; then
-        if [ "$current_ver" != "$tag" ] || [ ! -f "$standalone_bin" ]; then
+        if [ "$current_ver" = "$tag" ] && [ -f "$standalone_bin" ]; then
+            echo "==> [GJC CLI] Standalone gjc ${current_ver} is current."
+        elif [ "$auto_update" != "true" ] && [ -f "$standalone_bin" ]; then
+            echo "==> [GJC CLI] AUTO_UPDATE is disabled; keeping ${current_ver:-the existing binary}."
+        else
             echo "==> [GJC CLI] Updating standalone gjc ${current_ver:-missing} -> ${tag}..."
             if curl -fsSL --retry 2 -o "${standalone_bin}.tmp" "$download_url"; then
                 mv "${standalone_bin}.tmp" "$standalone_bin" && \
@@ -427,8 +418,6 @@ provision_gjc_cli() {
                 rm -f "${standalone_bin}.tmp"
                 echo "==> [GJC CLI] Download failed; keeping ${current_ver:-the existing binary}."
             fi
-        else
-            echo "==> [GJC CLI] Standalone gjc ${current_ver} is current."
         fi
     else
         echo "==> [GJC CLI] Could not resolve the latest release; keeping ${current_ver:-the existing binary}."
@@ -687,7 +676,7 @@ echo "=========================================================="
 # in-place file change. See provision_gjc_cli for the one component that can
 # still self-update.)
 # ==============================================================================
-if { [ "${AUTO_UPDATE_PACKAGES}" = "true" ] || [ "${AUTO_UPDATE_PACKAGES}" = "1" ]; } && [ -f /opt/gajae-app/.image_repository ] && [ -f /opt/gajae-app/.image_ref ]; then
+if { [ "${AUTO_UPDATE}" = "true" ] || [ "${AUTO_UPDATE}" = "1" ]; } && [ -f /opt/gajae-app/.image_repository ] && [ -f /opt/gajae-app/.image_ref ]; then
     IMAGE_REPO="$(cat /opt/gajae-app/.image_repository)"
     IMAGE_REF="$(cat /opt/gajae-app/.image_ref)"
     IMAGE_COMMIT="$(cat /opt/gajae-app/.image_revision 2>/dev/null || true)"

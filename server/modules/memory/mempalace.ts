@@ -7,10 +7,10 @@ import path from 'node:path';
 import { agentDir } from '../mcp/index.js';
 
 /**
- * MemPalace ships with the image: the entrypoint installs the tool and points
- * its config dir at the mounted volume, so the palace and the embedding model
- * survive a recreate. The app only has to keep the MCP entry and the autosave
- * hook in place — the palace itself is MemPalace's file format, not ours.
+ * MemPalace is installed from Settings > Memory. The entrypoint only points its
+ * config dir at the mounted volume, so the palace and the embedding model
+ * survive a recreate. The app installs the tool, MCP entry and autosave hook
+ * when the user enables it — the palace itself is MemPalace's format, not ours.
  */
 
 export const MEMPALACE_SERVER = 'mempalace';

@@ -39,7 +39,7 @@ async function main(): Promise<void> {
   const stateFile = provisionStatePath(env);
   const ledger = await readLedger(ledgerFile);
   const pins = await pinsFromConfigAndLedger(ledger);
-  const autoUpdate = env.AUTO_UPDATE_PACKAGES === 'true' || env.AUTO_UPDATE_PACKAGES === '1';
+  const autoUpdate = env.AUTO_UPDATE === 'true' || env.AUTO_UPDATE === '1';
   const runner = spawnCommandRunner();
 
   const seeds = envSeeds(env);

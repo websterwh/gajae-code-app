@@ -62,8 +62,7 @@ services:
       - PIP_PACKAGES=${PIP_PACKAGES:-}
       - NPM_PACKAGES=${NPM_PACKAGES:-}
       - GITHUB_APPS=${GITHUB_APPS:-}
-      - AUTO_UPDATE_PACKAGES=${AUTO_UPDATE_PACKAGES:-true}
-      - INSTALL_MEMPALACE=${INSTALL_MEMPALACE:-true}
+      - AUTO_UPDATE=${AUTO_UPDATE:-true}
       - POST_COMMANDS=${POST_COMMANDS:-}
       # Direct Container SSH & CLI Access
       - SSH_ENABLE=${SSH_ENABLE:-false}

@@ -121,11 +121,14 @@ revision is required.
 | `GITHUB_APPS` | *(empty)* | Comma-separated GitHub release apps installed via Aqua (`skylot/jadx,iBotPeaches/Apktool`). |
 | `UV_TOOL_DIR` | `<config root>/app/uv` | Where `uv tool install` puts its environments. Defaults beside `GJC_WORKER_AGENT_DIR`, so it survives with the mounted config; overridable. |
 | `UV_TOOL_BIN_DIR` | `<config root>/app/bin` | Where uv tool executables appear. Prepended to `PATH` for the app and for `gjc`'s child processes; overridable. |
-| `AUTO_UPDATE_PACKAGES` | `true` | Upgrade installed packages on boot. Packages pinned to a version are skipped. |
-| `INSTALL_MEMPALACE` | `true` | Install the built-in MemPalace memory provider and keep it upgraded with `AUTO_UPDATE_PACKAGES`. |
+| `AUTO_UPDATE` | `true` | Update installed packages, the standalone GJC CLI and the image check on boot. Packages pinned to a version are skipped. Set `false` to install missing pieces without replacing working ones. |
 | `POST_COMMANDS` | *(empty)* | Custom shell commands executed after provisioning (e.g. `adb connect 192.0.2.79:5555`). |
 
 Boolean variables take `true` or `false` (`1`/`0` is still accepted for older deployments).
+
+MemPalace has no install/update environment variable. Install and enable it from
+**Settings > Memory**; the app installs the binary, MCP entry and autosave hook,
+and keeps them tied to the mounted config.
 
 Provisioning keeps a per-package ledger at `<config root>/app/provision-ledger.json`
 (`/root/.gjc/app/provision-ledger.json` with the compose file). A package is
