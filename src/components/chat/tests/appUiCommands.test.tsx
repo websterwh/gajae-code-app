@@ -283,6 +283,7 @@ test('a TUI command the app can already do points at how to do it', () => {
     '/copy': /copy button/i,
     '/drop': /sidebar/i,
     '/hotkeys': /command palette/i,
+    '/btw': /new chat/i,
   };
 
   for (const [name, mentions] of Object.entries(hasAppEquivalent)) {
@@ -312,6 +313,26 @@ test('/help is answered locally instead of being forwarded as prose', async () =
     assert.deepEqual(sentMessages, [], `${form} must not be sent`);
     assert.equal(addedMessages.length, 1, `${form} must render a notice`);
     assert.match((addedMessages[0] as { content: string }).content, /not available in the app/);
+  }
+});
+
+test('/btw is answered locally instead of reaching the model as prose', async () => {
+  // The runtime's /btw opens a TUI side-chat panel, which has no headless
+  // handler, so without a local disposition the question was delivered to the
+  // model as ordinary text.
+  for (const form of ['/btw', '/btw what does this function do?']) {
+    const sentMessages: unknown[] = [];
+    const addedMessages: unknown[] = [];
+    const composer = captureComposer(sentMessages, addedMessages);
+
+    composer.handleVoiceTranscript(form);
+    await composer.handleSubmit(submitEvent);
+
+    assert.deepEqual(sentMessages, [], `${form} must not be sent`);
+    assert.equal(addedMessages.length, 1, `${form} must render a notice`);
+    const notice = (addedMessages[0] as { content: string }).content;
+    assert.match(notice, /not available in the app/);
+    assert.match(notice, /new chat/i);
   }
 });
 

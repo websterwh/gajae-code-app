@@ -248,6 +248,7 @@ export const TUI_ONLY_COMMAND_HINTS: Readonly<Record<string, string>> = {
   '/agents': '',
   '/monitors': '',
   '/tree': '',
+  '/btw': 'A side chat streams into a terminal panel the app has no surface for. Start a new chat here for a question that should not affect this conversation.',
   '/background': 'App sessions already keep running when you navigate away.',
   '/debug': '',
   '/copy': 'Each message has a copy button, offering plain text or markdown.',
