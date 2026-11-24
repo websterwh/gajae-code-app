@@ -77,6 +77,9 @@ function ChatInterface({
   const projectPermissions = useProjectPermissions(selectedProject?.projectId);
   const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>(readReasoningEffort);
   const reasoningSessionRef = useRef<string | null>(selectedSession?.id ?? null);
+  // The session whose turn the user stopped. Its answer stays on screen, so
+  // the retry control follows that turn until the next run starts.
+  const [stoppedTurnSession, setStoppedTurnSession] = useState<string | null>(null);
 
   useEffect(() => {
     if (oauthLogin.attempt?.phase === 'completed') void hardRefreshProviderModels();
@@ -178,6 +181,23 @@ function ChatInterface({
     onRetryLastTurn: retryFailedTurn,
   });
 
+  // Stop is offered by the composer's button and by Escape; both are routed
+  // through here so the transcript can offer the retry control for the turn
+  // the user stopped, exactly as /retry does.
+  const abortSession = composer.handleAbortSession;
+  const requestAbort = useCallback(() => {
+    if (session.canAbortSession) setStoppedTurnSession(session.currentSessionId ?? selectedSession?.id ?? null);
+    abortSession();
+  }, [abortSession, selectedSession?.id, session.canAbortSession, session.currentSessionId]);
+
+  // A stopped turn stays retryable until the next run starts: from then on the
+  // transcript's tail belongs to that run, not to the turn that was stopped.
+  const wasProcessingRef = useRef(session.isProcessing);
+  useEffect(() => {
+    if (session.isProcessing && !wasProcessingRef.current) setStoppedTurnSession(null);
+    wasProcessingRef.current = session.isProcessing;
+  }, [session.isProcessing]);
+
   // Typing with nothing focused is meant for the conversation. Without this the
   // keystroke went to whichever field held focus last - in practice the sidebar
   // conversation filter - so the message was never written.
@@ -252,7 +272,7 @@ function ChatInterface({
     sessionStore,
   });
 
-  useEscapeToAbort(session.canAbortSession, composer.handleAbortSession);
+  useEscapeToAbort(session.canAbortSession, requestAbort);
 
   useEffect(() => clearStreaming, [clearStreaming]);
 
@@ -300,6 +320,15 @@ function ChatInterface({
 
   const endsInFailure = session.chatMessages[session.chatMessages.length - 1]?.type === 'error';
 
+  // A stopped turn has no failure row, but /retry still applies to it: the
+  // tail offers the same control a failed turn shows, and both run
+  // `retryFailedTurn`, so the command and the button cannot drift apart.
+  const stoppedTurnKey = session.currentSessionId ?? selectedSession?.id ?? null;
+  const retryStoppedTurn = !historicalSession && !endsInFailure && !session.isProcessing
+    && stoppedTurnSession !== null && stoppedTurnSession === stoppedTurnKey
+    ? retryFailedTurn
+    : undefined;
+
   if (!selectedProject) {
     return <ProjectSelectionNotice text={t('projectSelection.startChatWithProvider', {
       provider: 'Gajae Code',
@@ -316,7 +345,7 @@ function ChatInterface({
       pendingPermissionRequests={pendingPermissionRequests}
       handlePermissionDecision={composer.handlePermissionDecision}
       isLoading={session.isProcessing}
-      onAbortSession={composer.handleAbortSession}
+      onAbortSession={requestAbort}
       sessionState={session.sessionState}
       onShowTokenUsage={composer.showCostModal}
       onSubmit={composer.handleSubmit}
@@ -427,6 +456,7 @@ function ChatInterface({
               loadAllJustFinished={session.loadAllJustFinished}
               showLoadAllOverlay={session.showLoadAllOverlay}
               retryFailedTurn={endsInFailure ? retryFailedTurn : undefined}
+              stoppedTurnRetry={retryStoppedTurn}
               createDiff={session.createDiff}
               onFileOpen={onFileOpen}
               onShowSettings={onShowSettings}

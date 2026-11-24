@@ -60,6 +60,33 @@ const paneProps = (density: ToolOutputDensity, messages = transcript) => ({
 
 const toggle = () => screen.getByRole('button', { name: enChat.workBlock.toggle });
 
+test('a stopped turn offers the same retry control the command runs', () => {
+  let retried = 0;
+  render(createElement(ChatMessagesPane, {
+    ...paneProps('balanced'),
+    stoppedTurnRetry: () => { retried += 1; },
+  }));
+
+  // The partial answer has no failure row, so without this tail row a stopped
+  // turn had no button at all while /retry still worked on it.
+  assert.match(screen.getByText('Turn stopped.').textContent ?? '', /Turn stopped\./);
+  fireEvent.click(screen.getByRole('button', { name: enChat.messageTypes.retryFailedTurn }));
+  assert.equal(retried, 1);
+});
+
+// The control belongs to the stopped turn only; a live run or no stop at all
+// leaves the transcript's tail alone.
+test('the stopped-turn retry control disappears once the turn is no longer stopped', () => {
+  const view = render(createElement(ChatMessagesPane, {
+    ...paneProps('balanced'),
+    stoppedTurnRetry: () => undefined,
+  }));
+  assert.ok(screen.queryByText('Turn stopped.'));
+
+  view.rerender(createElement(ChatMessagesPane, paneProps('balanced')));
+  assert.equal(screen.queryByText('Turn stopped.'), null);
+});
+
 test('the block opens on a click to the rows the pane would have shown, and closes again', () => {
   render(createElement(ChatMessagesPane, paneProps('balanced')));
 

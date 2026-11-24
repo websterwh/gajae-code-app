@@ -92,6 +92,12 @@ export function useChatComposerState(args: UseChatComposerStateArgs) {
   const queueInFlight = useRef(false);
   /** The session whose turn the user stopped, until they start another one. */
   const abortedTurn = useRef<string | null>(null);
+  /**
+   * A `/retry` typed while Stop was still settling. To the user the turn ended
+   * with the click, so the retry waits for that one last frame instead of
+   * landing in the queue Stop deliberately holds closed.
+   */
+  const retryAfterStop = useRef(false);
   const dispatchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const priorLoading = useRef(isLoading);
   const priorConversation = useRef(composerOwner);
@@ -268,6 +274,26 @@ export function useChatComposerState(args: UseChatComposerStateArgs) {
     const sendOptions = queued?.options ?? optionsFor(text);
     const files = queued?.images ?? attachedImages;
     const signIn = /^\/login(?:\s+(.*))?$/.exec(text.trim()); if (signIn) { login(signIn[1]?.trim() || undefined); resetCommandMenuState(); return; }
+    // `/retry` names the turn that already ended, so it is a command rather
+    // than a message: queued while the composer is busy, it would sit behind
+    // the queue Stop deliberately holds closed and never run at all. A stop
+    // still in flight is waited for, which is the CLI's Ctrl+C then /retry.
+    const retryCommand = (() => {
+      const candidate = text.trimEnd();
+      if (!candidate.startsWith('/')) return null;
+      const gap = candidate.indexOf(' ');
+      const command = findAppUiCommand(resolveCommandAlias(gap > 0 ? candidate.slice(0, gap) : candidate));
+      return command?.actionId === 'retry-last-turn' ? command : null;
+    })();
+    if (retryCommand) {
+      clearComposer();
+      if (isLoading && abortedTurn.current !== null && abortedTurn.current === conversation) {
+        retryAfterStop.current = true;
+        return;
+      }
+      applyAppCommand(retryCommand);
+      return;
+    }
     if (isLoading) { queueOwner.current = composerOwner; setQueuedDrafts((q) => [...q, { id: newQueuedDraftId(), content: text, images: files, options: sendOptions }]); clearComposer(); eraseDraft(); return; }
     const candidate = text.trimEnd(); const help = candidate.trim().toLowerCase() === 'help';
     if (candidate.startsWith('/') || help) { const gap = candidate.indexOf(' '); const name = help ? '/help' : gap > 0 ? candidate.slice(0, gap) : candidate; const commandArgs = gap > 0 ? candidate.slice(gap).trim() : ''; const app = findAppUiCommand(resolveCommandAlias(name)); if (app && (app.interceptWithArgs !== false || !commandArgs)) { clearComposer(); applyAppCommand(app, commandArgs); return; } const notice = getLocalCommandNotice(name, commandArgs); if (notice) { clearComposer(); addMessage({ type: 'assistant', content: notice, timestamp: Date.now() }); return; } 
@@ -320,6 +346,14 @@ export function useChatComposerState(args: UseChatComposerStateArgs) {
     }
   }, [addMessage, allocate, applyAppCommand, attachedImages, clearComposer, composerOwner, conversation, draftPersistence.phase, draftReady, eraseDraft, isLoading, login, onSessionEstablished, onSessionProcessing, optionsFor, projectId, resetCommandMenuState, retryDraftPersistence, scrollToBottom, selectedProject, selectedSession, sendMessage, setIsUserScrolledUp, setQueuedDrafts, t, upload]);
   useEffect(() => { submitRef.current = handleSubmit; }, [handleSubmit]);
+  // The stopped turn has ended: the /retry typed while it was still stopping
+  // runs now, exactly as it would have if it had been typed a second later.
+  useEffect(() => {
+    if (isLoading || !retryAfterStop.current) return;
+    retryAfterStop.current = false;
+    onRetryLastTurn?.();
+  }, [isLoading, onRetryLastTurn]);
+  useEffect(() => { retryAfterStop.current = false; }, [composerOwner]);
 
   const handleSteer = useCallback((event: FormEvent<HTMLFormElement> | MouseEvent | TouchEvent | KeyboardEvent<HTMLTextAreaElement>) => {
     event.preventDefault();

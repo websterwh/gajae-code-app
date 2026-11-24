@@ -64,6 +64,8 @@ interface ChatMessagesPaneProps {
   showLoadAllOverlay: boolean;
   /** Resends the failed turn; only worth passing when the transcript ends in one. */
   retryFailedTurn?: () => void;
+  /** Re-runs a turn the user stopped; the tail's control runs the same action as /retry. */
+  stoppedTurnRetry?: () => void;
   createDiff: any;
   onFileOpen?: (filePath: string, diffInfo?: CodeEditorDiffInfo | null) => void;
   onShowSettings?: () => void;
@@ -98,6 +100,7 @@ function ChatMessagesPane({
   loadAllJustFinished,
   showLoadAllOverlay,
   retryFailedTurn,
+  stoppedTurnRetry,
   createDiff,
   onFileOpen,
   onShowSettings,
@@ -212,6 +215,24 @@ function ChatMessagesPane({
                 {showInlineRunningRow && (
                   <div data-scroll-anchor={`running-${density}`} className="flow-root">
                     <RunningActivityRow liveActivity={liveActivity} runStartedAt={runStartedAt} variant="inline" />
+                  </div>
+                )}
+
+                {stoppedTurnRetry && (
+                  // Stop leaves the partial answer in place with nothing that
+                  // says the turn can be run again; this is the tail's own
+                  // Retry, the same action as typing /retry.
+                  <div data-scroll-anchor="stopped-turn" className="flow-root">
+                    <div className="flex items-center gap-2 px-3 text-xs text-muted-foreground sm:px-0">
+                      <span>{t('session.stoppedTurn', { defaultValue: 'Turn stopped.' })}</span>
+                      <button
+                        type="button"
+                        onClick={stoppedTurnRetry}
+                        className="text-primary underline underline-offset-2 hover:text-primary/80"
+                      >
+                        {t('messageTypes.retryFailedTurn', { defaultValue: 'Retry' })}
+                      </button>
+                    </div>
                   </div>
                 )}
               </>

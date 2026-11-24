@@ -299,6 +299,53 @@ test('image attachments follow their draft when switching between conversations'
   assert.deepEqual(view.result.current.attachedImages, [first]);
 });
 
+test('/retry typed while Stop is settling runs as soon as the turn ends', async () => {
+  // The click on Stop ends the turn as far as the user is concerned. Queued
+  // behind the queue Stop keeps closed, /retry would never leave at all.
+  let retried = 0;
+  const view = composer({
+    selectedSession: session('a'),
+    currentSessionId: 'a',
+    isLoading: true,
+    canAbortSession: true,
+    onRetryLastTurn: () => { retried += 1; },
+  });
+
+  act(() => view.result.current.handleAbortSession());
+  typeText(view, '/retry');
+  await act(async () => { await view.result.current.handleSubmit(submit()); });
+
+  assert.equal(retried, 0, 'the stop has not finished, so nothing is sent yet');
+  assert.deepEqual(view.result.current.queuedDrafts, [], 'the command is not buried in the send queue');
+  assert.equal(view.result.current.input, '', 'the command leaves the composer as any command does');
+
+  view.rerender({
+    selectedSession: session('a'), currentSessionId: 'a', canAbortSession: true,
+    isLoading: false, onRetryLastTurn: () => { retried += 1; },
+  });
+
+  await waitFor(() => assert.equal(retried, 1, 'the retry runs once the stopped turn has ended'));
+});
+
+test('/retry during a live turn reaches the retry path instead of the queue', async () => {
+  let retried = 0;
+  const view = composer({
+    selectedSession: session('a'),
+    currentSessionId: 'a',
+    isLoading: true,
+    canAbortSession: true,
+    onRetryLastTurn: () => { retried += 1; },
+  });
+
+  typeText(view, '/retry');
+  await act(async () => { await view.result.current.handleSubmit(submit()); });
+
+  // The retry itself reports why it is waiting; the command never becomes a
+  // queued draft that a later Stop would strand.
+  assert.equal(retried, 1);
+  assert.deepEqual(view.result.current.queuedDrafts, []);
+});
+
 test('a disconnected send retains the draft and never reports an unsent user turn', async () => {
   const messages: Array<{ type: string }> = [];
   const view = composer({ selectedSession: session('a'), sendMessage: () => false, addMessage: (message) => { messages.push(message as { type: string }); } });
