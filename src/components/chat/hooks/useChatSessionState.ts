@@ -316,6 +316,12 @@ export function useChatSessionState({
   // Everything below treats "no transcript yet" as loading: the landing holds
   // until the first page lands instead of settling on an empty pane.
   const sessionMessagesPending = isLoadingSessionMessages || isOpeningFirstPage;
+  // Read frame by frame by the landing: a session reopened from a cached
+  // window schedules its settle in the commit before the refetch flips the
+  // loading flag, so the schedule-time check alone let the open land on the
+  // old window and the new page then replaced it under a revealed transcript.
+  const sessionMessagesPendingRef = useRef(sessionMessagesPending);
+  sessionMessagesPendingRef.current = sessionMessagesPending;
 
   const addMessage = useCallback((message: ChatMessage) => {
     if (!activeSessionRef.current) {
@@ -442,19 +448,22 @@ export function useChatSessionState({
   }, [beginLandingAtTail, selectedProject?.projectId, selectedSession?.id, setIsUserScrolledUp]);
 
   useEffect(() => {
+    // Only an open lands; once it has, the follow flag owns the pane, including
+    // a reader who scrolled up while a turn was streaming.
+    if (!initialScrollRef.current) return;
+    // The flag belongs to whatever was on screen before the open. A reopened
+    // conversation must land on its newest row even when it arrives with the
+    // previous one's scrolled-up state still in hand.
     if (!isFollowing) {
-      if (openingSessionRef.current) return;
-      initialScrollRef.current = false;
-      endLandingAtTail();
-      return;
+      if (!openingSessionRef.current) {
+        initialScrollRef.current = false;
+        endLandingAtTail();
+        return;
+      }
+      setFollowing(true);
     }
-    if (!initialScrollRef.current || sessionMessagesPending || !scrollContainer) return;
-    if (!chatMessages.length || searchInProgressRef.current) {
-      initialScrollRef.current = false;
-      openingSessionRef.current = false;
-      endLandingAtTail();
-      return;
-    }
+    if (sessionMessagesPending || !scrollContainer) return;
+    if (!chatMessages.length || searchInProgressRef.current) return;
     const node = scrollContainer;
     let frames = 0;
     let unchanged = 0;
@@ -462,6 +471,9 @@ export function useChatSessionState({
     let frameId = 0;
     const settle = () => {
       if (!initialScrollRef.current || !scrollContainerRef.current) return;
+      // The refetch for this open started between frames: wait for its page.
+      // It lands the open again when the page arrives.
+      if (sessionMessagesPendingRef.current) return;
       node.scrollTop = node.scrollHeight;
       if (node.scrollHeight === height) unchanged += 1;
       else {
@@ -482,7 +494,7 @@ export function useChatSessionState({
     };
     frameId = requestAnimationFrame(settle);
     return () => cancelAnimationFrame(frameId);
-  }, [chatMessages.length, endLandingAtTail, isFollowing, scrollContainer, sessionMessagesPending]);
+  }, [chatMessages.length, endLandingAtTail, isFollowing, scrollContainer, sessionMessagesPending, setFollowing]);
 
   useEffect(() => {
     if (!selectedProject || !selectedSession) {
@@ -678,12 +690,23 @@ export function useChatSessionState({
       setHasNewMessagesBelow(true);
     }
   }, [activeSession, chatMessages, density, isFollowing, isLoadingSessionMessages]);
+  // Scroll events the layout raises on its own - a restored offset clamping
+  // when a shorter window replaces the previous transcript, a row resizing
+  // under the pointer - are not the reader leaving the tail. While an open is
+  // still landing the landing owns the pane; treating the event as a gesture
+  // ended the landing and paginated, which parked the transcript at its top
+  // with following off. Wheel, touch and keys still reach handleScroll.
+  const handlePaneScroll = useCallback(() => {
+    if (initialScrollRef.current) return;
+    void handleScroll();
+  }, [handleScroll]);
+
   useEffect(() => {
     const node = scrollContainer;
     if (!node) return;
-    node.addEventListener('scroll', handleScroll);
-    return () => node.removeEventListener('scroll', handleScroll);
-  }, [handleScroll, scrollContainer]);
+    node.addEventListener('scroll', handlePaneScroll);
+    return () => node.removeEventListener('scroll', handlePaneScroll);
+  }, [handlePaneScroll, scrollContainer]);
 
   const loadAllMessages = useCallback(async () => {
     if (!selectedProject || !selectedSession || isLoadingAllMessages) return;

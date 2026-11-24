@@ -268,15 +268,19 @@ async function setup(options: { pane?: boolean; density?: 'compact' | 'balanced'
   let pageRequests = 0;
   let pageResolve: ((value: FetchMoreResult) => void) | undefined;
   let allResolve: ((value: unknown) => void) | undefined;
+  let stale = false;
+  let firstPageResolve: ((window: unknown) => void) | undefined;
   let state: ReturnType<typeof useChatSessionState> | undefined;
   const store = {
     setActiveSession() {},
     getMessages: () => rows,
     has: () => true,
-    isStale: () => false,
+    isStale: () => stale,
     fetchFromServer: (_id: string, options: { limit: number | null }) => options.limit === null || options.limit === LOAD_ALL_LIMIT
       ? new Promise(resolve => { allResolve = resolve; })
-      : Promise.resolve({ serverMessages: rows, hasMore: true, total: 40 }),
+      : stale
+        ? new Promise(resolve => { firstPageResolve = resolve; })
+        : Promise.resolve({ serverMessages: rows, hasMore: true, total: 40 }),
     fetchMore: () => { pageRequests += 1; return new Promise(resolve => { pageResolve = resolve; }); },
   } as unknown as SessionStore;
   const props = {
@@ -347,6 +351,10 @@ async function setup(options: { pane?: boolean; density?: 'compact' | 'balanced'
     async switchSession() {
       props.selectedSession = { id: 'another-session' };
       await act(async () => view.rerender(<Harness />));
+    },
+    setStale(value: boolean) { stale = value; },
+    async resolveFirstPage(next: NormalizedMessage[] = rows, hasMore = true) {
+      await act(async () => { firstPageResolve?.({ serverMessages: next, hasMore, total: 40 }); });
     },
     close() { view.unmount(); globalThis.fetch = originalFetch; },
   };
@@ -516,6 +524,46 @@ test('opening a session lands on its newest row even from a scrolled-up one', as
   } finally { harness.close(); }
 });
 
+test('a layout scroll during an open does not park the transcript at its top', async () => {
+  const harness = await setup();
+  try {
+    const pane = harness.state().scrollContainerRef.current!;
+    let scrollTop = 0;
+    Object.defineProperty(pane, 'scrollTop', { configurable: true, get: () => scrollTop, set: (value: number) => { scrollTop = value; } });
+    Object.defineProperty(pane, 'scrollHeight', { configurable: true, get: () => 900 });
+    await harness.switchSession();
+    // A restored offset clamps to zero when the shorter first page replaces the
+    // previous transcript. The browser raises a scroll event for it, but it is
+    // layout, not the reader leaving the tail.
+    await act(async () => { pane.dispatchEvent(new Event('scroll')); });
+    await act(async () => { await new Promise(resolve => { setTimeout(resolve, 120); }); });
+    assert.equal(scrollTop, 900, 'the open still lands on its newest row');
+    assert.equal(harness.state().isLandingAtTail, false, 'and is revealed once it settles');
+    assert.equal(harness.pageRequests(), 0, 'an open never pages through history on its own');
+  } finally { harness.close(); }
+});
+
+test('an open waits for its own page instead of landing on the cached window', async () => {
+  const harness = await setup();
+  try {
+    const pane = harness.state().scrollContainerRef.current!;
+    let scrollTop = 0;
+    let height = 900;
+    Object.defineProperty(pane, 'scrollTop', { configurable: true, get: () => scrollTop, set: (value: number) => { scrollTop = value; } });
+    Object.defineProperty(pane, 'scrollHeight', { configurable: true, get: () => height });
+    // Seen a while ago: the store keeps the old window until the refetch lands.
+    harness.setStale(true);
+    await harness.switchSession();
+    await act(async () => { await new Promise(resolve => { setTimeout(resolve, 120); }); });
+    assert.equal(harness.state().isLandingAtTail, true, 'the cached window is not the open');
+    height = 1800;
+    await harness.resolveFirstPage();
+    await act(async () => { await new Promise(resolve => { setTimeout(resolve, 120); }); });
+    assert.equal(scrollTop, 1800, 'the page that arrived is what the open lands on');
+    assert.equal(harness.state().isLandingAtTail, false);
+  } finally { harness.close(); }
+});
+
 test('arrivals the density never renders do not announce unseen messages', async () => {
   const compact = await setup({ density: 'compact' });
   try {
@@ -537,6 +585,10 @@ test('a pane attached after the landing view still binds the transcript scroll l
   try {
     const node = harness.mountPane();
     assert.equal(harness.pageRequests(), 0);
+    // The landing owns the freshly attached pane until it settles; the reader's
+    // own scrolling starts after that.
+    await act(async () => { await new Promise(resolve => { setTimeout(resolve, 120); }); });
+    assert.equal(harness.state().isLandingAtTail, false);
     await act(async () => { node.dispatchEvent(new Event('scroll')); });
     assert.equal(harness.pageRequests(), 1);
   } finally { harness.close(); }
