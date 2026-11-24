@@ -71,6 +71,17 @@
     "stopSpeaking": "Durmak",
     "loading": "Yükleniyor…"
   },
+  "btw": {
+    "title": "Yan sohbet",
+    "hint": "Bu konuşmayı değiştirmeden soru sor.",
+    "placeholder": "Yan soru sor…",
+    "send": "Gönder",
+    "close": "Yan sohbeti kapat",
+    "thinking": "Düşünüyor…",
+    "error": "Yan sohbet başarısız oldu.",
+    "usage": "Kullanım: /btw <soru>",
+    "noSession": "Önce bir mesaj gönder: yan sohbet için henüz konuşma bağlamı yok."
+  },
   "input": {
     "placeholder": "'ya sorun, komutlar için / tuşunu veya dosya eklemek için @ tuşunu kullanın… {{provider}}",
     "modelReasoning": {

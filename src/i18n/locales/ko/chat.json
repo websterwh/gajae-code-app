@@ -71,6 +71,17 @@
     "stopSpeaking": "중단",
     "loading": "불러오는 중…"
   },
+  "btw": {
+    "title": "사이드 채팅",
+    "hint": "이 대화를 바꾸지 않고 질문하세요.",
+    "placeholder": "사이드 질문 입력…",
+    "send": "보내기",
+    "close": "사이드 채팅 닫기",
+    "thinking": "생각 중…",
+    "error": "사이드 채팅에 실패했습니다.",
+    "usage": "사용법: /btw <질문>",
+    "noSession": "먼저 메시지를 보내세요. 아직 사이드 채팅에 사용할 대화 컨텍스트가 없습니다."
+  },
   "input": {
     "placeholder": "{{provider}}에게 질문하세요, /로 명령어를 사용하거나 @로 파일을 추가하세요…",
     "modelReasoning": {

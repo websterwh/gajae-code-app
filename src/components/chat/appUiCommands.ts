@@ -28,6 +28,7 @@ type AppUiCommandActionId =
   | 'open-cost-modal'
   | 'fork-session'
   | 'retry-last-turn'
+  | 'open-side-chat'
   | 'rename-session'
   | 'run-shell-command';
 
@@ -61,6 +62,8 @@ export type AppUiCommandActions = {
   forkSession: () => void;
   /** Re-runs the turn the transcript ends on, as GJC's `/retry` does. */
   retryLastTurn: () => void;
+  /** Opens the ephemeral side chat with its first question. */
+  openSideChat: (question: string) => void;
   /** Retitles the open conversation, as the sidebar's rename does. */
   renameSession: (title: string) => void;
   /** Runs one shell command in the session's project and reports the result. */
@@ -90,6 +93,14 @@ export const APP_UI_COMMANDS: readonly AppUiCommand[] = [
     namespace: 'app',
     type: 'app',
     actionId: 'start-new-chat',
+  },
+  {
+    name: '/btw',
+    description: 'Ask a side question without changing this conversation',
+    namespace: 'app',
+    type: 'app',
+    actionId: 'open-side-chat',
+    requiresArguments: true,
   },
   {
     name: '/settings',
@@ -201,6 +212,9 @@ export function runAppUiCommand(command: AppUiCommand, actions: AppUiCommandActi
     case 'fork-session':
       actions.forkSession();
       break;
+    case 'open-side-chat':
+      actions.openSideChat(args.trim());
+      break;
     case 'retry-last-turn':
       // The runtime's retry takes no operands: the turn being re-run already
       // holds its prompt, so arguments typed after the command are ignored
@@ -248,7 +262,6 @@ export const TUI_ONLY_COMMAND_HINTS: Readonly<Record<string, string>> = {
   '/agents': '',
   '/monitors': '',
   '/tree': '',
-  '/btw': 'A side chat streams into a terminal panel the app has no surface for. Start a new chat here for a question that should not affect this conversation.',
   '/background': 'App sessions already keep running when you navigate away.',
   '/debug': '',
   '/copy': 'Each message has a copy button, offering plain text or markdown.',

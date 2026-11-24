@@ -35,7 +35,7 @@ interface UseChatComposerStateArgs { draftRepository?: ComposerDraftRepository; 
    * this session on?" - the telemetry panel read it and named a model from a
    * different conversation.
    */
-  telemetryModel?: string | null; reasoningEffort?: string; isLoading: boolean; canAbortSession: boolean; tokenBudget: Record<string, unknown> | null; sendMessage: (message: unknown) => boolean | void; sendByCtrlEnter?: boolean; onSessionProcessing?: MarkSessionProcessing; onSessionEstablished?: (sessionId: string, context: SessionEstablishedContext) => void; onInputFocusChange?: (focused: boolean) => void; onShowSettings?: () => void; onLogin?: (providerId?: string) => void; onRetryLastTurn?: () => void;
+  telemetryModel?: string | null; reasoningEffort?: string; isLoading: boolean; canAbortSession: boolean; tokenBudget: Record<string, unknown> | null; sendMessage: (message: unknown) => boolean | void; sendByCtrlEnter?: boolean; onSessionProcessing?: MarkSessionProcessing; onSessionEstablished?: (sessionId: string, context: SessionEstablishedContext) => void; onInputFocusChange?: (focused: boolean) => void; onShowSettings?: () => void; onLogin?: (providerId?: string) => void; onRetryLastTurn?: () => void; onOpenSideChat?: (question: string) => void;
   /**
    * What the run-location picker shows before the user touches it.
    *
@@ -62,7 +62,7 @@ const resetBox = (setInput: (value: string) => void, value: MutableRefObject<str
 
 export function useChatComposerState(args: UseChatComposerStateArgs) {
   const { t } = useTranslation('chat');
-  const { executionCwd, selectedProject, selectedSession, currentSessionId, gjcModel, telemetryModel, reasoningEffort = 'default', isLoading, canAbortSession, tokenBudget, sendMessage, sendByCtrlEnter, onSessionProcessing, onSessionEstablished, onInputFocusChange, onShowSettings, onLogin, onRetryLastTurn, scrollToBottom, addMessage, setIsUserScrolledUp, setPendingPermissionRequests, defaultUseWorktree = false } = args;
+  const { executionCwd, selectedProject, selectedSession, currentSessionId, gjcModel, telemetryModel, reasoningEffort = 'default', isLoading, canAbortSession, tokenBudget, sendMessage, sendByCtrlEnter, onSessionProcessing, onSessionEstablished, onInputFocusChange, onShowSettings, onLogin, onRetryLastTurn, onOpenSideChat, scrollToBottom, addMessage, setIsUserScrolledUp, setPendingPermissionRequests, defaultUseWorktree = false } = args;
   const projectId = selectedProject?.projectId;
   const conversation = selectedSession?.id || currentSessionId || null;
   const drafts = useDurableComposerDraft(projectId, conversation, args.draftRepository);
@@ -210,7 +210,7 @@ export function useChatComposerState(args: UseChatComposerStateArgs) {
         addMessage({ type: 'error', content: `/rename failed: ${error instanceof Error ? error.message : 'unknown error'}`, timestamp: Date.now() });
       });
   }, [addMessage, currentSessionId, palette, selectedSession?.id]);
-  const applyAppCommand = useCallback((command: AppUiCommand, commandArgs = '') => { if (isComposerSealed()) return; return runAppUiCommand(command, { openSessionPicker: palette.openSessionPicker, startNewChat: palette.startNewChat, openSettings: () => onShowSettings ? onShowSettings() : palette.openSettings(), openMemorySettings: () => palette.openSettings('memory'), runMempalace: (args: string) => runShellCommand(`mempalace ${args}`), openModelPicker: () => setModelPickerTrigger((n) => n + 1), openCostModal: showCostModal, forkSession, retryLastTurn: () => onRetryLastTurn?.(), runShellCommand, renameSession }, commandArgs); }, [forkSession, onRetryLastTurn, onShowSettings, palette, renameSession, runShellCommand, showCostModal]);
+  const applyAppCommand = useCallback((command: AppUiCommand, commandArgs = '') => { if (isComposerSealed()) return; return runAppUiCommand(command, { openSessionPicker: palette.openSessionPicker, startNewChat: palette.startNewChat, openSettings: () => onShowSettings ? onShowSettings() : palette.openSettings(), openMemorySettings: () => palette.openSettings('memory'), runMempalace: (args: string) => runShellCommand(`mempalace ${args}`), openModelPicker: () => setModelPickerTrigger((n) => n + 1), openCostModal: showCostModal, forkSession, retryLastTurn: () => onRetryLastTurn?.(), runShellCommand, renameSession, openSideChat: (question: string) => onOpenSideChat?.(question) }, commandArgs); }, [forkSession, onOpenSideChat, onRetryLastTurn, onShowSettings, palette, renameSession, runShellCommand, showCostModal]);
 
   const { slashCommands, slashCommandsCount, filteredCommands, frequentCommands, commandQuery, showCommandMenu, selectedCommandIndex, resetCommandMenuState, handleCommandSelect, handleToggleCommandMenu, handleCommandInputChange, handleCommandMenuKeyDown } = useSlashCommands({ selectedProject, executionCwd, provider: 'gjc', sessionId: conversation, input, setInput, textareaRef, onLoginCommand: login, onAppCommand: (command) => { const app = findAppUiCommand(command.name); if (app) applyAppCommand(app); } });
   const { showFileDropdown, filteredFiles, selectedFileIndex, renderInputWithMentions, selectFile, setCursorPosition, handleFileMentionsKeyDown } = useFileMentions({ selectedProject, executionCwd, sessionId: conversation, input, setInput, textareaRef });

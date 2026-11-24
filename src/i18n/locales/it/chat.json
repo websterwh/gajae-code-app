@@ -71,6 +71,17 @@
     "stopSpeaking": "Fermati",
     "loading": "Caricamento…"
   },
+  "btw": {
+    "title": "Chat laterale",
+    "hint": "Fai una domanda su questa conversazione senza modificarla.",
+    "placeholder": "Fai una domanda laterale…",
+    "send": "Invia",
+    "close": "Chiudi la chat laterale",
+    "thinking": "Sto pensando…",
+    "error": "Chat laterale non riuscita.",
+    "usage": "Uso: /btw <domanda>",
+    "noSession": "Invia prima un messaggio: non c’è ancora un contesto per una chat laterale."
+  },
   "input": {
     "placeholder": "Chiedi {{provider}}, usa / per i comandi o @ per aggiungere file...",
     "modelReasoning": {

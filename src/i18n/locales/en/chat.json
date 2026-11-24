@@ -71,6 +71,17 @@
     "stopSpeaking": "Stop",
     "loading": "Loading…"
   },
+  "btw": {
+    "title": "Side chat",
+    "hint": "Ask about this conversation without changing it.",
+    "placeholder": "Ask a side question…",
+    "send": "Send",
+    "close": "Close side chat",
+    "thinking": "Thinking…",
+    "error": "Side chat failed.",
+    "usage": "Usage: /btw <question>",
+    "noSession": "Send a message first: there is no conversation context for a side chat yet."
+  },
   "input": {
     "placeholder": "Ask {{provider}}, use / for commands, or @ to add files…",
     "modelReasoning": {

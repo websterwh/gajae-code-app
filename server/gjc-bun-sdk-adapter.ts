@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { realpath } from 'node:fs/promises';
 
 import { createAgentSession, discoverAuthStorage, type AutomationTools } from '@gajae-code/coding-agent/sdk/session';
+import type { BtwConversationScope } from '@gajae-code/coding-agent/sdk/btw';
 import { resolveBrowserBackend } from '@gajae-code/coding-agent/browser-backend';
 import { ModelRegistry } from '@gajae-code/coding-agent/config/model-registry';
 import { mergeModelProfiles, resolveProfileBindings } from '@gajae-code/coding-agent/config/model-profiles';
@@ -118,6 +119,11 @@ export type SdkRunConfig = {
   /** Image attachments the client sent with this message (`{path, name?, mimeType?}` descriptors). */
   images?: unknown;
   /**
+   * One ephemeral `/btw` question. The run resumes the session only to answer
+   * it; nothing is prompted into or persisted to the main transcript.
+   */
+  btw?: { question: string; exchanges: BtwExchange[] };
+  /**
    * The project's permission policy. Absent means the app did not decide, and
    * the runtime keeps its own default (guarded tools run unprompted); present
    * means the session is switched to `prompt` mode and this policy answers.
@@ -230,6 +236,15 @@ type ActiveRun = {
     subscribe(listener: (event: unknown) => void): () => void;
     /** True while a turn is in flight. Absent on runtimes that never stream. */
     readonly isStreaming?: boolean;
+    createBtwConversationScope(instruction: string): BtwConversationScope;
+    releaseBtwConversationScope(scope: BtwConversationScope): void;
+    runEphemeralTurn(args: {
+      purpose: 'btw';
+      turn: { question: string; scope: BtwConversationScope };
+      contextExchanges?: BtwExchange[];
+      onTextDelta?: (delta: string) => void;
+      signal?: AbortSignal;
+    }): Promise<{ replyText: string }>;
     setSdkPermissionMode?(mode: 'prompt' | 'allow' | 'deny'): void;
     setSdkPermissionProvider?(provider: GjcPermissionProvider | undefined): void;
   };
@@ -237,6 +252,8 @@ type ActiveRun = {
   unsubscribe: () => void;
   askController: GjcBunAskController;
   state: SdkRunState;
+  /** Cancels the in-flight side question without touching a durable turn. */
+  btwAbort?: AbortController;
   abortState: 'idle' | 'aborting' | 'aborted';
   settling: boolean;
   appSessionId?: string;
@@ -505,6 +522,27 @@ function exactCredentialRef(value: unknown): value is ExactCredentialRef {
     && RUNTIME_CREDENTIAL_ENV_VARS.has(value.envVar);
 }
 
+type BtwExchange = { question: string; answer: string };
+
+const BTW_MAX_QUESTION_BYTES = 16 * 1024;
+const BTW_MAX_CONTEXT_BYTES = 64 * 1024;
+const BTW_MAX_EXCHANGES = 12;
+
+/** Mirrors the runtime's `btw.ask` contract; the app refuses instead of admitting bad work. */
+function validBtwConfig(value: unknown): value is NonNullable<SdkRunConfig['btw']> {
+  if (!object(value) || typeof value.question !== 'string' || !value.question.trim()
+    || Buffer.byteLength(value.question, 'utf8') > BTW_MAX_QUESTION_BYTES) return false;
+  if (!Array.isArray(value.exchanges) || value.exchanges.length > BTW_MAX_EXCHANGES) return false;
+  let bytes = 0;
+  for (const exchange of value.exchanges) {
+    if (!object(exchange) || typeof exchange.question !== 'string' || typeof exchange.answer !== 'string') return false;
+    if (!exchange.question.trim()) return false;
+    bytes += Buffer.byteLength(exchange.question, 'utf8') + Buffer.byteLength(exchange.answer, 'utf8');
+    if (bytes > BTW_MAX_CONTEXT_BYTES) return false;
+  }
+  return true;
+}
+
 function configFromOptions(value: Record<string, unknown>): SdkRunConfig {
   const candidate = value;
   if (!object(candidate)
@@ -529,6 +567,7 @@ function configFromOptions(value: Record<string, unknown>): SdkRunConfig {
     || (candidate.computerAvailable !== undefined && typeof candidate.computerAvailable !== 'boolean')
     || (candidate.hostControl !== undefined && !isHostControlRunPolicy(candidate.hostControl))
     || (candidate.retryLastTurn !== undefined && typeof candidate.retryLastTurn !== 'boolean')
+    || (candidate.btw !== undefined && !validBtwConfig(candidate.btw))
   ) throw new Error(FAILURE);
   // A malformed policy block throws GjcRunPermissionsError, which keeps its
   // `invalid_permissions` code so the worker can answer with that code and the
@@ -1172,6 +1211,7 @@ export class GjcBunSdkAdapter implements GjcWorkerRuntime {
     // `session.abort()` is still in flight, and that turn must not be reported
     // back to the user as an unexpected interruption.
     run.state.abortPending = true;
+    run.btwAbort?.abort();
     this.#revision += 1;
     const closeAutomation = this.options.closeAutomationSession
       ?? (this.options.automationBridge
@@ -1555,12 +1595,16 @@ export class GjcBunSdkAdapter implements GjcWorkerRuntime {
         const unsubscribe = result.session.subscribe((event: unknown) => {
           this.#revision += 1;
           goals?.onEvent(event);
-          forwardSdkEvent(
-            event,
-            writer,
-            state,
-            () => ({ ...readSessionSnapshot(result.session, sessionManager), ...(goals ? { goal: goals.snapshot() } : {}) }),
-          );
+          // An ephemeral /btw turn is observed through its own delta callback;
+          // its provider events must never be projected into the main transcript.
+          if (!config.btw) {
+            forwardSdkEvent(
+              event,
+              writer,
+              state,
+              () => ({ ...readSessionSnapshot(result.session, sessionManager), ...(goals ? { goal: goals.snapshot() } : {}) }),
+            );
+          }
         });
         const activeRun: ActiveRun = {
           markAborted: writer.setAborted,
@@ -1602,6 +1646,36 @@ export class GjcBunSdkAdapter implements GjcWorkerRuntime {
         if (!resumedId) writer.setSessionId?.(startingSessionId);
         const initialSnapshot = readSessionSnapshot(result.session, sessionManager);
         if (goals) writer.send({ kind: 'status', text: 'session_state', sessionState: { ...initialSnapshot, goal: goals.snapshot() } });
+        if (config.btw) {
+          // The runtime owns the side-chat contract: a frozen, visible-text-only
+          // scope and an ephemeral turn that persists nothing and runs no tools.
+          // Only its deltas cross the run writer, and the session is disposed
+          // below exactly as after an ordinary turn.
+          const controller = new AbortController();
+          activeRun.btwAbort = controller;
+          const scope = result.session.createBtwConversationScope(
+            'You are answering inside an ephemeral multi-turn side chat for the interactive session.\n'
+            + 'Treat the conversation so far as read-only context and answer the side-chat question directly.\n'
+            + 'Do not use tools or request hidden session state. Any tool call you emit is discarded without being run.\n'
+            + 'Earlier side-chat exchanges, when present, follow this instruction; answer only the latest side-chat question.',
+          );
+          try {
+            const { replyText } = await result.session.runEphemeralTurn({
+              purpose: 'btw',
+              turn: { question: config.btw.question, scope },
+              contextExchanges: config.btw.exchanges,
+              onTextDelta: (delta: string) => writer.send({ kind: 'stream_delta', content: delta }),
+              signal: controller.signal,
+            });
+            writer.send({ kind: 'stream_end', content: replyText });
+          } catch (error) {
+            // Stop is not a failed side question; the aborted turn just ends.
+            if (!controller.signal.aborted) throw error;
+          } finally {
+            result.session.releaseBtwConversationScope(scope);
+          }
+          return;
+        }
         let promptMessage: string | null = message;
         if (config.goalCommand) {
           const goal = await goals!.control(config.goalCommand);

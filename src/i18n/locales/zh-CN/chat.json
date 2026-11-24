@@ -71,6 +71,17 @@
     "stopSpeaking": "停止",
     "loading": "加载中……"
   },
+  "btw": {
+    "title": "侧边聊天",
+    "hint": "就当前对话提问，不会改动它。",
+    "placeholder": "输入侧边问题…",
+    "send": "发送",
+    "close": "关闭侧边聊天",
+    "thinking": "思考中…",
+    "error": "侧边聊天失败。",
+    "usage": "用法：/btw <问题>",
+    "noSession": "请先发送一条消息：目前还没有可供侧边聊天使用的对话上下文。"
+  },
   "input": {
     "placeholder": "询问{{provider}}，使用/发送命令，或@添加文件……",
     "modelReasoning": {

@@ -9,10 +9,15 @@ import { providerSkillsService } from '@/modules/providers/services/provider-ski
 import { sessionConversationsSearchService } from '@/modules/providers/services/session-conversations-search.service.js';
 import { exportSessionTranscript } from '@/modules/providers/services/session-export.service.js';
 import { sessionsService } from '@/modules/providers/services/sessions.service.js';
+import { createBtwStream, parseBtwRequest } from '@/modules/providers/services/btw.service.js';
+import { sessionsDb } from '@/modules/database/index.js';
+import { resolveProjectRunPermissions } from '@/modules/projects/index.js';
 import { createWorktreeSession, readSessionLocation, resolveSessionCommandWorkspace } from '@/modules/providers/services/session-worktrees.service.js';
 import { getHomeDir, getHomeDirSuggestions } from '@/modules/providers/services/home-dirs.service.js';
 import type { LLMProvider, ProviderChangeActiveModelInput } from '@/shared/types.js';
 import { AppError, asyncHandler, createApiSuccessResponse } from '@/shared/utils.js';
+
+import { abortGjcRun, isGjcSessionActive, spawnGjcRun } from '../../gjc-worker-client.js';
 
 const router = express.Router();
 const SESSION_ID = /^[a-zA-Z0-9._-]{1,120}$/;
@@ -174,6 +179,58 @@ router.post('/sessions', asyncHandler(async (req: Request, res: Response) => {
 // action. Both answer with the new app session id so the client can open it.
 router.post('/sessions/:sessionId/fork', asyncHandler(async (req: Request, res: Response) => {
   res.status(201).json(createApiSuccessResponse(await sessionsService.branchSession(sessionFrom(req.params.sessionId))));
+}));
+
+// A side chat is an ephemeral turn against the session's own transcript. It
+// deliberately does not use chat.send: the main transcript, run registry and
+// replay stream must stay untouched, and one question is one worker run.
+router.post('/sessions/:sessionId/btw', asyncHandler(async (req: Request, res: Response) => {
+  const sessionId = sessionFrom(req.params.sessionId);
+  const { question, exchanges } = parseBtwRequest(req.body);
+  const stored = sessionsDb.getSessionById(sessionId);
+  if (!stored) throw new AppError(`Session \"${sessionId}\" was not found.`, { code: 'SESSION_NOT_FOUND', statusCode: 404 });
+  if (stored.provider !== 'gjc') throw new AppError('Side chats are available for Gajae Code sessions.', { code: 'UNSUPPORTED_PROVIDER', statusCode: 400 });
+  const providerSessionId = stored.provider_session_id;
+  if (!providerSessionId) throw new AppError('Send a message before opening a side chat.', { code: 'SESSION_NOT_STARTED', statusCode: 409 });
+  if (isGjcSessionActive(providerSessionId)) {
+    throw new AppError('Wait for the current turn to finish before opening a side chat.', { code: 'RUN_IN_PROGRESS', statusCode: 409 });
+  }
+
+  const model = await providerModelsService.resolveResumeModel('gjc', sessionId, null, { firstTurn: false });
+  res.status(200);
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  const stream = createBtwStream(res, sessionId);
+  let run: ReturnType<typeof spawnGjcRun>;
+  try {
+    run = spawnGjcRun('', {
+      sessionId: providerSessionId,
+      resume: true,
+      cwd: stored.project_path ?? undefined,
+      projectPath: stored.project_path ?? undefined,
+      permissions: resolveProjectRunPermissions(stored.project_path),
+      ...(model ? { model } : {}),
+      btw: { question, exchanges },
+    }, stream.writer);
+  } catch {
+    stream.fail('Side-chat request failed.');
+    return;
+  }
+  // A closed response is a discarded side chat: stop the worker run rather than
+  // leaving an orphaned answer in flight.
+  res.on('close', () => {
+    if (!stream.finished()) void abortGjcRun(run.abortHandle);
+  });
+  try {
+    await run;
+  } catch {
+    stream.fail('Side-chat request failed.');
+  }
+  stream.end();
 }));
 
 router.post('/sessions/:sessionId/branch', asyncHandler(async (req: Request, res: Response) => {

@@ -71,6 +71,17 @@
     "stopSpeaking": "停止",
     "loading": "読み込み中…"
   },
+  "btw": {
+    "title": "サイドチャット",
+    "hint": "この会話を変えずに質問できます。",
+    "placeholder": "サイドの質問を入力…",
+    "send": "送信",
+    "close": "サイドチャットを閉じる",
+    "thinking": "考え中…",
+    "error": "サイドチャットに失敗しました。",
+    "usage": "使い方: /btw <質問>",
+    "noSession": "まずメッセージを送信してください。サイドチャットに使える会話コンテキストがまだありません。"
+  },
   "input": {
     "placeholder": "/ でコマンド、@ でファイル指定、または {{provider}} に何でも聞いてください...",
     "modelReasoning": {

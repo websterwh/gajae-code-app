@@ -71,6 +71,17 @@
     "stopSpeaking": "停止",
     "loading": "載入中…"
   },
+  "btw": {
+    "title": "側邊聊天",
+    "hint": "就目前對話提問，不會改動它。",
+    "placeholder": "輸入側邊問題…",
+    "send": "傳送",
+    "close": "關閉側邊聊天",
+    "thinking": "思考中…",
+    "error": "側邊聊天失敗。",
+    "usage": "用法：/btw <問題>",
+    "noSession": "請先傳送一則訊息：目前還沒有可供側邊聊天使用的對話內容。"
+  },
   "input": {
     "placeholder": "請問 {{provider}}，使用 / 進行指令，或 @ 添加檔案…",
     "modelReasoning": {

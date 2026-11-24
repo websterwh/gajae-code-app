@@ -53,13 +53,13 @@ const GROUP_A: readonly Row[] = [
   ['A13', 'help', 'notice'],
   ['A14', '/help extra e2e-arg', 'notice'],
   ['A15', '/notacommand-e2e', 'command'],
+  ['A16', '/btw', 'app-action'],
+  ['A17', '/btw what does this do e2e-arg', 'app-action'],
 ];
 
 const GROUP_B: readonly Row[] = [
   // TUI-only commands, bare and with arguments. Arguments must not smuggle one
   // past the notice.
-  ['B01', '/btw', 'notice'],
-  ['B02', '/btw what does this do e2e-arg', 'notice'],
   ['B03', '/goal', 'notice'],
   ['B04', '/goal set e2e-arg', 'notice'],
   ['B05', '/agents', 'notice'],
@@ -323,8 +323,8 @@ test('runtime forms, skills and forms the app has never seen all reach the runti
 });
 
 test('the matrix has not silently shrunk', () => {
-  assert.equal(GROUP_A.length, 15);
-  assert.equal(GROUP_B.length, 26);
+  assert.equal(GROUP_A.length, 17);
+  assert.equal(GROUP_B.length, 24);
   assert.equal(GROUP_C.length, 24);
   assert.equal(GROUP_D.length, 87);
   assert.equal(GROUP_E.length, 24);

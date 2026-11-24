@@ -71,6 +71,17 @@
     "stopSpeaking": "Stopp",
     "loading": "Laden…"
   },
+  "btw": {
+    "title": "Seiten-Chat",
+    "hint": "Stelle eine Frage zu diesem Gespräch, ohne es zu verändern.",
+    "placeholder": "Seitenfrage stellen…",
+    "send": "Senden",
+    "close": "Seiten-Chat schließen",
+    "thinking": "Denkt nach…",
+    "error": "Seiten-Chat fehlgeschlagen.",
+    "usage": "Verwendung: /btw <Frage>",
+    "noSession": "Sende zuerst eine Nachricht: Es gibt noch keinen Gesprächskontext für einen Seiten-Chat."
+  },
   "input": {
     "placeholder": "Fragen Sie {{provider}}, verwenden Sie / für Befehle oder @, um Dateien hinzuzufügen ...",
     "modelReasoning": {

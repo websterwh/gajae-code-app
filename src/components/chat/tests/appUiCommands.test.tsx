@@ -73,6 +73,7 @@ test('runAppUiCommand dispatches each action id to its action', () => {
     openCostModal: () => { calls.push('open-cost-modal'); },
     forkSession: () => { calls.push('fork-session'); },
     retryLastTurn: () => { calls.push('retry-last-turn'); },
+    openSideChat: () => { calls.push('open-side-chat'); },
     renameSession: () => { calls.push('rename-session'); },
     runShellCommand: () => { calls.push('run-shell-command'); },
   };
@@ -92,7 +93,7 @@ test('getTuiOnlyCommandNotice covers a TUI-only key and skips app/unknown comman
   assert.equal(getTuiOnlyCommandNotice('/definitely-not-a-command'), null);
 });
 
-function captureComposer(sentMessages: unknown[], addedMessages: unknown[], onRetryLastTurn?: () => void) {
+function captureComposer(sentMessages: unknown[], addedMessages: unknown[], onRetryLastTurn?: () => void, onOpenSideChat?: (question: string) => void) {
   // Each command case starts with its own empty draft; pending confirmations
   // now deliberately survive instead of clearing the previous case's text.
   storage.clear();
@@ -113,6 +114,7 @@ function captureComposer(sentMessages: unknown[], addedMessages: unknown[], onRe
       setIsUserScrolledUp: () => undefined,
       setPendingPermissionRequests: () => undefined,
       ...(onRetryLastTurn ? { onRetryLastTurn } : {}),
+      ...(onOpenSideChat ? { onOpenSideChat } : {}),
     });
     return null;
   }
@@ -283,7 +285,6 @@ test('a TUI command the app can already do points at how to do it', () => {
     '/copy': /copy button/i,
     '/drop': /sidebar/i,
     '/hotkeys': /command palette/i,
-    '/btw': /new chat/i,
   };
 
   for (const [name, mentions] of Object.entries(hasAppEquivalent)) {
@@ -316,24 +317,18 @@ test('/help is answered locally instead of being forwarded as prose', async () =
   }
 });
 
-test('/btw is answered locally instead of reaching the model as prose', async () => {
-  // The runtime's /btw opens a TUI side-chat panel, which has no headless
-  // handler, so without a local disposition the question was delivered to the
-  // model as ordinary text.
-  for (const form of ['/btw', '/btw what does this function do?']) {
-    const sentMessages: unknown[] = [];
-    const addedMessages: unknown[] = [];
-    const composer = captureComposer(sentMessages, addedMessages);
+test('typed /btw opens a side chat with the question and sends nothing to the model', async () => {
+  const sentMessages: unknown[] = [];
+  const addedMessages: unknown[] = [];
+  const questions: string[] = [];
+  const composer = captureComposer(sentMessages, addedMessages, undefined, (question) => { questions.push(question); });
 
-    composer.handleVoiceTranscript(form);
-    await composer.handleSubmit(submitEvent);
+  composer.handleVoiceTranscript('/btw what does this function do?');
+  await composer.handleSubmit(submitEvent);
 
-    assert.deepEqual(sentMessages, [], `${form} must not be sent`);
-    assert.equal(addedMessages.length, 1, `${form} must render a notice`);
-    const notice = (addedMessages[0] as { content: string }).content;
-    assert.match(notice, /not available in the app/);
-    assert.match(notice, /new chat/i);
-  }
+  assert.deepEqual(sentMessages, [], 'the side question must not become a chat turn');
+  assert.deepEqual(addedMessages, [], 'the main transcript must stay untouched');
+  assert.deepEqual(questions, ['what does this function do?']);
 });
 
 test('/move is declined locally and names the app affordance', async () => {

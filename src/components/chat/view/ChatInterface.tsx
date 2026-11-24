@@ -28,6 +28,7 @@ import GoalControls from './GoalControls';
 import ChatComposer from './ChatComposer';
 import ChatMessagesPane from './ChatMessagesPane';
 import CommandResultModal from './CommandResultModal';
+import BtwPanel from './BtwPanel';
 import { isReasoningEffort, readReasoningEffort, rememberReasoningEffort, type ReasoningEffort } from './reasoningEffort';
 
 function ComposerSurface(props: ComponentProps<typeof ChatComposer>) {
@@ -80,6 +81,10 @@ function ChatInterface({
   // The session whose turn the user stopped. Its answer stays on screen, so
   // the retry control follows that turn until the next run starts.
   const [stoppedTurnSession, setStoppedTurnSession] = useState<string | null>(null);
+  const [btwQuestion, setBtwQuestion] = useState<string | null>(null);
+  // Remounting the panel is what starts a different side chat; its question and
+  // exchanges deliberately live only for as long as the drawer is open.
+  const [btwKey, setBtwKey] = useState(0);
 
   useEffect(() => {
     if (oauthLogin.attempt?.phase === 'completed') void hardRefreshProviderModels();
@@ -150,6 +155,20 @@ function ChatInterface({
     notice('Retrying the last turn.');
   }, [appendSessionMessage, selectedSession?.id, sendMessage, session.chatMessages, session.currentSessionId, session.isProcessing]);
 
+  const openSideChat = useCallback((question: string) => {
+    const trimmed = question.trim();
+    if (!trimmed) {
+      appendSessionMessage({ type: 'assistant', content: t('btw.usage', { defaultValue: 'Usage: /btw <question>' }), timestamp: Date.now() });
+      return;
+    }
+    if (!(session.currentSessionId || selectedSession?.id)) {
+      appendSessionMessage({ type: 'assistant', content: t('btw.noSession', { defaultValue: 'Send a message first: there is no conversation context for a side chat yet.' }), timestamp: Date.now() });
+      return;
+    }
+    setBtwQuestion(trimmed);
+    setBtwKey((key) => key + 1);
+  }, [appendSessionMessage, selectedSession?.id, session.currentSessionId, t]);
+
   const composer = useChatComposerState({
     executionCwd: sessionLocation.data?.cwd,
     // An unattended run commits, pushes and switches branches on whatever
@@ -179,6 +198,7 @@ function ChatInterface({
     setIsUserScrolledUp: session.setIsUserScrolledUp,
     setPendingPermissionRequests,
     onRetryLastTurn: retryFailedTurn,
+    onOpenSideChat: openSideChat,
   });
 
   // Stop is offered by the composer's button and by Escape; both are routed
@@ -502,6 +522,14 @@ function ChatInterface({
         currentSessionId={session.currentSessionId || selectedSession?.id || null}
         onSelectProviderModel={selectProviderModel}
       />
+      {btwQuestion !== null && (
+        <BtwPanel
+          key={btwKey}
+          question={btwQuestion}
+          sessionId={session.currentSessionId || selectedSession?.id || null}
+          onClose={() => setBtwQuestion(null)}
+        />
+      )}
       <OAuthLoginDialog
         open={oauthLogin.isOpen}
         providers={oauthLogin.providers}

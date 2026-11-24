@@ -71,6 +71,17 @@
     "stopSpeaking": "Arrêter",
     "loading": "Chargement…"
   },
+  "btw": {
+    "title": "Conversation parallèle",
+    "hint": "Pose une question sur cette conversation sans la modifier.",
+    "placeholder": "Poser une question parallèle…",
+    "send": "Envoyer",
+    "close": "Fermer la conversation parallèle",
+    "thinking": "Réflexion…",
+    "error": "La conversation parallèle a échoué.",
+    "usage": "Utilisation : /btw <question>",
+    "noSession": "Envoie d’abord un message : il n’y a pas encore de contexte pour une conversation parallèle."
+  },
   "input": {
     "placeholder": "Demandez {{provider}}, utilisez / pour les commandes, ou @ pour ajouter des fichiers…",
     "modelReasoning": {
