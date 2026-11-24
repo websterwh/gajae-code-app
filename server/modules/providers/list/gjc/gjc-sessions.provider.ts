@@ -12,6 +12,11 @@ const PROVIDER = 'gjc';
 const MAX_JSONL_LINE_BYTES = 32 * 1024 * 1024;
 const MAX_BUFFERED_HISTORY_RECORDS = 5_000;
 const MAX_BUFFERED_HISTORY_BYTES = 64 * 1024 * 1024;
+// Newest-row payloads retained during the index pass, so the page an open asks
+// for does not need a second read of the whole transcript. Bounded and local to
+// one request: it is released with the page and never grows with paging.
+const HISTORY_TAIL_RING_RECORDS = 512;
+const HISTORY_TAIL_RING_BYTES = 16 * 1024 * 1024;
 const HISTORY_READ_ATTEMPTS = 3;
 const HISTORY_INDEX_CACHE_CAPACITY = 16;
 type HistoryRow = { ordinal: number; time: number; kind: NormalizedMessage['kind']; toolId?: string };
@@ -522,6 +527,8 @@ export class GjcSessionsProvider implements IProviderSessions {
     let turns: HistoryIndexCacheEntry['turns'];
     let chronological: HistoryRow[];
     let visible: HistoryRow[];
+    const tail = new Map<number, { message: NormalizedMessage; bytes: number }>();
+    let tailBytes = 0;
     if (cached) {
       // Same revision: the cached size/mtimeMs exactly equal the fresh stat, so
       // the post-read comparison below still guards the revision the index was
@@ -534,8 +541,20 @@ export class GjcSessionsProvider implements IProviderSessions {
       const index: HistoryRow[] = [];
       await streamGjcSessionMessages(sessionFilePath, turns, raw => {
         for (const message of this.normalizeHistoryEntry(raw, sessionId, sessionIsRunning)) {
+          const position = index.length;
           const time = Date.parse(message.timestamp);
-          index.push({ ordinal: index.length, time: Number.isFinite(time) ? time : 0, kind: message.kind, toolId: message.toolId });
+          index.push({ ordinal: position, time: Number.isFinite(time) ? time : 0, kind: message.kind, toolId: message.toolId });
+          // Lengths, not a serialization: the bound only has to stay in the
+          // right order of magnitude, and stringifying every row would cost as
+          // much as the pass it is meant to save.
+          const bytes = (message.content?.length ?? 0) + (message.displayText?.length ?? 0) + (message.text?.length ?? 0);
+          tail.set(position, { message, bytes });
+          tailBytes += bytes;
+          while (tail.size > 1 && (tail.size > HISTORY_TAIL_RING_RECORDS || tailBytes > HISTORY_TAIL_RING_BYTES)) {
+            const oldest = tail.keys().next().value!;
+            tailBytes -= tail.get(oldest)!.bytes;
+            tail.delete(oldest);
+          }
         }
       });
       chronological = index.sort((a, b) => a.time - b.time || a.ordinal - b.ordinal);
@@ -556,22 +575,29 @@ export class GjcSessionsProvider implements IProviderSessions {
     }
     for (const ordinal of resultsByTool.values()) wanted.add(ordinal);
 
-    // A second streaming pass retains only the page and its attached results,
-    // independent of how far back the user has paged. No growing payload cache.
     const payloads = new Map<number, NormalizedMessage>();
-    let ordinal = 0;
-    let bytes = 0;
-    if (wanted.size) await streamGjcSessionMessages(sessionFilePath, turns, raw => {
-      for (const message of this.normalizeHistoryEntry(raw, sessionId, sessionIsRunning)) {
-        const position = ordinal++;
-        if (!wanted.has(position)) continue;
-        bytes += Buffer.byteLength(JSON.stringify(message), 'utf8');
-        if (bytes > MAX_BUFFERED_HISTORY_BYTES) {
-          throw new AppError('History page exceeds the payload limit; request fewer messages.', { code: 'HISTORY_PAGE_TOO_LARGE', statusCode: 413 });
+    // A page inside the retained tail - every open, which asks for the newest
+    // few rows - is already in hand from the index pass. Only a page that
+    // reaches further back streams the transcript again, and that pass retains
+    // just the page and its attached results.
+    const ringed = wanted.size > 0 && [...wanted].every(ordinal => tail.has(ordinal));
+    if (ringed) {
+      for (const ordinal of wanted) payloads.set(ordinal, tail.get(ordinal)!.message);
+    } else if (wanted.size) {
+      let ordinal = 0;
+      let bytes = 0;
+      await streamGjcSessionMessages(sessionFilePath, turns, raw => {
+        for (const message of this.normalizeHistoryEntry(raw, sessionId, sessionIsRunning)) {
+          const position = ordinal++;
+          if (!wanted.has(position)) continue;
+          bytes += Buffer.byteLength(JSON.stringify(message), 'utf8');
+          if (bytes > MAX_BUFFERED_HISTORY_BYTES) {
+            throw new AppError('History page exceeds the payload limit; request fewer messages.', { code: 'HISTORY_PAGE_TOO_LARGE', statusCode: 413 });
+          }
+          payloads.set(position, message);
         }
-        payloads.set(position, message);
-      }
-    });
+      });
+    }
     const after = await fsSync.promises.stat(sessionFilePath);
     if (after.size !== revision.size || after.mtimeMs !== revision.mtimeMs) {
       throw new AppError('Transcript changed while reading history; retry the request.', { code: 'HISTORY_CHANGED', statusCode: 409 });

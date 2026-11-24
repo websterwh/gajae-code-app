@@ -968,7 +968,9 @@ test('history carries the runtime tool details the transcript persisted', { conc
 /**
  * Counts `createReadStream` calls against one transcript path. Each history
  * read pass (lineage, descriptor index, payload) opens the file exactly once,
- * so the counter separates index reuse from payload streaming.
+ * so the counter separates index reuse from payload streaming. A cold read of
+ * the newest page needs only the first two: its payloads are kept in the tail
+ * ring while the index pass already has them.
  */
 const countTranscriptStreams = (filePath: string) => {
   const originalCreateReadStream = fs.createReadStream;
@@ -999,11 +1001,11 @@ test('gjc history index cache reuses the descriptor index while payloads still s
       const counter = countTranscriptStreams(filePath);
       try {
         const first = await provider.fetchHistory(sessionId, { limit: 2 });
-        assert.equal(counter.count, 3, 'a cold read streams lineage, index and payload passes');
+        assert.equal(counter.count, 2, 'a cold read of the newest page streams lineage and index; the payloads come from the retained tail');
         assert.equal(first.total, 4);
 
         const second = await provider.fetchHistory(sessionId, { limit: 2, offset: 2 });
-        assert.equal(counter.count, 4, 'a cache hit re-streams only the payload pass');
+        assert.equal(counter.count, 3, 'a cache hit re-streams only the payload pass');
         assert.equal(second.total, 4);
         assert.equal(second.hasMore, false);
         assert.equal(second.messages[0]?.content, 'cached prompt');
@@ -1033,7 +1035,7 @@ test('gjc history index cache invalidates when the transcript grows', { concurre
       const counter = countTranscriptStreams(filePath);
       try {
         const first = await provider.fetchHistory(sessionId, { limit: 10 });
-        assert.equal(counter.count, 3);
+        assert.equal(counter.count, 2);
         assert.equal(first.total, 4);
 
         await appendFile(filePath, `${JSON.stringify({
@@ -1045,12 +1047,12 @@ test('gjc history index cache invalidates when the transcript grows', { concurre
         })}\n`, 'utf8');
 
         const second = await provider.fetchHistory(sessionId, { limit: 10 });
-        assert.equal(counter.count, 6, 'a changed transcript rebuilds the index');
+        assert.equal(counter.count, 4, 'a changed transcript rebuilds the index and serves the page from its tail');
         assert.equal(second.total, 5);
         assert.equal(second.messages.at(-1)?.content, 'appended question');
 
         const third = await provider.fetchHistory(sessionId, { limit: 10 });
-        assert.equal(counter.count, 7, 'the rebuilt revision is cached again');
+        assert.equal(counter.count, 5, 'the rebuilt revision is cached; only the page payload streams');
         assert.equal(third.total, 5);
       } finally {
         counter.restore();
@@ -1076,12 +1078,12 @@ test('gjc history index cache keys entries per session path', { concurrency: fal
       const counterB = countTranscriptStreams(filePathB);
       try {
         await provider.fetchHistory('cache-path-a', { limit: 1 });
-        assert.equal(counterA.count, 3);
+        assert.equal(counterA.count, 2);
         assert.equal(counterB.count, 0);
 
         await provider.fetchHistory('cache-path-b', { limit: 1 });
-        assert.equal(counterA.count, 3, 'reading another transcript must not churn this entry');
-        assert.equal(counterB.count, 3);
+        assert.equal(counterA.count, 2, 'reading another transcript must not churn this entry');
+        assert.equal(counterB.count, 2);
 
         await appendFile(filePathB, `${JSON.stringify({
           type: 'message',
@@ -1092,11 +1094,11 @@ test('gjc history index cache keys entries per session path', { concurrency: fal
         })}\n`, 'utf8');
 
         const againA = await provider.fetchHistory('cache-path-a', { limit: 1 });
-        assert.equal(counterA.count, 4, "one transcript's invalidation leaves the other entry intact");
+        assert.equal(counterA.count, 3, "one transcript's invalidation leaves the other entry intact");
         assert.equal(againA.total, 1);
 
         const againB = await provider.fetchHistory('cache-path-b', { limit: 10 });
-        assert.equal(counterB.count, 6, 'only the appended transcript rebuilds its index');
+        assert.equal(counterB.count, 4, 'only the appended transcript rebuilds its index, and its page needs no payload pass');
         assert.equal(againB.total, 2);
         assert.equal(againB.messages.at(-1)?.content, 'b grows');
       } finally {
