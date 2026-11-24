@@ -123,7 +123,7 @@ import { memoryRoutes } from './modules/memory/index.js';
 import { packagesRoutes } from './modules/packages/index.js';
 import { forgetProjectExport, projectExportsFilePath, projectExportsFor, readProjectExports } from './gjc-project-exports.js';
 import { restoreSavedGithubToken } from './modules/git/github-auth.service.js';
-import voiceRoutes from './voice-proxy.js';
+import voiceRoutes, { handleVoiceStreamConnection } from './voice-proxy.js';
 import { assetsRoutes } from './modules/assets/index.js';
 import { initializeDatabase, projectsDb, sessionsDb, userDb } from './modules/database/index.js';
 import {
@@ -302,6 +302,7 @@ const { app, server, wss } = createGjcAppFactory({
     authenticateGjcRoute: authenticateGjcAccess,
     validateApiKey,
     chat: chatDependencies,
+    voice: { handleStream: handleVoiceStreamConnection },
     shell: {
         resolveProviderSessionId: (sessionId, provider) => {
             const dbSession = sessionsDb.getSessionById(sessionId);

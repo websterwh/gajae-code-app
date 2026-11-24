@@ -23,6 +23,7 @@ import type { WorkspaceCandidate } from '../hooks/useWorkspaceTarget';
 import type { PendingPermissionRequest, PermissionDecision } from '../types/types';
 import type { ProviderModelOption } from '../../../types/app';
 import type { PermissionModeUpdate, ProjectPermissions } from '../../../hooks/useProjectPermissions';
+import { useUiPreferences } from '../../../hooks/useUiPreferences';
 import {
   PromptInput,
   PromptInputHeader,
@@ -116,6 +117,8 @@ interface ChatComposerProps {
   textareaRef: RefObject<HTMLTextAreaElement | null>;
   input: string;
   onVoiceTranscript?: (text: string, send?: boolean) => void;
+  onVoicePartial?: (text: string) => void;
+  onVoiceReset?: () => void;
   onInputChange: (event: ChangeEvent<HTMLTextAreaElement>) => void;
   onTextareaClick: (event: MouseEvent<HTMLTextAreaElement>) => void;
   onTextareaKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
@@ -192,6 +195,8 @@ export default function ChatComposer({
   textareaRef,
   input,
   onVoiceTranscript,
+  onVoicePartial,
+  onVoiceReset,
   onInputChange,
   onTextareaClick,
   onTextareaKeyDown,
@@ -243,6 +248,7 @@ export default function ChatComposer({
   // Voice state is hosted here (not in the mic button) so the main Send button can stop
   // recording and send the transcript in one tap, the way the mic button drops it in the box.
   const voiceAvailable = useVoiceAvailable();
+  const { preferences: { voiceStreaming } } = useUiPreferences();
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const voiceErrorTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleVoiceError = useCallback((msg: string) => {
@@ -258,6 +264,7 @@ export default function ChatComposer({
     onVoiceTranscript ?? noopTranscript,
     handleVoiceError,
     voiceOwnerKey,
+    { streaming: voiceStreaming, onPartial: onVoicePartial, onStreamReset: onVoiceReset },
   );
   const isRecording = voiceState === 'recording';
   const isVoiceBusy = voiceState !== 'idle' && !isRecording;

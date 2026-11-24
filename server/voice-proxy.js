@@ -15,6 +15,7 @@ import { dirname, join } from 'node:path';
 import { spawn } from 'node:child_process';
 
 import express from 'express';
+import { WebSocket } from 'ws';
 
 import { asyncHandler } from './shared/utils.js';
 
@@ -294,6 +295,184 @@ router.put('/config', asyncHandler((req, res) => {
   renameSync(temporary, CONFIG_PATH);
   res.json(config);
 }));
+
+const STREAM_SAMPLE_RATE = 16000;
+const STREAM_PENDING_LIMIT = 64;
+const STREAM_HANDSHAKE_TIMEOUT_MS = 10_000;
+
+/**
+ * Map an OpenAI-compatible HTTP base URL to the live transcription WebSocket.
+ * Phonon serves it at `{base}/audio/stream`; credentials travel in a header,
+ * never in the URL, because this side of the proxy is server-controlled.
+ * @param {string} baseUrl
+ * @returns {string}
+ */
+function streamEndpoint(baseUrl) {
+  const url = new URL(baseUrl);
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  url.pathname = `${url.pathname.replace(/\/+$/, '')}/audio/stream`;
+  url.search = '';
+  return url.toString();
+}
+
+/**
+ * Bridge an authenticated app WebSocket to a backend live-transcription stream.
+ *
+ * The browser cannot set headers on `WebSocket()`, so the first frame carries
+ * the stream configuration and, optionally, the per-user API key. The backend
+ * host still comes from server config (never the client), and the same SSRF
+ * guard as the HTTP routes runs before any connection is opened. Provider
+ * `partial`/`final`/`done`/`error` frames are relayed verbatim; raw PCM flows
+ * the other way.
+ *
+ * @param {import('ws').WebSocket} client
+ * @param {import('node:http').IncomingMessage} request
+ */
+export function handleVoiceStreamConnection(client, request) {
+  /** @type {import('ws').WebSocket | null} */
+  let upstream = null;
+  let configured = false;
+  let ready = false;
+  let requestedEnd = false;
+  let completed = false;
+  let closed = false;
+  /** @type {ReturnType<typeof setTimeout> | null} */
+  let closeTimer = null;
+  /** @type {Array<Buffer | ArrayBuffer>} */
+  const pending = [];
+
+  const send = (payload) => {
+    if (client.readyState !== WebSocket.OPEN) return;
+    try { client.send(JSON.stringify(payload)); } catch { /* peer already gone */ }
+  };
+  const stopTimer = () => {
+    if (closeTimer) clearTimeout(closeTimer);
+    closeTimer = null;
+  };
+  const closeClient = (code = 1000) => {
+    stopTimer();
+    if (closed) return;
+    closed = true;
+    try { client.close(code); } catch { /* already closed */ }
+  };
+  const fail = (message, code = 1011) => {
+    send({ type: 'error', message });
+    closeClient(code);
+  };
+  const closeUpstream = () => {
+    const socket = upstream;
+    upstream = null;
+    try { socket?.close(); } catch { /* already closed */ }
+  };
+
+  /** @param {{sttApiKey?: unknown}} frame */
+  const openUpstream = (frame) => {
+    const cfg = resolveConfig(request);
+    if (!cfg.sttBaseUrl) return fail('No speech recognition backend configured', 1008);
+    if (!isAllowedBackendUrl(cfg.sttBaseUrl)) return fail('Invalid speech recognition backend URL.', 1008);
+    let endpoint;
+    try {
+      endpoint = streamEndpoint(cfg.sttBaseUrl);
+    } catch {
+      return fail('Invalid speech recognition backend URL.', 1008);
+    }
+    const apiKey = text(frame.sttApiKey, 512) || cfg.sttApiKey;
+    let socket;
+    try {
+      socket = new WebSocket(endpoint, {
+        headers: authHeader(apiKey),
+        handshakeTimeout: STREAM_HANDSHAKE_TIMEOUT_MS,
+      });
+    } catch {
+      return fail('Voice backend unreachable');
+    }
+    upstream = socket;
+
+    if (requestedEnd) {
+      // The user stopped before the backend finished connecting; the stream is
+      // still opened so the backend can flush what it already received.
+    }
+
+    socket.on('open', () => {
+      if (closed) { closeUpstream(); return; }
+      socket.send(JSON.stringify({ sample_rate: STREAM_SAMPLE_RATE, format: 'pcm_s16le' }));
+      ready = true;
+      send({ type: 'ready' });
+      for (const data of pending.splice(0)) {
+        if (socket.readyState !== WebSocket.OPEN) break;
+        socket.send(data);
+      }
+      if (requestedEnd && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'end' }));
+    });
+    socket.on('message', (data, isBinary) => {
+      if (isBinary || closed) return;
+      const raw = String(data);
+      if (raw.length > 64 * 1024) return;
+      let event;
+      try { event = JSON.parse(raw); } catch { return; }
+      if (!event || typeof event !== 'object') return;
+      if (event.type === 'done') {
+        completed = true;
+        if (client.readyState === WebSocket.OPEN) client.send(raw);
+        closeClient(1000);
+        return;
+      }
+      if (event.type === 'error') {
+        send({ type: 'error', message: typeof event.message === 'string' ? event.message.slice(0, 512) : 'Voice backend error' });
+        closeUpstream();
+        return;
+      }
+      if (client.readyState === WebSocket.OPEN) client.send(raw);
+    });
+    socket.on('close', () => {
+      if (upstream === socket) upstream = null;
+      if (!completed && !requestedEnd) send({ type: 'error', message: 'Speech recognition stream closed' });
+      closeClient(1000);
+    });
+    socket.on('error', (error) => {
+      if (upstream === socket) upstream = null;
+      fail(`Voice backend unreachable: ${error.message}`);
+    });
+  };
+
+  client.on('message', (data, isBinary) => {
+    if (closed) return;
+    if (isBinary) {
+      if (upstream?.readyState === WebSocket.OPEN && ready) upstream.send(data);
+      else if (!ready && pending.length < STREAM_PENDING_LIMIT) pending.push(data);
+      return;
+    }
+    let frame;
+    try { frame = JSON.parse(String(data)); } catch { return fail('Invalid stream message', 1002); }
+    if (!frame || typeof frame !== 'object') return fail('Invalid stream message', 1002);
+    if (frame.type === 'config' && !configured) {
+      configured = true;
+      openUpstream(frame);
+      return;
+    }
+    if (frame.type === 'end') {
+      requestedEnd = true;
+      if (upstream?.readyState === WebSocket.OPEN && ready) {
+        upstream.send(JSON.stringify({ type: 'end' }));
+        stopTimer();
+        closeTimer = setTimeout(() => closeClient(1000), VOICE_TIMEOUT_MS);
+      } else if (!upstream) {
+        closeClient(1000);
+      }
+      // While the upstream is still connecting, `open` sends the end frame.
+    }
+  });
+  client.on('close', () => {
+    stopTimer();
+    closed = true;
+    closeUpstream();
+  });
+  client.on('error', () => {
+    stopTimer();
+    closed = true;
+    closeUpstream();
+  });
+}
 
 /**
  * POST /api/voice/transcribe (multipart 'audio') -> { text }.

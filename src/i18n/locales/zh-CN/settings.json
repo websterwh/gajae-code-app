@@ -92,6 +92,8 @@
     "sttModel": "语音识别模型",
     "voice": "语音",
     "format": "声音文件格式",
+    "streaming": "边说边流式转写",
+    "streamingDescription": "实时发送音频，并在说话时逐句显示文字。需要支持实时转写流（如 Phonon）的后端。",
     "note": "浏览器直接连接到自定义的基础URL，因此必须允许CORS。留空将使用服务器后端。",
     "sttBaseUrl": "语音识别 URL",
     "ttsBaseUrl": "语音合成 URL",

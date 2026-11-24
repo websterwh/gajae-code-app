@@ -51,16 +51,29 @@ export default function VoiceSettingsTab() {
   return (
     <div className="space-y-8">
       <SettingsSection title={t('voiceSettings.title')} description={t('voiceSettings.description')}>
-        <div className="flex items-center justify-between rounded-lg border border-border p-3">
-          <div className="pr-3">
-            <div className="text-sm font-medium text-foreground">{t('voiceSettings.enable')}</div>
-            <div className="text-xs text-muted-foreground">{t('voiceSettings.enableDescription')}</div>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between rounded-lg border border-border p-3">
+            <div className="pr-3">
+              <div className="text-sm font-medium text-foreground">{t('voiceSettings.enable')}</div>
+              <div className="text-xs text-muted-foreground">{t('voiceSettings.enableDescription')}</div>
+            </div>
+            <SettingsToggle
+              checked={ui.voiceEnabled}
+              onChange={(enabled) => setUiPreference('voiceEnabled', enabled)}
+              ariaLabel={t('voiceSettings.enable')}
+            />
           </div>
-          <SettingsToggle
-            checked={ui.voiceEnabled}
-            onChange={(enabled) => setUiPreference('voiceEnabled', enabled)}
-            ariaLabel={t('voiceSettings.enable')}
-          />
+          <div className="flex items-center justify-between rounded-lg border border-border p-3">
+            <div className="pr-3">
+              <div className="text-sm font-medium text-foreground">{t('voiceSettings.streaming')}</div>
+              <div className="text-xs text-muted-foreground">{t('voiceSettings.streamingDescription')}</div>
+            </div>
+            <SettingsToggle
+              checked={ui.voiceStreaming}
+              onChange={(enabled) => setUiPreference('voiceStreaming', enabled)}
+              ariaLabel={t('voiceSettings.streaming')}
+            />
+          </div>
         </div>
       </SettingsSection>
       {backend}

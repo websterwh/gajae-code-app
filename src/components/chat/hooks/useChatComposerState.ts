@@ -499,12 +499,34 @@ export function useChatComposerState(args: UseChatComposerStateArgs) {
   const syncInputOverlayScroll = useCallback((target: HTMLTextAreaElement) => { if (inputHighlightRef.current) { inputHighlightRef.current.scrollTop = target.scrollTop; inputHighlightRef.current.scrollLeft = target.scrollLeft; } }, []);
   const handleTextareaInput = useCallback((event: FormEvent<HTMLTextAreaElement>) => { if (isComposerSealed()) { event.preventDefault?.(); event.currentTarget.value = inputRef.current; return; } resize(event.currentTarget); setCursorPosition(event.currentTarget.selectionStart); syncInputOverlayScroll(event.currentTarget); }, [resize, setCursorPosition, syncInputOverlayScroll]);
   const handleKeyDown = useCallback((event: KeyboardEvent<HTMLTextAreaElement>) => { if (isComposerSealed()) { event.preventDefault(); return; } if (handleCommandMenuKeyDown(event) || handleFileMentionsKeyDown(event) || event.key !== 'Enter' || event.nativeEvent.isComposing) return; if ((event.ctrlKey || event.metaKey) && !event.shiftKey || (!event.shiftKey && !event.ctrlKey && !event.metaKey && !sendByCtrlEnter)) { event.preventDefault(); void handleSubmit(event); } }, [handleCommandMenuKeyDown, handleFileMentionsKeyDown, handleSubmit, sendByCtrlEnter]);
+  // Live streaming replaces one phrase at a time. The baseline is what the
+  // composer held when speech started, so partials never stack up and the final
+  // transcript replaces the last partial rather than repeating it.
+  const voiceStreamBaseline = useRef<string | null>(null);
+  const handleVoicePartial = useCallback((text: string) => {
+    if (isComposerSealed()) return;
+    const baseline = voiceStreamBaseline.current ?? inputRef.current;
+    voiceStreamBaseline.current = baseline;
+    const next = text.trim() ? (baseline.trim() ? `${baseline.trim()} ${text.trim()}` : text.trim()) : baseline;
+    setInput(next);
+    inputRef.current = next;
+  }, [setInput]);
+  const handleVoicePartialReset = useCallback(() => {
+    if (voiceStreamBaseline.current === null) return;
+    const baseline = voiceStreamBaseline.current;
+    voiceStreamBaseline.current = null;
+    setInput(baseline);
+    inputRef.current = baseline;
+  }, [setInput]);
   const handleVoiceTranscript = useCallback((text: string, send?: boolean) => {
     if (isComposerSealed()) return;
     const isCurrent = queueOwner.current === composerOwner && submissionOwner.current !== null;
     const shouldSend = send && isCurrent && !isComposerFrozen();
+    const baseline = voiceStreamBaseline.current;
+    voiceStreamBaseline.current = null;
     setInput((previous) => {
-      const next = previous.trim() ? `${previous.trim()} ${text}` : text;
+      const base = baseline ?? previous;
+      const next = base.trim() ? `${base.trim()} ${text}` : text;
       if (isCurrent) inputRef.current = next;
       return next;
     });
@@ -537,5 +559,5 @@ export function useChatComposerState(args: UseChatComposerStateArgs) {
     } finally { finishOperation(); }
   }, [sendMessage, setPendingPermissionRequests]);
   const handleInputFocusChange = useCallback((focused: boolean) => { setFocused(focused); onInputFocusChange?.(focused); }, [onInputFocusChange]);
-  return { useWorktree, setUseWorktree: setWorktreeChoice, composerFrozen, draftPersistence, draftReady, retryDraftPersistence, input, setInput, textareaRef, inputHighlightRef, isTextareaExpanded, slashCommandsCount, skillCommands: slashCommands.filter((command) => command.type === 'skill'), filteredCommands, frequentCommands, commandQuery, showCommandMenu, selectedCommandIndex, resetCommandMenuState, handleCommandSelect, handleToggleCommandMenu, showFileDropdown, filteredFiles: filteredFiles as MentionableFile[], selectedFileIndex, renderInputWithMentions, selectFile, attachedImages, setAttachedImages, attachmentNotice, dismissAttachmentNotice: () => setAttachmentNotice(null), getRootProps, getInputProps, isDragActive, openImagePicker: open, handleSubmit, handleSteer, modelPickerTrigger, queuedDrafts, editQueuedDraft, deleteQueuedDraft, moveQueuedDraft, resolveSteerResult, handleVoiceTranscript, insertAtEnd, handleInputChange, handleKeyDown, handlePaste, handleTextareaClick: (event: MouseEvent<HTMLTextAreaElement>) => setCursorPosition(event.currentTarget.selectionStart), handleTextareaInput, syncInputOverlayScroll, handleClearInput, handleAbortSession, handlePermissionDecision, handleInputFocusChange, isInputFocused, commandModalPayload, closeCommandModal: () => setModal(null), showCostModal, isWorkspace: workspaceTarget.isWorkspace, workspaceCandidates: workspaceTarget.candidates, workspaceTargetValue: workspaceTarget.target, pickWorkspaceTarget: workspaceTarget.pickTarget };
+  return { useWorktree, setUseWorktree: setWorktreeChoice, composerFrozen, draftPersistence, draftReady, retryDraftPersistence, input, setInput, textareaRef, inputHighlightRef, isTextareaExpanded, slashCommandsCount, skillCommands: slashCommands.filter((command) => command.type === 'skill'), filteredCommands, frequentCommands, commandQuery, showCommandMenu, selectedCommandIndex, resetCommandMenuState, handleCommandSelect, handleToggleCommandMenu, showFileDropdown, filteredFiles: filteredFiles as MentionableFile[], selectedFileIndex, renderInputWithMentions, selectFile, attachedImages, setAttachedImages, attachmentNotice, dismissAttachmentNotice: () => setAttachmentNotice(null), getRootProps, getInputProps, isDragActive, openImagePicker: open, handleSubmit, handleSteer, modelPickerTrigger, queuedDrafts, editQueuedDraft, deleteQueuedDraft, moveQueuedDraft, resolveSteerResult, handleVoiceTranscript, handleVoicePartial, handleVoicePartialReset, insertAtEnd, handleInputChange, handleKeyDown, handlePaste, handleTextareaClick: (event: MouseEvent<HTMLTextAreaElement>) => setCursorPosition(event.currentTarget.selectionStart), handleTextareaInput, syncInputOverlayScroll, handleClearInput, handleAbortSession, handlePermissionDecision, handleInputFocusChange, isInputFocused, commandModalPayload, closeCommandModal: () => setModal(null), showCostModal, isWorkspace: workspaceTarget.isWorkspace, workspaceCandidates: workspaceTarget.candidates, workspaceTargetValue: workspaceTarget.target, pickWorkspaceTarget: workspaceTarget.pickTarget };
 }

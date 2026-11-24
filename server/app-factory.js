@@ -28,6 +28,7 @@ export function createGjcAppFactory({
   validateApiKey,
   chat,
   shell,
+  voice = undefined,
   desktopUpdateRelay = undefined,
   desktopRestartAdmission = /** @type {import('./shared/interfaces.js').DesktopWorkAdmission | undefined} */ (undefined),
 }) {
@@ -66,6 +67,7 @@ export function createGjcAppFactory({
     },
     chat: { ...chat, desktopRestartAdmission },
     shell: { ...shell, desktopRestartAdmission },
+    voice,
   });
   app.locals.wss = wss;
 

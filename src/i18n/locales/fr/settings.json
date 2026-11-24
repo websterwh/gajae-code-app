@@ -92,6 +92,8 @@
     "sttModel": "Modèle de reconnaissance vocale",
     "voice": "Voix",
     "format": "Format de fichier son",
+    "streaming": "Diffuser pendant que vous parlez",
+    "streamingDescription": "Envoyer l’audio en direct et afficher chaque phrase au fur et à mesure. Nécessite un backend avec un flux de transcription en direct, comme Phonon.",
     "note": "Le navigateur contacte directement une URL de base personnalisée et doit donc autoriser CORS. Laissez ce champ vide pour utiliser le backend du serveur.",
     "sttBaseUrl": "URL de reconnaissance vocale",
     "ttsBaseUrl": "URL de synthèse vocale",

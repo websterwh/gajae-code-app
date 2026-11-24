@@ -92,6 +92,8 @@
     "sttModel": "Spracherkennungsmodell",
     "voice": "Stimme",
     "format": "Sounddateiformat",
+    "streaming": "Beim Sprechen streamen",
+    "streamingDescription": "Audio live senden und jeden Satz anzeigen, sobald er entsteht. Erfordert ein Backend mit Live-Transkriptionsstream, etwa Phonon.",
     "note": "Der Browser ruft eine benutzerdefinierte Basis-URL direkt auf und benötigt daher CORS. Lassen Sie das Feld leer, um das Server-Backend zu verwenden.",
     "sttBaseUrl": "URL für Spracherkennung",
     "ttsBaseUrl": "URL für Sprachausgabe",

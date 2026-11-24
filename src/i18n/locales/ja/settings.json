@@ -92,6 +92,8 @@
     "sttModel": "Speech-to-text model",
     "voice": "Voice",
     "format": "Audio format",
+    "streaming": "話しながらストリーミング",
+    "streamingDescription": "音声をリアルタイムで送信し、話すそばから文を表示します。Phonon などライブ文字起こしストリーム対応のバックエンドが必要です。",
     "note": "A custom base URL is called directly by your browser and must allow browser CORS requests. Leave it blank to use the server-configured backend.。",
     "sttBaseUrl": "音声認識の URL",
     "ttsBaseUrl": "音声合成の URL",

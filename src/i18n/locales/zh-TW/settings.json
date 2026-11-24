@@ -92,6 +92,8 @@
     "sttModel": "語音辨識模型",
     "voice": "語音",
     "format": "聲音檔案格式",
+    "streaming": "邊說邊串流轉寫",
+    "streamingDescription": "即時傳送音訊，並在說話時逐句顯示文字。需要支援即時轉寫串流（如 Phonon）的後端。",
     "note": "瀏覽器會直接連接至自訂的基本URL，因此必須允許CORS。留空則使用伺服器後端.",
     "sttBaseUrl": "語音辨識 URL",
     "ttsBaseUrl": "語音合成 URL",

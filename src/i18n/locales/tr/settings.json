@@ -92,6 +92,8 @@
     "sttModel": "Konuşma tanıma modeli",
     "voice": "Ses",
     "format": "Ses dosyası formatı",
+    "streaming": "Konuşurken akış",
+    "streamingDescription": "Sesi canlı gönderin ve her cümleyi oluşurken görün. Phonon gibi canlı deşifre akışı destekleyen bir arka uç gerekir.",
     "note": "Tarayıcı özel bir temel URL ile doğrudan iletişim kurar, dolayısıyla CORS'a izin vermesi gerekir. Sunucu arka ucunu kullanmak için boş bırakın.",
     "sttBaseUrl": "Konuşma tanıma URL’si",
     "ttsBaseUrl": "Konuşma sentezi URL’si",

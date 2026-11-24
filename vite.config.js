@@ -23,6 +23,7 @@ function websocketTarget(address) {
 
 function developmentProxy(address) {
   return {
+    '/api/voice/stream': websocketTarget(address),
     '/api': `http://${address}`,
     '/ws': websocketTarget(address),
     '/shell': websocketTarget(address),

@@ -92,6 +92,8 @@
     "sttModel": "음성 인식 모델",
     "voice": "음성",
     "format": "음성 파일 형식",
+    "streaming": "말하는 동안 스트리밍",
+    "streamingDescription": "오디오를 실시간으로 보내 말하는 대로 문장을 표시합니다. Phonon처럼 실시간 전사 스트림을 지원하는 백엔드가 필요합니다.",
     "note": "브라우저는 직접 커스텀 기본 URL에 연결하므로 CORS를 허용해야 합니다. 비어있으면 서버 백엔드 사용.",
     "sttBaseUrl": "음성 인식 URL",
     "ttsBaseUrl": "음성 합성 URL",

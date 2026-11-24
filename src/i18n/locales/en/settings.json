@@ -96,6 +96,8 @@
     "sttModel": "Speech recognition model",
     "voice": "Voice",
     "format": "Sound file format",
+    "streaming": "Stream while speaking",
+    "streamingDescription": "Send audio live and show each phrase as it forms. Requires a backend with a live transcription stream, such as Phonon.",
     "note": "The app server stores endpoint URLs under its persistent data volume and proxies audio requests, so local services do not need browser CORS support."
   },
   "preferences": {

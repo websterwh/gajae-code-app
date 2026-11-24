@@ -8,7 +8,7 @@ import type { ToolOutputDensity } from '../components/chat/utils/toolOutputDensi
  * (version 3): nothing reads them any more, but they stay in the record for one
  * release so a downgrade still finds them and an upgrade can derive from them.
  */
-type UiPreferences = { showRawParameters: boolean; showThinking: boolean; showImagePreviews: boolean; sendByCtrlEnter: boolean; sidebarVisible: boolean; voiceEnabled: boolean; toolOutputDensity: ToolOutputDensity };
+type UiPreferences = { showRawParameters: boolean; showThinking: boolean; showImagePreviews: boolean; sendByCtrlEnter: boolean; sidebarVisible: boolean; voiceEnabled: boolean; voiceStreaming: boolean; toolOutputDensity: ToolOutputDensity };
 type UiPreferenceKey = keyof UiPreferences;
 type UiPreferencesAction =
   | { type: 'set'; key: UiPreferenceKey; value: unknown }
@@ -22,6 +22,7 @@ const initialValues: UiPreferences = {
   sendByCtrlEnter: false,
   sidebarVisible: true,
   voiceEnabled: false,
+  voiceStreaming: false,
   toolOutputDensity: DEFAULT_TOOL_OUTPUT_DENSITY,
 };
 const preferenceNames = Object.keys(initialValues) as UiPreferenceKey[];

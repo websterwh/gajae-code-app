@@ -382,6 +382,8 @@ function ChatInterface({
       textareaRef={composer.textareaRef}
       input={composer.input}
       onVoiceTranscript={composer.handleVoiceTranscript}
+      onVoicePartial={composer.handleVoicePartial}
+      onVoiceReset={composer.handleVoicePartialReset}
       onInputChange={composer.handleInputChange}
       onTextareaClick={composer.handleTextareaClick}
       onTextareaKeyDown={composer.handleKeyDown}

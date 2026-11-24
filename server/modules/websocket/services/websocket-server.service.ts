@@ -1,6 +1,6 @@
 import type { Server as HttpServer } from 'node:http';
 
-import { WebSocketServer, type VerifyClientCallbackSync } from 'ws';
+import { WebSocketServer, type VerifyClientCallbackSync, type WebSocket } from 'ws';
 
 import { handleDesktopNotificationsConnection } from '@/modules/notifications/index.js';
 import { automationService } from '@/modules/automation/index.js';
@@ -14,6 +14,8 @@ type UpgradeVerifier = Parameters<typeof verifyWebSocketClient>[1];
 type GatewayDependencies = {
   verifyClient: UpgradeVerifier;
   chat: Parameters<typeof handleChatConnection>[2]; shell: Parameters<typeof handleShellConnection>[1];
+  /** Live speech bridge; absent builds simply have no streaming voice route. */
+  voice?: { handleStream: (socket: WebSocket, request: AuthenticatedWebSocketRequest) => void };
 };
 
 function startHeartbeat(socket: Parameters<typeof handleChatConnection>[0]): void {
@@ -119,6 +121,11 @@ export function createWebSocketServer(server: HttpServer, dependencies: GatewayD
       },
       '/desktop-notifications': () => {
         handleDesktopNotificationsConnection(socket, request);
+        return true;
+      },
+      '/api/voice/stream': () => {
+        if (!dependencies.voice) return false;
+        dependencies.voice.handleStream(socket, request);
         return true;
       },
       [REMOTE_COMPUTER_PATH]: handleRemoteComputer,
