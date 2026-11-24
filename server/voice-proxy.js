@@ -26,6 +26,7 @@ const CONFIG_PATH = join(
 const ENV = {
   baseUrl: (process.env.VOICE_API_BASE_URL || '').replace(/\/$/, ''),
   apiKey: process.env.VOICE_API_KEY || '',
+  sttStreamProtocol: process.env.VOICE_STREAM_PROTOCOL || 'auto',
   sttModel: process.env.VOICE_STT_MODEL || 'whisper-1',
   ttsModel: process.env.VOICE_TTS_MODEL || 'kokoro',
   ttsVoice: process.env.VOICE_TTS_VOICE || 'alloy',
@@ -50,6 +51,7 @@ function voiceConfig() {
     sttBaseUrl: text(saved.sttBaseUrl) || ENV.baseUrl,
     ttsBaseUrl: text(saved.ttsBaseUrl) || ENV.baseUrl,
     sttModel: text(saved.sttModel, 128) || ENV.sttModel,
+    sttStreamProtocol: normalizeStreamProtocol(saved.sttStreamProtocol || ENV.sttStreamProtocol),
     ttsVoice: text(saved.ttsVoice, 128) || ENV.ttsVoice,
     ttsFormat: text(saved.ttsFormat, 32),
   };
@@ -59,7 +61,7 @@ function voiceConfig() {
  * Resolve the voice backend config for a request. Client headers (set from the
  * user's in-app voice settings) take precedence over the server env defaults.
  * @param {import('express').Request} req
- * @returns {{sttBaseUrl: string, ttsBaseUrl: string, sttApiKey: string, ttsApiKey: string, sttModel: string, ttsModel: string, ttsVoice: string, ttsFormat: string}}
+ * @returns {{sttBaseUrl: string, ttsBaseUrl: string, sttApiKey: string, ttsApiKey: string, sttModel: string, sttStreamProtocol: string, ttsModel: string, ttsVoice: string, ttsFormat: string}}
  */
 function resolveConfig(req) {
   const h = req.headers;
@@ -72,6 +74,7 @@ function resolveConfig(req) {
     sttApiKey: String(h['x-voice-stt-api-key'] || h['x-voice-api-key'] || '') || ENV.apiKey,
     ttsApiKey: String(h['x-voice-tts-api-key'] || h['x-voice-api-key'] || '') || ENV.apiKey,
     sttModel: String(h['x-voice-stt-model'] || '') || saved.sttModel,
+    sttStreamProtocol: saved.sttStreamProtocol,
     ttsModel: ENV.ttsModel,
     ttsVoice: String(h['x-voice-tts-voice'] || '') || saved.ttsVoice,
     ttsFormat: String(h['x-voice-tts-format'] || '').trim() || saved.ttsFormat,
@@ -282,6 +285,7 @@ router.put('/config', asyncHandler((req, res) => {
     sttBaseUrl: text(candidate.sttBaseUrl),
     ttsBaseUrl: text(candidate.ttsBaseUrl),
     sttModel: text(candidate.sttModel, 128),
+    sttStreamProtocol: normalizeStreamProtocol(candidate.sttStreamProtocol),
     ttsVoice: text(candidate.ttsVoice, 128),
     ttsFormat: text(candidate.ttsFormat, 32),
   };
@@ -297,16 +301,71 @@ router.put('/config', asyncHandler((req, res) => {
 }));
 
 const STREAM_SAMPLE_RATE = 16000;
+const OPENAI_STREAM_SAMPLE_RATE = 24000;
 const STREAM_PENDING_LIMIT = 64;
 const STREAM_HANDSHAKE_TIMEOUT_MS = 10_000;
+const STREAM_PROTOCOLS = ['auto', 'phonon', 'openai', 'deepgram'];
 
 /**
- * Map an OpenAI-compatible HTTP base URL to the live transcription WebSocket.
- * Phonon serves it at `{base}/audio/stream`; credentials travel in a header,
- * never in the URL, because this side of the proxy is server-controlled.
+ * Normalize the configured live-stream dialect. `auto` is resolved per backend
+ * host: OpenAI and Deepgram run their own protocols, and every other
+ * OpenAI-compatible server is assumed to speak Phonon's stream.
+ * @param {unknown} value
+ * @returns {'auto' | 'phonon' | 'openai' | 'deepgram'}
+ */
+function normalizeStreamProtocol(value) {
+  const candidate = text(value, 32).toLowerCase();
+  return STREAM_PROTOCOLS.includes(candidate) ? candidate : 'auto';
+}
+
+/**
  * @param {string} baseUrl
+ * @param {unknown} selection
+ * @returns {'phonon' | 'openai' | 'deepgram'}
+ */
+function selectStreamProtocol(baseUrl, selection) {
+  const chosen = normalizeStreamProtocol(selection);
+  if (chosen !== 'auto') return chosen;
+  let host = '';
+  try {
+    host = new URL(baseUrl).hostname.toLowerCase();
+  } catch {
+    return 'phonon';
+  }
+  if (host === 'api.openai.com' || host.endsWith('.openai.com')) return 'openai';
+  if (host === 'api.deepgram.com' || host.endsWith('.deepgram.com')) return 'deepgram';
+  return 'phonon';
+}
+
+/**
+ * Map a configured base URL to a WebSocket endpoint. Credentials stay in a
+ * header, never the URL, because this side of the proxy is server-controlled.
+ * @param {string} baseUrl
+ * @param {string} pathname
+ * @param {string} [search]
  * @returns {string}
  */
+function websocketEndpoint(baseUrl, pathname, search = '') {
+  const url = new URL(baseUrl);
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  url.pathname = pathname;
+  url.search = search;
+  return url.toString();
+}
+
+/**
+ * Keep a base that already ends in `/v1` and add it when it does not, so both
+ * `https://host` and `https://host/v1` reach the same versioned endpoint.
+ * @param {string} baseUrl
+ * @param {string} suffix
+ * @returns {string}
+ */
+function versionedPath(baseUrl, suffix) {
+  const pathname = new URL(baseUrl).pathname.replace(/\/+$/, '');
+  return `${pathname.endsWith('/v1') ? pathname : `${pathname}/v1`}${suffix}`;
+}
+
+/** Phonon: `{base}/audio/stream`, JSON config then raw PCM. */
 function streamEndpoint(baseUrl) {
   const url = new URL(baseUrl);
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -315,15 +374,83 @@ function streamEndpoint(baseUrl) {
   return url.toString();
 }
 
+/** OpenAI Realtime transcription: `/v1/realtime?intent=transcription`. */
+function realtimeEndpoint(baseUrl) {
+  return websocketEndpoint(baseUrl, versionedPath(baseUrl, '/realtime'), '?intent=transcription');
+}
+
+/** Deepgram live listen: `/v1/listen` with linear16 16 kHz PCM. */
+function deepgramEndpoint(baseUrl, model) {
+  const params = new URLSearchParams({
+    encoding: 'linear16',
+    sample_rate: String(STREAM_SAMPLE_RATE),
+    channels: '1',
+    interim_results: 'true',
+    smart_format: 'true',
+  });
+  // `whisper-1` is the OpenAI-style default; Deepgram requires its own model.
+  params.set('model', model && model !== 'whisper-1' ? model : 'nova-3');
+  return websocketEndpoint(baseUrl, versionedPath(baseUrl, '/listen'), `?${params.toString()}`);
+}
+
+/**
+ * @param {'phonon' | 'openai' | 'deepgram'} protocol
+ * @param {string} apiKey
+ * @returns {Record<string, string>}
+ */
+function streamHeaders(protocol, apiKey) {
+  if (!apiKey) return {};
+  return { Authorization: `${protocol === 'deepgram' ? 'Token' : 'Bearer'} ${apiKey}` };
+}
+
+/**
+ * Re-clock 16-bit mono PCM to the rate a provider requires. Capture is fixed at
+ * 16 kHz; OpenAI's realtime endpoint only accepts 24 kHz, so it is resampled
+ * here instead of changing the client's wire format per provider.
+ * @param {number} fromRate
+ * @param {number} toRate
+ * @returns {(chunk: Buffer | ArrayBuffer) => Buffer}
+ */
+function createPcmResampler(fromRate, toRate) {
+  if (fromRate === toRate) return (chunk) => Buffer.from(chunk);
+  const step = fromRate / toRate;
+  /** @type {number[]} */
+  let queue = [];
+  let cursor = 0;
+  return (chunk) => {
+    const incoming = Buffer.from(chunk);
+    for (let offset = 0; offset + 1 < incoming.length; offset += 2) {
+      queue.push(incoming.readInt16LE(offset));
+    }
+    /** @type {number[]} */
+    const output = [];
+    while (cursor + 1 < queue.length) {
+      const index = Math.floor(cursor);
+      const fraction = cursor - index;
+      const value = queue[index] + (queue[index + 1] - queue[index]) * fraction;
+      output.push(Math.max(-32768, Math.min(32767, Math.round(value))));
+      cursor += step;
+    }
+    const consumed = Math.floor(cursor);
+    if (consumed > 0) {
+      queue = queue.slice(consumed);
+      cursor -= consumed;
+    }
+    const pcm = Buffer.alloc(output.length * 2);
+    output.forEach((sample, index) => pcm.writeInt16LE(sample, index * 2));
+    return pcm;
+  };
+}
+
 /**
  * Bridge an authenticated app WebSocket to a backend live-transcription stream.
  *
  * The browser cannot set headers on `WebSocket()`, so the first frame carries
  * the stream configuration and, optionally, the per-user API key. The backend
  * host still comes from server config (never the client), and the same SSRF
- * guard as the HTTP routes runs before any connection is opened. Provider
- * `partial`/`final`/`done`/`error` frames are relayed verbatim; raw PCM flows
- * the other way.
+ * guard as the HTTP routes runs before any connection is opened. Each provider
+ * dialect is normalized here to `partial`/`final`/`done`/`error`, so the client
+ * only speaks one protocol; raw 16 kHz PCM flows the other way.
  *
  * @param {import('ws').WebSocket} client
  * @param {import('node:http').IncomingMessage} request
@@ -335,11 +462,18 @@ export function handleVoiceStreamConnection(client, request) {
   let ready = false;
   let requestedEnd = false;
   let completed = false;
+  let failed = false;
   let closed = false;
   /** @type {ReturnType<typeof setTimeout> | null} */
   let closeTimer = null;
   /** @type {Array<Buffer | ArrayBuffer>} */
   const pending = [];
+  /** @type {'phonon' | 'openai' | 'deepgram'} */
+  let protocol = 'phonon';
+  /** @type {(chunk: Buffer | ArrayBuffer) => Buffer} */
+  let resample = (chunk) => Buffer.from(chunk);
+  const finals = [];
+  let partial = '';
 
   const send = (payload) => {
     if (client.readyState !== WebSocket.OPEN) return;
@@ -356,6 +490,7 @@ export function handleVoiceStreamConnection(client, request) {
     try { client.close(code); } catch { /* already closed */ }
   };
   const fail = (message, code = 1011) => {
+    failed = true;
     send({ type: 'error', message });
     closeClient(code);
   };
@@ -365,22 +500,150 @@ export function handleVoiceStreamConnection(client, request) {
     try { socket?.close(); } catch { /* already closed */ }
   };
 
-  /** @param {{sttApiKey?: unknown}} frame */
+  /** Complete the phrase with whatever the provider finalized. */
+  const finish = () => {
+    if (completed || closed || failed) return;
+    completed = true;
+    send({ type: 'done', text: finals.join(' ').trim() });
+    closeClient(1000);
+  };
+
+  /** Send one captured frame in the provider's own encoding. */
+  const forwardAudio = (data) => {
+    const socket = upstream;
+    if (!ready || socket?.readyState !== WebSocket.OPEN) return;
+    const audio = resample(data);
+    if (protocol === 'openai') {
+      socket.send(JSON.stringify({
+        type: 'input_audio_buffer.append',
+        audio: Buffer.from(audio).toString('base64'),
+      }));
+      return;
+    }
+    socket.send(audio);
+  };
+
+  /** Stop waiting for a flush once the provider has had ample time. */
+  const armTimer = () => {
+    stopTimer();
+    closeTimer = setTimeout(() => closeClient(1000), VOICE_TIMEOUT_MS);
+  };
+
+  /** Tell the provider no more audio is coming, in its own vocabulary. */
+  const requestProviderEnd = () => {
+    const socket = upstream;
+    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+    try {
+      if (protocol === 'openai') socket.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+      else if (protocol === 'deepgram') socket.send(JSON.stringify({ type: 'CloseStream' }));
+      else socket.send(JSON.stringify({ type: 'end' }));
+    } catch {
+      return;
+    }
+    armTimer();
+  };
+
+  /** The provider is configured and can accept audio. */
+  const announceReady = () => {
+    const socket = upstream;
+    if (ready || closed || failed || !socket || socket.readyState !== WebSocket.OPEN) return;
+    ready = true;
+    send({ type: 'ready' });
+    for (const data of pending.splice(0)) {
+      if (socket.readyState !== WebSocket.OPEN) break;
+      forwardAudio(data);
+    }
+    if (requestedEnd) requestProviderEnd();
+  };
+
+  /** Deepgram `Results` -> the client's partial/final vocabulary. */
+  const handleDeepgramEvent = (event) => {
+    if (event.type === 'Results') {
+      const transcript = event.channel?.alternatives?.[0]?.transcript;
+      if (typeof transcript !== 'string' || !transcript.trim()) return;
+      const value = transcript.trim();
+      if (event.is_final) {
+        finals.push(value);
+        partial = '';
+        send({ type: 'final', text: value });
+      } else {
+        partial = value;
+        send({ type: 'partial', text: value });
+      }
+      return;
+    }
+    if (event.type === 'Metadata') {
+      if (requestedEnd) finish();
+      return;
+    }
+    if (event.type === 'Error' || event.type === 'error') {
+      failed = true;
+      const message = event.message ?? event.description ?? event.error;
+      send({ type: 'error', message: typeof message === 'string' ? message.slice(0, 512) : 'Voice backend error' });
+      closeUpstream();
+    }
+  };
+
+  /** OpenAI realtime transcription events -> the same vocabulary. */
+  const handleRealtimeEvent = (event) => {
+    if (event.type === 'session.updated') {
+      announceReady();
+      return;
+    }
+    if (event.type === 'conversation.item.input_audio_transcription.delta') {
+      const delta = typeof event.delta === 'string' ? event.delta : '';
+      if (!delta) return;
+      partial += delta;
+      send({ type: 'partial', text: partial });
+      return;
+    }
+    if (event.type === 'conversation.item.input_audio_transcription.completed') {
+      const transcript = typeof event.transcript === 'string' ? event.transcript.trim() : partial.trim();
+      partial = '';
+      if (!transcript) return;
+      finals.push(transcript);
+      send({ type: 'final', text: transcript });
+      if (requestedEnd) finish();
+      return;
+    }
+    if (event.type === 'conversation.item.input_audio_transcription.failed') {
+      failed = true;
+      const message = event.error?.message;
+      send({ type: 'error', message: typeof message === 'string' ? message.slice(0, 512) : 'Speech recognition failed' });
+      closeUpstream();
+      return;
+    }
+    if (event.type === 'error') {
+      failed = true;
+      const message = event.error?.message ?? event.message;
+      send({ type: 'error', message: typeof message === 'string' ? message.slice(0, 512) : 'Voice backend error' });
+      closeUpstream();
+    }
+  };
+
+  /** @param {{sttApiKey?: unknown, sttModel?: unknown}} frame */
   const openUpstream = (frame) => {
     const cfg = resolveConfig(request);
     if (!cfg.sttBaseUrl) return fail('No speech recognition backend configured', 1008);
     if (!isAllowedBackendUrl(cfg.sttBaseUrl)) return fail('Invalid speech recognition backend URL.', 1008);
+    protocol = selectStreamProtocol(cfg.sttBaseUrl, cfg.sttStreamProtocol);
+    const model = text(frame.sttModel, 128) || cfg.sttModel;
     let endpoint;
     try {
-      endpoint = streamEndpoint(cfg.sttBaseUrl);
+      endpoint = protocol === 'openai' ? realtimeEndpoint(cfg.sttBaseUrl)
+        : protocol === 'deepgram' ? deepgramEndpoint(cfg.sttBaseUrl, model)
+          : streamEndpoint(cfg.sttBaseUrl);
     } catch {
       return fail('Invalid speech recognition backend URL.', 1008);
     }
+    resample = protocol === 'openai'
+      ? createPcmResampler(STREAM_SAMPLE_RATE, OPENAI_STREAM_SAMPLE_RATE)
+      : (chunk) => Buffer.from(chunk);
     const apiKey = text(frame.sttApiKey, 512) || cfg.sttApiKey;
     let socket;
     try {
       socket = new WebSocket(endpoint, {
-        headers: authHeader(apiKey),
+        headers: streamHeaders(protocol, apiKey),
         handshakeTimeout: STREAM_HANDSHAKE_TIMEOUT_MS,
       });
     } catch {
@@ -388,44 +651,77 @@ export function handleVoiceStreamConnection(client, request) {
     }
     upstream = socket;
 
-    if (requestedEnd) {
-      // The user stopped before the backend finished connecting; the stream is
-      // still opened so the backend can flush what it already received.
-    }
-
     socket.on('open', () => {
       if (closed) { closeUpstream(); return; }
-      socket.send(JSON.stringify({ sample_rate: STREAM_SAMPLE_RATE, format: 'pcm_s16le' }));
-      ready = true;
-      send({ type: 'ready' });
-      for (const data of pending.splice(0)) {
-        if (socket.readyState !== WebSocket.OPEN) break;
-        socket.send(data);
+      if (protocol === 'phonon') {
+        socket.send(JSON.stringify({ sample_rate: STREAM_SAMPLE_RATE, format: 'pcm_s16le' }));
+        announceReady();
+        return;
       }
-      if (requestedEnd && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'end' }));
+      if (protocol === 'deepgram') {
+        announceReady();
+        return;
+      }
+      // OpenAI accepts audio only after the transcription session is updated.
+      socket.send(JSON.stringify({
+        type: 'session.update',
+        session: {
+          type: 'transcription',
+          audio: {
+            input: {
+              format: { type: 'audio/pcm', rate: OPENAI_STREAM_SAMPLE_RATE },
+              transcription: { model: model && model !== 'whisper-1' ? model : 'gpt-live-transcribe' },
+              turn_detection: null,
+            },
+          },
+        },
+      }));
     });
+
     socket.on('message', (data, isBinary) => {
-      if (isBinary || closed) return;
+      if (closed) return;
+      if (protocol === 'phonon') {
+        if (isBinary) return;
+        const raw = String(data);
+        if (raw.length > 64 * 1024) return;
+        let event;
+        try { event = JSON.parse(raw); } catch { return; }
+        if (!event || typeof event !== 'object') return;
+        if (event.type === 'done') {
+          completed = true;
+          if (client.readyState === WebSocket.OPEN) client.send(raw);
+          closeClient(1000);
+          return;
+        }
+        if (event.type === 'error') {
+          failed = true;
+          send({ type: 'error', message: typeof event.message === 'string' ? event.message.slice(0, 512) : 'Voice backend error' });
+          closeUpstream();
+          return;
+        }
+        if (client.readyState === WebSocket.OPEN) client.send(raw);
+        return;
+      }
+      if (isBinary) return;
       const raw = String(data);
       if (raw.length > 64 * 1024) return;
       let event;
       try { event = JSON.parse(raw); } catch { return; }
       if (!event || typeof event !== 'object') return;
-      if (event.type === 'done') {
-        completed = true;
-        if (client.readyState === WebSocket.OPEN) client.send(raw);
-        closeClient(1000);
-        return;
-      }
-      if (event.type === 'error') {
-        send({ type: 'error', message: typeof event.message === 'string' ? event.message.slice(0, 512) : 'Voice backend error' });
-        closeUpstream();
-        return;
-      }
-      if (client.readyState === WebSocket.OPEN) client.send(raw);
+      if (protocol === 'deepgram') handleDeepgramEvent(event);
+      else handleRealtimeEvent(event);
     });
+
     socket.on('close', () => {
       if (upstream === socket) upstream = null;
+      if (closed) return;
+      if (failed) { closeClient(1000); return; }
+      // OpenAI and Deepgram close after flushing instead of sending a terminal
+      // frame; the phrases they finalized are the completed phrase.
+      if (protocol !== 'phonon' && requestedEnd) {
+        finish();
+        return;
+      }
       if (!completed && !requestedEnd) send({ type: 'error', message: 'Speech recognition stream closed' });
       closeClient(1000);
     });
@@ -438,8 +734,8 @@ export function handleVoiceStreamConnection(client, request) {
   client.on('message', (data, isBinary) => {
     if (closed) return;
     if (isBinary) {
-      if (upstream?.readyState === WebSocket.OPEN && ready) upstream.send(data);
-      else if (!ready && pending.length < STREAM_PENDING_LIMIT) pending.push(data);
+      if (ready) forwardAudio(data);
+      else if (pending.length < STREAM_PENDING_LIMIT) pending.push(data);
       return;
     }
     let frame;
@@ -452,14 +748,9 @@ export function handleVoiceStreamConnection(client, request) {
     }
     if (frame.type === 'end') {
       requestedEnd = true;
-      if (upstream?.readyState === WebSocket.OPEN && ready) {
-        upstream.send(JSON.stringify({ type: 'end' }));
-        stopTimer();
-        closeTimer = setTimeout(() => closeClient(1000), VOICE_TIMEOUT_MS);
-      } else if (!upstream) {
-        closeClient(1000);
-      }
-      // While the upstream is still connecting, `open` sends the end frame.
+      if (ready) requestProviderEnd();
+      else if (!upstream) closeClient(1000);
+      // While the upstream is still connecting, `announceReady` sends the end.
     }
   });
   client.on('close', () => {

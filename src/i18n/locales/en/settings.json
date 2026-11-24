@@ -97,7 +97,10 @@
     "voice": "Voice",
     "format": "Sound file format",
     "streaming": "Stream while speaking",
-    "streamingDescription": "Send audio live and show each phrase as it forms. Requires a backend with a live transcription stream, such as Phonon.",
+    "streamingDescription": "Send audio live and show each phrase as it forms. Requires a backend with a live transcription stream: Phonon, OpenAI Realtime, or Deepgram.",
+    "streamProtocol": "Live stream format",
+    "streamProtocolAuto": "Auto-detect",
+    "streamProtocolDescription": "Which live protocol the speech backend speaks. Auto picks OpenAI Realtime or Deepgram from the URL host and uses Phonon otherwise.",
     "note": "The app server stores endpoint URLs under its persistent data volume and proxies audio requests, so local services do not need browser CORS support."
   },
   "preferences": {

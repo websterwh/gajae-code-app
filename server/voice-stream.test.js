@@ -17,8 +17,8 @@ const { handleVoiceStreamConnection } = await import('./voice-proxy.js');
 
 after(() => rmSync(directory, { recursive: true, force: true }));
 
-function configure(baseUrl) {
-  writeFileSync(path.join(directory, 'voice-config.json'), JSON.stringify({ sttBaseUrl: baseUrl }));
+function configure(baseUrl, sttStreamProtocol = 'auto') {
+  writeFileSync(path.join(directory, 'voice-config.json'), JSON.stringify({ sttBaseUrl: baseUrl, sttStreamProtocol }));
 }
 
 async function listen(server) {
@@ -43,7 +43,7 @@ async function appServer(t) {
   return { port };
 }
 
-async function speechBackend(t) {
+async function speechBackend(t, onFrame) {
   const server = http.createServer();
   const sockets = new WebSocketServer({ server });
   const seen = { url: '', authorization: '', frames: [], audioBytes: 0, ended: false };
@@ -60,6 +60,7 @@ async function speechBackend(t) {
       const frame = JSON.parse(String(data));
       if (frame.type === 'end') seen.ended = true;
       else seen.frames.push(frame);
+      onFrame?.(socket, frame);
     });
     accept(socket);
   });
@@ -121,6 +122,91 @@ test('relays provider partials, forwards pcm, and completes on end', { timeout: 
   socket.send(JSON.stringify({ type: 'end' }));
   await waitUntil(() => speech.seen.ended);
   provider.send(JSON.stringify({ type: 'done', text: 'hello' }));
+  assert.deepEqual(await next(), { type: 'done', text: 'hello' });
+  assert.equal((await once(socket, 'close'))[0], 1000);
+});
+
+test('speaks the OpenAI realtime transcription protocol and normalizes its events', { timeout: 10_000 }, async (t) => {
+  let audioBytes = 0;
+  const speech = await speechBackend(t, (socket, frame) => {
+    if (frame.type === 'session.update') {
+      socket.send(JSON.stringify({ type: 'session.updated', session: { type: 'transcription' } }));
+      return;
+    }
+    if (frame.type === 'input_audio_buffer.append') {
+      audioBytes += Buffer.from(frame.audio, 'base64').length;
+      return;
+    }
+    if (frame.type === 'input_audio_buffer.commit') {
+      socket.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.delta', delta: 'hel' }));
+      socket.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.delta', delta: 'lo' }));
+      socket.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed', transcript: 'hello' }));
+    }
+  });
+  configure(`http://127.0.0.1:${speech.port}/v1`, 'openai');
+  const app = await appServer(t);
+  const socket = new WebSocket(`ws://127.0.0.1:${app.port}/api/voice/stream`);
+  t.after(() => socket.terminate());
+  const next = inbox(socket);
+  await once(socket, 'open');
+  socket.send(JSON.stringify({ type: 'config', sttApiKey: 'fixture-key', sttModel: 'gpt-live-transcribe' }));
+  assert.deepEqual(await next(), { type: 'ready' });
+  await speech.connection;
+  assert.equal(speech.seen.url, '/v1/realtime?intent=transcription');
+  assert.equal(speech.seen.authorization, 'Bearer fixture-key');
+  await waitUntil(() => speech.seen.frames.length === 1);
+  assert.equal(speech.seen.frames[0].type, 'session.update');
+  assert.deepEqual(speech.seen.frames[0].session.audio.input.format, { type: 'audio/pcm', rate: 24000 });
+  assert.equal(speech.seen.frames[0].session.audio.input.transcription.model, 'gpt-live-transcribe');
+  assert.equal(speech.seen.frames[0].session.audio.input.turn_detection, null);
+
+  // Capture is 16 kHz; the realtime API only accepts 24 kHz PCM, so the bridge
+  // resamples rather than making every provider share one capture rate.
+  socket.send(Buffer.alloc(6_400));
+  await waitUntil(() => audioBytes > 9_000);
+  assert.ok(Math.abs(audioBytes - 9_600) <= 8, `resampled bytes: ${audioBytes}`);
+
+  socket.send(JSON.stringify({ type: 'end' }));
+  assert.deepEqual(await next(), { type: 'partial', text: 'hel' });
+  assert.deepEqual(await next(), { type: 'partial', text: 'hello' });
+  assert.deepEqual(await next(), { type: 'final', text: 'hello' });
+  assert.deepEqual(await next(), { type: 'done', text: 'hello' });
+  assert.equal((await once(socket, 'close'))[0], 1000);
+});
+
+test('speaks the Deepgram listen protocol and ends with CloseStream', { timeout: 10_000 }, async (t) => {
+  const speech = await speechBackend(t, (socket, frame) => {
+    if (frame.type === 'CloseStream') socket.send(JSON.stringify({ type: 'Metadata' }));
+  });
+  configure(`http://127.0.0.1:${speech.port}/v1`, 'deepgram');
+  const app = await appServer(t);
+  const socket = new WebSocket(`ws://127.0.0.1:${app.port}/api/voice/stream`);
+  t.after(() => socket.terminate());
+  const next = inbox(socket);
+  await once(socket, 'open');
+  socket.send(JSON.stringify({ type: 'config', sttApiKey: 'fixture-key', sttModel: 'nova-3' }));
+  assert.deepEqual(await next(), { type: 'ready' });
+  await speech.connection;
+  assert.match(speech.seen.url, /^\/v1\/listen\?/);
+  const query = new URLSearchParams(speech.seen.url.split('?')[1]);
+  assert.equal(query.get('encoding'), 'linear16');
+  assert.equal(query.get('sample_rate'), '16000');
+  assert.equal(query.get('channels'), '1');
+  assert.equal(query.get('interim_results'), 'true');
+  assert.equal(query.get('model'), 'nova-3');
+  assert.equal(speech.seen.authorization, 'Token fixture-key');
+
+  socket.send(Buffer.from([1, 2, 3, 4]));
+  await waitUntil(() => speech.seen.audioBytes === 4);
+
+  speech.seen.frames.length = 0;
+  const provider = await speech.connection;
+  provider.send(JSON.stringify({ type: 'Results', is_final: false, channel: { alternatives: [{ transcript: 'hel' }] } }));
+  assert.deepEqual(await next(), { type: 'partial', text: 'hel' });
+  provider.send(JSON.stringify({ type: 'Results', is_final: true, channel: { alternatives: [{ transcript: 'hello' }] } }));
+  assert.deepEqual(await next(), { type: 'final', text: 'hello' });
+
+  socket.send(JSON.stringify({ type: 'end' }));
   assert.deepEqual(await next(), { type: 'done', text: 'hello' });
   assert.equal((await once(socket, 'close'))[0], 1000);
 });

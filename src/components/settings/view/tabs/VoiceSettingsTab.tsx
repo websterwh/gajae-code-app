@@ -33,6 +33,19 @@ export default function VoiceSettingsTab() {
             <VoiceInput label={t('voiceSettings.sttBaseUrl')} placeholder="https://my-phonon-host/v1" value={voice.sttBaseUrl} onChange={(event) => updateVoice({ sttBaseUrl: event.target.value })} />
             <VoiceInput label={t('voiceSettings.sttApiKey')} type="password" autoComplete="off" placeholder="STT API key" value={voice.sttApiKey} onChange={(event) => updateVoice({ sttApiKey: event.target.value })} />
             <VoiceInput label={t('voiceSettings.sttModel')} placeholder="phonon-2.5-en" value={voice.sttModel} onChange={(event) => updateVoice({ sttModel: event.target.value })} />
+            <label className="block space-y-1">
+              <span className="text-sm font-medium text-foreground">{t('voiceSettings.streamProtocol')}</span>
+              <select
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:ring-2 focus:ring-ring focus:outline-hidden"
+                value={voice.sttStreamProtocol || 'auto'}
+                onChange={(event) => updateVoice({ sttStreamProtocol: event.target.value })}
+              >
+                <option value="auto">{t('voiceSettings.streamProtocolAuto')}</option>
+                <option value="phonon">Phonon</option>
+                <option value="openai">OpenAI Realtime</option>
+                <option value="deepgram">Deepgram</option>
+              </select>
+            </label>
           </div>
           <div className="space-y-4">
             <VoiceInput label={t('voiceSettings.ttsBaseUrl')} placeholder="https://my-kokoro-host/v1" value={voice.ttsBaseUrl} onChange={(event) => updateVoice({ ttsBaseUrl: event.target.value })} />
@@ -43,6 +56,7 @@ export default function VoiceSettingsTab() {
             </div>
           </div>
         </div>
+        <p className="text-xs text-muted-foreground">{t('voiceSettings.streamProtocolDescription')}</p>
         <p className="text-xs text-muted-foreground">{t('voiceSettings.note')}</p>
       </div>
     </SettingsSection>
