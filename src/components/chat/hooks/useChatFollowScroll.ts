@@ -78,6 +78,34 @@ export function useChatFollowScroll({ container, enabled }: UseChatFollowScrollA
     };
   }, [container, handleScroll, setFollowing]);
 
+  // Background tabs coalesce paints and ResizeObserver notifications, so a
+  // transcript that grew while the reader was away can arrive without the
+  // resize callback that pins the pane. Land the tail once rendering resumes.
+  useEffect(() => {
+    const node = container;
+    if (!node) return;
+    let frame = 0;
+    let settle = 0;
+    const onVisibility = () => {
+      if (document.visibilityState !== 'visible') return;
+      cancelAnimationFrame(frame);
+      cancelAnimationFrame(settle);
+      // One frame restores layout; the second lets React commit anything the
+      // tab deferred, then the pane measures its final height.
+      frame = requestAnimationFrame(() => {
+        settle = requestAnimationFrame(() => {
+          if (isFollowingRef.current && enabledRef.current) node.scrollTop = node.scrollHeight;
+        });
+      });
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      cancelAnimationFrame(frame);
+      cancelAnimationFrame(settle);
+    };
+  }, [container]);
+
   useEffect(() => {
     const node = container;
     if (!node || typeof ResizeObserver === 'undefined') return;

@@ -167,6 +167,33 @@ test('a pane that mounts after the first render still follows growth', () => {
   assertAtBottom(container());
 });
 
+async function resumeVisibility() {
+  act(() => { document.dispatchEvent(new Event('visibilitychange')); });
+  // The hook waits two frames for layout and any commit the tab deferred.
+  for (let frame = 0; frame < 3; frame += 1) {
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  }
+}
+
+test('returning to the tab lands the tail after growth it never observed', async () => {
+  const { container, getByText } = setup();
+  // Background tabs coalesce paints, so this growth arrives without a resize
+  // notification while the pane is away.
+  act(() => fireEvent.click(getByText('grow')));
+  assert.equal(container().scrollTop, 0);
+  await resumeVisibility();
+  assertAtBottom(container());
+});
+
+test('returning to the tab leaves a reader who left the tail in place', async () => {
+  const { container, getByText } = setup();
+  fireEvent.wheel(container(), { deltaY: -100 });
+  container().scrollTop = 30;
+  act(() => fireEvent.click(getByText('grow')));
+  await resumeVisibility();
+  assert.equal(container().scrollTop, 30);
+});
+
 test('a remounted pane rebinds scroll intent and following', () => {
   const { container, grow, rerender } = setup();
   grow();
