@@ -27,7 +27,7 @@ export interface PermissionDecision { allow?: boolean; always?: boolean; message
 interface QuestionOption { label: string; description?: string; }
 export interface Question { options: QuestionOption[]; question: string; header?: string; multiSelect?: boolean; }
 export interface SessionNavigationOptions { replace?: boolean; }
-export interface SessionEstablishedContext { project: Project; provider: LLMProvider; summary?: string | null; }
+export interface SessionEstablishedContext { project: Project; provider: LLMProvider; summary?: string | null; /** The project is this quick chat's disposable folder, not a workspace. */ quickChat?: boolean; }
 
 
 export interface ChatInterfaceProps {

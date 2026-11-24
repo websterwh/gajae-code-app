@@ -5,6 +5,7 @@ import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 
 import type { Project, ProjectSession } from '../../../types/app';
 import { resetComposerFreezeForTests } from '../../../shared/composerFreeze';
+import { useQuickChatStore } from '../../../stores/useQuickChatStore';
 import { draftInputKey, readQueuedMessages, writeQueuedMessages } from '../utils/chatStorage';
 
 import { useChatComposerState } from './useChatComposerState';
@@ -60,6 +61,7 @@ globalThis.fetch = (async () => new Response('[]', {
 afterEach(() => {
   cleanup();
   resetComposerFreezeForTests();
+  useQuickChatStore.getState().clear();
   localStorage.clear();
 });
 
@@ -362,6 +364,39 @@ test('a disconnected permission decision keeps its pending request visible', () 
   const view = composer({ selectedSession: session('a'), sendMessage: () => false, setPendingPermissionRequests: () => { removals += 1; } });
   act(() => view.result.current.handlePermissionDecision('request-a', { allow: true }));
   assert.equal(removals, 0);
+});
+
+test('a quick chat is established under its disposable project, not the selected workspace', async () => {
+  const originalFetch = globalThis.fetch;
+  const quickProject: Project = {
+    projectId: 'quick-project-1',
+    displayName: 'gajae-quick-chat',
+    fullPath: '/workspace/gajae-quick-chat/quick-1',
+    origin: 'auto',
+  };
+  globalThis.fetch = (async (input, init = {}) => {
+    if (String(input).endsWith('/api/providers/quick-chat-sessions') && init.method === 'POST') {
+      return Response.json({ data: { sessionId: 'quick-1', project: quickProject } });
+    }
+    return Response.json([]);
+  }) as typeof globalThis.fetch;
+  try {
+    const established: Array<{ id: string; projectId: string; quickChat?: boolean }> = [];
+    const sent: Array<{ sessionId?: string }> = [];
+    useQuickChatStore.getState().start('proj-1', 'session-a');
+    const view = composer({
+      onSessionEstablished: (id, context) => { established.push({ id, projectId: context.project.projectId, quickChat: context.quickChat }); },
+      sendMessage: (message) => { sent.push(message as { sessionId?: string }); },
+    });
+    typeText(view, 'a quick question');
+    await act(async () => { await view.result.current.handleSubmit(submit()); });
+
+    assert.deepEqual(established, [{ id: 'quick-1', projectId: 'quick-project-1', quickChat: true }]);
+    assert.equal(sent[0]?.sessionId, 'quick-1');
+    assert.equal(useQuickChatStore.getState().quickChat?.projectId, 'proj-1', 'the launch workspace is still the quick chat origin');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test('a late session allocation cannot establish or send after the viewer leaves its project', async () => {

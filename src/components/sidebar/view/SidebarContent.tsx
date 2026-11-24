@@ -109,6 +109,22 @@ export default function SidebarContent({
     }
     return null;
   })();
+  // The disposable project is hidden from the workspace tree, so the chip
+  // cannot rely on finding its row there after a refresh. Its stored ids are
+  // enough to reopen it; the route then restores the project it really owns.
+  const quickChatRow = quickChatTarget
+    ? { session: quickChatTarget.session, projectId: quickChatTarget.project.projectId }
+    : quickChat?.sessionId
+      ? {
+        session: {
+          id: quickChat.sessionId,
+          summary: '',
+          __provider: 'gjc' as const,
+          __projectId: quickChat.sessionProjectId ?? quickChat.projectId,
+        },
+        projectId: quickChat.sessionProjectId ?? quickChat.projectId,
+      }
+      : null;
 
   // With no conversation open there is nowhere else for a keystroke to go, so
   // typing starts a conversation search. It is deliberately only that case: a
@@ -195,7 +211,11 @@ export default function SidebarContent({
   };
 
   const createQuickChat = () => {
-    const project = selectedProjectIsAvailable ? selectedProject : availableProjects[0];
+    // While a quick chat is open, its disposable project is selected but not a
+    // workspace in the tree. Start the next one in the workspace that launched
+    // it, never in whichever workspace happens to be first.
+    const launchProject = quickChat && availableProjects.find((project) => project.projectId === quickChat.projectId);
+    const project = selectedProjectIsAvailable ? selectedProject : launchProject ?? availableProjects[0];
     if (!project) {
       return;
     }
@@ -228,12 +248,12 @@ export default function SidebarContent({
               t={t}
             />
           )}
-          {quickChatTarget ? (
+          {quickChatRow ? (
             <div className="mx-2 mb-2 flex items-center gap-1 rounded-lg border border-border bg-card/60 pl-2.5">
               <Zap className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
               <button
                 type="button"
-                onClick={() => listProps.onSessionSelect(quickChatTarget.session, quickChatTarget.project.projectId)}
+                onClick={() => listProps.onSessionSelect(quickChatRow.session, quickChatRow.projectId)}
                 className="min-w-0 flex-1 truncate py-1.5 text-left text-xs font-medium text-foreground"
                 title="Quick chat — deleted when you leave this chat"
               >

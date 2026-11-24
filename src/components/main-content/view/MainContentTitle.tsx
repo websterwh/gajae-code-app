@@ -23,11 +23,12 @@ export default function MainContentTitle({
 }: MainContentTitleProps) {
   const { t } = useTranslation();
   const quickChat = useQuickChatStore((state) => state.quickChat);
-  // A quick chat runs in its own disposable folder; naming the project it was
-  // launched from would claim the chat is working in that folder.
+  // A quick chat runs in its own disposable folder; naming the workspace it
+  // was launched from - or that folder itself - would misstate where it runs.
   const disposable = Boolean(quickChat
-    && quickChat.projectId === selectedProject.projectId
-    && (!selectedSession || quickChat.sessionId === selectedSession.id));
+    && (quickChat.sessionId
+      ? quickChat.sessionId === selectedSession?.id
+      : quickChat.projectId === selectedProject.projectId));
 
   return (
     <div className="scrollbar-hide flex min-w-0 flex-1 items-center gap-2 overflow-x-auto">

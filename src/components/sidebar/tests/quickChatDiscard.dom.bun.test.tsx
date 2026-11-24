@@ -47,3 +47,27 @@ test('starting an ordinary conversation deletes the temporary one still on scree
   });
   assert.equal(useQuickChatStore.getState().quickChat, null, 'the chip does not outlive the conversation');
 });
+
+test('the quick chat chip reopens the disposable project even though the tree hides it', async () => {
+  const t = await makeSidebarT();
+  const base = sidebarContentPropsFixture(t);
+  const opened: Array<{ sessionId: string; projectId: string }> = [];
+  useQuickChatStore.getState().start('project-alpha', 'session-running');
+  useQuickChatStore.getState().attachSession('project-alpha', 'quick-1', 'quick-project-1');
+
+  render(createElement(
+    MemoryRouter,
+    null,
+    createElement(SidebarContent, {
+      ...base,
+      projectListProps: {
+        ...base.projectListProps,
+        onSessionSelect: (session, projectId) => opened.push({ sessionId: session.id, projectId }),
+      },
+    }),
+  ));
+
+  fireEvent.click(screen.getByText('Quick chat'));
+
+  assert.deepEqual(opened, [{ sessionId: 'quick-1', projectId: 'quick-project-1' }]);
+});

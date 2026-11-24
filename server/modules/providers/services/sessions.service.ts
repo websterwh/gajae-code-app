@@ -13,7 +13,8 @@ import type { FetchHistoryOptions, FetchHistoryResult, LLMProvider, NormalizedMe
 import { boundToolResultDetails, prepareMessagesForTransport } from '@/shared/tool-output-transport.js';
 import { AppError } from '@/shared/utils.js';
 
-type CreateAppSessionResult = { sessionId: string; provider: LLMProvider; projectPath: string };
+type SessionProjectResult = { projectId: string; path: string; fullPath: string; displayName: string; isStarred: boolean; origin: 'legacy' | 'explicit' | 'auto' };
+type CreateAppSessionResult = { sessionId: string; provider: LLMProvider; projectPath: string; project?: SessionProjectResult };
 type ArchivedSessionListItem = { sessionId: string; provider: LLMProvider; projectId: string | null; projectPath: string | null; projectDisplayName: string; sessionTitle: string; createdAt: string | null; updatedAt: string | null; lastActivity: string | null; isStarred: boolean; isProjectArchived: boolean };
 
 function sessionNotFound(sessionId: string): AppError {
@@ -135,7 +136,19 @@ export const sessionsService = {
       await removeQuickChatWorkspace(sessionId, projectPath);
       throw error;
     }
-    return { sessionId, provider, projectPath };
+    // `createAppSession` registered the disposable folder so the session has
+    // a project row like any other. Return that row: the browser must file and
+    // reopen the quick chat there, not under whichever workspace launched it.
+    const stored = projectsDb.getProjectPath(projectPath);
+    const project = stored ? {
+      projectId: stored.project_id,
+      path: projectPath,
+      fullPath: projectPath,
+      displayName: stored.custom_project_name?.trim() || path.basename(projectPath) || projectPath,
+      isStarred: Boolean(stored.isStarred),
+      origin: stored.origin ?? 'auto' as const,
+    } : undefined;
+    return { sessionId, provider, projectPath, ...(project ? { project } : {}) };
   },
 
   /**

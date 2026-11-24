@@ -16,7 +16,7 @@ export { projectsHaveChanges, readProjectsResponse } from './useProjectsQuery';
 
 type UseProjectsStateArgs = { sessionId?: string | null; navigate: NavigateFunction; subscribe: (listener: (event: ServerEvent) => void) => () => void; isMobile: boolean; activeSessions: SessionActivityMap };
 type SessionUpsert = ServerEvent & { sessionId: string; providerSessionId?: string | null; provider: LLMProvider; session: ProjectSession; project: { projectId: string; path: string; fullPath: string; displayName: string; isStarred: boolean; isArchived?: boolean; origin?: Project['origin'] } | null };
-type RegisterOptimisticSessionArgs = { sessionId: string; provider: LLMProvider; project: Project; summary?: string | null };
+type RegisterOptimisticSessionArgs = { sessionId: string; provider: LLMProvider; project: Project; summary?: string | null; quickChat?: boolean };
 type ProjectSessionPage = Pick<Project, 'sessions' | 'sessionMeta'>;
 type FetchProjectsOptions = { showLoadingState?: boolean };
 
@@ -160,14 +160,21 @@ export function useProjectsState({ sessionId, navigate, subscribe, isMobile, act
   const { refetch: queryRefetch } = query;
   const refetch = useCallback(async (_options: FetchProjectsOptions = {}) => { await queryRefetch(); }, [queryRefetch]);
 
-  const registerOptimisticSession = useCallback(({ sessionId: id, provider, project, summary }: RegisterOptimisticSessionArgs) => {
+  const registerOptimisticSession = useCallback(({ sessionId: id, provider, project, summary, quickChat }: RegisterOptimisticSessionArgs) => {
     if (!id || !project?.projectId) return;
     const now = new Date().toISOString();
     const session: ProjectSession = { id, summary: summary ?? '', messageCount: 0, createdAt: now, created_at: now, updated_at: now, lastActivity: now, __provider: provider, __projectId: project.projectId };
     const event: SessionUpsert = { kind: 'session_upserted', sessionId: id, provider, session, project: { projectId: project.projectId, path: project.path || project.fullPath, fullPath: project.fullPath || project.path || '', displayName: project.displayName, isStarred: Boolean(project.isStarred), isArchived: Boolean(project.isArchived), origin: project.origin }, timestamp: now };
     // A quick chat learns its session id here: the first turn is what creates
-    // the row, and the row is what the sidebar's discard action deletes.
-    useQuickChatStore.getState().attachSession(project.projectId, id);
+    // the row, and the row is what the sidebar's discard action deletes. Its
+    // owning project is the disposable folder, which is not the project that
+    // launched it; keep that distinction in the chip's discard state.
+    const activeQuickChat = useQuickChatStore.getState().quickChat;
+    if (quickChat && activeQuickChat) {
+      useQuickChatStore.getState().attachSession(activeQuickChat.projectId, id, project.projectId);
+    } else {
+      useQuickChatStore.getState().attachSession(project.projectId, id);
+    }
     client.setQueryData<Project[]>(PROJECTS_QUERY_KEY, (cached) => updateProjectCache(cached ?? [], event));
     setSelectedProject((current) => current?.projectId === project.projectId ? applySessionUpsert(current, event) : current);
     setSelectedSession((current) => current?.id === id ? { ...current, ...session } : session);

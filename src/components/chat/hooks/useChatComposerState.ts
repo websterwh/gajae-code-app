@@ -251,13 +251,24 @@ export function useChatComposerState(args: UseChatComposerStateArgs) {
           : '/api/providers/sessions',
       { method: 'POST', body: JSON.stringify({ provider: 'gjc', projectPath: project?.fullPath || project?.path || '' }) },
     );
+    const body = (await response.json().catch(() => ({}))) as {
+      data?: { sessionId?: unknown; project?: Project };
+      error?: string | { message?: string };
+    };
     if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
       throw new Error(typeof body.error === 'string' ? body.error : body.error?.message ?? `Failed to create session (${response.status})`);
     }
-    id = (await response.json())?.data?.sessionId || null;
+    id = typeof body.data?.sessionId === 'string' ? body.data.sessionId : null;
     if (!id) throw new Error('no session id returned.');
-    return { id, context: { provider: 'gjc', project: project!, summary } };
+    // A quick chat is filed under the disposable folder the server just made.
+    // Filing it under `selectedProject` is what made it reappear in the last
+    // workspace when the user reopened it.
+    const establishedProject = startsQuickChat && body.data?.project?.projectId ? body.data.project : project;
+    if (!establishedProject) throw new Error('no project returned.');
+    return {
+      id,
+      context: { provider: 'gjc', project: establishedProject, summary, ...(startsQuickChat ? { quickChat: true } : {}) },
+    };
   }, [currentSessionId, descend, resolveForSend, selectedProject, selectedSession, useWorktree]);
 
   const handleSubmit = useCallback(async (event: FormEvent<HTMLFormElement> | MouseEvent | TouchEvent | KeyboardEvent<HTMLTextAreaElement>, queued?: QueuedDraft) => {
