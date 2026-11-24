@@ -1,4 +1,5 @@
-import { Button } from '../../../shared/view/ui';
+import { useEffect, useRef } from 'react';
+
 import { collectWorkRows } from '../utils/workList';
 
 import SidebarProjectsState from './SidebarProjectsState';
@@ -41,11 +42,24 @@ export default function SidebarWorkList({ projectListProps }: SidebarWorkListPro
   } = projectListProps;
 
   const sessionRows = collectWorkRows({ filteredProjects, getProjectSessions, getSessionStatus });
-  // The rows here come from every project at once, so paging is one control
-  // that pulls the next page of each project with more; one anonymous button
-  // per project read as the same button repeated.
-  const moreProjects = filteredProjects.filter((project) => project.sessionMeta?.hasMore);
-  const loadingMore = moreProjects.some((project) => loadingMoreProjects.has(project.projectId));
+  // Active is a status list, not a browse: a running conversation left behind
+  // a "Show more" button is exactly what this section exists to surface, so it
+  // pulls every remaining page of the projects it draws from on its own. The
+  // workspace trees keep their own paging.
+  const pendingPages = filteredProjects
+    .filter((project) => project.sessionMeta?.hasMore && !loadingMoreProjects.has(project.projectId))
+    .map((project) => project.projectId);
+  const pendingKey = pendingPages.join(',');
+  const requestedKey = useRef<string | null>(null);
+  useEffect(() => {
+    if (!pendingKey) {
+      requestedKey.current = null;
+      return;
+    }
+    if (requestedKey.current === pendingKey) return;
+    requestedKey.current = pendingKey;
+    for (const projectId of pendingKey.split(',')) onLoadMoreSessions(projectId);
+  }, [onLoadMoreSessions, pendingKey]);
 
   if (isLoading || projects.length === 0) {
     return (
@@ -92,18 +106,6 @@ export default function SidebarWorkList({ projectListProps }: SidebarWorkListPro
           t={t}
         />
       ))}
-
-      {moreProjects.length > 0 && (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-8 w-full justify-center text-xs text-muted-foreground hover:text-foreground"
-          onClick={() => moreProjects.forEach((project) => onLoadMoreSessions(project.projectId))}
-          disabled={loadingMore}
-        >
-          {loadingMore ? t('sessions.loadingSessions') : t('sessions.showMore')}
-        </Button>
-      )}
     </div>
   );
 }

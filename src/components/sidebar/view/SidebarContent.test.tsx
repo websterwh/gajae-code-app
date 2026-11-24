@@ -106,7 +106,7 @@ test('the Work section lists every non-idle session, most urgent first, with per
   assert.doesNotMatch(counts, /waiting for input|ready/);
 });
 
-test('the Work section pages every project with more through one control, not one button per project', async () => {
+test('the Work section never pages, while the workspace trees keep their own Show more', async () => {
   const t = await makeT();
   const base = sidebarContentProps(t);
   const paged = base.projectListProps.projects.map((project) => ({ ...project, sessionMeta: { total: 30, hasMore: true } }));
@@ -122,7 +122,8 @@ test('the Work section pages every project with more through one control, not on
   const workStart = html.indexOf('id="sidebar-work-content"');
   const projectsStart = html.indexOf('id="sidebar-projects-content"');
   const work = html.slice(workStart, projectsStart > workStart ? projectsStart : undefined);
-  assert.equal(work.match(/sessions\.showMore/g)?.length, 1, 'expected exactly one paging control under Work');
+  assert.doesNotMatch(work, /sessions\.showMore/, 'Active pulls every page itself; it is a status list, not a browse');
+  assert.match(html.slice(projectsStart), /sessions\.showMore/, 'the workspace trees still page their own session lists');
 });
 
 test('project rows show an attention badge only when a session needs a look', async () => {
