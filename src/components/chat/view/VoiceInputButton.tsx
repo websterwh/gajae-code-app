@@ -15,12 +15,17 @@ type Props = {
 
 // Fixed shape, so the bars move with the voice instead of all changing at once.
 const BAR_SCALES = [0.45, 0.8, 1, 0.65, 0.35];
+// The meter reports quiet room levels most of the time. A perceptual curve and
+// gain make normal speech move the bars without touching capture or recording.
+const VISUAL_CURVE = 0.6;
+const VISUAL_GAIN = 1.45;
 
 // Push-to-talk mic button (presentational). Recording state and the stop-and-send action
 // are owned by the composer so the main Send button can drive them too. This button just
 // starts recording and, while recording, stops and drops the transcript into the input box.
 export default function VoiceInputButton({ state, level = 0, onToggle, errorMsg, disabled = false }: Props) {
   const { t } = useTranslation('chat');
+  const visualLevel = level > 0 ? Math.min(1, Math.pow(level, VISUAL_CURVE) * VISUAL_GAIN) : 0;
 
   const icon =
     state === 'recording' ? (
@@ -39,7 +44,7 @@ export default function VoiceInputButton({ state, level = 0, onToggle, errorMsg,
             <span
               key={index}
               className="w-[2px] rounded-full bg-destructive"
-              style={{ height: `${Math.max(2, Math.round(level * 18 * scale))}px` }}
+              style={{ height: `${Math.max(2, Math.round(visualLevel * 18 * scale))}px` }}
             />
           ))}
         </span>
