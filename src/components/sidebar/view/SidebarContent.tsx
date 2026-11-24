@@ -160,7 +160,12 @@ export default function SidebarContent({
   const discardQuickChat = useCallback((active = useQuickChatStore.getState().quickChat) => {
     useQuickChatStore.getState().clear();
     if (!active?.sessionId) return;
-    void api.deleteSession(active.sessionId, true)
+    // A temporary chat is disposable, and in a repository it usually runs in a
+    // managed worktree. Releasing that checkout refuses when it has changes,
+    // and the refusal used to be swallowed: the chip vanished while the
+    // conversation stayed in the list. Discarding the worktree is what a
+    // temporary chat's checkout is for, so the delete goes through.
+    void api.deleteSession(active.sessionId, true, { discardWorktree: true })
       .catch(() => undefined)
       .finally(() => onRefresh());
   }, [onRefresh]);
@@ -182,6 +187,10 @@ export default function SidebarContent({
     if (!project) {
       return;
     }
+    // An ordinary conversation ends the temporary one, even when the selection
+    // itself does not change (leaving a quick chat with nothing selected used
+    // to keep its row alive).
+    discardQuickChat();
     projectListProps.onNewSession(project);
   };
 
@@ -190,6 +199,8 @@ export default function SidebarContent({
     if (!project) {
       return;
     }
+    // One temporary chat at a time: starting another discards the last.
+    discardQuickChat();
     useQuickChatStore.getState().start(project.projectId, projectListProps.selectedSession?.id ?? null);
     projectListProps.onNewSession(project);
   };
