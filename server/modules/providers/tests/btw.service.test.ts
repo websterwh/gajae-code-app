@@ -41,10 +41,14 @@ test('parseBtwRequest refuses blank, oversized and malformed requests', () => {
   assert.throws(() => parseBtwRequest({ question: 'x'.repeat(BTW_MAX_QUESTION_BYTES + 1) }), /limited/);
   assert.throws(() => parseBtwRequest({ question: 'why?', exchanges: 'nope' }), /must be an array/);
   assert.throws(() => parseBtwRequest({ question: 'why?', exchanges: [{ question: '', answer: 'b' }] }), /nonempty question/);
-  assert.throws(
-    () => parseBtwRequest({ question: 'why?', exchanges: Array.from({ length: BTW_MAX_EXCHANGES + 1 }, (_, index) => ({ question: `q${index}`, answer: 'a' })) }),
-    /at most/,
-  );
+});
+
+test('parseBtwRequest keeps the newest exchanges when the history grows past the cap', () => {
+  const exchanges = Array.from({ length: BTW_MAX_EXCHANGES + 3 }, (_, index) => ({ question: `q${index}`, answer: 'a' }));
+  const parsed = parseBtwRequest({ question: 'why?', exchanges });
+  assert.equal(parsed.exchanges.length, BTW_MAX_EXCHANGES);
+  assert.equal(parsed.exchanges[0].question, 'q3');
+  assert.equal(parsed.exchanges[parsed.exchanges.length - 1].question, `q${BTW_MAX_EXCHANGES + 2}`);
 });
 
 test('createBtwStream forwards deltas and turns the run terminal into one done event', () => {

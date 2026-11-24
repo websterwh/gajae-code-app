@@ -25,8 +25,7 @@ export function parseBtwRequest(raw: unknown): { question: string; exchanges: Bt
     return fail(`Side-chat questions are limited to ${BTW_MAX_QUESTION_BYTES} UTF-8 bytes.`);
   }
   if (body.exchanges !== undefined && !Array.isArray(body.exchanges)) return fail('exchanges must be an array.');
-  const exchanges: BtwExchange[] = [];
-  let bytes = 0;
+  const parsed: BtwExchange[] = [];
   for (const [index, entry] of (body.exchanges as unknown[] | undefined ?? []).entries()) {
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
       return fail(`exchanges[${index}] must be a { question, answer } object.`);
@@ -35,10 +34,18 @@ export function parseBtwRequest(raw: unknown): { question: string; exchanges: Bt
     if (typeof exchange.question !== 'string' || !exchange.question.trim() || typeof exchange.answer !== 'string') {
       return fail(`exchanges[${index}] must contain a nonempty question and a string answer.`);
     }
-    bytes += Buffer.byteLength(exchange.question, 'utf8') + Buffer.byteLength(exchange.answer, 'utf8');
-    if (bytes > BTW_MAX_CONTEXT_BYTES) return fail('The side-chat history is too large.');
-    exchanges.push({ question: exchange.question, answer: exchange.answer });
-    if (exchanges.length > BTW_MAX_EXCHANGES) return fail(`A side chat keeps at most ${BTW_MAX_EXCHANGES} earlier exchanges.`);
+    parsed.push({ question: exchange.question, answer: exchange.answer });
+  }
+  // Match the runtime's panel: keep the newest exchanges that fit, rather than
+  // failing a long-running side chat once it passes the cap.
+  const exchanges: BtwExchange[] = [];
+  let bytes = 0;
+  for (let index = parsed.length - 1; index >= 0 && exchanges.length < BTW_MAX_EXCHANGES; index -= 1) {
+    const exchange = parsed[index];
+    const size = Buffer.byteLength(exchange.question, 'utf8') + Buffer.byteLength(exchange.answer, 'utf8');
+    if (bytes + size > BTW_MAX_CONTEXT_BYTES) break;
+    exchanges.unshift(exchange);
+    bytes += size;
   }
   return { question: body.question.trim(), exchanges };
 }
