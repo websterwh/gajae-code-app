@@ -541,9 +541,9 @@ export default function AutomationSettingsTab() {
 
   return (
     <div className="space-y-6">
-      <SettingsSection title={t('automation.browserBackend.title')} description={t('automation.browserBackend.description')}>
+      <SettingsSection title={t('automation.browserBackend.title')}>
         <SettingsCard>
-          <SettingsRow label={t('automation.browserBackend.label')} description={t(`automation.browserBackend.${browserBackend ?? 'builtin'}Description`)}>
+          <SettingsRow label={t('automation.browserBackend.label')}>
             <select
               aria-label={t('automation.browserBackend.label')}
               value={browserBackend ?? 'builtin'}
@@ -556,11 +556,8 @@ export default function AutomationSettingsTab() {
               ))}
             </select>
           </SettingsRow>
-          {browserBackend === 'aside' ? (
-            <p className="px-4 pb-4 text-xs text-muted-foreground">{t('automation.browserBackend.asideNote')}</p>
-          ) : null}
           {browserBackend === 'ego' ? (
-            <SettingsRow label={t('automation.browserBackend.activity')} description={t('automation.browserBackend.activityDescription')}>
+            <SettingsRow label={t('automation.browserBackend.activity')}>
               <SettingsToggle
                 checked={egoActivity}
                 onChange={(value) => void changeEgoActivity(value)}
@@ -569,7 +566,7 @@ export default function AutomationSettingsTab() {
             </SettingsRow>
           ) : null}
           {browserBackend === 'ego' ? (
-            <SettingsRow label={t('automation.browserBackend.activityFrame')} description={t('automation.browserBackend.activityFrameDescription')}>
+            <SettingsRow label={t('automation.browserBackend.activityFrame')}>
               <SettingsToggle
                 checked={egoFrames}
                 onChange={(value) => void changeEgoFrames(value)}
@@ -580,7 +577,6 @@ export default function AutomationSettingsTab() {
           ) : null}
           {browserBackend === 'ego' ? (
             <div className="space-y-2 px-4 pb-4 text-xs text-muted-foreground">
-              <p>{t('automation.browserBackend.egoNote')}</p>
               <p>
                 {t('automation.browserBackend.readiness')}: {t(`automation.browserBackend.readiness${egoReadiness?.status === 'ready' ? 'Ready' : egoReadiness?.status === 'not_ready' ? 'NotReady' : 'Unknown'}`)}
               </p>
@@ -609,9 +605,9 @@ export default function AutomationSettingsTab() {
       </SettingsSection>
 
       {hasBuiltinBrowserBridge() ? (
-        <SettingsSection title={t('automation.builtinBrowser.title')} description={t('automation.builtinBrowser.description')}>
+        <SettingsSection title={t('automation.builtinBrowser.title')}>
           <SettingsCard>
-            <SettingsRow label={t('automation.builtinBrowser.label')} description={t('automation.builtinBrowser.note')}>
+            <SettingsRow label={t('automation.builtinBrowser.label')}>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
@@ -643,9 +639,9 @@ export default function AutomationSettingsTab() {
       {/* Its own switch above the device list: pairing a computer is not
          permission to hand a session a computer tool. Off until the person
          turns it on, exactly like host control. */}
-      <SettingsSection title={t('automation.computerUse.title')} description={t('automation.computerUse.description')}>
+      <SettingsSection title={t('automation.computerUse.title')}>
         <SettingsCard>
-          <SettingsRow label={t('automation.computerUse.enableLabel')} description={t('automation.computerUse.enableDescription')}>
+          <SettingsRow label={t('automation.computerUse.enableLabel')}>
             <SettingsToggle
               checked={status?.computerUse?.enabled === true}
               disabled={status === null}
@@ -659,13 +655,9 @@ export default function AutomationSettingsTab() {
         </SettingsCard>
       </SettingsSection>
 
-      <SettingsSection title={t('automation.title')} description={t('automation.description')}>
+      <SettingsSection title={t('automation.title')}>
         <SettingsCard divided>
-          <div className="flex items-center justify-between gap-4 p-4">
-            <div>
-              <p className="text-sm font-medium text-foreground">Remote devices</p>
-              <p className="mt-1 text-xs text-muted-foreground">Pair a device running the agent-desktop companion, or run it with only --server and no token at all - either way a new device needs to be Trusted below before it can be selected, and only a trusted, currently connected device with a valid readiness report can actually run anything. Untrust pauses a device without deleting it; Remove deletes it outright (it can always reconnect and register again afterward).</p>
-            </div>
+          <div className="flex items-center justify-end gap-4 p-4">
             <div className="flex items-center gap-2">
               {companionDownloadTemplate ? <a href={companionDownloadTemplate.replace('{platform}', companionPlatform())} className="rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted">Download companion</a> : null}
               {companionDownloadTemplate && navigator.userAgent.includes('Mac')
@@ -683,7 +675,6 @@ export default function AutomationSettingsTab() {
                 <button type="button" onClick={() => void copyPairingCommand()} className="rounded-lg border border-input px-3 py-2 text-xs text-foreground hover:bg-muted">{commandCopied ? 'Command copied' : 'Copy command'}</button>
               </div>
               <code className="mt-2 block overflow-x-auto rounded bg-muted px-2 py-1.5 text-xs text-foreground">{companionPairCommand(pairingToken)}</code>
-              <p className="mt-2 text-xs text-muted-foreground">"Open in companion" requires an OS protocol handler the companion does not register yet - use the token or command for now. The device will appear below once it connects, and needs to be Trusted here before it can run anything.</p>
             </div>
           ) : null}
           <div className="border-t border-border p-4">
@@ -755,9 +746,9 @@ export default function AutomationSettingsTab() {
          row that silently disappears reads as "this build has no such
          setting" - which is what a deployment without GAJAE_HOST_CONTROL
          sees, since the section still has to say why it is inert. */}
-      <SettingsSection title={t('automation.hostControl.label')} description={t('automation.hostControl.description')}>
+      <SettingsSection title={t('automation.hostControl.label')}>
         <SettingsCard divided>
-          <SettingsRow label={t('automation.hostControl.enableLabel')} description={t('automation.hostControl.enableDescription')}>
+          <SettingsRow label={t('automation.hostControl.enableLabel')}>
             <SettingsToggle
               checked={hostControl?.enabled === true}
               disabled={hostControl?.available !== true}
@@ -787,7 +778,7 @@ export default function AutomationSettingsTab() {
               <div className="border-b border-border bg-muted/20 py-1">
                 <p className="px-4 py-2 text-xs font-medium text-foreground">{t('automation.hostControl.sshGroup')}</p>
                 <div className="ml-4 border-l border-border pl-1">
-                  <SettingsRow label={t('automation.hostControl.sshHost')} description={t('automation.hostControl.sshHostDescription')}>
+                  <SettingsRow label={t('automation.hostControl.sshHost')}>
                     <div className="flex flex-wrap items-center gap-2">
                       <input
                         aria-label={t('automation.hostControl.sshHost')}
@@ -827,7 +818,7 @@ export default function AutomationSettingsTab() {
                       />
                     </div>
                   </SettingsRow>
-                  <SettingsRow label={t('automation.hostControl.sshHostKey')} description={t('automation.hostControl.sshHostKeyDescription')}>
+                  <SettingsRow label={t('automation.hostControl.sshHostKey')}>
                     <input
                       aria-label={t('automation.hostControl.sshHostKey')}
                       value={sshDraft.hostKey}
@@ -840,10 +831,7 @@ export default function AutomationSettingsTab() {
                       className={`${selectClass} sm:w-72`}
                     />
                   </SettingsRow>
-                  <SettingsRow
-                    label={t('automation.hostControl.sshGenerateTitle')}
-                    description={t('automation.hostControl.sshGenerateDescription')}
-                  >
+                  <SettingsRow label={t('automation.hostControl.sshGenerateTitle')}>
                     <div className="flex w-full flex-col gap-2 sm:w-80">
                       <div className="flex items-center justify-end gap-2">
                         <button
@@ -921,21 +909,21 @@ export default function AutomationSettingsTab() {
                       </div>
                     </div>
                   </SettingsRow>
-                  <SettingsRow label={t('automation.hostControl.hostRead')} description={t('automation.hostControl.hostReadDescription')}>
+                  <SettingsRow label={t('automation.hostControl.hostRead')}>
                     <SettingsToggle
                       checked={hostControl.capabilities.hostRead === true}
                       onChange={(value) => void saveHostControl({ hostRead: value })}
                       ariaLabel={t('automation.hostControl.hostRead')}
                     />
                   </SettingsRow>
-                  <SettingsRow label={t('automation.hostControl.hostWrite')} description={t('automation.hostControl.hostWriteDescription')}>
+                  <SettingsRow label={t('automation.hostControl.hostWrite')}>
                     <SettingsToggle
                       checked={hostControl.capabilities.hostWrite === true}
                       onChange={(value) => void saveHostControl({ hostWrite: value })}
                       ariaLabel={t('automation.hostControl.hostWrite')}
                     />
                   </SettingsRow>
-                  <SettingsRow label={t('automation.hostControl.sshPreauthorized')} description={t('automation.hostControl.sshPreauthorizedDescription')}>
+                  <SettingsRow label={t('automation.hostControl.sshPreauthorized')}>
                     <SettingsToggle
                       checked={hostControl.ssh?.writePreauthorized === true}
                       disabled={hostControl.capabilities.hostWrite !== true}
@@ -957,7 +945,7 @@ export default function AutomationSettingsTab() {
                 label={t('automation.hostControl.hostInfo')}
                 description={!detectingHost && shownOs
                   ? <span role="status" className="font-medium text-foreground">{shownOs}</span>
-                  : t('automation.hostControl.hostInfoDescription')}
+                  : undefined}
               >
                 <div className="flex items-center gap-3">
                   <button
@@ -979,7 +967,7 @@ export default function AutomationSettingsTab() {
                  inset, under a rule, so the nesting is visible without
                  pushing the group itself to the right. Turned off, it hides
                  them and takes their grants with it. */}
-              <SettingsRow label={t('automation.hostControl.dockerGroup')} description={t('automation.hostControl.dockerGroupDescription')}>
+              <SettingsRow label={t('automation.hostControl.dockerGroup')}>
                 <SettingsToggle
                   checked={dockerGroupOn}
                   onChange={(value) => void saveHostControl(
@@ -996,7 +984,6 @@ export default function AutomationSettingsTab() {
                         key={capability}
                         className="py-3"
                         label={t(`automation.hostControl.${capability}`)}
-                        description={t(`automation.hostControl.${capability}Description`)}
                       >
                         <SettingsToggle
                           checked={hostControl.capabilities[capability] === true}
@@ -1011,7 +998,7 @@ export default function AutomationSettingsTab() {
               {/* The scope for everything that reaches further than a restart:
                  state changes, commands and file reads only touch containers
                  this list names. Empty means none, not all of them. */}
-              <SettingsRow label={t('automation.hostControl.targets')} description={t('automation.hostControl.targetsDescription')}>
+              <SettingsRow label={t('automation.hostControl.targets')}>
                 <input
                   aria-label={t('automation.hostControl.targets')}
                   value={targetsDraft}
@@ -1031,7 +1018,7 @@ export default function AutomationSettingsTab() {
         </SettingsCard>
       </SettingsSection>
 
-      <SettingsSection title={t('automation.grants')} description={t('automation.grantsDescription')}>
+      <SettingsSection title={t('automation.grants')}>
         <SettingsCard>
           {allGrants.length === 0 ? (
             <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground"><ShieldCheck className="h-4 w-4" />{t('automation.noGrants')}</div>

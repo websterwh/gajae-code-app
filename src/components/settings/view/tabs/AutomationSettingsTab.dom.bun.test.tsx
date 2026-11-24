@@ -185,19 +185,15 @@ test('Built-in is the default and every backend choice persists through the API'
 
   fireEvent.change(backendSelect(), { target: { value: 'aside' } });
   await waitFor(() => assert.equal(backendSelect().value, 'aside'));
-  assert.ok(screen.getByText(english.automation.browserBackend.asideNote));
-  assert.equal(screen.queryByText(english.automation.browserBackend.egoNote), null);
+  assert.equal(screen.queryByRole('switch', { name: english.automation.browserBackend.activity }), null, 'the activity switches stay ego-only');
 
   fireEvent.change(backendSelect(), { target: { value: 'ego' } });
   await waitFor(() => assert.equal(backendSelect().value, 'ego'));
-  assert.ok(screen.getByText(english.automation.browserBackend.egoNote));
-  assert.ok(screen.getByText(english.automation.browserBackend.egoDescription));
-  assert.equal(screen.queryByText(english.automation.browserBackend.asideNote), null);
+  assert.ok(screen.getByRole('switch', { name: english.automation.browserBackend.activity }));
 
   fireEvent.change(backendSelect(), { target: { value: 'builtin' } });
   await waitFor(() => assert.equal(backendSelect().value, 'builtin'));
-  assert.equal(screen.queryByText(english.automation.browserBackend.asideNote), null);
-  assert.equal(screen.queryByText(english.automation.browserBackend.egoNote), null);
+  assert.equal(screen.queryByRole('switch', { name: english.automation.browserBackend.activity }), null);
   assert.deepEqual(calls.filter((call) => call.method === 'PUT').map((call) => call.body), [
     { backend: 'aside' },
     { backend: 'ego' },
@@ -216,7 +212,6 @@ test('the browser activity opt-in belongs to ego, is off by default and persists
   fireEvent.change(backendSelect(), { target: { value: 'ego' } });
   const toggle = await screen.findByRole('switch', { name: activityLabel });
   assert.equal(toggle.getAttribute('aria-checked'), 'false', 'rendering a logged-in browser is never on by default');
-  assert.ok(screen.getByText(english.automation.browserBackend.activityDescription));
 
   fireEvent.click(toggle);
   await waitFor(() => assert.equal(screen.getByRole('switch', { name: activityLabel }).getAttribute('aria-checked'), 'true'));
@@ -243,7 +238,6 @@ test('the picture is a second switch: off by default and unavailable until activ
   // Seeing an address is not agreeing to see the page, so the picture cannot be
   // switched on before the surface it lives in.
   assert.equal((frameToggle as HTMLButtonElement).disabled, true);
-  assert.ok(screen.getByText(english.automation.browserBackend.activityFrameDescription));
 
   fireEvent.click(screen.getByRole('switch', { name: activity }));
   await waitFor(() => assert.equal((screen.getByRole('switch', { name: frame }) as HTMLButtonElement).disabled, false));
