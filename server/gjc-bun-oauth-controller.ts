@@ -39,7 +39,10 @@ export type GjcOAuthAttempt = {
   errorCode?: string;
   expiresAt?: number;
   valueKind?: GjcOAuthInputValueKind;
+  promptMessage?: string;
+  promptPlaceholder?: string;
   password?: true;
+  allowEmpty?: true;
 };
 
 export type GjcOAuthEvent =
@@ -235,7 +238,20 @@ export class GjcBunOAuthController {
   }
 
   #snapshot(attempt: AttemptState): GjcOAuthAttempt {
-    const { attemptId, providerId, phase, authorizationUrl, instruction, errorCode, expiresAt, valueKind, password } = attempt;
+    const {
+      attemptId,
+      providerId,
+      phase,
+      authorizationUrl,
+      instruction,
+      errorCode,
+      expiresAt,
+      valueKind,
+      promptMessage,
+      promptPlaceholder,
+      password,
+      allowEmpty,
+    } = attempt;
     return {
       attemptId,
       providerId,
@@ -245,7 +261,10 @@ export class GjcBunOAuthController {
       ...(errorCode ? { errorCode } : {}),
       ...(expiresAt ? { expiresAt } : {}),
       ...(valueKind ? { valueKind } : {}),
+      ...(promptMessage ? { promptMessage } : {}),
+      ...(promptPlaceholder ? { promptPlaceholder } : {}),
       ...(password ? { password } : {}),
+      ...(allowEmpty ? { allowEmpty } : {}),
     };
   }
 
@@ -260,22 +279,39 @@ export class GjcBunOAuthController {
     this.#emit({ method: 'oauth.phase', payload: this.#snapshot(attempt) });
   }
 
-  #transition(attempt: AttemptState, phase: GjcOAuthAttemptPhase, fields: Partial<Pick<GjcOAuthAttempt, 'authorizationUrl' | 'instruction' | 'errorCode' | 'valueKind' | 'password'>> = {}): void {
+  #transition(
+    attempt: AttemptState,
+    phase: GjcOAuthAttemptPhase,
+    fields: Partial<Pick<GjcOAuthAttempt, 'authorizationUrl' | 'instruction' | 'errorCode' | 'valueKind' | 'promptMessage' | 'promptPlaceholder' | 'password' | 'allowEmpty'>> = {},
+  ): void {
     if (!this.#isActive(attempt) && !terminalPhases.has(phase)) return;
     attempt.phase = phase;
     delete attempt.valueKind;
+    delete attempt.promptMessage;
+    delete attempt.promptPlaceholder;
     delete attempt.password;
+    delete attempt.allowEmpty;
     Object.assign(attempt, fields);
     this.#revision += 1;
     this.#emitPhase(attempt);
   }
 
-  #requestInput(attempt: AttemptState, valueKind: GjcOAuthInputValueKind, password?: true): Promise<string> {
+  #requestInput(
+    attempt: AttemptState,
+    valueKind: GjcOAuthInputValueKind,
+    fields: { password?: true; promptMessage?: string; promptPlaceholder?: string; allowEmpty?: boolean } = {},
+  ): Promise<string> {
     if (!this.#isActive(attempt)) return Promise.reject(new GjcOAuthControllerError('oauth_attempt_not_active'));
     return new Promise((resolve, reject) => {
       attempt.input = { resolve, reject };
       // Register before notifying: a synchronous subscriber may submit/cancel.
-      this.#transition(attempt, 'awaiting_input', { valueKind, ...(password ? { password } : {}) });
+      this.#transition(attempt, 'awaiting_input', {
+        valueKind,
+        ...(fields.password ? { password: true } : {}),
+        ...(fields.promptMessage ? { promptMessage: fields.promptMessage } : {}),
+        ...(fields.promptPlaceholder ? { promptPlaceholder: fields.promptPlaceholder } : {}),
+        ...(fields.allowEmpty ? { allowEmpty: true } : {}),
+      });
     });
   }
 
@@ -332,7 +368,12 @@ export class GjcBunOAuthController {
         },
         onPrompt: async (prompt: OAuthPrompt) => {
           const password = isPasswordPrompt(prompt);
-          return this.#requestInput(attempt, password ? 'password' : 'prompt', password ? true : undefined);
+          return this.#requestInput(attempt, password ? 'password' : 'prompt', {
+            ...(password ? { password: true as const } : {}),
+            ...(safeText(prompt.message) ? { promptMessage: safeText(prompt.message) } : {}),
+            ...(safeText(prompt.placeholder, 512) ? { promptPlaceholder: safeText(prompt.placeholder, 512) } : {}),
+            ...(prompt.allowEmpty === true ? { allowEmpty: true } : {}),
+          });
         },
         onManualCodeInput: async () => this.#requestInput(attempt, 'manual_code'),
         onProgress: () => {

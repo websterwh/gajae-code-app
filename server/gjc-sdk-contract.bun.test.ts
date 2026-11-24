@@ -67,7 +67,7 @@ type OAuthCallbacks = {
   onAuth(info: { url: string; instructions?: string }): void;
   onProgress?(message: string): void;
   onManualCodeInput?(): Promise<string>;
-  onPrompt(prompt: { message: string; placeholder?: string }): Promise<string>;
+  onPrompt(prompt: { message: string; placeholder?: string; allowEmpty?: boolean }): Promise<string>;
   signal?: AbortSignal;
 };
 type OAuthLogin = (provider: string, callbacks: OAuthCallbacks) => Promise<void>;
@@ -1087,7 +1087,7 @@ test('OAuth callbacks emit safe phases and refresh before auth update completion
       callbacks.onAuth({ url: 'https://login.example.test/authorize', instructions: 'Complete browser sign-in.' });
       callbacks.onProgress?.('Waiting for browser authentication.');
       assert.equal(await callbacks.onManualCodeInput!(), manualCanary);
-      assert.equal(await callbacks.onPrompt({ message: 'Enter the displayed code', placeholder: 'Code' }), promptCanary);
+      assert.equal(await callbacks.onPrompt({ message: 'Enter the displayed code', placeholder: 'Code', allowEmpty: true }), promptCanary);
       assert.equal(await callbacks.onPrompt({ message: 'Enter your password', placeholder: 'Password' }), passwordCanary);
     },
   );
@@ -1106,6 +1106,9 @@ test('OAuth callbacks emit safe phases and refresh before auth update completion
       .map((frame) => frame.payload as Record<string, unknown>)
       .find((phase) => phase.attemptId === attemptId && phase.valueKind === 'prompt'));
     assert.equal(promptPhase.password, undefined);
+    assert.equal(promptPhase.promptMessage, 'Enter the displayed code');
+    assert.equal(promptPhase.promptPlaceholder, 'Code');
+    assert.equal(promptPhase.allowEmpty, true);
     await f.host.handle(request('oauth.submit', 'oauth-submit-prompt', { attemptId, value: promptCanary }));
 
 

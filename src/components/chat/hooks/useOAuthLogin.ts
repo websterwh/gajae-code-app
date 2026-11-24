@@ -34,7 +34,10 @@ export type OAuthAttempt = {
   errorCode?: string;
   expiresAt?: number;
   valueKind?: 'manual_code' | 'password' | 'prompt';
+  promptMessage?: string;
+  promptPlaceholder?: string;
   password?: true;
+  allowEmpty?: true;
 };
 
 export type OAuthLoginFailure = {
@@ -127,6 +130,8 @@ const parseAttempt = (value: unknown): OAuthAttempt | null => {
   const instruction = readString(record?.instruction) || undefined;
   const errorCode = readString(record?.errorCode, MAX_IDENTIFIER_LENGTH) || undefined;
   const valueKind = record?.valueKind;
+  const promptMessage = readString(record?.promptMessage) || undefined;
+  const promptPlaceholder = readString(record?.promptPlaceholder, MAX_IDENTIFIER_LENGTH) || undefined;
 
   return {
     attemptId,
@@ -137,7 +142,10 @@ const parseAttempt = (value: unknown): OAuthAttempt | null => {
     ...(errorCode ? { errorCode } : {}),
     ...(typeof record?.expiresAt === 'number' && Number.isFinite(record.expiresAt) ? { expiresAt: record.expiresAt } : {}),
     ...(valueKind === 'manual_code' || valueKind === 'password' || valueKind === 'prompt' ? { valueKind } : {}),
+    ...(promptMessage ? { promptMessage } : {}),
+    ...(promptPlaceholder ? { promptPlaceholder } : {}),
     ...(record?.password === true ? { password: true as const } : {}),
+    ...(record?.allowEmpty === true ? { allowEmpty: true as const } : {}),
   };
 };
 
@@ -198,6 +206,8 @@ const safeFailure = (code: string): OAuthLoginFailure => {
       return { code, message: 'Sign-in was saved, but available models could not be refreshed.' };
     case 'oauth_state_mismatch':
       return { code, message: 'The link you opened belongs to an earlier sign-in attempt. Each attempt issues a new link: start again and open the link shown now.' };
+    case 'oauth_browser_open_failed':
+      return { code, message: 'The browser link could not be opened automatically. Use “Open sign-in link” or copy the link below.' };
     default:
       return { code: 'oauth_failed', message: 'Sign-in could not be completed. Try again.' };
   }
@@ -424,7 +434,11 @@ export function useOAuthLogin() {
       return;
     }
     openedAuthorizationRef.current = authorizationUrl;
-    void openOAuthAuthorizationUrl(authorizationUrl);
+    void openOAuthAuthorizationUrl(authorizationUrl).then((opened) => {
+      if (!opened && isOpenRef.current && activeAttemptRef.current?.authorizationUrl === authorizationUrl) {
+        setFailure(safeFailure('oauth_browser_open_failed'));
+      }
+    });
   }, [attempt?.authorizationUrl, attempt?.phase, isOpen]);
 
   useEffect(() => () => {

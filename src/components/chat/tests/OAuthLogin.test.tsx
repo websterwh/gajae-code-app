@@ -48,6 +48,24 @@ test('OAuth frame parsing accepts safe state and excludes unsafe authorization U
     password: true,
   });
 
+  assert.deepEqual(parseOAuthAttempt({
+    attemptId: 'oauth-attempt-2',
+    providerId: 'github-copilot',
+    phase: 'awaiting_input',
+    valueKind: 'prompt',
+    promptMessage: 'GitHub Enterprise URL/domain (blank for github.com)',
+    promptPlaceholder: 'company.ghe.com',
+    allowEmpty: true,
+  }), {
+    attemptId: 'oauth-attempt-2',
+    providerId: 'github-copilot',
+    phase: 'awaiting_input',
+    valueKind: 'prompt',
+    promptMessage: 'GitHub Enterprise URL/domain (blank for github.com)',
+    promptPlaceholder: 'company.ghe.com',
+    allowEmpty: true,
+  });
+
   assert.equal(parseOAuthAttempt({
     attemptId: 'oauth-attempt-1',
     providerId: 'openai-codex',
@@ -76,6 +94,7 @@ test('provider sign-in link remains visible while manual input is requested', ()
 test('OAuth failure messages distinguish disconnect and persisted-login refresh failure', () => {
   assert.match(oauthFailureForCode('oauth_disconnected').message, /Connection lost/);
   assert.match(oauthFailureForCode('oauth_model_refresh_failed').message, /Sign-in was saved/);
+  assert.match(oauthFailureForCode('oauth_browser_open_failed').message, /Open sign-in link/);
   assert.equal(oauthFailureForCode('raw-provider-error').code, 'oauth_failed');
 });
 

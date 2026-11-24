@@ -138,6 +138,19 @@ function OAuthLoginDialog({
   const authorizationUrl = safeOAuthAuthorizationUrl(attempt?.authorizationUrl);
   const passwordInput = attempt?.password === true || attempt?.valueKind === 'password';
   const manualCodeInput = attempt?.valueKind === 'manual_code';
+  const allowEmpty = attempt?.allowEmpty === true;
+  const promptMessage = attempt?.promptMessage;
+  const promptPlaceholder = attempt?.promptPlaceholder;
+  const inputLabel = passwordInput
+    ? promptMessage || 'Password or secret value'
+    : manualCodeInput
+      ? promptMessage || 'Authorization code or full callback URL'
+      : promptMessage || 'Authorization code or sign-in value';
+  const inputPlaceholder = passwordInput
+    ? promptPlaceholder || 'Enter value'
+    : manualCodeInput
+      ? promptPlaceholder || 'Paste the code or the localhost callback URL from your browser'
+      : promptPlaceholder || (promptMessage ? 'Enter value' : 'Paste the authorization code');
   const showAuthorizationLink = shouldDisplayOAuthAuthorizationLink(attempt);
   const showProviderPicker = !attempt || (isTerminal && attempt.phase !== 'completed');
   const filteredProviders = useMemo(() => filterOAuthProviders(providers, providerQuery), [providers, providerQuery]);
@@ -169,11 +182,11 @@ function OAuthLoginDialog({
     event.preventDefault();
     const submittedValue = valueRef.current;
     clearValue();
-    if (!submittedValue.trim()) {
+    if (!submittedValue.trim() && !allowEmpty) {
       return;
     }
     onSubmitValue(submittedValue);
-  }, [clearValue, onSubmitValue]);
+  }, [allowEmpty, clearValue, onSubmitValue]);
 
   const handleCopy = useCallback(async () => {
     if (!authorizationUrl) {
@@ -296,11 +309,7 @@ function OAuthLoginDialog({
                 {attempt.instruction || phaseLabel(attempt.phase)}
               </div>
               <label htmlFor="oauth-login-value" className="text-sm font-medium text-foreground">
-                {passwordInput
-                  ? 'Password or secret value'
-                  : manualCodeInput
-                    ? 'Authorization code or full callback URL'
-                    : 'Authorization code or sign-in value'}
+                {inputLabel}
               </label>
               <Input
                 id="oauth-login-value"
@@ -311,16 +320,15 @@ function OAuthLoginDialog({
                   valueRef.current = event.target.value;
                   setValue(event.target.value);
                 }}
-                aria-label={passwordInput ? 'Password or secret value' : 'Authorization code or sign-in value'}
-                placeholder={passwordInput
-                  ? 'Enter value'
-                  : manualCodeInput
-                    ? 'Paste the code or the localhost callback URL from your browser'
-                    : 'Paste the authorization code'}
+                aria-label={inputLabel}
+                placeholder={inputPlaceholder}
               />
-              <Button type="submit" className="w-full" disabled={!value.trim()}>
+              {allowEmpty && (
+                <p className="text-xs text-muted-foreground">Leave this blank to use the default.</p>
+              )}
+              <Button type="submit" className="w-full" disabled={!value.trim() && !allowEmpty}>
                 <KeyRound className="mr-2 h-4 w-4" aria-hidden />
-                Continue securely
+                {allowEmpty && !value.trim() ? 'Continue with default' : 'Continue securely'}
               </Button>
             </form>
           )}

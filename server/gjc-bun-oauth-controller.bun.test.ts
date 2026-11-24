@@ -10,7 +10,7 @@ import { GjcBunOAuthController, type GjcOAuthActivitySnapshot, type GjcOAuthEven
 // test seam at the same narrow callback contract the controller supplies.
 type Callbacks = {
   onAuth(info: { url: string; instructions?: string }): void;
-  onPrompt(prompt: { message: string; placeholder?: string }): Promise<string>;
+  onPrompt(prompt: { message: string; placeholder?: string; allowEmpty?: boolean }): Promise<string>;
   signal?: AbortSignal;
 };
 
@@ -181,6 +181,37 @@ for (const outcome of ['resolve', 'reject'] as const) {
     }
   });
 }
+
+test('OAuth prompt metadata and an explicitly empty answer reach the provider', async () => {
+  const finish = deferred();
+  const entered = deferred();
+  let submitted: string | undefined;
+  const f = fixture(async (callbacks) => {
+    submitted = await callbacks.onPrompt({
+      message: 'GitHub Enterprise URL/domain (blank for github.com)',
+      placeholder: 'company.ghe.com',
+      allowEmpty: true,
+    });
+    entered.resolve();
+    await finish.promise;
+  });
+  try {
+    const attempt = f.controller.start('github-copilot');
+    await until(() => f.controller.status().attempt?.phase === 'awaiting_input');
+    const waiting = f.controller.status().attempt;
+    assert.equal(waiting?.promptMessage, 'GitHub Enterprise URL/domain (blank for github.com)');
+    assert.equal(waiting?.promptPlaceholder, 'company.ghe.com');
+    assert.equal(waiting?.allowEmpty, true);
+
+    assert.equal(f.controller.submit(attempt.attemptId, '').phase, 'awaiting_input');
+    await entered.promise;
+    assert.equal(submitted, '');
+  } finally {
+    f.controller.close();
+    finish.resolve();
+    await until(() => total(f.controller.snapshotActivity()) === 0);
+  }
+});
 
 test('OAuth submission invalidates activity even when its visible phase does not change', async () => {
   const finish = deferred();
