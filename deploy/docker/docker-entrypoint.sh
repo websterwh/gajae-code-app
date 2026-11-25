@@ -479,6 +479,19 @@ Port ${SSH_PORT}
 HostKey /data/ssh/ssh_host_ed25519_key
 HostKey /data/ssh/ssh_host_rsa_key
 AuthorizedKeysFile .ssh/authorized_keys
+# Two handshake steps can stall a login for a minute on a container network,
+# and neither can succeed here: reverse DNS of the client, and GSSAPI. They are
+# named rather than left to the compiled defaults so an OpenSSH bump cannot
+# quietly reintroduce the wait between "Connection established" and the prompt.
+UseDNS no
+GSSAPIAuthentication no
+# An unauthenticated connection holds a MaxStartups slot until LoginGraceTime
+# expires. A client that retries (a dropped session, an editor reattaching)
+# leaves a few behind, and the next login then waits for a slot instead of
+# answering. Bounding the grace window and widening the pool keeps a reconnect
+# from queueing behind abandoned ones.
+LoginGraceTime 30
+MaxStartups 30:30:100
 ChallengeResponseAuthentication no
 UsePAM no
 X11Forwarding no
