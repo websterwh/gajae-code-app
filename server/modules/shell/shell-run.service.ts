@@ -42,6 +42,14 @@ export const SHELL_RUN_MAX_OUTPUT_CHARS = 60_000;
 
 const ANSI_SEQUENCE = /\u001B\[[0-9;?]*[ -/]*[@-~]/gu;
 
+/**
+ * A login shell runs the user's profile first, and that profile may change
+ * directory (`WORKSPACES_ROOT`, for one, in the container). The command still
+ * has to run inside the directory the caller asked for, so the path is restored
+ * after the profile has had its turn.
+ */
+const SHELL_CWD_ENV = 'GJC_SHELL_RUN_CWD';
+
 export function parseShellRunRequest(body: unknown): { command: string; cwd: string; timeoutMs: number } {
   const record = typeof body === 'object' && body !== null ? body as Record<string, unknown> : {};
   const command = typeof record.command === 'string' ? record.command.trim() : '';
@@ -80,11 +88,12 @@ export function runShellCommand(body: unknown): Promise<ShellRunResult> {
   return new Promise((resolve) => {
     const child = spawn(
       windows ? 'powershell.exe' : 'bash',
-      windows ? ['-NoLogo', '-NoProfile', '-Command', command] : ['-lc', command],
+      windows ? ['-NoLogo', '-NoProfile', '-Command', command]
+        : ['-lc', `cd -- "$${SHELL_CWD_ENV}" && ${command}`],
       {
         cwd,
         // The server's own API credentials are not part of the user's shell.
-        env: { ...childEnvironment(), TERM: 'dumb', NO_COLOR: '1' },
+        env: { ...childEnvironment(), TERM: 'dumb', NO_COLOR: '1', [SHELL_CWD_ENV]: cwd },
         // A group lets a timeout take the whole tree, not just the shell.
         detached: !windows,
         stdio: ['ignore', 'pipe', 'pipe'],
