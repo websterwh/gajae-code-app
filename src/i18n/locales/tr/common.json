@@ -136,6 +136,19 @@
       "cache": "Önbellek",
       "thisChat": "Bu sohbet",
       "project": "Proje"
+    },
+    "git": {
+      "title": "Git",
+      "fetch": "Getir",
+      "pull": "Çek",
+      "push": "Gönder",
+      "commit": "Commit",
+      "message": "Commit mesajı",
+      "messagePlaceholder": "Hazırlanan değişiklikleri açıklayın",
+      "submit": "Hazırlanan değişiklikleri commit'le",
+      "busy": "Commit'leniyor…",
+      "done": "Tamam",
+      "failed": "Git komutu başarısız oldu."
     }
   },
   "commandPalette": {

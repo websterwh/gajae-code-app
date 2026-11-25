@@ -136,6 +136,19 @@
       "cache": "缓存",
       "thisChat": "本对话",
       "project": "项目"
+    },
+    "git": {
+      "title": "Git",
+      "fetch": "获取",
+      "pull": "拉取",
+      "push": "推送",
+      "commit": "提交",
+      "message": "提交信息",
+      "messagePlaceholder": "描述已暂存的更改",
+      "submit": "提交已暂存的更改",
+      "busy": "正在提交…",
+      "done": "完成",
+      "failed": "Git 命令失败。"
     }
   },
   "commandPalette": {

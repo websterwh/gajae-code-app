@@ -136,6 +136,19 @@
       "cache": "キャッシュ",
       "thisChat": "このチャット",
       "project": "プロジェクト"
+    },
+    "git": {
+      "title": "Git",
+      "fetch": "フェッチ",
+      "pull": "プル",
+      "push": "プッシュ",
+      "commit": "コミット",
+      "message": "コミットメッセージ",
+      "messagePlaceholder": "ステージした変更を説明",
+      "submit": "ステージした変更をコミット",
+      "busy": "コミット中…",
+      "done": "完了",
+      "failed": "Git コマンドに失敗しました。"
     }
   },
   "commandPalette": {

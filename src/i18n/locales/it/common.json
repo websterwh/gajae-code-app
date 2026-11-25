@@ -136,6 +136,19 @@
       "cache": "Cache",
       "thisChat": "Questa chat",
       "project": "Progetto"
+    },
+    "git": {
+      "title": "Git",
+      "fetch": "Recupera",
+      "pull": "Esegui pull",
+      "push": "Esegui push",
+      "commit": "Commit",
+      "message": "Messaggio di commit",
+      "messagePlaceholder": "Descrivi le modifiche in stage",
+      "submit": "Esegui il commit delle modifiche in stage",
+      "busy": "Commit in corso…",
+      "done": "Fatto",
+      "failed": "Comando Git non riuscito."
     }
   },
   "commandPalette": {

@@ -136,6 +136,19 @@
       "cache": "快取",
       "thisChat": "本對話",
       "project": "專案"
+    },
+    "git": {
+      "title": "Git",
+      "fetch": "取得",
+      "pull": "拉取",
+      "push": "推送",
+      "commit": "提交",
+      "message": "提交訊息",
+      "messagePlaceholder": "描述已暫存的變更",
+      "submit": "提交已暫存的變更",
+      "busy": "正在提交…",
+      "done": "完成",
+      "failed": "Git 指令失敗。"
     }
   },
   "commandPalette": {

@@ -136,6 +136,19 @@
       "cache": "Cache",
       "thisChat": "Dieser Chat",
       "project": "Projekt"
+    },
+    "git": {
+      "title": "Git",
+      "fetch": "Abrufen",
+      "pull": "Pull",
+      "push": "Push",
+      "commit": "Commit",
+      "message": "Commit-Nachricht",
+      "messagePlaceholder": "Beschreiben Sie die bereitgestellten Änderungen",
+      "submit": "Bereitgestellte Änderungen committen",
+      "busy": "Wird committet…",
+      "done": "Fertig",
+      "failed": "Git-Befehl fehlgeschlagen."
     }
   },
   "commandPalette": {

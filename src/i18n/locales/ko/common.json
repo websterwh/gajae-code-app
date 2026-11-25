@@ -136,6 +136,19 @@
       "cache": "캐시",
       "thisChat": "이 채팅",
       "project": "프로젝트"
+    },
+    "git": {
+      "title": "Git",
+      "fetch": "가져오기",
+      "pull": "풀",
+      "push": "푸시",
+      "commit": "커밋",
+      "message": "커밋 메시지",
+      "messagePlaceholder": "스테이징된 변경 사항을 설명하세요",
+      "submit": "스테이징된 변경 사항 커밋",
+      "busy": "커밋 중…",
+      "done": "완료",
+      "failed": "Git 명령이 실패했습니다."
     }
   },
   "commandPalette": {

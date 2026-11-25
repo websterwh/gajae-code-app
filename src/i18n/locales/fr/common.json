@@ -136,6 +136,19 @@
       "cache": "Cache",
       "thisChat": "Cette conversation",
       "project": "Projet"
+    },
+    "git": {
+      "title": "Git",
+      "fetch": "Récupérer",
+      "pull": "Tirer",
+      "push": "Pousser",
+      "commit": "Valider",
+      "message": "Message de validation",
+      "messagePlaceholder": "Décrivez les modifications indexées",
+      "submit": "Valider les modifications indexées",
+      "busy": "Validation…",
+      "done": "Terminé",
+      "failed": "La commande Git a échoué."
     }
   },
   "commandPalette": {
