@@ -848,10 +848,7 @@ export default function AutomationSettingsTab() {
                       />
                     </div>
                   </SettingsRow>
-                  <SettingsRow
-                    label={t('automation.hostControl.sshHostKey')}
-                    description={t('automation.hostControl.sshHostKeyDescription')}
-                  >
+                  <SettingsRow label={t('automation.hostControl.sshHostKey')}>
                     <input
                       aria-label={t('automation.hostControl.sshHostKey')}
                       value={sshDraft.hostKey}
@@ -864,10 +861,7 @@ export default function AutomationSettingsTab() {
                       className={`${selectClass} sm:w-72`}
                     />
                   </SettingsRow>
-                  <SettingsRow
-                    label={t('automation.hostControl.sshGenerateTitle')}
-                    description={t('automation.hostControl.sshGenerateDescription')}
-                  >
+                  <SettingsRow label={t('automation.hostControl.sshGenerateTitle')}>
                     <div className="flex w-full flex-col gap-2 sm:w-80">
                       <div className="flex items-center justify-end gap-2">
                         <button
@@ -908,12 +902,7 @@ export default function AutomationSettingsTab() {
                       {sshGenerateError ? <p role="alert" className="text-xs text-destructive">{sshGenerateError}</p> : null}
                     </div>
                   </SettingsRow>
-                  <SettingsRow
-                    label={t('automation.hostControl.sshPrivateKey')}
-                    description={hostControl.ssh?.keyPresent === true
-                      ? t('automation.hostControl.sshPrivateKeyStored')
-                      : t('automation.hostControl.sshPrivateKeyMissing')}
-                  >
+                  <SettingsRow label={t('automation.hostControl.sshPrivateKey')}>
                     <div className="flex w-full flex-col gap-2 sm:w-80">
                       <textarea
                         aria-label={t('automation.hostControl.sshPrivateKey')}
