@@ -87,14 +87,19 @@ async function mount(kind: 'footer' | 'collapsed' | 'notice' | 'shared' | 'modes
   return { ...view, i18n, t };
 }
 
-test('ordinary web and static Footer render are safe without a bridge, fetch, or updater UI', async () => {
+test('ordinary web and static Footer render are safe without a bridge or updater UI, and ask for no update', async () => {
   delete globals[DESKTOP_UPDATE_BRIDGE_NAME];
-  let fetches = 0;
-  globalThis.fetch = async () => { fetches += 1; throw new Error('unexpected network request'); };
+  // The footer's account control reads sign-in state on mount, so a plain web
+  // render is not request-free; an update request is what must not happen.
+  const requests: string[] = [];
+  globalThis.fetch = (async (input: unknown) => {
+    requests.push(input instanceof Request ? input.url : String(input));
+    throw new Error('unexpected network request');
+  }) as typeof fetch;
   const view = await mount();
   assert.equal(view.container.querySelector('[data-sidebar-update]'), null);
   assert.ok(screen.getByRole('button', { name: sidebarEnglish.actions.settings }));
-  assert.equal(fetches, 0);
+  assert.deepEqual(requests.filter((url) => /update/iu.test(url)), [], 'rendering the footer must not ask for an update');
   const html = renderToStaticMarkup(<Footer t={view.t} />);
   assert.ok(html.includes(sidebarEnglish.actions.settings));
   assert.equal(html.includes('data-sidebar-update'), false);

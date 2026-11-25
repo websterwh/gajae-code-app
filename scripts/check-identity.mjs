@@ -249,6 +249,12 @@ async function walkDirectory(directoryPath, category) {
       ) {
         continue;
       }
+      // The companion's compile output: cargo's target tree and the staged
+      // sidecar executables are build artifacts (both gitignored), not authored
+      // content, and they are far past the text scan limit.
+      if (relativePath === 'companion-rs/target' || relativePath === 'release/companion') {
+        continue;
+      }
 
       if (category === 'source' && GENERATED_DIRECTORIES.includes(entry.name)) {
         continue;

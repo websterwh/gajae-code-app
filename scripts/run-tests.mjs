@@ -4,6 +4,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
+// Permission assertions in the build and release tests spell out 0644/0755
+// modes, and their fixtures create files with those modes. A restrictive umask
+// from the host shell (this app's container runs with 077 so every file it
+// writes stays owner-only) would silently strip that bit before the code under
+// test ever sees it, so the suite runs with the conventional mode instead.
+process.umask(0o022);
+
 const TEST_FILE_PATTERN = /\.(?:test|spec)\.(?:js|mjs|ts|tsx)$/;
 // `.tsx` too: component tests that need a DOM run on Bun as well, under
 // `*.dom.bun.test.tsx`.

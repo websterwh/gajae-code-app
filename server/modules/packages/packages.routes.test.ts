@@ -10,7 +10,8 @@ import type { PackagesService } from './packages.service.js';
 test('the packages router maps validation errors to 400 and conflicts to 409', async (t) => {
   const service = {
     list: async () => [],
-    add: async () => {
+    // POST answers with `queue`, which starts the install in the background.
+    queue: () => {
       throw new Error('manager must be one of uv, pip, npm or aqua.');
     },
     setPin: async (manager: string) => {

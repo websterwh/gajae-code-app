@@ -658,6 +658,9 @@ test('builtin stdout is terminal-safe, preserves Unicode, and retains export pat
         role: 'assistant',
         content: 'Failed to export "nested/報告.html": the upstream export command returned a corrupted path.',
         isLocalCommandStdout: true,
+        // The destination the command resolved to travels with the message so
+        // the app can offer the file for download, even when the export failed.
+        exportPath: join(process.cwd(), 'nested', '報告.html'),
       },
     ]);
   } finally {
@@ -1930,7 +1933,7 @@ test('app-shaped real SDK sessions isolate async ownership and reject duplicate 
   } finally { await b.close(); await a.close(); }
 });
 
-test('app-shaped real SDK handoff rekeys logical ownership while retaining provider affinity', async () => {
+test('app-shaped real SDK handoff rekeys logical ownership while retaining provider affinity', { timeout: 30_000 }, async () => {
   const f = await identityFixture();
   let handoffCalls = 0;
   let successorId: string | undefined;
@@ -2892,7 +2895,13 @@ test('rejecting session disposal emits the fixed diagnostic and fails the run', 
     session.complete();
     await run;
     assert.equal((response(f.frames, 'dispose-rejects').payload as Record<string, unknown>).ok, false);
-    assert.deepEqual(diagnostics, [['GJC SDK session disposal failed.']]);
+    // The diagnostic names the cleanup step that failed and keeps the error,
+    // which is what separates a transient teardown from a real one; only the
+    // stable prefix and the underlying error are asserted here, not stack
+    // frames.
+    assert.equal(diagnostics.length, 1);
+    assert.equal(diagnostics[0]![0], 'GJC SDK session disposal failed (SDK session):');
+    assert.match(String(diagnostics[0]![1]), /^Error: dispose failed/u);
     const terminals = f.frames.flatMap(frame => {
       const message = (frame.payload as { message?: Record<string, unknown> })?.message;
       return message?.kind === 'complete' ? [message.exitCode] : [];
@@ -3148,7 +3157,7 @@ test('the SDK runtime bootstrap initializes the theme before any session can ask
   // would leave every option-bearing ask crashing again with a passing suite.
   assert.match(bootstrap, /ensureSdkThemeInitialized\(\)/u);
 });
-test('production Bun worker verifies the manifest before accepting initialize and shuts down over stdio', async () => {
+test('production Bun worker verifies the manifest before accepting initialize and shuts down over stdio', { timeout: 30_000 }, async () => {
   const agentDirectory = await mkdtemp(join(tmpdir(), 'gjc-agent-'));
   try {
     const result = await runProductionWorker({

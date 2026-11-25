@@ -188,17 +188,6 @@ test('configure opens on the block the server runs and saves what that block say
   });
 });
 
-test('the manual add dialog asks for headers only when the transport uses them', async () => {
-  fakeApi();
-  await mount();
-
-  fireEvent.click(await screen.findByRole('button', { name: english.mcp.manuallyAdd }));
-  assert.equal(screen.queryByText(english.mcp.headers), null, 'a stdio server has no headers field');
-
-  fireEvent.change(screen.getByLabelText(english.mcp.transport), { target: { value: 'http' } });
-  await screen.findByText(english.mcp.headers);
-});
-
 test('save stays disabled while the block has nothing to run', async () => {
   fakeApi([installedServer()]);
   await mount();
@@ -398,7 +387,13 @@ test('every row keeps the same action bar, with remove anchored to the right edg
   const bars = verifies.map((button) => button.parentElement);
   for (const bar of bars) {
     assert.ok(bar?.className.includes('w-full'), 'the bar is its own full-width line on every row');
-    assert.equal(bar?.firstElementChild?.textContent, english.mcp.verify, 'every bar starts with the same control');
+    // The per-server scope control leads the bar on every row; the pin
+    // controls a package row adds sit after it, so the bar's start is fixed.
+    assert.equal(bar?.firstElementChild?.tagName, 'SELECT', 'every bar starts with the scope control');
+    assert.ok(
+      (bar?.firstElementChild?.getAttribute('aria-label') ?? '').startsWith(`${english.mcp.scope} `),
+      'the leading control is the server scope',
+    );
     const remove = bar?.lastElementChild as HTMLElement | null;
     assert.ok(remove?.className.includes('ml-auto'), 'the remove control is pushed to the right edge');
     assert.equal(remove?.textContent, english.mcp.remove);

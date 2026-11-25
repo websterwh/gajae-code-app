@@ -38,6 +38,10 @@ function fixture(overrides: Record<string, unknown> = {}) {
     wss: { clients: [], close() {} }, server: { close() {}, closeAllConnections() {} },
     shutdownGjcWorker: async () => { events.push('worker-close'); },
     automationService: { shutdown: async () => {} },
+    // Telegram ingress is not what this fixture orders; shutdown still calls it,
+    // so the names it reaches for have to exist.
+    telegramInbound: { stop() {} },
+    unsubscribeTelegramTurnStream: () => {},
     removeLocalServerMarker: async () => {},
     console: { error() {} }, process,
     setInterval: () => events.push('hold-unconfirmed-exit'),

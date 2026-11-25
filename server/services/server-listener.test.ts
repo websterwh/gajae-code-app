@@ -83,6 +83,9 @@ test('the actual index startup failure joins cleanup and removes only its owned 
     writeLocalServerMarker: async () => { markerWrites++; }, removeLocalServerMarker: async () => {},
     initializeSessionsWatcher: async () => {}, closeSessionsWatcher: async () => {},
     drainWebSocketClients: async () => {}, shutdownGjcWorker: async () => {},
+    // Reached by shutdown before any awaited cleanup; without them the error
+    // path rejects before it can report its exit code.
+    telegramInbound: { stop() {} }, unsubscribeTelegramTurnStream: () => {},
     setInterval: () => { throw new Error('unexpected incomplete cleanup'); },
   };
   try {

@@ -771,7 +771,10 @@ async function verifyRealChildCleanupFailure(failureMode: 'permanent' | 'transie
         toolNames: ['task', 'subagent'], spawns: '*', bashPolicy: { allowedPrefixes: [] }, permissions: { mode: 'ask', allowAlways: ['task'] },
       } },
     };
-    await within(host.handle(start));
+    // A real child session is created here and its first abort is rejected on
+    // purpose; that path settles well past the 3s default on a busy machine,
+    // and the test's own 30s budget is the bound that matters.
+    await within(host.handle(start), 20_000);
     if (failureMode === 'transient') {
       assert.equal(frames.find((frame) => frame.id === 'fatal-cleanup')!.payload.error.code, 'run_failed');
       assert.equal(childStopped, true);

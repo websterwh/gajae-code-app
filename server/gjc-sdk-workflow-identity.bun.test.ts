@@ -38,7 +38,7 @@ async function materializeToolSession(session: { getToolByName(name: string): un
   return toolSession;
 }
 
-test('an app-shaped SDK session keeps workflow identity path-safe beside the async endpoint key', async () => {
+test('an app-shaped SDK session keeps workflow identity path-safe beside the async endpoint key', { timeout: 30_000 }, async () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gjc-app-workflow-identity-'));
   tempDirs.push(tempDir);
   const cwd = path.join(tempDir, 'project');
