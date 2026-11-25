@@ -54,6 +54,20 @@ export const SSH_READ_VERBS: readonly SshVerb[] = [
   { id: 'docker.ps', summary: 'Running containers', mutating: false, command: "docker ps --format 'table {{.Names}}\\t{{.Image}}\\t{{.Status}}\\t{{.Ports}}'" },
   { id: 'docker.images', summary: 'Images on the host', mutating: false, command: "docker images --format 'table {{.Repository}}\\t{{.Tag}}\\t{{.Size}}'" },
   { id: 'docker.inspect', summary: 'State of one container', mutating: false, target: 'container', command: (target) => `docker inspect --format '{{json .State}}' ${target}` },
+  // Logs, mounts and resource use are what a diagnosis actually needs, and the
+  // alternative - a browser scraping the app's own dashboard - is many turns of
+  // guessing. These stay inside the same rule as the rest of the table: a
+  // fixed command, the validated name as the only input, no environment values
+  // (that is where a container's secrets live).
+  { id: 'docker.logs', summary: 'Recent output of one container', mutating: false, target: 'container', command: (target) => `docker logs --tail 300 ${target}` },
+  {
+    id: 'docker.config',
+    summary: 'Image, mounts, ports and restart policy of one container',
+    mutating: false,
+    target: 'container',
+    command: (target) => `docker inspect --format 'image={{.Config.Image}}\nrestart={{.HostConfig.RestartPolicy.Name}}\ncommand={{json .Config.Cmd}}\nentrypoint={{json .Config.Entrypoint}}\nports={{json .HostConfig.PortBindings}}\nlabels={{json .Config.Labels}}\nmounts={{range .Mounts}}{{.Type}} {{.Source}} -> {{.Destination}}{{if not .RW}} (read-only){{end}}\n{{end}}' ${target}`,
+  },
+  { id: 'docker.stats', summary: 'CPU and memory use of every container', mutating: false, command: "docker stats --no-stream --format 'table {{.Name}}\\t{{.CPUPerc}}\\t{{.MemUsage}}\\t{{.MemPerc}}\\t{{.NetIO}}\\t{{.BlockIO}}'" },
 ];
 
 /** Writes. Each one asks first unless the operator pre-authorized host writes. */
@@ -130,6 +144,31 @@ export function sshArguments(target: SshHostTarget, command: string, paths: { ke
 
 function shellQuote(value: string): string {
   return `'${value.replace(/'/gu, `'\\''`)}'`;
+}
+
+/**
+ * Reading one path on the host is a read, so `hostRead` covers it: looking at a
+ * configuration file must not require the switch that also runs commands. The
+ * path is the only caller input, it is validated here and quoted for the remote
+ * shell, and `head` bounds what a huge file can do to one turn.
+ */
+export const HOST_FILE_MAX_BYTES = 256 * 1024;
+
+export function resolveHostFilePath(value: unknown): string {
+  if (typeof value !== 'string') throw new Error('path must be a string.');
+  if (value.length === 0 || value.length > 4096) {
+    throw new Error('path must be between 1 and 4096 characters.');
+  }
+  if (/[\u0000\r\n]/u.test(value)) throw new Error('path must not contain a NUL byte or a line break.');
+  if (!value.startsWith('/')) throw new Error('path must be an absolute path.');
+  if (value.split('/').includes('..')) throw new Error('path must not contain a ".." segment.');
+  return value;
+}
+
+/** One directory listing or the first 256 KiB of one file, never a command. */
+export function hostFileReadCommand(path: string): string {
+  const quoted = shellQuote(path);
+  return `if [ -d ${quoted} ]; then ls -la -- ${quoted}; else head -c ${HOST_FILE_MAX_BYTES} -- ${quoted}; fi`;
 }
 
 export type SshExecResult = {

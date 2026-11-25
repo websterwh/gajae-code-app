@@ -19,6 +19,8 @@ import {
 import {
   describeSshVerbs,
   findSshVerb,
+  hostFileReadCommand,
+  resolveHostFilePath,
   resolveSshCommand,
   runSshCommand,
 } from './gjc-ssh-host.js';
@@ -58,6 +60,10 @@ export function hostSchemaFor(policy: HostControlRunPolicy) {
         command: z.string().min(1).max(8192),
         timeoutMs: z.number().int().min(1_000).max(300_000).optional(),
       }),
+      z.strictObject({
+        action: z.literal('host_read_file'),
+        path: z.string().min(1).max(4096),
+      }),
     ]
     : [];
   return z.discriminatedUnion('action', [...dockerActions, ...sshActions] as any);
@@ -95,18 +101,31 @@ function describe(policy: HostControlRunPolicy): string {
   return [
     'Direct access to the Docker host that runs this app, over the daemon socket rather than the app\'s own HTTP API.',
     `Capabilities enabled for this run: ${policy.capabilities.join(', ')}. A capability that is off is refused with the switch that turns it on.`,
-    `Allowed containers: ${policy.targets.join(', ') || 'none'}. exec, read_file and container_action reach only names matching that list; restart is the one named container the operator permitted.`,
+    `Allowed containers: ${policy.targets.length === 0 || policy.targets.includes('*') ? 'every container' : policy.targets.join(', ')}. exec, read_file and container_action reach only names matching that list, and an empty list matches every container; restart is the one named container the operator permitted.`,
     'info reads daemon facts, containers lists every container with image, state, mounts and compose labels, and discovery derives the host picture: which OS or appliance the daemon runs on (Unraid, MOS, Proxmox VE, OpenMediaVault, CasaOS, ZimaOS) with its evidence, compose stacks, containers that mount the daemon socket, and unmanaged containers.',
     `exec runs one fixed verb inside the named container - there is no command string: ${verbs}. read_file reads one absolute path out of that container (files up to 256 KiB, directories list).`,
     'Start with containers to find the name, then exec with network or processes, or read_file on the mounted configuration. Do not guess a container name; the list is authoritative.',
     ...(policy.ssh
-      ? [`ssh runs one fixed verb on ${policy.ssh.user}@${policy.ssh.host}:${policy.ssh.port} over SSH, pinned to the host key the operator saved - no command string is involved: ${sshVerbs}. A read verb runs immediately; a write verb asks the user for approval before it runs${policy.sshWritePreauthorized ? ', except that the operator pre-authorized host writes in Settings' : ', even in a trusted permission mode'}. host_shell is the general path: it runs the shell command you write on that host as ${policy.ssh.user} - edit a file, install a package, drive compose, restart what no verb names. The command is passed unchanged as one argument to sh on the remote host, so heredocs and pipes work. It counts as a host write: it needs the hostWrite switch and asks the user for approval showing the exact command${policy.sshWritePreauthorized ? ', unless the operator pre-authorized host writes' : ', in every permission mode'}. Prefer the fixed verbs for reads, because those run without a question. Output is capped at 64 KiB; pass timeoutMs (up to 5 minutes) for slow work.`]
+      ? [`ssh runs one fixed verb on ${policy.ssh.user}@${policy.ssh.host}:${policy.ssh.port} over SSH, pinned to the host key the operator saved - no command string is involved: ${sshVerbs}. A read verb runs immediately; a write verb asks the user for approval before it runs${policy.sshWritePreauthorized ? ', except that the operator pre-authorized host writes in Settings' : ', even in a trusted permission mode'}. For a container, docker.logs, docker.config and docker.stats cover its recent output, its image, mounts, ports, labels and restart policy, and per-container CPU and memory, and exec with the memory or processes verb looks inside it; read_file (capability files) reads its configuration. host_read_file reads one absolute path on the host itself - the first 256 KiB of a file, or a directory listing - and it is a read: hostRead is enough and it never asks. Use those read paths instead of working around the tool: scraping a web dashboard for facts the host can report directly takes many turns and can miss what the container logs already say. host_shell is the general path: it runs the shell command you write on that host as ${policy.ssh.user} - edit a file, install a package, drive compose, restart what no verb names. The command is passed unchanged as one argument to sh on the remote host, so heredocs and pipes work. It counts as a host write: it needs the hostWrite switch and asks the user for approval showing the exact command${policy.sshWritePreauthorized ? ', unless the operator pre-authorized host writes' : ', in every permission mode'}. Prefer the fixed verbs for reads, because those run without a question. Output is capped at 64 KiB; pass timeoutMs (up to 5 minutes) for slow work.`]
       : []),
   ].join(' ');
 }
 
 /** The words the app's own approval cards use, so a host write reads like them. */
 const APPROVE_ONCE = 'Allow once';
+
+/**
+ * The ask panel renders its question as Markdown, so a bare command loses its
+ * line breaks and has pieces between underscores or backticks styled as
+ * emphasis - half the card in another font, and not what would run. A fenced
+ * block keeps the command verbatim in the code font. The fence is longer than
+ * any backtick run inside, so a heredoc containing ``` cannot close it early.
+ */
+function fencedCommand(command: string): string {
+  const longest = Math.max(0, ...(command.match(/`+/gu) ?? []).map((run) => run.length));
+  const fence = '`'.repeat(Math.max(3, longest + 1));
+  return `${fence}\n${command}\n${fence}`;
+}
 const DENY = 'Deny';
 
 type HostApprovalUI = {
@@ -133,8 +152,15 @@ export function createHostControlTool(
 
   const requireCapability = (capability: HostCapability): void => {
     if (policy.capabilities.includes(capability)) return;
+    // A refusal costs the model a turn, so it says what it can still do: the
+    // read verbs need no approval and usually answer the question that made it
+    // reach for a shell.
+    const readVerbs = describeSshVerbs().filter((verb) => !verb.mutating).map((verb) => verb.id).join(', ');
+    const alternative = capability === 'hostWrite' && policy.ssh
+      ? ` Read-only access is separate and already works: the ssh verbs ${readVerbs} need no approval, and read_file reads a container's configuration. Use those instead of retrying this call.`
+      : '';
     throw new Error(
-      `The host ${capability} capability is off for this run. Turn it on in Settings → Automation (host control) and start a new turn.`,
+      `The host ${capability} capability is off for this run. Turn it on in Settings → Automation (host control) and start a new turn.${alternative}`,
     );
   };
 
@@ -162,7 +188,7 @@ export function createHostControlTool(
       throw new Error('host_shell needs the user\'s approval, but this run has no approval surface.');
     }
     const choice = await ui.select(
-      `Allow the agent to run this command on ${target.user}@${target.host}?\n\n${command}`,
+      `Allow the agent to run this command on ${target.user}@${target.host}?\n\n${fencedCommand(command)}`,
       [APPROVE_ONCE, DENY],
     ).catch(() => undefined);
     if (choice !== APPROVE_ONCE) throw new Error('The host command was not approved.');
@@ -175,7 +201,7 @@ export function createHostControlTool(
     }
     if (!matchesHostTarget(policy.targets, container)) {
       throw new Error(
-        `${JSON.stringify(container)} is not on the host-control Allowed containers list in Settings → Automation. Add a matching name or glob, then start a new turn.`,
+        `${JSON.stringify(container)} is not on the host-control Allowed containers list in Settings → Automation. Add a matching name or glob, or leave the list empty to allow every container, then start a new turn.`,
       );
     }
   };
@@ -275,6 +301,21 @@ export function createHostControlTool(
             },
             { host: 'ssh', verb: verb.id, mutating: verb.mutating },
           );
+        }
+
+        case 'host_read_file': {
+          if (!policy.ssh) {
+            throw new Error(
+              'SSH access is not configured. Add the host, user, private key and pinned host key in Settings → Automation (host control), then start a new turn.',
+            );
+          }
+          // A path is the whole input and `host_file` is one listing or one
+          // bounded read, so this sits with the read verbs: no write switch, no
+          // approval card.
+          requireCapability('hostRead');
+          const path = resolveHostFilePath(params.path);
+          const result = await run(policy.ssh, hostFileReadCommand(path), { timeoutMs: 20_000 });
+          return jsonResult({ host: policy.ssh.host, path, ...result }, { host: 'host_read_file', path });
         }
 
         case 'host_shell': {

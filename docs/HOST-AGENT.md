@@ -269,6 +269,9 @@ the API still leaves every switch working.
 | `docker.ps` | — | no |
 | `docker.images` | — | no |
 | `docker.inspect` | container | no |
+| `docker.logs` | container | no |
+| `docker.config` | container | no |
+| `docker.stats` | — | no |
 | `service.status` | service | no |
 | `docker.restart` | container | yes, declared but disabled |
 | `service.restart` | service | yes, declared but disabled |

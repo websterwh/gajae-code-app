@@ -248,6 +248,9 @@ test('a shell command is a host write: the card shows it verbatim and a denial r
   const script = 'cat >/srv/app/.env <<\'EOF\'\nDEBUG=true\nEOF';
   await assert.rejects(run(tool, { action: 'host_shell', command: script }), /was not approved/u);
   assert.ok(asked.includes(script), 'the approval must show the command, not a summary of it');
+  // The card renders the prompt as Markdown; the fence is what keeps the
+  // command in one monospace block instead of losing its line breaks.
+  assert.ok(asked.includes(`\n\n\`\`\`\n${script}\n\`\`\``), 'the command is fenced as one code block');
   assert.deepEqual(commands, []);
 
   const approved = createHostControlTool(policy({ capabilities: ['hostWrite'], ssh: sshTarget }), {
@@ -274,6 +277,35 @@ test('host_shell needs the write switch', async () => {
   await assert.rejects(
     run(readOnly, { action: 'host_shell', command: 'uptime' }),
     /hostWrite capability is off/u,
+  );
+  assert.deepEqual(commands, []);
+});
+
+test('reading a path on the host is a read: hostRead alone, no question, and the path is the only input', async () => {
+  const commands: string[] = [];
+  const tool = createHostControlTool(policy({ capabilities: ['hostRead'], ssh: sshTarget }), {
+    run: sshRun(commands),
+    ui: { select: async () => { assert.fail('reading a path must not ask for approval'); } },
+  });
+
+  const result = await run(tool, { action: 'host_read_file', path: '/mnt/cache/appdata/qui/config' });
+  assert.match(result, /"path": "\/mnt\/cache\/appdata\/qui\/config"/u);
+  assert.match(result, /Linux webby/u);
+  assert.equal(commands.length, 1);
+  assert.match(commands[0]!, /^if \[ -d '\/mnt\/cache\/appdata\/qui\/config' \]; then ls -la -- /u);
+
+  for (const path of ['/etc/../etc/shadow', 'etc/hostname', '/etc/hostname\nrm -rf /']) {
+    await assert.rejects(run(tool, { action: 'host_read_file', path }), /path must/u, path);
+  }
+  assert.equal(commands.length, 1, 'a refused path never reaches the host');
+});
+
+test('host_read_file still needs the read switch', async () => {
+  const commands: string[] = [];
+  const readOnlyOff = createHostControlTool(policy({ capabilities: ['facts'], ssh: sshTarget }), { run: sshRun(commands) });
+  await assert.rejects(
+    run(readOnlyOff, { action: 'host_read_file', path: '/etc/hostname' }),
+    /hostRead capability is off/u,
   );
   assert.deepEqual(commands, []);
 });

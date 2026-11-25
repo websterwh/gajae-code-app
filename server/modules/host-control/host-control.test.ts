@@ -19,6 +19,7 @@ import {
 import { createHostControlRouter as createRouter, type HostControlStore, type HostProfileStore } from './host-control.routes.js';
 import type { SavedHostProfile } from './host-profile.store.js';
 import {
+  allowsHostTarget,
   applyHostControlPatch,
   DEFAULT_HOST_CONTROL_SETTINGS,
   matchesHostTarget,
@@ -153,6 +154,20 @@ test('without the env var the surface is inert and the socket is never opened', 
   } finally {
     await server.close();
   }
+});
+
+test('an empty allowed-containers list means every container, not none', () => {
+  const settings: HostControlSettings = {
+    ...DEFAULT_HOST_CONTROL_SETTINGS,
+    ...capabilities({ containers: true, docker: true }),
+    enabled: true,
+    targets: [],
+  };
+  assert.equal(allowsHostTarget(settings, 'anything'), true);
+  assert.equal(allowsHostTarget({ ...settings, targets: ['mos-*'] }, 'mos-app'), true);
+  assert.equal(allowsHostTarget({ ...settings, targets: ['mos-*'] }, 'immich'), false);
+  // The switches still decide what may happen at all.
+  assert.equal(allowsHostTarget({ ...settings, enabled: false }, 'anything'), false);
 });
 
 test('the removed container endpoints are not served at all', async () => {

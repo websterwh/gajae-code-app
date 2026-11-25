@@ -48,7 +48,7 @@ export function dockerSocketPath(env: NodeJS.ProcessEnv = process.env): string {
 
 export type HostControlSettings = {
   enabled: boolean;
-  /** Container-name globs the reaching capabilities may touch. Empty means none. */
+  /** Container-name globs the reaching capabilities may touch. Empty means every container. */
   targets: string[];
   /** The SSH endpoint, entered by hand: there is no default that guesses it right. */
   sshHost: string;
@@ -181,9 +181,15 @@ export function allowsHostCapability(settings: HostControlSettings, capability: 
  * `restart` keeps its own single-action permission and is not scoped: it is one
  * named container the operator already asked for. Everything that reaches
  * further - state changes, commands, files - must also be on the list.
+ *
+ * An empty list means every container: the operator who has not typed a scope
+ * has not narrowed anything, and the capability switches already decide what
+ * may happen. A list that only ever became narrower made an unconfigured
+ * install refuse every container by name.
  */
 export function allowsHostTarget(settings: HostControlSettings, name: string): boolean {
-  return settings.enabled && matchesHostTarget(settings.targets, name);
+  if (!settings.enabled) return false;
+  return settings.targets.length === 0 || matchesHostTarget(settings.targets, name);
 }
 
 /** True when an SSH endpoint is described, whether or not a key is stored yet. */
@@ -237,7 +243,9 @@ export function readHostControlRunPolicy(env: NodeJS.ProcessEnv = process.env): 
   return {
     socketPath: dockerSocketPath(env),
     capabilities,
-    targets: [...settings.targets],
+    // No list means no narrowing: the run sees the same universe the settings
+    // page shows, rather than an empty scope that refuses every container.
+    targets: settings.targets.length > 0 ? [...settings.targets] : ['*'],
     ...(ssh ? { ssh } : {}),
     // Prior authorization is a grant, so it never rides along without a write
     // permission: a read-only run cannot be talked into a mutating verb.

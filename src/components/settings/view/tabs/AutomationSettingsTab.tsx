@@ -748,6 +748,35 @@ export default function AutomationSettingsTab() {
          sees, since the section still has to say why it is inert. */}
       <SettingsSection title={t('automation.hostControl.label')}>
         <SettingsCard divided>
+          {/* Above the master switch on purpose: it describes the machine
+             itself, and it stays visible so an operator can see what is there
+             before turning host control on. Its switch is inert until the
+             master switch below is on, since a capability cannot outlive it. */}
+          {hostControl?.available === true ? (
+            <SettingsRow
+              label={t('automation.hostControl.hostInfo')}
+              description={!detectingHost && shownOs
+                ? <span role="status" className="font-medium text-foreground">{shownOs}</span>
+                : t('automation.hostControl.hostInfoDescription')}
+            >
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => void detectHostEnvironment()}
+                  disabled={detectingHost || !hostReadOn}
+                  className="rounded-lg border border-input px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {detectingHost ? t('automation.hostControl.detecting') : t('automation.hostControl.detect')}
+                </button>
+                <SettingsToggle
+                  checked={hostReadOn}
+                  disabled={hostControl?.enabled !== true}
+                  onChange={(value) => void saveHostControl({ facts: value, discovery: value })}
+                  ariaLabel={t('automation.hostControl.hostInfo')}
+                />
+              </div>
+            </SettingsRow>
+          ) : null}
           <SettingsRow label={t('automation.hostControl.enableLabel')}>
             <SettingsToggle
               checked={hostControl?.enabled === true}
@@ -776,7 +805,8 @@ export default function AutomationSettingsTab() {
                  the container has no socket for. The key is write-only, so the
                  card can say whether one is stored but never show it. */}
               <div className="border-b border-border bg-muted/20 py-1">
-                <p className="px-4 py-2 text-xs font-medium text-foreground">{t('automation.hostControl.sshGroup')}</p>
+                <p className="px-4 pt-3 text-xs font-medium text-foreground">{t('automation.hostControl.sshGroup')}</p>
+                <p className="px-4 pb-2 text-xs text-muted-foreground">{t('automation.hostControl.sshGroupDescription')}</p>
                 <div className="ml-4 border-l border-border pl-1">
                   <SettingsRow label={t('automation.hostControl.sshHost')}>
                     <div className="flex flex-wrap items-center gap-2">
@@ -936,38 +966,14 @@ export default function AutomationSettingsTab() {
                   ) : null}
                 </div>
               </div>
-              {/* One row, one right-hand cluster: the button that refreshes the
-                 answer sits left of the switch that permits it, and the answer
-                 itself takes the description slot once it is known, so it lines
-                 up with the text of every other row instead of floating in a
-                 strip of its own. */}
-              <SettingsRow
-                label={t('automation.hostControl.hostInfo')}
-                description={!detectingHost && shownOs
-                  ? <span role="status" className="font-medium text-foreground">{shownOs}</span>
-                  : undefined}
-              >
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => void detectHostEnvironment()}
-                    disabled={detectingHost || !hostReadOn}
-                    className="rounded-lg border border-input px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {detectingHost ? t('automation.hostControl.detecting') : t('automation.hostControl.detect')}
-                  </button>
-                  <SettingsToggle
-                    checked={hostReadOn}
-                    onChange={(value) => void saveHostControl({ facts: value, discovery: value })}
-                    ariaLabel={t('automation.hostControl.hostInfo')}
-                  />
-                </div>
-              </SettingsRow>
               {/* The group sits level with every other row; only its rows are
                  inset, under a rule, so the nesting is visible without
                  pushing the group itself to the right. Turned off, it hides
                  them and takes their grants with it. */}
-              <SettingsRow label={t('automation.hostControl.dockerGroup')}>
+              <SettingsRow
+                label={t('automation.hostControl.dockerGroup')}
+                description={t('automation.hostControl.dockerGroupDescription')}
+              >
                 <SettingsToggle
                   checked={dockerGroupOn}
                   onChange={(value) => void saveHostControl(
@@ -997,8 +1003,11 @@ export default function AutomationSettingsTab() {
               ) : null}
               {/* The scope for everything that reaches further than a restart:
                  state changes, commands and file reads only touch containers
-                 this list names. Empty means none, not all of them. */}
-              <SettingsRow label={t('automation.hostControl.targets')}>
+                 this list names. Empty means every container. */}
+              <SettingsRow
+                label={t('automation.hostControl.targets')}
+                description={t('automation.hostControl.targetsDescription')}
+              >
                 <input
                   aria-label={t('automation.hostControl.targets')}
                   value={targetsDraft}
