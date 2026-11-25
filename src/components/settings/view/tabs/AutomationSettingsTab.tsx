@@ -848,7 +848,10 @@ export default function AutomationSettingsTab() {
                       />
                     </div>
                   </SettingsRow>
-                  <SettingsRow label={t('automation.hostControl.sshHostKey')}>
+                  <SettingsRow
+                    label={t('automation.hostControl.sshHostKey')}
+                    description={t('automation.hostControl.sshHostKeyDescription')}
+                  >
                     <input
                       aria-label={t('automation.hostControl.sshHostKey')}
                       value={sshDraft.hostKey}
@@ -861,7 +864,10 @@ export default function AutomationSettingsTab() {
                       className={`${selectClass} sm:w-72`}
                     />
                   </SettingsRow>
-                  <SettingsRow label={t('automation.hostControl.sshGenerateTitle')}>
+                  <SettingsRow
+                    label={t('automation.hostControl.sshGenerateTitle')}
+                    description={t('automation.hostControl.sshGenerateDescription')}
+                  >
                     <div className="flex w-full flex-col gap-2 sm:w-80">
                       <div className="flex items-center justify-end gap-2">
                         <button

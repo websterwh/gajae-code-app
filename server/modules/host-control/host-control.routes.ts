@@ -226,7 +226,7 @@ export function createHostControlRouter({
     if (body.sshHostKey !== undefined) {
       const value = typeof body.sshHostKey === 'string' ? body.sshHostKey.trim() : undefined;
       if (value === undefined) {
-        return refuse(response, 400, 'HOST_SETTINGS_INVALID', 'sshHostKey must be a pinned host key line.');
+        return refuse(response, 400, 'HOST_SETTINGS_INVALID', 'sshHostKey must be a host public key line.');
       }
       if (value.length === 0) {
         patch.sshHostKey = '';

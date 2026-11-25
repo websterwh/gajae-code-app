@@ -273,7 +273,7 @@ export function createHostControlTool(
         case 'ssh': {
           if (!policy.ssh) {
             throw new Error(
-              'SSH access is not configured. Add the host, user, private key and pinned host key in Settings → Automation (host control), then start a new turn.',
+              'SSH access is not configured. Add the host, user, private key and host public key in Settings → Automation (host control), then start a new turn.',
             );
           }
           const verb = findSshVerb(params.verb);
@@ -306,7 +306,7 @@ export function createHostControlTool(
         case 'host_read_file': {
           if (!policy.ssh) {
             throw new Error(
-              'SSH access is not configured. Add the host, user, private key and pinned host key in Settings → Automation (host control), then start a new turn.',
+              'SSH access is not configured. Add the host, user, private key and host public key in Settings → Automation (host control), then start a new turn.',
             );
           }
           // A path is the whole input and `host_file` is one listing or one
@@ -321,7 +321,7 @@ export function createHostControlTool(
         case 'host_shell': {
           if (!policy.ssh) {
             throw new Error(
-              'SSH access is not configured. Add the host, user, private key and pinned host key in Settings → Automation (host control), then start a new turn.',
+              'SSH access is not configured. Add the host, user, private key and host public key in Settings → Automation (host control), then start a new turn.',
             );
           }
           // A command can read, write and install, so it is never a read verb:
