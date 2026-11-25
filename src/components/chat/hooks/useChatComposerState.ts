@@ -210,7 +210,37 @@ export function useChatComposerState(args: UseChatComposerStateArgs) {
         addMessage({ type: 'error', content: `/rename failed: ${error instanceof Error ? error.message : 'unknown error'}`, timestamp: Date.now() });
       });
   }, [addMessage, currentSessionId, palette, selectedSession?.id]);
-  const applyAppCommand = useCallback((command: AppUiCommand, commandArgs = '') => { if (isComposerSealed()) return; return runAppUiCommand(command, { openSessionPicker: palette.openSessionPicker, startNewChat: palette.startNewChat, openSettings: () => onShowSettings ? onShowSettings() : palette.openSettings(), openMemorySettings: () => palette.openSettings('memory'), runMempalace: (args: string) => runShellCommand(`mempalace ${args}`), openModelPicker: () => setModelPickerTrigger((n) => n + 1), openCostModal: showCostModal, forkSession, retryLastTurn: () => onRetryLastTurn?.(), runShellCommand, renameSession, openSideChat: (question: string) => onOpenSideChat?.(question) }, commandArgs); }, [forkSession, onOpenSideChat, onRetryLastTurn, onShowSettings, palette, renameSession, runShellCommand, showCostModal]);
+  // `/move` is the CLI's relocation: the same session (id, transcript and
+  // history) is repointed at another folder, so the next turn and the sidebar
+  // both follow it. The server owns the SDK move and the row update.
+  const moveSession = useCallback((folder: string) => {
+    if (isComposerSealed()) return;
+    const trimmed = folder.trim();
+    if (!trimmed) {
+      addMessage({ type: 'assistant', content: 'Usage: `/move <folder>` — for example `/move /workspace/other-project`.', timestamp: Date.now() });
+      return;
+    }
+    const target = selectedSession?.id || currentSessionId;
+    if (!target) {
+      addMessage({ type: 'assistant', content: 'Send a message first: there is no conversation to move here yet.', timestamp: Date.now() });
+      return;
+    }
+    void api.moveSession(target, trimmed)
+      .then(async (response) => {
+        const payload = await response.json().catch(() => ({})) as { data?: { projectPath?: unknown }; error?: string | { message?: string } };
+        if (!response.ok) {
+          const error = payload.error;
+          throw new Error(typeof error === 'string' ? error : error?.message ?? `Request failed (${response.status})`);
+        }
+        const movedTo = typeof payload.data?.projectPath === 'string' ? payload.data.projectPath : trimmed;
+        addMessage({ type: 'assistant', content: `Session moved to ${movedTo}.`, timestamp: Date.now() });
+        await palette.refreshProjects();
+      })
+      .catch((error: unknown) => {
+        addMessage({ type: 'error', content: `/move failed: ${error instanceof Error ? error.message : 'unknown error'}`, timestamp: Date.now() });
+      });
+  }, [addMessage, currentSessionId, palette, selectedSession?.id]);
+  const applyAppCommand = useCallback((command: AppUiCommand, commandArgs = '') => { if (isComposerSealed()) return; return runAppUiCommand(command, { openSessionPicker: palette.openSessionPicker, startNewChat: palette.startNewChat, openSettings: () => onShowSettings ? onShowSettings() : palette.openSettings(), openMemorySettings: () => palette.openSettings('memory'), runMempalace: (args: string) => runShellCommand(`mempalace ${args}`), openModelPicker: () => setModelPickerTrigger((n) => n + 1), openCostModal: showCostModal, forkSession, retryLastTurn: () => onRetryLastTurn?.(), runShellCommand, renameSession, moveSession, openSideChat: (question: string) => onOpenSideChat?.(question) }, commandArgs); }, [forkSession, moveSession, onOpenSideChat, onRetryLastTurn, onShowSettings, palette, renameSession, runShellCommand, showCostModal]);
 
   const { slashCommands, slashCommandsCount, filteredCommands, frequentCommands, commandQuery, showCommandMenu, selectedCommandIndex, resetCommandMenuState, handleCommandSelect, handleToggleCommandMenu, handleCommandInputChange, handleCommandMenuKeyDown } = useSlashCommands({ selectedProject, executionCwd, provider: 'gjc', sessionId: conversation, input, setInput, textareaRef, onLoginCommand: login, onAppCommand: (command) => { const app = findAppUiCommand(command.name); if (app) applyAppCommand(app); } });
   const { showFileDropdown, filteredFiles, selectedFileIndex, renderInputWithMentions, selectFile, setCursorPosition, handleFileMentionsKeyDown } = useFileMentions({ selectedProject, executionCwd, sessionId: conversation, input, setInput, textareaRef });

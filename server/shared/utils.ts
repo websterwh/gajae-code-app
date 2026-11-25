@@ -236,6 +236,23 @@ export function getGjcLiveSessionRoot(): string {
   return process.env.GJC_LIVE_SESSION_DIR || path.join(os.homedir(), '.gajae-app', 'gjc-live-sessions');
 }
 
+/**
+ * The GJC CLI's per-workspace session directory (`sessions/<cwd-slug>`). The CLI
+ * lists these legacy directories alongside its managed v2 scope, so a transcript
+ * written here is resumable from the terminal as well as the app.
+ */
+export function getGjcCliSessionDir(
+  cwd: string,
+  agentDir = process.env.GJC_WORKER_AGENT_DIR || path.join(os.homedir(), '.gjc', 'agent'),
+): string {
+  const absolute = path.resolve(cwd);
+  const home = path.resolve(os.homedir());
+  const scoped = absolute === home
+    ? absolute
+    : absolute.startsWith(`${home}${path.sep}`) ? absolute.slice(home.length) : absolute;
+  return path.join(path.resolve(agentDir), 'sessions', scoped.split(path.sep).join('-'));
+}
+
 const sessionModelKey = (provider: LLMProvider, sessionId: string): string => `${provider}:${sessionId}`;
 
 function blankCache(): ProviderSessionActiveModelChangeCacheFile {

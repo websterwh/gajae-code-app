@@ -75,6 +75,7 @@ test('runAppUiCommand dispatches each action id to its action', () => {
     retryLastTurn: () => { calls.push('retry-last-turn'); },
     openSideChat: () => { calls.push('open-side-chat'); },
     renameSession: () => { calls.push('rename-session'); },
+    moveSession: () => { calls.push('move-session'); },
     runShellCommand: () => { calls.push('run-shell-command'); },
   };
 
@@ -331,21 +332,44 @@ test('typed /btw opens a side chat with the question and sends nothing to the mo
   assert.deepEqual(questions, ['what does this function do?']);
 });
 
-test('/move is declined locally and names the app affordance', async () => {
-  for (const form of ['/move', '/move /somewhere/else']) {
-    const sentMessages: unknown[] = [];
-    const addedMessages: unknown[] = [];
-    const composer = captureComposer(sentMessages, addedMessages);
+test('typed /move POSTs the folder and never reaches the model', async () => {
+  const sentMessages: unknown[] = [];
+  const addedMessages: unknown[] = [];
+  const composer = captureComposer(sentMessages, addedMessages);
+  const originalFetch = globalThis.fetch;
+  const requests: Array<{ url: string; method?: string; body: unknown }> = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    requests.push({ url: String(input), method: init?.method, body: init?.body ? JSON.parse(String(init.body)) : null });
+    return Response.json({ success: true, data: { sessionId: 'session-1', projectPath: '/workspace/other-project', moved: true } });
+  }) as typeof fetch;
 
-    composer.handleVoiceTranscript(form);
+  try {
+    composer.handleVoiceTranscript('/move /workspace/other-project');
     await composer.handleSubmit(submitEvent);
-
-    assert.deepEqual(sentMessages, [], `${form} must not be sent`);
-    assert.equal(addedMessages.length, 1);
-    const notice = (addedMessages[0] as { content: string }).content;
-    assert.match(notice, /not available in the app/);
-    assert.match(notice, /switch projects from the sidebar/);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  } finally {
+    globalThis.fetch = originalFetch;
   }
+
+  assert.deepEqual(sentMessages, [], 'a /move command must not reach the model');
+  assert.deepEqual(requests.map((request) => `${request.method} ${request.url}`), ['POST /api/providers/sessions/session-1/move']);
+  assert.deepEqual(requests[0]?.body, { path: '/workspace/other-project' });
+  const confirmation = addedMessages.at(-1) as { type: string; content: string };
+  assert.equal(confirmation.type, 'assistant');
+  assert.match(confirmation.content, /moved to \/workspace\/other-project/u);
+});
+
+test('bare /move prints usage instead of being forwarded as prose', async () => {
+  const sentMessages: unknown[] = [];
+  const addedMessages: unknown[] = [];
+  const composer = captureComposer(sentMessages, addedMessages);
+
+  composer.handleVoiceTranscript('/move');
+  await composer.handleSubmit(submitEvent);
+
+  assert.deepEqual(sentMessages, []);
+  assert.equal(addedMessages.length, 1);
+  assert.match((addedMessages[0] as { content: string }).content, /Usage: `\/move/u);
 });
 
 test('/init and /transcript are declined locally without exposing upstream session data', async () => {
@@ -473,7 +497,7 @@ test('isAppUsableCommand hides exactly what the composer answers locally', () =>
   for (const name of Object.keys(TUI_ONLY_COMMAND_HINTS)) {
     assert.equal(isAppUsableCommand(name), false, `${name} should be hidden`);
   }
-  for (const name of ['/init', '/move', '/transcript', '/skill:team', '/bg', '/quit']) {
+  for (const name of ['/init', '/transcript', '/skill:team', '/bg', '/quit']) {
     assert.equal(isAppUsableCommand(name), false, `${name} should be hidden`);
   }
 });
@@ -504,7 +528,7 @@ test('a command-level decline hides the command, a form-level one does not', () 
   for (const form of Object.keys(APP_UNSUPPORTED_COMMAND_HINTS)) {
     const [commandName, verb = ''] = form.split(' ');
     assert.notEqual(getLocalCommandNotice(commandName, verb), null, form);
-    // "/move" hides /move from the menu; "/notify on" must NOT hide /notify,
+    // "/init" hides /init from the menu; "/notify on" must NOT hide /notify,
     // because every other /notify verb still works.
     assert.equal(isAppUsableCommand(commandName), verb !== '', form);
   }

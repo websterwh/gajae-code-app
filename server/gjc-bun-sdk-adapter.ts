@@ -39,7 +39,7 @@ import { GjcBunOAuthController, type GjcBunOAuthControllerOptions, type GjcOAuth
 import { GJC_COPILOT_AUTO_MODEL_ID, copilotAutoModelApi, resolveCopilotAutoSelection, withCopilotAutoSession } from './shared/copilot-auto.js';
 import { GJC_APP_BUILTIN_COMMAND_NAMES } from './gjc-command-surface.generated.js';
 import type { GjcWorkerOAuthRuntime, GjcWorkerRuntime, GjcWorkerWriter } from './gjc-worker.js';
-import type { GjcBranchedSession, GjcWorkerActivity, JsonObject } from './gjc-worker-protocol.js';
+import type { GjcBranchedSession, GjcMovedSession, GjcWorkerActivity, JsonObject } from './gjc-worker-protocol.js';
 import { GjcBunAskController } from './gjc-bun-ask-controller.js';
 import { GjcCleanupUnconfirmedError, isGjcCleanupUnconfirmedError } from './gjc-cleanup-error.js';
 import { isVerifiedSdkPatch, type VerifiedSdkPatch } from './gjc-runtime-manifest.js';
@@ -88,6 +88,12 @@ type AppBashPolicy = { allowedPrefixes: string[]; restrictionProfile?: 'workflow
 export type SdkRunConfig = {
   cwd: string;
   sessionRoot: string;
+  /**
+   * Let the SDK pick the managed destination for a new session. Server-set and
+   * only when the app root was not pinned by `GJC_LIVE_SESSION_DIR` or a caller,
+   * so new transcripts land in the same store the GJC CLI lists.
+   */
+  managedSessionScope?: boolean;
   credential: ExactCredentialRef;
   modelId: string;
   modelProfile?: string;
@@ -569,6 +575,7 @@ function configFromOptions(value: Record<string, unknown>): SdkRunConfig {
     || (candidate.browserBackend !== undefined && !isGjcBrowserBackend(candidate.browserBackend))
     || (candidate.builtinBrowserAvailable !== undefined && typeof candidate.builtinBrowserAvailable !== 'boolean')
     || (candidate.computerAvailable !== undefined && typeof candidate.computerAvailable !== 'boolean')
+    || (candidate.managedSessionScope !== undefined && typeof candidate.managedSessionScope !== 'boolean')
     || (candidate.hostControl !== undefined && !isHostControlRunPolicy(candidate.hostControl))
     || (candidate.retryLastTurn !== undefined && typeof candidate.retryLastTurn !== 'boolean')
     || (candidate.btw !== undefined && !validBtwConfig(candidate.btw))
@@ -591,6 +598,7 @@ function configFromOptions(value: Record<string, unknown>): SdkRunConfig {
     builtinBrowserAvailable: candidate.builtinBrowserAvailable === true,
     // Same for computer: the server decides, never the request.
     computerAvailable: candidate.computerAvailable === true,
+    managedSessionScope: candidate.managedSessionScope === true,
     // Keep only the known capabilities, in their canonical order, so an
     // unexpected name cannot add a permission the Settings tab never granted.
     ...(candidate.hostControl
@@ -1225,6 +1233,25 @@ export class GjcBunSdkAdapter implements GjcWorkerRuntime {
   }
 
   /**
+   * `/move` for a web session. The session is opened exactly as a resume opens
+   * it, then the runtime's `moveTo` relocates the transcript and artifacts and
+   * rewrites the header. A transcript written before the app adopted the CLI's
+   * managed store still lives under the app's own root; the SDK cannot publish
+   * it into managed storage in place, so report that instead of half-moving.
+   */
+  async moveGjcSession(providerSessionId: string, sessionRoot: string, cwd: string): Promise<GjcMovedSession> {
+    this.#assertHealthy();
+    return this.#withOperation(async () => {
+      const manager = await resumeManager(providerSessionId, sessionRoot);
+      await manager.flush();
+      await manager.moveTo(cwd);
+      const transcriptPath = manager.getSessionFile();
+      if (!transcriptPath) throw new Error(FAILURE);
+      return { cwd: manager.getCwd(), transcriptPath };
+    });
+  }
+
+  /**
    * `createBranchedSession` hands back the successor's file, not its session id,
    * so the id is read back from that file. The path returns with it: history,
    * the sidebar and resume all read the transcript a row points at, and a row
@@ -1443,7 +1470,12 @@ export class GjcBunSdkAdapter implements GjcWorkerRuntime {
       const resumedId = typeof options.sessionId === 'string' && options.sessionId ? options.sessionId : undefined;
       const sessionManager = resumedId
         ? await resumeManager(resumedId, config.sessionRoot)
-        : SessionManager.create(config.cwd, config.sessionRoot);
+        : config.managedSessionScope === true
+          // No destination: the SDK's managed store for this cwd, which is the
+          // directory the CLI's `/resume` scans. An explicit root is kept for
+          // tests and isolated dev runs that pin GJC_LIVE_SESSION_DIR.
+          ? SessionManager.create(config.cwd)
+          : SessionManager.create(config.cwd, config.sessionRoot);
       const globalSettings = this.options.settings
         ?? await this.options.loadSettings?.()
         ?? await Settings.init(

@@ -66,6 +66,6 @@ export const GJC_AGENT_TOOLS_WITHHELD: Readonly<Record<string, string>> = {
   monitor: 'A monitor watches a background process past the turn; the app disposes the SDK session when each turn ends, so it would stop before it could report.',
   cron: 'Scheduled prompts fire into a live session; the app disposes the SDK session when each turn ends, so a schedule would never fire.',
   goal: 'Enabled conditionally by the SDK adapter for a capable app view with scoped lifecycle controls and bounded continuation; excluded from delegated sessions and clients without controls.',
-  move_session: 'Permanently repoints the SDK session cwd, which the app binds to the session\u2019s project; the /move command is excluded for the same reason.',
+  move_session: 'Permanently repoints the SDK session cwd, which the app binds to the session\u2019s project and its sidebar row. The user moves a session explicitly with /move, which goes through the app\u2019s own validation and row update, so a model-invoked move stays withheld.',
   report_issue: 'Off by default in the runtime: it records tool-quality reports into the runtime\u2019s own local database, which serves runtime debugging rather than the app\u2019s tool surface.',
 };

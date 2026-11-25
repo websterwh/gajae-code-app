@@ -38,9 +38,11 @@ type Row = readonly [string, string, Kind];
 const GROUP_A: readonly Row[] = [
   // Runtime commands and aliases the app answers itself. Every one of these
   // reached the model as prose before the app claimed it.
-  ['A01', '/move', 'notice'],
-  ['A02', '/move sibling', 'notice'],
-  ['A03', '/move /nonexistent-e2e', 'notice'],
+  // `/move` is the app's own relocation now; bare and with a folder it stays
+  // local instead of reaching the model or a runtime notice.
+  ['A01', '/move', 'app-action'],
+  ['A02', '/move sibling', 'app-action'],
+  ['A03', '/move /nonexistent-e2e', 'app-action'],
   ['A04', '/models', 'app-action'],
   ['A05', '/models gpt-5', 'command'],
   ['A06', '/bg', 'notice'],

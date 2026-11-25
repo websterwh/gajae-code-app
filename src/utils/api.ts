@@ -165,6 +165,12 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ summary }),
     }),
+  // `/move`: repoints the conversation (and its SDK cwd) at another folder.
+  moveSession: (sessionId: string, path: string) =>
+    authenticatedFetch(`/api/providers/sessions/${encodeURIComponent(sessionId)}/move`, {
+      method: 'POST',
+      body: JSON.stringify({ path }),
+    }),
   // Replaces the stored title with one derived afresh from the transcript.
   regenerateSessionTitle: (sessionId: string) =>
     authenticatedFetch(`/api/providers/sessions/${encodeURIComponent(sessionId)}/regenerate-title`, {

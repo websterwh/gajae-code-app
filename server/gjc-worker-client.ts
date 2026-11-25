@@ -10,6 +10,7 @@ import type { Writable } from 'node:stream';
 import type { DesktopOwnerActivity } from '../shared/desktopUpdateProtocol.js';
 import type { GjcGoalCommand, GjcGoalSnapshot, GjcGoalScope } from '../shared/gjc-goal.js';
 
+import { relocateLiveGjcTranscript } from './gjc-transcript-store.js';
 import {
   GJC_ASIDE_UNAVAILABLE_CODE,
   GJC_ASIDE_UNAVAILABLE_MESSAGE,
@@ -498,12 +499,23 @@ export async function enrichGjcSdkRunOptions(
     hostControl = undefined;
   }
 
-  const liveSessionRoot = typeof options.sessionRoot === 'string' && options.sessionRoot
+  // A caller-pinned root (isolated dev, tests) or an explicit env override keeps
+  // the old flat store. Otherwise a new session is created in the SDK's managed
+  // destination, the directory the GJC CLI's `/resume` scans.
+  const pinnedSessionRoot = typeof options.sessionRoot === 'string' && options.sessionRoot
     ? options.sessionRoot
-    : getGjcLiveSessionRoot();
+    : process.env.GJC_LIVE_SESSION_DIR ? getGjcLiveSessionRoot() : undefined;
+  const managedSessionScope = pinnedSessionRoot === undefined;
+  const liveSessionRoot = pinnedSessionRoot ?? getGjcLiveSessionRoot();
   const requestedSessionId = typeof options.sessionId === 'string' && options.sessionId
     ? options.sessionId
     : undefined;
+  // Transcripts written before the app used the CLI-visible store sit under the
+  // app's own root. Move them before the run so the CLI can list the session
+  // too; a refused move leaves the row untouched.
+  if (requestedSessionId) {
+    await relocateLiveGjcTranscript(requestedSessionId).catch(() => undefined);
+  }
   // A conversation whose transcript has vanished (deleted, half-restored
   // backup, wiped volume) can never be resumed: the worker's lookup finds no
   // file, so every send fails and the conversation is stuck forever with a
@@ -522,6 +534,7 @@ export async function enrichGjcSdkRunOptions(
     ...base,
     cwd: options.cwd ?? options.projectPath,
     sessionRoot,
+    managedSessionScope,
     credential: options.credential ?? { kind: 'stored' },
     modelId,
     ...(modelProfile ? { modelProfile } : {}),
@@ -937,6 +950,27 @@ export class GjcWorkerSupervisor {
   /** Branches the session at one entry, the headless form of `/tree`. */
   branchSession(scope: GjcGoalScope, providerSessionId: string, entryId: string): Promise<GjcBranchedSession> {
     return this.#branchSession('session.branch', scope, providerSessionId, { entryId });
+  }
+
+  /** Repoints the session cwd through the SDK's `/move` transition. */
+  async moveSession(scope: GjcGoalScope, providerSessionId: string, cwd: string): Promise<{ cwd: string; transcriptPath: string }> {
+    const releaseAdmission = this.acquireRoot('session.move');
+    const release = this.beginActivity('settling');
+    try {
+      const liveRoot = getGjcLiveSessionRoot();
+      const sessionRoot = await resolveGjcResumeSessionRoot(providerSessionId, liveRoot) ?? liveRoot;
+      await this.ensureWorker();
+      const response = await this.request('session.move', scope.appSessionId, { providerSessionId, sessionRoot, cwd });
+      if (!response.ok) throw new Error(response.error.message);
+      const result = response.result as { cwd?: unknown; transcriptPath?: unknown } | undefined;
+      if (!result || typeof result.cwd !== 'string' || typeof result.transcriptPath !== 'string') {
+        throw new Error('The worker returned no moved session.');
+      }
+      return { cwd: result.cwd, transcriptPath: result.transcriptPath };
+    } finally {
+      release();
+      releaseAdmission();
+    }
   }
 
   async #branchSession(

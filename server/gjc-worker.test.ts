@@ -458,3 +458,26 @@ test('a rejection nobody awaited is recorded without taking the shared worker do
   assert.equal(failures(), 0, "one conversation's stray rejection must not kill the others");
   assert.match(diagnostics[0] ?? '', /^GJC worker unhandled rejection: Error: stray cleanup rejection/u);
 });
+
+test('session.move hands an absolute target to the runtime and reports the relocated transcript', async () => {
+  const fake = fakeRuntime();
+  const moves: Array<[string, string, string]> = [];
+  fake.runtime.moveGjcSession = async (providerSessionId, sessionRoot, cwd) => {
+    moves.push([providerSessionId, sessionRoot, cwd]);
+    return { cwd, transcriptPath: `${sessionRoot}/moved.jsonl` };
+  };
+  const { frames, host } = await initialized(fake);
+  const call = async (id: string, payload: Record<string, unknown>) => {
+    await host.handle(request('session.move', id, payload));
+    return (frames as Array<{ id: string; payload: { ok: boolean; result?: unknown; error?: { code: string } } }>)
+      .find((frame) => frame.id === id)!.payload;
+  };
+
+  assert.deepEqual(await call('move-1', { providerSessionId: 'p-1', sessionRoot: '/sessions', cwd: '/workspace/target' }), {
+    ok: true,
+    result: { cwd: '/workspace/target', transcriptPath: '/sessions/moved.jsonl' },
+  });
+  assert.deepEqual(moves, [['p-1', '/sessions', '/workspace/target']]);
+  assert.equal((await call('move-relative', { providerSessionId: 'p-1', sessionRoot: '/sessions', cwd: 'sibling' })).error?.code, 'invalid_payload');
+  assert.equal(moves.length, 1, 'a relative target never reaches the runtime');
+});

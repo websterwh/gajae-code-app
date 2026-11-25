@@ -146,8 +146,9 @@ discovery follows the user's setting, projects default to `bypass`, slash
 commands run without a confirmation card, sessions/jobs/terminals open in any
 directory, and the self-host browser falls back to the runtime's own tool.
 Remaining structural gaps (see `server/gjc-agent-tools.ts`): `job`/`monitor`/
-`cron` (the SDK session is disposed at every turn end) and `move_session`/
-`/move` (the session cwd is bound to its project).
+`cron` (the SDK session is disposed at every turn end) and `move_session` (the
+session cwd is bound to its project; the user relocates it explicitly with
+`/move`, which updates the SDK cwd and the app row together).
 
 Observed, not fixed:
 

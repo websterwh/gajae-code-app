@@ -102,6 +102,7 @@ const backendElements = [
 const backendFiles = [
   { category: 'gjc-engine-api', pattern: ['server/gjc-engine.ts'] },
   { category: 'gjc-engine-client', pattern: ['server/gjc-worker-client.ts'] },
+  { category: 'gjc-transcript-store', pattern: ['server/gjc-transcript-store.ts'] },
   { category: 'gjc-engine', pattern: engineFiles },
   {
     category: 'backend-shared-type-contract',

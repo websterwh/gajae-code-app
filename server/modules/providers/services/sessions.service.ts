@@ -1,9 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import fsp from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 
-import { getGjcWorkerSupervisor } from '@/gjc-worker-client.js';
-import { projectsDb, sessionsDb } from '@/modules/database/index.js';
+import { getGjcWorkerSupervisor, isGjcSessionActive } from '@/gjc-worker-client.js';
+import { relocateLiveGjcTranscript } from '@/gjc-transcript-store.js';
+import { projectsDb, sessionsDb, sessionWorktreesDb } from '@/modules/database/index.js';
 import { providerRegistry } from '@/modules/providers/provider.registry.js';
 import { resolveSessionProjectPath } from '@/modules/providers/services/session-project-path.service.js';
 import { releaseWorktreeSession, sessionTranscriptWorkspace } from '@/modules/providers/services/session-worktrees.service.js';
@@ -178,6 +180,64 @@ export const sessionsService = {
       ),
       providerSessionId: successor.sessionId,
     };
+  },
+
+  /**
+   * `/move`: repoints the session at another existing folder. The SDK owns the
+   * transcript relocation (header cwd, artifacts, locks); the app row follows
+   * it so the sidebar and the next turn read the new project. A session without
+   * a transcript yet has nothing to relocate and only changes its binding.
+   */
+  async moveSession(sessionId: string, targetPath: string): Promise<{ sessionId: string; projectPath: string; moved: boolean }> {
+    const row = requiredSession(sessionId);
+    if (row.provider !== 'gjc') {
+      throw new AppError('Only Gajae Code sessions can be moved between folders.', { code: 'UNSUPPORTED_PROVIDER', statusCode: 400 });
+    }
+    const requested = targetPath.trim();
+    if (!requested) throw new AppError('A destination folder is required.', { code: 'INVALID_MOVE_TARGET', statusCode: 400 });
+    const expanded = requested.startsWith('~') ? path.join(os.homedir(), requested.slice(1)) : requested;
+    const target = path.resolve(row.project_path?.trim() || process.cwd(), expanded);
+    let metadata;
+    try {
+      metadata = await fsp.stat(target);
+    } catch {
+      throw new AppError(`Directory does not exist or is not a directory: ${target}`, { code: 'INVALID_MOVE_TARGET', statusCode: 400 });
+    }
+    if (!metadata.isDirectory()) {
+      throw new AppError(`Directory does not exist or is not a directory: ${target}`, { code: 'INVALID_MOVE_TARGET', statusCode: 400 });
+    }
+    if (sessionWorktreesDb.get(row.session_id)) {
+      throw new AppError('This session runs in a managed worktree; release it before moving it elsewhere.', { code: 'SESSION_MOVE_WORKTREE', statusCode: 409 });
+    }
+    if (row.provider_session_id && isGjcSessionActive(row.provider_session_id)) {
+      throw new AppError('Wait for the current turn to finish before moving this session.', { code: 'RUN_IN_PROGRESS', statusCode: 409 });
+    }
+
+    // An older transcript may still sit in the app's own flat store, which the
+    // SDK cannot relocate across roots. Bring it to the CLI-visible store first.
+    await relocateLiveGjcTranscript(row.session_id).catch(() => undefined);
+    const current = requiredSession(sessionId);
+    let transcriptPath: string | undefined;
+    let movedCwd: string | undefined;
+    if (current.provider_session_id && current.jsonl_path) {
+      try {
+        const result = await getGjcWorkerSupervisor().moveSession({
+          appSessionId: current.session_id,
+          cwd: current.project_path ?? target,
+          owner: `session:${current.session_id}`,
+        }, current.provider_session_id, target);
+        transcriptPath = result.transcriptPath;
+        movedCwd = result.cwd;
+      } catch (error) {
+        throw new AppError(error instanceof Error ? error.message : 'The session could not be moved.', {
+          code: 'SESSION_MOVE_FAILED', statusCode: 409,
+        });
+      }
+    }
+    const projectPath = movedCwd ?? target;
+    projectsDb.ensureProjectPathForSession(projectPath);
+    sessionsDb.updateSessionProjectPath(sessionId, projectPath, transcriptPath);
+    return { sessionId, projectPath, moved: true };
   },
 
   async fetchHistory(sessionId: string, options: Pick<FetchHistoryOptions, 'limit' | 'offset' | 'includeImages'> = {}): Promise<FetchHistoryResult> {

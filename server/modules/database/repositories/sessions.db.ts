@@ -156,6 +156,16 @@ export const sessionsDb = {
     getConnection().prepare('UPDATE sessions SET jsonl_path = ?, updated_at = CURRENT_TIMESTAMP WHERE session_id = ?').run(jsonlPath, sessionId);
   },
 
+  /**
+   * Repoints a row at a different project after `/move`. The transcript may
+   * have been relocated by the same call, so both fields change together to
+   * keep the sidebar, history and resume reading one location.
+   */
+  updateSessionProjectPath(sessionId: string, projectPath: string, jsonlPath?: string): void {
+    getConnection().prepare(`UPDATE sessions SET project_path = ?, jsonl_path = COALESCE(?, jsonl_path), updated_at = CURRENT_TIMESTAMP WHERE session_id = ?`)
+      .run(normalizeProjectPath(projectPath), jsonlPath ?? null, sessionId);
+  },
+
   updateSessionCustomName(sessionId: string, customName: string, source: SessionNameSource): void {
     getConnection().prepare('UPDATE sessions SET custom_name = ?, name_source = ? WHERE session_id = ?').run(customName, source, sessionId);
   },

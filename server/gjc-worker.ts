@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import path from 'node:path';
 import type { Readable, Writable } from 'node:stream';
 
 import { parseGjcGoalCommand, type GjcGoalCommand, type GjcGoalSnapshot } from '../shared/gjc-goal.js';
@@ -12,6 +13,7 @@ import {
   serializeGjcWorkerFrame,
   isGjcWorkerActivity,
   type GjcBranchedSession,
+  type GjcMovedSession,
   type GjcWorkerActivity,
   type GjcWorkerEventFrame,
   type GjcWorkerGlobalEventMethod,
@@ -70,6 +72,8 @@ export type GjcWorkerRuntime = {
   forkGjcSession?(providerSessionId: string, sessionRoot: string): Promise<GjcBranchedSession>;
   /** Native /tree branch step: a new session file rooted at `entryId`. */
   branchGjcSession?(providerSessionId: string, entryId: string, sessionRoot: string): Promise<GjcBranchedSession>;
+  /** Repoints the session's cwd and relocates its transcript, as the CLI's `/move` does. */
+  moveGjcSession?(providerSessionId: string, sessionRoot: string, cwd: string): Promise<GjcMovedSession>;
   /**
    * Delivers a message into a turn that is already running. Optional: a runtime
    * that drives a CLI process has no way to reach a live turn, and the caller
@@ -257,6 +261,7 @@ export class GjcWorkerHost {
     switch (request.method) {
       case 'session.start': case 'session.resume': case 'turn.start': return this.#start(request);
       case 'session.fork': case 'session.branch': return this.#branch(request);
+      case 'session.move': return this.#move(request);
       case 'turn.abort': return this.#abort(request);
       case 'turn.steer': return this.#steer(request);
       case 'goal.inspect': case 'goal.control': return this.#goal(request);
@@ -298,6 +303,31 @@ export class GjcWorkerHost {
     } catch (error) {
       this.#diagnose('session branch failed', error);
       this.#response(request, failure('session_branch_failed', 'The session could not be branched.'));
+    }
+  }
+
+  /**
+   * `/move` for an app session. The session is opened exactly as a resume opens
+   * it and the SDK's own `moveTo` does the relocation, so artifacts, header
+   * patches and directory locks stay consistent with a CLI move.
+   */
+  async #move(request: GjcWorkerRequestFrame): Promise<void> {
+    if (request.method !== 'session.move') return;
+    const input = payload(request, ['providerSessionId', 'sessionRoot', 'cwd']);
+    if (!input || typeof input.providerSessionId !== 'string' || !input.providerSessionId
+      || typeof input.sessionRoot !== 'string' || !input.sessionRoot
+      || typeof input.cwd !== 'string' || !path.isAbsolute(input.cwd)) {
+      return this.#response(request, failure('invalid_payload', 'Request payload is invalid.'));
+    }
+    if (!this.#runtime?.moveGjcSession) {
+      return this.#response(request, failure('session_move_unavailable', 'This runtime cannot move sessions.'));
+    }
+    try {
+      const moved = await this.#runtime.moveGjcSession(input.providerSessionId, input.sessionRoot, input.cwd);
+      this.#response(request, success({ cwd: moved.cwd, transcriptPath: moved.transcriptPath }));
+    } catch (error) {
+      this.#diagnose('session move failed', error);
+      this.#response(request, failure('session_move_failed', error instanceof Error ? error.message : 'The session could not be moved.'));
     }
   }
 

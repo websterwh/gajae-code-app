@@ -324,7 +324,8 @@ which replaces the project-scope and extension refusals of #161):
   CLI. Withheld are only the tools the app's hosting model cannot carry: `job`,
   `monitor` and `cron` (the app disposes the SDK session when each turn ends,
   so background work could never outlive or wake a turn) and `move_session`
-  (the session cwd is bound to its project, like the excluded `/move`).
+  (the session cwd is bound to its project and sidebar row; the user moves a
+  session explicitly with `/move`, which updates both).
 - **Extension modules load as in the CLI.** `<agentDir>/extensions`, a
   repository's `.gjc/extensions`, installed plugin extension entry points and
   the `extensions` setting load through the runtime's own discovery, alongside

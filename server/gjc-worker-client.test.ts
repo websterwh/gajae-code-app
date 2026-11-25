@@ -11,6 +11,7 @@ import type { DesktopOwnerActivity } from '../shared/desktopUpdateProtocol.js';
 
 import { DesktopRestartAuthority, type DesktopRestartAuthorityOptions } from './services/desktop-restart-authority.js';
 import { createDesktopRestartRuntime, DESKTOP_RESTART_REQUIRED_OWNERS } from './services/desktop-restart-runtime.js';
+import { getGjcLiveSessionRoot } from './shared/utils.js';
 import { GjcWorkerHost, type GjcWorkerRuntime } from './gjc-worker.js';
 import {
   DEFAULT_INITIALIZE_TIMEOUT_MS,
@@ -62,6 +63,31 @@ test('run enrichment stops resuming a conversation whose transcript is gone', as
   });
   assert.equal(dropped.sessionId, undefined);
   assert.equal(dropped.sessionRoot, '/fixture/sessions');
+});
+
+test('a new session uses the CLI-visible managed store unless a root is pinned', async () => {
+  const authorities = {
+    resolveBrowserBackend: () => 'builtin' as const,
+    browserStatus: async () => ({ state: 'ready', ready: true, engine: 'webview' }),
+  };
+  const previous = process.env.GJC_LIVE_SESSION_DIR;
+  delete process.env.GJC_LIVE_SESSION_DIR;
+  try {
+    const managed = await enrichGjcSdkRunOptions({ projectPath: '/fixture/project', modelId: 'fixture-model' }, authorities);
+    assert.equal(managed.managedSessionScope, true);
+    assert.equal(managed.sessionRoot, getGjcLiveSessionRoot(), 'resume and goal lookups still start from the app root');
+
+    const pinned = await enrichGjcSdkRunOptions({ projectPath: '/fixture/project', sessionRoot: '/fixture/sessions', modelId: 'fixture-model' }, authorities);
+    assert.equal(pinned.managedSessionScope, false, 'an explicit root is honored');
+
+    process.env.GJC_LIVE_SESSION_DIR = '/fixture/live-sessions';
+    const isolated = await enrichGjcSdkRunOptions({ projectPath: '/fixture/project', modelId: 'fixture-model' }, authorities);
+    assert.equal(isolated.managedSessionScope, false, 'isolated dev keeps its own store');
+    assert.equal(isolated.sessionRoot, '/fixture/live-sessions');
+  } finally {
+    if (previous === undefined) delete process.env.GJC_LIVE_SESSION_DIR;
+    else process.env.GJC_LIVE_SESSION_DIR = previous;
+  }
 });
 
 test('a transcript that moved is found under either session layout', async () => {

@@ -13,6 +13,7 @@ export const GJC_WORKER_REQUEST_METHODS = [
   'session.resume',
   'session.fork',
   'session.branch',
+  'session.move',
   'turn.start',
   'turn.abort',
   'turn.steer',
@@ -468,3 +469,9 @@ export class GjcWorkerRequestTracker {
  * `createBranchedSession` reports the file, so the id is resolved by opening it.
  */
 export type GjcBranchedSession = { sessionId: string; transcriptPath: string };
+
+/**
+ * A relocated session: the cwd it now reports and the transcript file it lives
+ * in. `/move` rewrites the transcript header, so the app stores both.
+ */
+export type GjcMovedSession = { cwd: string; transcriptPath: string };

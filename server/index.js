@@ -39,6 +39,7 @@ import {
 
 import { getConnectableHost } from '../shared/networkHosts.js';
 
+import { relocateAllLiveGjcTranscripts } from './gjc-transcript-store.js';
 import { deleteProject } from './modules/projects/services/project-delete.service.js';
 import { GjcJobProjectionService } from './modules/websocket/services/gjc-job-projection.service.js';
 import { chatRunRegistry } from './modules/websocket/index.js';
@@ -1971,6 +1972,14 @@ async function startServer() {
                     console.log(`${c.info('[INFO]')} App root: ${c.dim(appRoot)}`);
                     console.log(`${c.tip('[TIP]')}  Run "gajae-app status" for full configuration details`);
                     console.log('');
+                    // Old app-written transcripts move into the CLI's session
+                    // store before the watcher indexes it, so the terminal and
+                    // the app list the same conversations.
+                    const relocated = await relocateAllLiveGjcTranscripts().catch((error) => {
+                        console.error('[WARN] Could not move older transcripts into the CLI session store:', error);
+                        return 0;
+                    });
+                    if (relocated > 0) console.log(`${c.info('[INFO]')} Moved ${relocated} transcript(s) into the CLI session store`);
                     // Start watching the projects folder for changes
                     await initializeSessionsWatcher();
                 }

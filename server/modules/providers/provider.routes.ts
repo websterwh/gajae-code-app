@@ -241,6 +241,14 @@ router.post('/sessions/:sessionId/branch', asyncHandler(async (req: Request, res
   res.status(201).json(createApiSuccessResponse(await sessionsService.branchSession(sessionFrom(req.params.sessionId), entryId)));
 }));
 
+// `/move`: the session keeps its history and id, but its project (and the SDK
+// cwd the next turn runs in) changes. The folder must already exist.
+router.post('/sessions/:sessionId/move', asyncHandler(async (req: Request, res: Response) => {
+  const target = queryText(objectBody(req.body).path);
+  if (!target) return invalid('A destination folder is required.', 'INVALID_MOVE_TARGET');
+  res.json(createApiSuccessResponse(await sessionsService.moveSession(sessionFrom(req.params.sessionId), target)));
+}));
+
 // A quick chat allocates the session and its disposable folder together; the
 // composer's projectPath is not used, because that is the workspace the chat
 // must not run in.

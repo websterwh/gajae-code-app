@@ -30,6 +30,7 @@ type AppUiCommandActionId =
   | 'retry-last-turn'
   | 'open-side-chat'
   | 'rename-session'
+  | 'move-session'
   | 'run-shell-command';
 
 export type AppUiCommand = {
@@ -66,6 +67,8 @@ export type AppUiCommandActions = {
   openSideChat: (question: string) => void;
   /** Retitles the open conversation, as the sidebar's rename does. */
   renameSession: (title: string) => void;
+  /** Repoints the conversation at another folder, as the CLI's `/move` does. */
+  moveSession: (folder: string) => void;
   /** Runs one shell command in the session's project and reports the result. */
   runShellCommand: (command: string) => void;
   /** Runs a MemPalace command in the session's project. */
@@ -167,6 +170,15 @@ export const APP_UI_COMMANDS: readonly AppUiCommand[] = [
     requiresArguments: true,
   },
   {
+    name: '/move',
+    description: 'Move this conversation to a different folder',
+    namespace: 'app',
+    type: 'app',
+    actionId: 'move-session',
+    // A bare /move has no destination, so the menu inserts it for typing.
+    requiresArguments: true,
+  },
+  {
     name: '/run',
     description: 'Run a shell command here and show its output',
     namespace: 'app',
@@ -223,6 +235,9 @@ export function runAppUiCommand(command: AppUiCommand, actions: AppUiCommandActi
       break;
     case 'rename-session':
       actions.renameSession(args.trim());
+      break;
+    case 'move-session':
+      actions.moveSession(args.trim());
       break;
     case 'run-shell-command':
       actions.runShellCommand(args);
@@ -284,11 +299,6 @@ export function getTuiOnlyCommandNotice(commandName: string): string | null {
 /**
  * Commands and command FORMS the app answers itself rather than dispatching.
  *
- * `/move` has a runtime handler, but it retargets the session's working
- * directory; in the app a session is bound to the project you picked, so
- * moving it out from under that selection leaves the sidebar, the file tree
- * and the worker pointing at different places.
- *
  * `/notify on|off` is the one form of `/notify` the upstream builtin does not
  * consume — it returns the text as a residual prompt so GJC's notifications
  * extension can own the session-local toggle for its terminal/Telegram daemon.
@@ -302,7 +312,6 @@ export function getTuiOnlyCommandNotice(commandName: string): string | null {
  */
 export const APP_UNSUPPORTED_COMMAND_HINTS: Readonly<Record<string, string>> = {
   '/init': 'Generating AGENTS.md requires the GJC terminal until headless init is available.',
-  '/move': 'Sessions follow the project you select — switch projects from the sidebar instead.',
   '/notify on': 'The app delivers its own notifications — manage them in Settings → Notifications.',
   '/notify off': 'The app delivers its own notifications — manage them in Settings → Notifications.',
   '/skill:team': 'It drives workers through tmux panes, which this app cannot show. Run `gjc` in a terminal for that, or use `/skill:ultragoal` here.',
