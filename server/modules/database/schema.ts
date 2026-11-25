@@ -76,7 +76,8 @@ export const PROJECTS_TABLE_SCHEMA_SQL = table(`
       custom_project_name TEXT DEFAULT NULL, -- user-chosen display name
       isStarred BOOLEAN DEFAULT 0, -- sidebar pin
       isArchived BOOLEAN DEFAULT 0, -- soft delete
-      origin TEXT NOT NULL DEFAULT 'legacy' -- how the row came to exist
+      origin TEXT NOT NULL DEFAULT 'legacy', -- how the row came to exist
+      created_at TEXT DEFAULT NULL -- when the workspace was added
   );
 `);
 

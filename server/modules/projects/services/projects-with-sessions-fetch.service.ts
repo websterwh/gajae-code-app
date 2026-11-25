@@ -10,7 +10,7 @@ import { AppError } from '@/shared/utils.js';
 type SessionSummary = { id: string; provider: string; summary: string; isStarred: boolean; messageCount: number; lastActivity: string };
 type SessionRepositoryRow = { provider: string; session_id: string; custom_name?: string | null; isStarred: number; updated_at?: string | null; created_at?: string | null };
 type InitialProjectSessionRow = SessionRepositoryRow & { project_path: string | null; total: number };
-export type ProjectListItem = { projectId: string; path: string; displayName: string; fullPath: string; origin: 'legacy' | 'explicit' | 'auto'; isStarred: boolean; sessions: SessionSummary[]; sessionMeta: { hasMore: boolean; total: number } };
+export type ProjectListItem = { projectId: string; path: string; displayName: string; fullPath: string; origin: 'legacy' | 'explicit' | 'auto'; isStarred: boolean; createdAt: string | null; sessions: SessionSummary[]; sessionMeta: { hasMore: boolean; total: number } };
 export type ArchivedProjectListItem = ProjectListItem & { isArchived: true };
 type ProgressUpdate = { phase: 'loading' | 'complete'; current: number; total: number; currentProject?: string };
 type GetProjectsWithSessionsOptions = { skipSynchronization?: boolean; sessionsLimit?: number; sessionsOffset?: number };
@@ -149,7 +149,7 @@ function withoutOrphanedSessions<T extends ProjectListItem>(projects: T[]): T[] 
 export async function getProjectsWithSessions(options: GetProjectsWithSessionsOptions = {}): Promise<ProjectListItem[]> {
   if (!options.skipSynchronization) await sessionSynchronizerService.synchronizeSessions();
 
-  const projects = projectsDb.getProjectPaths() as Array<{ project_id: string; project_path: string; custom_project_name?: string | null; origin?: 'legacy' | 'explicit' | 'auto' | null; isStarred?: number }>;
+  const projects = projectsDb.getProjectPaths() as Array<{ project_id: string; project_path: string; custom_project_name?: string | null; origin?: 'legacy' | 'explicit' | 'auto' | null; isStarred?: number; created_at?: string | null }>;
   const sessionLimit = Math.min(Math.max(1, options.sessionsLimit ?? initialPageSize), maxPageSize);
   const prioritizedIds = runningSessionIds();
   const initialPages = initialSessions(sessionLimit, prioritizedIds);
@@ -173,6 +173,7 @@ export async function getProjectsWithSessions(options: GetProjectsWithSessionsOp
       fullPath: projectPath,
       isStarred: Boolean(project.isStarred),
       origin: project.origin ?? 'legacy',
+      createdAt: project.created_at ?? null,
       sessions: sessions.sessions,
       sessionMeta: { hasMore: sessions.hasMore, total: sessions.total },
     });
@@ -200,7 +201,7 @@ export function listProjectSummaries(): Array<{ projectId: string; path: string;
 export async function getArchivedProjectsWithSessions(options: Pick<GetProjectsWithSessionsOptions, 'skipSynchronization' | 'sessionsLimit' | 'sessionsOffset'> = {}): Promise<ArchivedProjectListItem[]> {
   if (!options.skipSynchronization) await sessionSynchronizerService.synchronizeSessions();
 
-  const projects = projectsDb.getArchivedProjectPaths() as Array<{ project_id: string; project_path: string; custom_project_name?: string | null; origin?: 'legacy' | 'explicit' | 'auto' | null; isStarred?: number }>;
+  const projects = projectsDb.getArchivedProjectPaths() as Array<{ project_id: string; project_path: string; custom_project_name?: string | null; origin?: 'legacy' | 'explicit' | 'auto' | null; isStarred?: number; created_at?: string | null }>;
   const result: ArchivedProjectListItem[] = [];
   for (const project of projects) {
     const projectPath = project.project_path;
@@ -212,6 +213,7 @@ export async function getArchivedProjectsWithSessions(options: Pick<GetProjectsW
       path: projectPath, fullPath: projectPath, displayName,
       isStarred: Boolean(project.isStarred),
       origin: project.origin ?? 'legacy',
+      createdAt: project.created_at ?? null,
       isArchived: true, sessions: sessions.sessions,
       sessionMeta: { hasMore: sessions.hasMore, total: sessions.total },
     };

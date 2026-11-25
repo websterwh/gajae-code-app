@@ -405,6 +405,10 @@ function ChatInterface({
       onDismissAttachmentNotice={composer.dismissAttachmentNotice}
       showFileDropdown={composer.showFileDropdown}
       filteredFiles={composer.filteredFiles}
+      showMoveDropdown={composer.showMoveDropdown}
+      moveSuggestions={composer.moveSuggestions}
+      selectedMoveIndex={composer.selectedMoveIndex}
+      onSelectMoveFolder={composer.selectMoveFolder}
       selectedFileIndex={composer.selectedFileIndex}
       onSelectFile={composer.selectFile}
       filteredCommands={composer.filteredCommands}

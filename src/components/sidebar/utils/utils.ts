@@ -59,13 +59,21 @@ export const getAllSessions = (project: Project): SessionWithProvider[] => {
   return entries.map((entry) => ({ ...entry, __provider: providerFor(entry) })).sort((first, second) => getSessionDate(second).getTime() - getSessionDate(first).getTime());
 };
 
+/**
+ * A workspace with no conversation has no activity to sort on, so it falls
+ * back to the moment it was added. Taking that time only when the list is
+ * empty keeps a workspace with history ordered by that history, not by when
+ * the folder was first opened.
+ */
 const getProjectLastActivity = (project: Project): Date => {
   let newest = new Date(0);
   for (const session of getAllSessions(project)) {
     const timestamp = getSessionDate(session);
     if (timestamp > newest) newest = timestamp;
   }
-  return newest;
+  if (newest.getTime() > 0) return newest;
+  const added = new Date(typeof project.createdAt === 'string' ? project.createdAt : 0);
+  return Number.isNaN(added.getTime()) ? newest : added;
 };
 
 export const sortProjects = (projects: Project[], projectSortOrder: ProjectSortOrder): Project[] => projects.slice().sort((left, right) => {

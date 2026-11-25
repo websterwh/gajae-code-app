@@ -1612,7 +1612,30 @@ export class GjcWorkerSupervisor {
       run.terminalForwarded = true;
       run.terminalFailed = event.method === 'turn.failed';
       this.activityChanged();
+      // Anything the agent installed during this turn should survive the
+      // container, so it joins the same ledger boot provisioning installs.
+      this.#adoptAgentPackageInstalls(run.appScope, run.providerSessionId ?? null);
     }
+  }
+
+  /**
+   * Records package installs a finished turn performed. The transcript holds
+   * the bash commands; the adoption verifies the package is present before it
+   * becomes a boot-time install, so a failed command changes nothing.
+   */
+  #adoptAgentPackageInstalls(appSessionId: string, providerSessionId: string | null): void {
+    void (async () => {
+      const [{ adoptAgentInstalledPackagesFromTranscript }, { sessionsDb }] = await Promise.all([
+        import('./modules/mcp/index.js'),
+        import('./modules/database/index.js'),
+      ]);
+      const session = (providerSessionId
+        ? sessionsDb.getSessionByProviderSessionId('gjc', providerSessionId)
+        : null) ?? sessionsDb.getSessionById(appSessionId);
+      const transcript = session?.jsonl_path;
+      if (!transcript) return;
+      await adoptAgentInstalledPackagesFromTranscript(transcript);
+    })().catch(() => undefined);
   }
 
   /**

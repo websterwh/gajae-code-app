@@ -15,7 +15,7 @@ export interface ProjectSession {
 interface ProjectSessionMeta { total?: number; hasMore?: boolean; [key: string]: unknown; }
 
 export interface Project {
-  displayName: string; fullPath: string; projectId: string; path?: string; isStarred?: boolean; origin?: 'legacy' | 'explicit' | 'auto'; sessions?: ProjectSession[]; sessionMeta?: ProjectSessionMeta;
+  displayName: string; fullPath: string; projectId: string; path?: string; isStarred?: boolean; origin?: 'legacy' | 'explicit' | 'auto'; createdAt?: string | null; sessions?: ProjectSession[]; sessionMeta?: ProjectSessionMeta;
   [key: string]: unknown;
 }
 

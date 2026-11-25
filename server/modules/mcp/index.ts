@@ -1,3 +1,13 @@
+export {
+  adoptAgentInstalledPackagesFromTranscript,
+  adoptAgentPackageInstalls,
+  installCommandsFromTranscript,
+  parseInstallCommands,
+  splitShellSegments,
+  type AdoptAgentPackagesOptions,
+  type AgentPackageInstall,
+  type AgentPackageManager,
+} from './agent-packages.service.js';
 export { createMcpRouter, default as mcpRoutes } from './mcp.routes.js';
 export { McpService, mcpService, type McpServerView, type VerifyResult } from './mcp.service.js';
 export {

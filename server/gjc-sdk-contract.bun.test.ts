@@ -3752,6 +3752,39 @@ test('SDK physical disposal retains feature-specific unknown instead of blanket-
   } finally { session.complete(); await run; await f.close(); }
 });
 
+test('a session built before its setup failed is disposed so the next turn can build one', async () => {
+  const sessions: FakeAgentSession[] = [];
+  let failSetup = true;
+  const factory = (async () => {
+    const session = new FakeAgentSession();
+    sessions.push(session);
+    if (failSetup) {
+      failSetup = false;
+      return { session, setToolUIContext: () => { throw new Error('setup failed'); } };
+    }
+    return { session, setToolUIContext: session.setToolUIContext.bind(session) };
+  }) as unknown as GjcAgentSessionFactory;
+  const f = await fixture(undefined, undefined, undefined, undefined, undefined, undefined, { createSessionFactory: factory });
+  const writer = { send() {} };
+  const retry = () => f.adapter.spawnGjc('retry after setup failure', { ...f.options, runHandle: `setup-${sessions.length}` }, writer);
+  try {
+    await assert.rejects(retry());
+    // Setup failed after the SDK had built the session. Left alone, its
+    // endpoint stays held and every retry is refused as a duplicate live
+    // session - exactly the stop, switch model, retry failure.
+    assert.equal(sessions[0]!.disposed, true, 'the half-built session must not keep its endpoint');
+    const second = retry();
+    for (let waited = 0; waited < 200 && sessions.length < 2; waited += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    assert.equal(sessions.length, 2, 'the retry must build a fresh session');
+    await sessions[1]!.promptStarted.promise;
+    sessions[1]!.complete();
+    await second;
+    assert.equal(sessions[1]!.promptCalls, 1);
+  } finally { sessions[1]?.complete(); await f.close(); }
+});
+
 test('SDK rejected factory cannot discharge potentially escaped creation work without an owner', async () => {
   const f = await fixture(undefined, undefined, undefined, undefined, undefined, undefined, {
     createSessionFactory: async () => { throw new Error('offline startup failure'); },

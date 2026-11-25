@@ -1039,6 +1039,13 @@ export class GjcBunSdkAdapter implements GjcWorkerRuntime {
   readonly #runs = new Map<string, ActiveRun>();
   /** Accepted roots through settlement; pre-session aborts still reach them here. */
   readonly #starting = new Map<string, { abortRequested: boolean }>();
+  /**
+   * One provider session cannot run two turns at once. A retry pressed while
+   * the stopped turn is still tearing down used to construct a second session
+   * for the same endpoint and fail with "endpoint id is already held"; queuing
+   * the new turn behind the finishing one lets it start instead.
+   */
+  readonly #sessionTurns = new Map<string, Promise<void>>();
   readonly oauth: GjcWorkerOAuthRuntime & Pick<GjcBunOAuthController, 'snapshotActivity' | 'getGeneration'>;
 
   constructor(
@@ -1167,7 +1174,19 @@ export class GjcBunSdkAdapter implements GjcWorkerRuntime {
       ...(writer.setModel ? { setModel: (model: string) => { if (!this.#cleanupFailure) writer.setModel!(model); } } : {}),
       ...(writer.setAborted ? { setAborted: () => { if (!this.#cleanupFailure) writer.setAborted!(); } } : {}),
     };
-    const task = this.#run(runId, message, options, config, guardedWriter).finally(() => {
+    // Resumed sessions are named up front, so a second turn for the same
+    // conversation can wait for the first to finish its physical teardown.
+    const sessionKey = typeof options.sessionId === 'string' && options.sessionId ? options.sessionId : null;
+    const previousTurn = sessionKey ? this.#sessionTurns.get(sessionKey) : undefined;
+    let releaseTurn: (() => void) | undefined;
+    const turnGate = sessionKey ? new Promise<void>((resolve) => { releaseTurn = resolve; }) : undefined;
+    if (sessionKey && turnGate) this.#sessionTurns.set(sessionKey, turnGate);
+    const task = (async () => {
+      if (previousTurn) await previousTurn.catch(() => undefined);
+      return this.#run(runId, message, options, config, guardedWriter);
+    })().finally(() => {
+      releaseTurn?.();
+      if (sessionKey && turnGate && this.#sessionTurns.get(sessionKey) === turnGate) this.#sessionTurns.delete(sessionKey);
       this.#starting.delete(runId);
       this.#revision += 1;
     });
@@ -1407,11 +1426,15 @@ export class GjcBunSdkAdapter implements GjcWorkerRuntime {
 
   async #run(runId: string, message: string, options: Record<string, unknown>, config: SdkRunConfig, writer: GjcWorkerWriter): Promise<void> {
     let active: ActiveRun | undefined;
+    // A session exists before its setup (model override, permissions,
+    // subscriptions) finishes. Keeping it here means a setup failure disposes
+    // it instead of leaving its endpoint held against every later retry.
+    let created: ActiveRun['session'] | undefined;
     let runError: unknown;
     let didRunFail = false;
     let disposalError: Error | undefined;
     try {
-      await this.#runInner(runId, options, config, writer, message, (value) => { active = value; });
+      await this.#runInner(runId, options, config, writer, message, (value) => { active = value; }, (session) => { created = session; });
     } catch (error) {
       if (isGjcCleanupUnconfirmedError(error)) throw this.#poison();
       // Diagnostics stay opt-in and never reach Protocol frames.
@@ -1460,12 +1483,27 @@ export class GjcBunSdkAdapter implements GjcWorkerRuntime {
       this.#runs.delete(runId);
       this.#revision += 1;
       forwardPromptTerminal(writer, run.state, didRunFail ? runError ?? new Error(FAILURE) : undefined);
+    } else if (created) {
+      // The session was built but never became an active run, so its setup
+      // failed. Dispose it here or the SDK keeps the endpoint alive and every
+      // retry of this conversation is refused as a duplicate live session.
+      try {
+        await disposeSdkSession(created);
+        this.#sdkSessionOwners.delete(created);
+        this.#revision += 1;
+      } catch (error) {
+        console.error(
+          'GJC SDK session disposal failed (unregistered session):',
+          error instanceof Error ? error.stack ?? error.message : String(error),
+        );
+        throw this.#poison();
+      }
     }
     this.#assertHealthy();
     if (didRunFail) throw runError;
   }
 
-  async #runInner(runId: string, options: Record<string, unknown>, config: SdkRunConfig, writer: GjcWorkerWriter, message: string, setActive: (run: ActiveRun) => void): Promise<void> {
+  async #runInner(runId: string, options: Record<string, unknown>, config: SdkRunConfig, writer: GjcWorkerWriter, message: string, setActive: (run: ActiveRun) => void, setCreated: (session: ActiveRun['session']) => void): Promise<void> {
     {
       const resumedId = typeof options.sessionId === 'string' && options.sessionId ? options.sessionId : undefined;
       const sessionManager = resumedId
@@ -1630,6 +1668,7 @@ export class GjcBunSdkAdapter implements GjcWorkerRuntime {
         const ownership = readSdkLifecycleOwner(result.session, 'sdk_background_ownership_unproven');
         if (ownership.unknown.includes('sdk_background_ownership_unproven')) this.#sdkBackgroundOwnershipUnproven = true;
         else this.#sdkSessionOwners.add(result.session);
+        setCreated(result.session);
         this.#revision += 1;
         this.#assertHealthy();
         if (config.modelProfile) {

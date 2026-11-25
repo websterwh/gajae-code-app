@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangleIcon, InfoIcon, OctagonAlertIcon, RotateCcw } from 'lucide-react';
+import { AlertTriangleIcon, InfoIcon, OctagonAlertIcon } from 'lucide-react';
 
 import SessionProviderLogo from '../../llm-logo-provider/SessionProviderLogo';
 import type {
@@ -228,21 +228,18 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, d
               </div>
               {message.type === 'error' && onRetryFailedTurn ? (
                 // The run stopped, so there is nothing to wait for and nothing
-                // in the transcript to click: one round button under the
-                // failure sends the same turn again. It stays a 24px circle
-                // until hovered, when the label slides out to the right.
+                // in the transcript to click: one text control under the
+                // failure sends the same turn again, the same control the tail
+                // of a stopped turn offers.
                 <div className="mt-1 flex pl-1">
                   <button
                     type="button"
                     onClick={onRetryFailedTurn}
                     aria-label={t('messageTypes.retryFailedTurn', { defaultValue: 'Retry' })}
                     title={t('messageTypes.retryFailedTurn', { defaultValue: 'Retry' })}
-                    className="group/retry flex h-6 items-center justify-center rounded-full border border-border bg-card px-[5px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden"
+                    className="text-xs text-primary underline underline-offset-2 hover:text-primary/80"
                   >
-                    <RotateCcw className="h-3 w-3 shrink-0" aria-hidden="true" />
-                    <span className="max-w-0 overflow-hidden text-[11px] leading-none whitespace-nowrap opacity-0 transition-all duration-150 group-hover/retry:ml-1 group-hover/retry:max-w-12 group-hover/retry:opacity-100 group-focus-visible/retry:ml-1 group-focus-visible/retry:max-w-12 group-focus-visible/retry:opacity-100">
-                      {t('messageTypes.retryFailedTurn', { defaultValue: 'Retry' })}
-                    </span>
+                    {t('messageTypes.retryFailedTurn', { defaultValue: 'Retry' })}
                   </button>
                 </div>
               ) : null}

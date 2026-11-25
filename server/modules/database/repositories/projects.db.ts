@@ -5,7 +5,9 @@ import { getConnection } from '@/modules/database/connection.js';
 import type { CreateProjectPathResult, ProjectRepositoryRow } from '@/shared/types.js';
 import { normalizeProjectPath } from '@/shared/utils.js';
 
-const PROJECT_COLUMNS = 'project_id, project_path, custom_project_name, isStarred, isArchived, origin';
+const PROJECT_COLUMNS = 'project_id, project_path, custom_project_name, isStarred, isArchived, origin, created_at';
+
+const nowIso = (): string => new Date().toISOString();
 
 function defaultNameFor(projectPath: string, suppliedName: string | null): string {
   const name = typeof suppliedName === 'string' ? suppliedName.trim() : '';
@@ -57,12 +59,12 @@ function createProjectPath(projectPath: string, customProjectName: string | null
   const normalizedPath = canonicalPath(projectPath);
   const generatedId = randomUUID();
   const result = getConnection().prepare(`
-    INSERT INTO projects (project_id, project_path, custom_project_name, isArchived, origin)
-    VALUES (?, ?, ?, 0, 'explicit')
+    INSERT INTO projects (project_id, project_path, custom_project_name, isArchived, origin, created_at)
+    VALUES (?, ?, ?, 0, 'explicit', ?)
     ON CONFLICT(project_path) DO UPDATE SET isArchived = 0, origin = 'explicit'
     WHERE projects.isArchived = 1
     RETURNING ${PROJECT_COLUMNS}
-  `).get(generatedId, normalizedPath, defaultNameFor(normalizedPath, customProjectName)) as ProjectRepositoryRow | undefined;
+  `).get(generatedId, normalizedPath, defaultNameFor(normalizedPath, customProjectName), nowIso()) as ProjectRepositoryRow | undefined;
 
   if (result) {
     return {
@@ -76,10 +78,10 @@ function createProjectPath(projectPath: string, customProjectName: string | null
 function ensureProjectPathForSession(projectPath: string): void {
   const normalizedPath = canonicalPath(projectPath);
   getConnection().prepare(`
-    INSERT INTO projects (project_id, project_path, custom_project_name, isArchived, origin)
-    VALUES (?, ?, ?, 0, 'auto')
+    INSERT INTO projects (project_id, project_path, custom_project_name, isArchived, origin, created_at)
+    VALUES (?, ?, ?, 0, 'auto', ?)
     ON CONFLICT(project_path) DO NOTHING
-  `).run(randomUUID(), normalizedPath, defaultNameFor(normalizedPath, null));
+  `).run(randomUUID(), normalizedPath, defaultNameFor(normalizedPath, null), nowIso());
 }
 
 function getProjectPathById(projectId: string): string | null {
@@ -99,10 +101,10 @@ function getCustomProjectName(projectPath: string): string | null {
 function updateCustomProjectName(projectPath: string, customProjectName: string | null): void {
   const normalizedPath = canonicalPath(projectPath);
   getConnection().prepare(`
-    INSERT INTO projects (project_id, project_path, custom_project_name)
-    VALUES (?, ?, ?)
+    INSERT INTO projects (project_id, project_path, custom_project_name, created_at)
+    VALUES (?, ?, ?, ?)
     ON CONFLICT(project_path) DO UPDATE SET custom_project_name = excluded.custom_project_name
-  `).run(randomUUID(), normalizedPath, customProjectName);
+  `).run(randomUUID(), normalizedPath, customProjectName, nowIso());
 }
 
 function updateCustomProjectNameById(projectId: string, customProjectName: string | null): void {

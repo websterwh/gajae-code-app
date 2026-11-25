@@ -100,6 +100,11 @@ interface ChatComposerProps {
   onDismissAttachmentNotice: () => void;
   showFileDropdown: boolean;
   filteredFiles: MentionableFile[];
+  /** `/move` is being typed and the server offered folders for its argument. */
+  showMoveDropdown?: boolean;
+  moveSuggestions?: MentionableFile[];
+  selectedMoveIndex?: number;
+  onSelectMoveFolder?: (folder: MentionableFile) => void;
   selectedFileIndex: number;
   onSelectFile: (file: MentionableFile) => void;
   filteredCommands: SlashCommand[];
@@ -178,6 +183,10 @@ export default function ChatComposer({
   onDismissAttachmentNotice,
   showFileDropdown,
   filteredFiles,
+  showMoveDropdown = false,
+  moveSuggestions = [],
+  selectedMoveIndex = -1,
+  onSelectMoveFolder,
   selectedFileIndex,
   onSelectFile,
   filteredCommands,
@@ -347,6 +356,33 @@ export default function ChatComposer({
       )}
 
       {!hasQuestionPanel && <div className="relative mx-auto max-w-chat">
+        {showMoveDropdown && onSelectMoveFolder && moveSuggestions.length > 0 && (
+          <div className="absolute right-0 bottom-full left-0 z-50 mb-2 max-h-48 overflow-y-auto rounded-xl border border-border/50 bg-card/95 shadow-lg backdrop-blur-md">
+            {moveSuggestions.map((folder, index) => (
+              <div
+                key={folder.path}
+                className={`cursor-pointer touch-manipulation border-b border-border/30 px-4 py-3 last:border-b-0 ${
+                  index === selectedMoveIndex
+                    ? 'bg-primary/8 text-primary'
+                    : 'text-foreground hover:bg-accent/50'
+                }`}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onSelectMoveFolder(folder);
+                }}
+              >
+                <div className="text-sm font-medium">{folder.name}</div>
+                <div className="font-mono text-xs text-muted-foreground">{folder.path}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {showFileDropdown && filteredFiles.length > 0 && (
           <div className="absolute right-0 bottom-full left-0 z-50 mb-2 max-h-48 overflow-y-auto rounded-xl border border-border/50 bg-card/95 shadow-lg backdrop-blur-md">
             {filteredFiles.map((file, index) => (

@@ -66,6 +66,7 @@ function upgradeProjectTable(database: Database): void {
     addMissingColumn(database, 'projects', names, 'isArchived', 'BOOLEAN DEFAULT 0');
     addMissingColumn(database, 'projects', names, 'origin', "TEXT NOT NULL DEFAULT 'legacy'");
     database.exec(`UPDATE projects SET project_id = ${uuid} WHERE project_id IS NULL OR trim(project_id) = ''`);
+    ensureProjectCreatedAt(database, names);
     return;
   }
 
@@ -88,7 +89,8 @@ function upgradeProjectTable(database: Database): void {
         custom_project_name TEXT DEFAULT NULL,
         isStarred BOOLEAN DEFAULT 0,
         isArchived BOOLEAN DEFAULT 0,
-        origin TEXT NOT NULL DEFAULT 'legacy'
+        origin TEXT NOT NULL DEFAULT 'legacy',
+        created_at TEXT DEFAULT NULL
       )
     `);
     database.exec(`
@@ -113,6 +115,31 @@ function upgradeProjectTable(database: Database): void {
     database.exec('DROP TABLE projects');
     database.exec('ALTER TABLE projects__new RENAME TO projects');
   });
+  ensureProjectCreatedAt(database, new Set(columnsOf(database, 'projects').map(({ name }) => name)));
+}
+
+/**
+ * Sidebar order for workspaces that have no session yet needs a time they were
+ * added. Older rows borrow their first session's creation instant, and a
+ * workspace that never ran one starts its clock now - once.
+ */
+function ensureProjectCreatedAt(database: Database, known: Set<string>): void {
+  addMissingColumn(database, 'projects', known, 'created_at', 'TEXT DEFAULT NULL');
+  // An older database can reach the projects upgrade before the sessions
+  // table exists; the current time is then the only answer, and the final
+  // migration step fills the rest once sessions are readable.
+  const added = hasTable(database, 'sessions')
+    ? `COALESCE(
+        (SELECT MIN(sessions.created_at) FROM sessions
+          WHERE sessions.project_path = projects.project_path
+            AND sessions.created_at IS NOT NULL AND trim(sessions.created_at) <> ''),
+        strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      )`
+    : `strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`;
+  database.exec(`
+    UPDATE projects SET created_at = ${added}
+    WHERE created_at IS NULL OR trim(created_at) = ''
+  `);
 }
 
 function importLegacyProjects(database: Database): void {
@@ -309,6 +336,8 @@ const migrationPlan: readonly Migration[] = [
   addProviderMapping,
   addSessionNameSource,
   addProjectsForSessions,
+  // After every path that can insert a project, so none is left without a time.
+  (database) => ensureProjectCreatedAt(database, new Set(columnsOf(database, 'projects').map(({ name }) => name))),
   removeLegacyIndexes,
   createProjectPermissions,
   (database) => { database.exec(SESSION_WORKTREES_TABLE_SCHEMA_SQL); },
