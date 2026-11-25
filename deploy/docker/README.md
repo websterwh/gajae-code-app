@@ -19,7 +19,7 @@ compose files and pulls keep working.
   - `APT_PACKAGES`: Comma-separated Debian packages (e.g. `openjdk-17-jre-headless,ffmpeg`).
   - `ANDROID_SDK_PACKAGES`: Android SDK components installed with Google's `sdkmanager` (e.g. `platform-tools,platforms;android-35`). No Debian package exists for the SDK, so this is the only route that keeps it on `/data`.
   - `UV_TOOLS`: Standalone Python CLI tools / MCP servers (e.g. `serena,canvas-mcp-server`).
-  - `PIP_PACKAGES`: Global Python packages via `uv pip install --system`.
+  - `PIP_PACKAGES`: Global Python packages via `uv pip install --system --break-system-packages`.
   - `NPM_PACKAGES`: Global Node packages via `npm install -g` (installed under `/data/npm-global`).
   - `GITHUB_APPS`: GitHub release CLI binaries via Aqua (e.g. `skylot/jadx,iBotPeaches/Apktool`).
 - ⚡ **Persistent Disk Caching**: APT archives, UV tools, Pip wheels, Aqua downloads, and NPM caches are rooted in `/data/cache/` for instant, cached boots.
@@ -116,7 +116,7 @@ revision is required.
 | `APT_PACKAGES` | *(empty)* | Comma-separated Debian packages to install via APT (`openjdk-17-jre-headless,ffmpeg`). |
 | `ANDROID_SDK_PACKAGES` | *(empty)* | Comma-separated Android SDK components installed through the `android` manager (`platform-tools,platforms;android-35,build-tools;35.0.0`). The first install fetches Google's command-line tools into `<config root>/android-sdk`; components and accepted licenses stay there, so a recreate does not download them again. Also selectable as `android` in Settings -> Packages, which is what keeps every component in the ledger. |
 | `UV_TOOLS` | *(empty)* | Comma-separated isolated Python CLI tools / MCPs via `uv tool install` (`serena`). |
-| `PIP_PACKAGES` | *(empty)* | Comma-separated Python packages installed globally via `uv pip install --system`. |
+| `PIP_PACKAGES` | *(empty)* | Comma-separated Python packages installed globally via `uv pip install --system --break-system-packages`. |
 | `NPM_PACKAGES` | *(empty)* | Comma-separated Node packages installed globally via `npm install -g` (`typescript,prettier`). Persisted under `/data/npm-global`. |
 | `GITHUB_APPS` | *(empty)* | Comma-separated GitHub release apps installed via Aqua (`skylot/jadx,iBotPeaches/Apktool`). |
 | `UV_TOOL_DIR` | `<config root>/app/uv` | Where `uv tool install` puts its environments. Defaults beside `GJC_WORKER_AGENT_DIR`, so it survives with the mounted config; overridable. |

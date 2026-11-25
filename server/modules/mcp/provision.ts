@@ -106,7 +106,13 @@ export function installCommand(
     case 'uv':
       return { command: 'uv', args: ['tool', 'install', '-q', spec] };
     case 'pip':
-      return { command: 'uv', args: ['pip', 'install', '-q', '--system', spec] };
+      // Debian marks its interpreter externally managed (PEP 668), and uv
+      // refuses a --system install there without this flag: every pip row
+      // failed with the EXTERNALLY-MANAGED banner and the pipx hint instead
+      // of installing. The container is root, nothing else owns the
+      // interpreter, and the pip manager exists to make a package importable
+      // by the system python, so the override is what `--system` means here.
+      return { command: 'uv', args: ['pip', 'install', '-q', '--system', '--break-system-packages', spec] };
     case 'npm':
       return { command: 'npm', args: ['install', '-g', '--no-fund', '--no-audit', spec] };
     case 'aqua':
@@ -212,7 +218,10 @@ export function verifyCommand(manager: InstallManager, name: string): { command:
     case 'uv':
       return { command: 'uv', args: ['tool', 'list'] };
     case 'pip':
-      return { command: 'uv', args: ['pip', 'show', name] };
+      // Without --system this looks for a virtual environment, landed on the
+      // image's own uv-managed interpreter and reported every package the
+      // install above wrote to /usr as missing, so a good install read failed.
+      return { command: 'uv', args: ['pip', 'show', '--system', name] };
     case 'npm':
       return { command: 'npm', args: ['ls', '-g', '--json', '--depth=0', name] };
     case 'aqua':
@@ -236,7 +245,7 @@ export function uninstallCommand(manager: InstallManager, spec: string): { comma
     case 'uv':
       return { command: 'uv', args: ['tool', 'uninstall', spec] };
     case 'pip':
-      return { command: 'uv', args: ['pip', 'uninstall', '--system', spec] };
+      return { command: 'uv', args: ['pip', 'uninstall', '--system', '--break-system-packages', spec] };
     case 'npm':
       return { command: 'npm', args: ['uninstall', '-g', spec] };
     case 'aqua':
@@ -710,7 +719,7 @@ function upgradeCommand(manager: InstallManager, parsed: ReturnType<typeof parse
     case 'uv':
       return { command: 'uv', args: ['tool', 'upgrade', '-q', parsed.name] };
     case 'pip':
-      return { command: 'uv', args: ['pip', 'install', '-q', '--system', '--upgrade', parsed.name] };
+      return { command: 'uv', args: ['pip', 'install', '-q', '--system', '--break-system-packages', '--upgrade', parsed.name] };
     case 'npm':
       return { command: 'npm', args: ['install', '-g', '--no-fund', '--no-audit', `${parsed.name}@latest`] };
     case 'aqua':

@@ -13,7 +13,18 @@ import {
   writeLedger,
 } from './ledger.js';
 import { normalizeCatalogEntry } from './catalog.js';
-import { autoUpdatePackages, provisionPackages, pruneDanglingLinks, serverPackages, uvToolVersion, type CommandRunner } from './provision.js';
+import {
+  autoUpdatePackages,
+  installCommand,
+  provisionPackages,
+  pruneDanglingLinks,
+  serverPackages,
+  uninstallCommand,
+  uvToolVersion,
+  verifyCommand,
+  type CommandRunner,
+} from './provision.js';
+import { parsePackageSpec } from './pins.js';
 import { provisionStateIsLive } from './provision-state.js';
 
 type Reply = { code: number; stdout?: string; stderr?: string };
@@ -336,6 +347,21 @@ test('a provisioning state left behind by a dead writer is not reported as runni
     'no heartbeat for an hour is stale even without a pid',
   );
   assert.equal(provisionStateIsLive({ running: false, completed: 0, failed: 0 }), false);
+});
+
+test('a pip package installs over Debian\'s externally-managed marker', () => {
+  // Debian 13 ships Python with EXTERNALLY-MANAGED, which makes uv refuse a
+  // --system install: every pip row failed with the pipx hint instead of
+  // installing. The verification has to read the same interpreter, or a good
+  // install is recorded as missing.
+  const parsed = parsePackageSpec('pymobiledevice3');
+  assert.deepEqual(installCommand('pip', parsed, null).args, [
+    'pip', 'install', '-q', '--system', '--break-system-packages', 'pymobiledevice3',
+  ]);
+  assert.deepEqual(verifyCommand('pip', parsed.name).args, ['pip', 'show', '--system', 'pymobiledevice3']);
+  assert.deepEqual(uninstallCommand('pip', parsed.name).args, [
+    'pip', 'uninstall', '--system', '--break-system-packages', 'pymobiledevice3',
+  ]);
 });
 
 test('the ledger lives under the config mount, not the data volume', () => {
