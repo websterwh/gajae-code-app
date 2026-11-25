@@ -596,6 +596,7 @@
     "pinPlaceholder": "例如 1.2.3",
     "add": "添加软件包",
     "adding": "正在安装…",
+    "waiting": "正在等待启动预配…",
     "upgrade": "升级",
     "upgrading": "正在升级…",
     "retry": "重试",

@@ -596,6 +596,7 @@
     "pinPlaceholder": "örn. 1.2.3",
     "add": "Paket ekle",
     "adding": "Kuruluyor…",
+    "waiting": "Açılış hazırlığı bekleniyor…",
     "upgrade": "Yükselt",
     "upgrading": "Yükseltiliyor…",
     "retry": "Yeniden dene",

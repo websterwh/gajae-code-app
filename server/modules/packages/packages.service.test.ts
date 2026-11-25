@@ -202,12 +202,71 @@ test('a GitHub release package pins to a release tag', async (t) => {
   assert.ok(calls.includes('install-github-app skylot/jadx@v1.5.1'), 'the pin is the tag the installer fetches');
 });
 
-test('a boot provision in flight blocks a second install', async (t) => {
+test('a queued install waits for boot provisioning and then runs', async (t) => {
   const root = await workspace(t);
+  // A live writer: the pid exists and the heartbeat is fresh.
+  await writeFile(join(root, 'state.json'), JSON.stringify({
+    running: true,
+    pid: process.pid,
+    updatedAt: new Date().toISOString(),
+    completed: 0,
+    failed: 0,
+  }), 'utf8');
+
+  const service = serviceFor(root, scripted({ 'uv tool list': { code: 0, stdout: 'serena v1.2.3\n' } }, []));
+  const install = service.add({ manager: 'uv', spec: 'serena' });
+
+  // While the boot owns the queue the row waits, rather than failing or
+  // claiming the package is simply not installed.
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const pending = (await service.list()).find((row) => row.name === 'serena');
+  assert.equal(pending?.waiting, true);
+  assert.equal(pending?.installing, true);
+
+  // The boot finishing is what releases the queued install.
+  await writeFile(join(root, 'state.json'), JSON.stringify({ running: false, completed: 0, failed: 0 }), 'utf8');
+  const row = await install;
+  assert.equal(row.status, 'installed');
+  assert.equal(row.waiting, undefined);
+});
+
+test('a provisioning state left by a dead writer does not block an install', async (t) => {
+  const root = await workspace(t);
+  // `running: true` with no pid and no heartbeat is what a container stopped
+  // mid-provision leaves behind; nothing else ever cleared it.
   await writeFile(join(root, 'state.json'), JSON.stringify({ running: true, completed: 0, failed: 0 }), 'utf8');
 
-  const service = serviceFor(root, scripted({}, []));
-  await assert.rejects(service.add({ manager: 'uv', spec: 'serena' }), /already running/u);
+  const service = serviceFor(root, scripted({ 'uv tool list': { code: 0, stdout: 'serena v1.2.3\n' } }, []));
+  const row = await service.add({ manager: 'uv', spec: 'serena' });
+  assert.equal(row.status, 'installed');
+});
+
+test('a queued install that fails before it starts records why', async (t) => {
+  const root = await workspace(t);
+  const service = new PackagesService({
+    env: { UV_TOOLS: '', PIP_PACKAGES: '', NPM_PACKAGES: '', GITHUB_APPS: '' },
+    ledgerPath: join(root, 'ledger.json'),
+    // A directory where the desire file belongs: writing the desire fails, so
+    // the install never starts.
+    desiredPath: root,
+    statePath: join(root, 'state.json'),
+    runner: scripted({}, []),
+  });
+
+  service.queue({ manager: 'apt', spec: 'scrcpy' });
+
+  // queue() answers before the install runs and the page polls the ledger, so
+  // a failure that happens before the installer does has to be written there.
+  let entry = (await readLedger(join(root, 'ledger.json'))).packages.apt.scrcpy;
+  for (let attempt = 0; attempt < 100 && !entry; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    entry = (await readLedger(join(root, 'ledger.json'))).packages.apt.scrcpy;
+  }
+  assert.equal(entry?.status, 'failed');
+  assert.ok((entry?.error ?? '').length > 0, 'the failure has to carry its reason');
+
+  const row = (await service.list()).find((item) => item.manager === 'apt' && item.name === 'scrcpy');
+  assert.equal(row?.status, 'failed', 'the row reports the failure, not a bare "not installed"');
 });
 
 test('an Android SDK component refuses a pin it could not apply', async (t) => {

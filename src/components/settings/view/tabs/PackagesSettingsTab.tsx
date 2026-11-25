@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import {
-  AlertTriangle, CheckCircle2, Loader2, Package as PackageIcon, Pencil, Pin, RefreshCw, Trash2,
+  AlertTriangle, CheckCircle2, Clock, Loader2, Package as PackageIcon, Pencil, Pin, RefreshCw, Trash2,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -29,6 +29,8 @@ type PackageRow = {
   version: string | null;
   /** The server is installing this row right now. */
   installing?: boolean;
+  /** The server queued this row behind the boot's own provisioning. */
+  waiting?: boolean;
   error?: string;
   updatedAt?: string;
 };
@@ -394,12 +396,16 @@ export default function PackagesSettingsTab() {
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                     <span className="inline-flex items-center gap-1">
-                      {row.installing
-                        ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
-                        : row.status === 'installed'
-                          ? <CheckCircle2 className="h-3 w-3" aria-hidden />
-                          : <AlertTriangle className="h-3 w-3" aria-hidden />}
-                      {row.installing ? t('packages.installing', 'Installing…') : statusLabel}
+                      {row.waiting
+                        ? <Clock className="h-3 w-3" aria-hidden />
+                        : row.installing
+                          ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+                          : row.status === 'installed'
+                            ? <CheckCircle2 className="h-3 w-3" aria-hidden />
+                            : <AlertTriangle className="h-3 w-3" aria-hidden />}
+                      {row.waiting
+                        ? t('packages.waiting')
+                        : row.installing ? t('packages.installing', 'Installing…') : statusLabel}
                       {row.version && !versionControl ? ` · ${row.version}` : ''}
                     </span>
                     {row.updatedAt ? <span>{new Date(row.updatedAt).toLocaleDateString()}</span> : null}
@@ -408,7 +414,7 @@ export default function PackagesSettingsTab() {
                 </div>
                 <div className="ml-auto flex flex-wrap items-center gap-2">
                   {row.desired && row.status !== 'installed' ? (
-                    <button type="button" disabled={busy !== null} onClick={() => retry(row)} className={buttonClass}>
+                    <button type="button" disabled={busy !== null || row.installing} onClick={() => retry(row)} className={buttonClass}>
                       {busy === `retry:${key}` ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : <RefreshCw className="h-3 w-3" aria-hidden />}
                       {t('packages.retry')}
                     </button>

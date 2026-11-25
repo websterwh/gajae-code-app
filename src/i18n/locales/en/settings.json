@@ -628,6 +628,7 @@
     "pinPlaceholder": "e.g. 1.2.3",
     "add": "Add package",
     "adding": "Installing…",
+    "waiting": "Waiting for boot provisioning…",
     "upgrade": "Upgrade",
     "upgrading": "Upgrading…",
     "retry": "Retry",

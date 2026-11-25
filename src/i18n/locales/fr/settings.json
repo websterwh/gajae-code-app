@@ -596,6 +596,7 @@
     "pinPlaceholder": "ex. 1.2.3",
     "add": "Ajouter le paquet",
     "adding": "Installation…",
+    "waiting": "En attente du provisionnement au démarrage…",
     "upgrade": "Mettre à jour",
     "upgrading": "Mise à jour…",
     "retry": "Réessayer",

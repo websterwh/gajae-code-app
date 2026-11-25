@@ -39,7 +39,7 @@ export {
   type ProvisionOutcome,
   type UninstallOutcome,
 } from './provision.js';
-export { provisionStatePath, readProvisionState, writeProvisionState, type ProvisionState } from './provision-state.js';
+export { provisionStateIsLive, provisionStatePath, readProvisionState, writeProvisionState, type ProvisionState } from './provision-state.js';
 export {
   ENV_PACKAGE_VARIABLES,
   desiredPackagesPath,

@@ -596,6 +596,7 @@
     "pinPlaceholder": "z. B. 1.2.3",
     "add": "Paket hinzufügen",
     "adding": "Wird installiert…",
+    "waiting": "Warten auf die Bereitstellung beim Start…",
     "upgrade": "Aktualisieren",
     "upgrading": "Wird aktualisiert…",
     "retry": "Erneut versuchen",

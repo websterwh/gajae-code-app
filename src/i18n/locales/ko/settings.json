@@ -596,6 +596,7 @@
     "pinPlaceholder": "예: 1.2.3",
     "add": "패키지 추가",
     "adding": "설치 중…",
+    "waiting": "부팅 프로비저닝 대기 중…",
     "upgrade": "업그레이드",
     "upgrading": "업그레이드 중…",
     "retry": "다시 시도",

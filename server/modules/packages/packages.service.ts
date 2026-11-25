@@ -6,10 +6,12 @@ import {
   normalizePin,
   parsePackageSpec,
   provisionPackages,
+  provisionStateIsLive,
   provisionStatePath,
   readDesired,
   readLedger,
   readProvisionState,
+  recordFailure,
   removeDesired,
   spawnCommandRunner,
   uninstallPackage,
@@ -38,6 +40,8 @@ export type PackageRow = {
   version: string | null;
   /** An install for this row is running right now; the page polls until it stops. */
   installing?: boolean;
+  /** Queued behind the boot's own provisioning, which ends before this runs. */
+  waiting?: boolean;
   error?: string;
   updatedAt?: string;
 };
@@ -68,6 +72,10 @@ function observed(entry: LedgerEntry): { status: PackageStatus; error?: string; 
   };
 }
 
+/** How long a queued install waits for the entrypoint's own provisioning. */
+const BOOT_PROVISION_WAIT_MS = 30 * 60_000;
+const BOOT_PROVISION_POLL_MS = 2_000;
+
 /**
  * One list for both halves of package management: what was asked for (env
  * seeds plus Settings additions) and what the ledger last observed. Installs,
@@ -78,6 +86,7 @@ export class PackagesService {
   private readonly runner: CommandRunner;
   private chain: Promise<unknown> = Promise.resolve();
   private readonly inFlight = new Set<string>();
+  private readonly waiting = new Set<string>();
 
   constructor(private readonly options: PackagesServiceOptions = {}) {
     this.env = { ...process.env, ...(options.env ?? {}) };
@@ -175,7 +184,9 @@ export class PackagesService {
     }
 
     for (const row of rows.values()) {
-      if (this.inFlight.has(id(row.manager, row.name))) row.installing = true;
+      const key = id(row.manager, row.name);
+      if (this.inFlight.has(key)) row.installing = true;
+      if (this.waiting.has(key)) row.waiting = true;
     }
 
     const order = new Map(INSTALL_MANAGERS.map((manager, index) => [manager, index]));
@@ -221,10 +232,24 @@ export class PackagesService {
     const parsed = parsePackageSpec(spec);
     if (!parsed.name) throw new Error('The package spec has no name.');
     const pin = normalizePin(input.pin);
-    void this.add({ manager, spec, pin }).catch((error: unknown) => {
-      // The outcome is in the ledger and shows on the row; the request that
-      // queued this install has already answered.
-      console.error(`[packages] ${manager}:${parsed.name} install failed:`, error instanceof Error ? error.message : error);
+    void this.add({ manager, spec, pin }).catch(async (error: unknown) => {
+      // The request that queued this install has already answered, so the row
+      // is the only place its outcome can be read. A failure raised before the
+      // installer runs (boot provisioning still in flight, an unreadable
+      // config) used to reach the console alone and left a desired row saying
+      // "Not installed" with no reason - and no hint that Retry would help.
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[packages] ${manager}:${parsed.name} install failed:`, message);
+      try {
+        const ledger = await readLedger(this.ledgerFile());
+        recordFailure(ledger, manager, parsed.name, spec, message, this.now());
+        await writeLedger(this.ledgerFile(), ledger);
+      } catch (recordError) {
+        console.error(
+          `[packages] could not record the ${manager}:${parsed.name} failure:`,
+          recordError instanceof Error ? recordError.message : recordError,
+        );
+      }
     });
     return { manager, name: parsed.name, spec, pin, source: 'ui', desired: true, status: 'missing', version: null, installing: true };
   }
@@ -302,9 +327,37 @@ export class PackagesService {
     });
   }
 
+  /**
+   * The entrypoint runs boot provisioning in a background subshell, so its
+   * state file is the only thing this process can observe about it. A package
+   * added while it runs used to be refused outright, which left a desired row
+   * reading "Not installed" with nothing to explain it. It is queued instead:
+   * the row reports `waiting` and the install starts as soon as the boot's own
+   * work ends. Installs are serialized here, so the queue holds one wait.
+   */
+  private async waitForBootProvisioning(manager: InstallManager, name: string): Promise<void> {
+    const stateFile = this.stateFile();
+    // A `running: true` left by a writer that died (a container stopped
+    // mid-provision) is not work to wait for; the heartbeat and pid say which.
+    if (!provisionStateIsLive(await readProvisionState(stateFile))) return;
+
+    const key = `${manager}:${name}`;
+    this.waiting.add(key);
+    try {
+      const deadline = Date.now() + BOOT_PROVISION_WAIT_MS;
+      while (provisionStateIsLive(await readProvisionState(stateFile))) {
+        if (Date.now() >= deadline) {
+          throw new Error('Boot provisioning is still running; try again when it finishes.');
+        }
+        await new Promise((resolve) => setTimeout(resolve, BOOT_PROVISION_POLL_MS));
+      }
+    } finally {
+      this.waiting.delete(key);
+    }
+  }
+
   private async install(manager: InstallManager, spec: string, name: string, pin: string | null): Promise<PackageRow> {
-    const state = await readProvisionState(this.stateFile());
-    if (state?.running) throw new Error('Package provisioning is already running. Try again when it finishes.');
+    await this.waitForBootProvisioning(manager, name);
 
     const ledger: Ledger = await readLedger(this.ledgerFile());
     const outcomes = await provisionPackages({
