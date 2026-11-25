@@ -60,6 +60,9 @@ export UV_CACHE_DIR="/data/cache/uv"
 export PIP_CACHE_DIR="/data/cache/pip"
 export UV_LINK_MODE="copy"
 export AQUA_ROOT_DIR="/data/aqua"
+# aqua's shims resolve the shared package list through this file; without it
+# they answer "command is not found" (or run an older copy elsewhere on PATH).
+export AQUA_CONFIG="/data/aqua/aqua.yaml"
 export NPM_CONFIG_CACHE="/data/cache/npm"
 export NPM_CONFIG_PREFIX="/data/npm-global"
 # npm keeps its own settings in ~/.npmrc; pointing them at the mounted prefix

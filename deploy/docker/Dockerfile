@@ -74,6 +74,24 @@ LABEL org.opencontainers.image.title="Gajae Code App" \
       org.opencontainers.image.source="https://github.com/websterwh/gajae-code-app" \
       org.opencontainers.image.licenses="MIT"
 
+# Packages outside trixie main live in contrib or backports. Enable those
+# components so Settings -> Packages can find and install any of them through
+# apt. Backports is NotAutomatic, so this does not silently replace stable
+# packages with newer backported versions.
+RUN printf '%s\n' \
+    'Types: deb' \
+    'URIs: http://deb.debian.org/debian' \
+    'Suites: trixie trixie-updates' \
+    'Components: contrib' \
+    'Signed-By: /usr/share/keyrings/debian-archive-keyring.pgp' \
+    '' \
+    'Types: deb' \
+    'URIs: http://deb.debian.org/debian' \
+    'Suites: trixie-backports' \
+    'Components: main contrib' \
+    'Signed-By: /usr/share/keyrings/debian-archive-keyring.pgp' \
+    > /etc/apt/sources.list.d/trixie-backports.sources
+
 # Install system dependencies:
 # - build / archive tools & utilities
 # - openssh-server for container SSH access
@@ -159,6 +177,7 @@ ENV PATH="/data/npm-global/bin:/data/bin:/root/.local/share/aquaproj-aqua/bin:/u
     PIP_CACHE_DIR="/data/cache/pip" \
     UV_LINK_MODE="copy" \
     AQUA_ROOT_DIR="/data/aqua" \
+    AQUA_CONFIG="/data/aqua/aqua.yaml" \
     NPM_CONFIG_CACHE="/data/cache/npm" \
     NPM_CONFIG_PREFIX="/data/npm-global" \
     HOST=0.0.0.0 \

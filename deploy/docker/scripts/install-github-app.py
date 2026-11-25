@@ -95,6 +95,33 @@ def fetch_release(repo, tag, headers):
 
 AQUA_ROOT = os.environ.get("AQUA_ROOT_DIR", "/data/aqua")
 AQUA_PACKAGES_FILE = os.environ.get("AQUA_PACKAGES_STATE", "/data/aqua/packages.json")
+# aqua requires an immutable registry ref, but the installer must not decide
+# which snapshot is current: resolve the latest release for every install so a
+# package added upstream does not need an image rebuild to become installable.
+AQUA_REGISTRY_RELEASES = "https://api.github.com/repos/aquaproj/aqua-registry/releases/latest"
+
+
+def latest_aqua_registry_ref(headers):
+    req = urllib.request.Request(AQUA_REGISTRY_RELEASES, headers=headers)
+    with urllib.request.urlopen(req) as resp:
+        data = json.loads(resp.read().decode())
+    ref = str(data.get("tag_name") or "").strip()
+    if not ref:
+        raise ValueError("the latest aqua-registry release has no tag")
+    return ref
+
+
+def current_aqua_registry_ref():
+    """The ref already in aqua.yaml, for rewrites that should not move it."""
+    try:
+        with open(os.path.join(AQUA_ROOT, "aqua.yaml")) as f:
+            for line in f:
+                stripped = line.strip()
+                if stripped.startswith("ref:"):
+                    return stripped[len("ref:"):].strip()
+    except OSError:
+        pass
+    return ""
 
 
 def read_aqua_packages():
@@ -124,7 +151,7 @@ def read_aqua_packages():
     return packages
 
 
-def save_aqua_config(packages):
+def save_aqua_config(packages, registry_ref):
     """Write the registry and the single aqua.yaml generated from it.
 
     The config used to be rewritten with only the package being installed, so
@@ -144,7 +171,9 @@ def save_aqua_config(packages):
         if os.path.exists(yaml_path):
             os.remove(yaml_path)
         return yaml_path
-    lines = ["---", "registries:", "  - type: standard", "    ref: v4.325.0", "packages:"]
+    if not registry_ref:
+        raise ValueError("an aqua registry ref is required")
+    lines = ["---", "registries:", "  - type: standard", f"    ref: {registry_ref}", "packages:"]
     for repo in sorted(packages):
         lines.append(f"  - name: {repo}@{packages[repo]}")
     yaml_tmp = f"{yaml_path}.tmp"
@@ -243,14 +272,23 @@ def install_github_app(spec, target_bin="/data/bin", target_share="/data/share")
     pkg_entry = f"{repo}@{tag}"
     print(f"==> [Aqua] Attempting aqua install for {pkg_entry}...")
     previous = read_aqua_packages()
+    previous_ref = current_aqua_registry_ref()
+    try:
+        registry_ref = latest_aqua_registry_ref(headers)
+    except Exception as e:
+        print(f"==> [ERROR] Could not resolve the latest aqua registry: {e}")
+        return False
     packages = dict(previous)
     packages[repo] = tag
-    yaml_path = save_aqua_config(packages)
-    res = subprocess.run(["aqua", "install", "-l", "-a", "-c", yaml_path], env=dict(os.environ, AQUA_ROOT_DIR=AQUA_ROOT))
+    yaml_path = save_aqua_config(packages, registry_ref)
+    res = subprocess.run(
+        ["aqua", "install", "-l", "-a", "-c", yaml_path],
+        env=dict(os.environ, AQUA_ROOT_DIR=AQUA_ROOT, AQUA_CONFIG=yaml_path),
+    )
     if res.returncode != 0:
         # Packages that already worked keep their config: a failed fetch must
         # not empty the file every other shim is resolved through.
-        save_aqua_config(previous)
+        save_aqua_config(previous, previous_ref or registry_ref)
         print(f"==> [ERROR] aqua could not install {pkg_entry} (exit {res.returncode}).")
         return False
     aqua_bin_dir = "/data/aqua/bin"
@@ -309,7 +347,10 @@ def uninstall_github_app(spec, target_bin="/data/bin", target_share="/data/share
     packages = read_aqua_packages()
     if repo in packages:
         packages.pop(repo, None)
-        save_aqua_config(packages)
+        registry_ref = current_aqua_registry_ref()
+        if packages and not registry_ref:
+            registry_ref = latest_aqua_registry_ref({"User-Agent": "GitHub-App-Installer"})
+        save_aqua_config(packages, registry_ref)
 
     # The verify step reads the recorded tag, so the name has to leave the
     # state file or a reinstall would look like it is still present.
