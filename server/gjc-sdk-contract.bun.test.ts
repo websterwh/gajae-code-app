@@ -187,6 +187,20 @@ class FakeAgentSession {
   retrySucceeds = true;
   /** A retry the runtime accepts but cannot start leaves the transcript alone. */
   retryStartsNothing = false;
+  /** A retry that starts right as auto-compaction rewrites the transcript. */
+  retryCompacts = false;
+  /**
+   * Auto-compaction still running when the retry arrives; it hands the session
+   * back after this many `isCompacting` reads, as a finishing compaction does.
+   */
+  compactionHoldReads = 0;
+  #compactionReads = 0;
+  /** Mirrors the SDK: a retry cannot start while compaction owns the session. */
+  get isCompacting(): boolean {
+    if (this.#compactionReads >= this.compactionHoldReads) return false;
+    this.#compactionReads += 1;
+    return true;
+  }
   /** Transcript the adapter's retry reads and rewrites, as the SDK exposes it. */
   readonly agent = {
     state: { messages: [] as Array<Record<string, unknown>> },
@@ -240,8 +254,17 @@ class FakeAgentSession {
   }
   async retry(): Promise<boolean> {
     this.retryCalls += 1;
+    if (this.isCompacting) return false;
     if (this.retrySucceeds && !this.retryStartsNothing) {
       this.agent.state.messages.push({ role: 'assistant', stopReason: 'stop', content: [{ type: 'text', text: 'retried' }] });
+    }
+    if (this.retryCompacts) {
+      // The turn started and the context was compacted before it answered: a
+      // summary plus the answer is all that is left of the transcript.
+      this.agent.state.messages = [
+        { role: 'user', content: '[summary of earlier turns]' },
+        { role: 'assistant', stopReason: 'stop', content: [{ type: 'text', text: 'continued' }] },
+      ];
     }
     return this.retrySucceeds;
   }
@@ -285,6 +308,10 @@ class FakeAgentSession {
 let pendingSessionMessages: Array<Record<string, unknown>> = [];
 /** Fixture-created retries accept but start no turn, as a refused continuation does. */
 let pendingSessionRetryStartsNothing = false;
+/** Fixture-created retries compact the transcript while they start. */
+let pendingSessionRetryCompacts = false;
+/** Auto-compaction reads the retry has to wait out before the session is free. */
+let pendingSessionCompactionReads = 0;
 
 const request = (method: string, id: string, payload: Record<string, unknown> = {}, sessionId = 'contract-scope') => ({
   protocolVersion: GJC_WORKER_PROTOCOL_VERSION,
@@ -374,6 +401,8 @@ async function fixture(
     const session = new FakeAgentSession();
     if (pendingSessionMessages.length > 0) session.agent.state.messages = pendingSessionMessages.slice();
     session.retryStartsNothing = pendingSessionRetryStartsNothing;
+    session.retryCompacts = pendingSessionRetryCompacts;
+    session.compactionHoldReads = pendingSessionCompactionReads;
     sessions.push(session);
     return { session, setToolUIContext: session.setToolUIContext.bind(session) };
   }) as unknown as GjcAgentSessionFactory;
@@ -654,6 +683,69 @@ test('a retry the runtime cannot start is reported instead of finishing silently
   } finally {
     pendingSessionMessages = [];
     pendingSessionRetryStartsNothing = false;
+    await f.close();
+  }
+});
+
+test('a retry waits for the auto-compaction that owns the session', async () => {
+  // A usage limit with a full context starts auto-compaction, and the runtime
+  // refuses a retry while it runs. That refusal used to become the run's answer
+  // while the compaction handed the session back a moment later.
+  pendingSessionMessages = [
+    { role: 'user', content: 'read BATCH.md' },
+    { role: 'assistant', stopReason: 'error', content: [], errorMessage: 'The usage limit has been reached' },
+  ];
+  pendingSessionCompactionReads = 2;
+  const f = await fixture();
+  try {
+    const run = f.host.handle(request('session.start', 'retry-compacting', {
+      message: '',
+      options: { ...f.options, retryLastTurn: true },
+    }));
+    const session = await firstSession(f.sessions);
+    await run;
+
+    assert.equal(session.retryCalls, 1);
+    assert.ok(!f.frames.some((frame) => frame.kind === 'event'
+      && ((frame.payload as { message?: { kind?: string; content?: string } }).message?.kind === 'error')
+      && /did not start/u.test((frame.payload as { message: { content: string } }).message.content)));
+    assert.equal((response(f.frames, 'retry-compacting').payload as { ok: boolean }).ok, true);
+  } finally {
+    pendingSessionMessages = [];
+    pendingSessionCompactionReads = 0;
+    await f.close();
+  }
+});
+
+test('a retry that compacts the transcript is not reported as never started', async () => {
+  // The retry ran and compacted the history into a short summary; comparing row
+  // counts across that rewrite read as "the retry did not start".
+  pendingSessionMessages = [
+    { role: 'user', content: 'read BATCH.md' },
+    ...Array.from({ length: 20 }, (_, index) => [
+      { role: 'assistant', stopReason: 'toolUse', content: [] },
+      { role: 'toolResult', content: [{ type: 'text', text: `row ${index}` }] },
+    ]).flat(),
+    { role: 'assistant', stopReason: 'error', content: [], errorMessage: '429 rate limit exceeded' },
+  ];
+  pendingSessionRetryCompacts = true;
+  const f = await fixture();
+  try {
+    const run = f.host.handle(request('session.start', 'retry-compacted', {
+      message: '',
+      options: { ...f.options, retryLastTurn: true },
+    }));
+    const session = await firstSession(f.sessions);
+    await run;
+
+    assert.equal(session.retryCalls, 1);
+    assert.ok(!f.frames.some((frame) => frame.kind === 'event'
+      && ((frame.payload as { message?: { kind?: string; content?: string } }).message?.kind === 'error')
+      && /did not start/u.test((frame.payload as { message: { content: string } }).message.content)));
+    assert.equal((response(f.frames, 'retry-compacted').payload as { ok: boolean }).ok, true);
+  } finally {
+    pendingSessionMessages = [];
+    pendingSessionRetryCompacts = false;
     await f.close();
   }
 });

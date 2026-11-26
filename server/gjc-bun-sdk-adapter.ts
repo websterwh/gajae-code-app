@@ -306,6 +306,12 @@ const MODEL_ID_EFFORT = /-(off|minimal|low|medium|high|xhigh|max)(?:-fast)?$/;
  * long done; a hung title request must not hold the turn's terminal frame.
  */
 const SESSION_TITLE_GRACE_MS = 10_000;
+/**
+ * How long a `/retry` waits for an auto-compaction to hand the session back.
+ * The runtime refuses a retry while it compacts, and a usage limit that empties
+ * the context triggers exactly that compaction.
+ */
+const RETRY_COMPACTION_WAIT_MS = 60_000;
 /** The runtime's own opt-out, honoured so one environment silences both the TUI and the app. */
 function sessionTitlesDisabled(): boolean {
   return Boolean(process.env.GJC_NO_TITLE || process.env.PI_NO_TITLE);
@@ -1964,13 +1970,29 @@ export class GjcBunSdkAdapter implements GjcWorkerRuntime {
                     historyRewrite: { reason: 'retry', preserveSeededPrefix: true },
                   });
                 }
+                // Compaction owns the session while it runs and `retry()`
+                // answers false without starting anything. Its refusal used to
+                // become the run's answer - "the retry did not start" - while
+                // the compaction that caused it finished a moment later.
+                const compactionDeadline = Date.now() + RETRY_COMPACTION_WAIT_MS;
+                while (result.session.isCompacting && Date.now() < compactionDeadline) {
+                  await new Promise<void>((resolve) => { setTimeout(resolve, 20); });
+                }
+                // A retry that never started leaves the transcript exactly as it
+                // was. Compare rows, not counts: a compaction that runs as the
+                // retry starts rewrites the transcript into a much shorter
+                // summary, and a count comparison called that ran turn "not
+                // started".
+                const beforeRetry = result.session.agent.state.messages.slice();
                 if (!(await result.session.retry())) failRetryNotStarted();
                 await result.session.waitForIdle();
-                // A retry the runtime could not start appends nothing, and an
-                // empty finished turn reads as "retried, then immediately done".
-                // Report it instead so the transcript says what happened and
-                // offers Retry again.
-                if (result.session.agent.state.messages.length <= trimmed.length) failRetryNotStarted();
+                const afterRetry = result.session.agent.state.messages;
+                const retryStarted = afterRetry.length !== beforeRetry.length
+                  || afterRetry.some((row: unknown, index: number) => row !== beforeRetry[index]);
+                // An empty finished turn reads as "retried, then immediately
+                // done". Report it instead so the transcript says what happened
+                // and offers Retry again.
+                if (!retryStarted) failRetryNotStarted();
               }
             }
           } else if (promptMessage !== null) {
