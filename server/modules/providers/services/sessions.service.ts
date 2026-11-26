@@ -29,6 +29,27 @@ function archivedProjectName(projectPath: string | null, configuredName: string 
   return projectPath ? path.basename(projectPath) || projectPath : 'Unknown Project';
 }
 
+/**
+ * Drops each project's most recent conversation from a bulk-archive batch.
+ *
+ * "Keep the last session" is per project: one global survivor would leave every
+ * other workspace looking empty, and this way each project keeps a row to
+ * reopen. The rows arrive oldest-first, so the last row seen for a project is
+ * the one to keep; a tie keeps the later row for the same reason. Sessions with
+ * no project path have no project to share, so each is its own group.
+ */
+function withoutNewestPerProject<Row extends { session_id: string; project_path: string | null; updated_at: string | null; created_at: string | null }>(rows: readonly Row[]): Row[] {
+  const newestPerProject = new Map<string, { sessionId: string; stamp: string }>();
+  for (const row of rows) {
+    const key = row.project_path?.trim() || `session:${row.session_id}`;
+    const stamp = row.updated_at ?? row.created_at ?? '';
+    const newest = newestPerProject.get(key);
+    if (!newest || stamp >= newest.stamp) newestPerProject.set(key, { sessionId: row.session_id, stamp });
+  }
+  const kept = new Set([...newestPerProject.values()].map((entry) => entry.sessionId));
+  return rows.filter((row) => !kept.has(row.session_id));
+}
+
 async function unlinkWhenPresent(filePath: string): Promise<boolean> {
   try {
     await fsp.unlink(filePath);
@@ -306,13 +327,14 @@ export const sessionsService = {
     });
   },
 
-  archiveSessionsIdleFor(olderThanDays: number, options: { dryRun?: boolean; excludeSessionIds?: readonly string[] } = {}): { olderThanDays: number; cutoff: string; matched: number; archived: number; dryRun: boolean; sessions: Array<{ sessionId: string; sessionTitle: string; lastActivity: string | null }> } {
+  archiveSessionsIdleFor(olderThanDays: number, options: { dryRun?: boolean; excludeSessionIds?: readonly string[]; keepLatestPerProject?: boolean } = {}): { olderThanDays: number; cutoff: string; matched: number; archived: number; dryRun: boolean; sessions: Array<{ sessionId: string; sessionTitle: string; lastActivity: string | null }> } {
     if (!Number.isFinite(olderThanDays) || olderThanDays < 1) {
       throw new AppError('olderThanDays must be a positive number of days.', { code: 'INVALID_RETENTION_WINDOW', statusCode: 400 });
     }
     const cutoff = new Date(Date.now() - olderThanDays * 86_400_000).toISOString();
     const excluded = new Set(options.excludeSessionIds ?? []);
-    const matches = sessionsDb.getActiveSessionsUpdatedBefore(cutoff).filter(({ session_id }) => !excluded.has(session_id));
+    const candidates = sessionsDb.getActiveSessionsUpdatedBefore(cutoff).filter(({ session_id }) => !excluded.has(session_id));
+    const matches = options.keepLatestPerProject === true ? withoutNewestPerProject(candidates) : candidates;
     const dryRun = options.dryRun === true;
     if (!dryRun) matches.forEach(({ session_id }) => sessionsDb.updateSessionIsArchived(session_id, true));
     return {

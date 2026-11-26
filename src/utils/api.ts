@@ -144,11 +144,12 @@ export const api = {
     authenticatedFetch('/api/providers/sessions/archived'),
   // Bulk-archives sessions idle past `olderThanDays`. Pass `dryRun` to get the
   // count without changing anything; both modes run the same selection.
-  archiveIdleSessions: (olderThanDays: number, dryRun: boolean = false) =>
+  // `keepLatestPerProject` leaves each project's newest conversation active.
+  archiveIdleSessions: (olderThanDays: number, dryRun: boolean = false, options: { keepLatestPerProject?: boolean } = {}) =>
     authenticatedFetch('/api/providers/sessions/archive-idle', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ olderThanDays, dryRun }),
+      body: JSON.stringify({ olderThanDays, dryRun, keepLatestPerProject: options.keepLatestPerProject === true }),
     }),
   // Normalized provider quota DTO; carries no credential material. The backend
   // accepts only the literal `true`/`false` spelling for boolean query flags.

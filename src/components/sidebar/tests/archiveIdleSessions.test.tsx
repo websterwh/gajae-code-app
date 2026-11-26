@@ -99,6 +99,17 @@ test('the retention windows are bounded and start at a week', async () => {
   assert.doesNotMatch(html, /value="0"/);
 });
 
+test('keeping the last session is offered and is off by default', async () => {
+  const t = await makeT();
+  const html = render(t);
+
+  // Opt-in: the checkbox exists next to the cleanup control, and an untouched
+  // page archives exactly what the preview said it would.
+  assert.match(html, /Keep the last session in each project/);
+  assert.match(html, /type="checkbox"/);
+  assert.doesNotMatch(html, /<input[^>]*type="checkbox"[^>]*checked/);
+});
+
 test('the default window is 30 days, not the shortest one', async () => {
   const t = await makeT();
   const html = render(t);

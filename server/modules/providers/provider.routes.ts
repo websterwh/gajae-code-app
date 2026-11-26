@@ -282,7 +282,11 @@ router.post('/sessions/archive-idle', asyncHandler(async (req: Request, res: Res
     .map((session) => session.sessionId)
     .filter((id): id is string => typeof id === 'string' && id.length > 0);
   const olderThanDays = typeof body.olderThanDays === 'number' ? body.olderThanDays : Number.NaN;
-  const result = sessionsService.archiveSessionsIdleFor(olderThanDays, { dryRun: body.dryRun === true, excludeSessionIds: activeSessionIds });
+  const result = sessionsService.archiveSessionsIdleFor(olderThanDays, {
+    dryRun: body.dryRun === true,
+    excludeSessionIds: activeSessionIds,
+    keepLatestPerProject: body.keepLatestPerProject === true,
+  });
   res.json(createApiSuccessResponse(result));
 }));
 

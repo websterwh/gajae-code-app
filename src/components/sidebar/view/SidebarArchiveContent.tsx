@@ -118,6 +118,9 @@ function formatCompactArchivedAge(dateString: string | null): string {
  */
 function ArchiveIdleSessionsControl({ onArchived, t }: { onArchived: () => void; t: TFunction }) {
   const [days, setDays] = useState(30);
+  // Opt-in, and deliberately not persisted: the last session survives one run,
+  // and the next run starts from the safe default again.
+  const [keepLatest, setKeepLatest] = useState(false);
   const [preview, setPreview] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -126,7 +129,7 @@ function ArchiveIdleSessionsControl({ onArchived, t }: { onArchived: () => void;
     setBusy(true);
     setError(null);
     try {
-      const response = await api.archiveIdleSessions(days, dryRun);
+      const response = await api.archiveIdleSessions(days, dryRun, { keepLatestPerProject: keepLatest });
       if (!response.ok) throw new Error(String(response.status));
       const data = (await response.json())?.data ?? {};
       if (dryRun) {
@@ -172,6 +175,17 @@ function ArchiveIdleSessionsControl({ onArchived, t }: { onArchived: () => void;
           </button>
         )}
       </div>
+
+      <label className="mt-1.5 flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+        <input
+          type="checkbox"
+          checked={keepLatest}
+          disabled={busy}
+          onChange={(event) => { setKeepLatest(event.target.checked); setPreview(null); }}
+          className="size-3.5 shrink-0 rounded border-border accent-primary"
+        />
+        {t('archived.bulkKeepLatest', 'Keep the last session in each project')}
+      </label>
 
       {error && <p className="mt-1.5 text-xs text-destructive">{error}</p>}
 

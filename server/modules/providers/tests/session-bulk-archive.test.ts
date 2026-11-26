@@ -38,15 +38,15 @@ async function withIsolatedDatabase(runTest: () => void | Promise<void>): Promis
 const daysAgo = (days: number): string =>
   new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
-function seedSession(sessionId: string, updatedAt: string): void {
+function seedSession(sessionId: string, updatedAt: string, projectPath = '/tmp/project'): void {
   sessionsDb.createSession(
     sessionId,
     'gjc',
-    '/tmp/project',
+    projectPath,
     sessionId,
     updatedAt,
     updatedAt,
-    `/tmp/project/${sessionId}.jsonl`,
+    `${projectPath}/${sessionId}.jsonl`,
   );
 }
 
@@ -140,6 +140,47 @@ test('archiving is reversible and leaves the transcript alone', async () => {
     const after = sessionsDb.getSessionById('old-1');
     assert.equal(after?.isArchived, 0);
     assert.equal(after?.jsonl_path, before?.jsonl_path, 'the transcript path must be untouched');
+  });
+});
+
+test('keeping the last session leaves each project its newest conversation', async () => {
+  await withIsolatedDatabase(async () => {
+    seedSession('one-oldest', daysAgo(90), '/repos/one');
+    seedSession('one-middle', daysAgo(60), '/repos/one');
+    seedSession('one-last', daysAgo(40), '/repos/one');
+    seedSession('two-only', daysAgo(40), '/repos/two');
+
+    const result = sessionsService.archiveSessionsIdleFor(30, { keepLatestPerProject: true });
+
+    assert.deepEqual(result.sessions.map((session) => session.sessionId), ['one-oldest', 'one-middle']);
+    assert.deepEqual(activeIds().sort(), ['one-last', 'two-only']);
+  });
+});
+
+test('the kept session is excluded from the preview too, not just the run', async () => {
+  await withIsolatedDatabase(async () => {
+    seedSession('old-1', daysAgo(90), '/repos/one');
+    seedSession('old-2', daysAgo(60), '/repos/one');
+
+    const preview = sessionsService.archiveSessionsIdleFor(30, { dryRun: true, keepLatestPerProject: true });
+    const applied = sessionsService.archiveSessionsIdleFor(30, { keepLatestPerProject: true });
+
+    assert.equal(preview.matched, 1);
+    assert.equal(applied.archived, 1);
+    assert.deepEqual(activeIds(), ['old-2']);
+  });
+});
+
+test('archiving every idle session is still the default', async () => {
+  await withIsolatedDatabase(async () => {
+    seedSession('old-1', daysAgo(90), '/repos/one');
+    seedSession('old-2', daysAgo(60), '/repos/one');
+    seedSession('old-3', daysAgo(50), '/repos/two');
+
+    const result = sessionsService.archiveSessionsIdleFor(30);
+
+    assert.equal(result.archived, 3);
+    assert.deepEqual(activeIds(), []);
   });
 });
 
