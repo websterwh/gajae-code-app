@@ -524,6 +524,36 @@ test('opening a session lands on its newest row even from a scrolled-up one', as
   } finally { harness.close(); }
 });
 
+test('leaving the tail during an open reveals it and leaves jump-to-latest working', async () => {
+  const harness = await setup();
+  try {
+    const pane = harness.state().scrollContainerRef.current!;
+    let scrollTop = 900;
+    Object.defineProperty(pane, 'scrollTop', { configurable: true, get: () => scrollTop, set: (value: number) => { scrollTop = value; } });
+    Object.defineProperty(pane, 'scrollHeight', { configurable: true, get: () => 900 });
+    Object.defineProperty(pane, 'clientHeight', { configurable: true, get: () => 400 });
+    await harness.switchSession();
+    assert.equal(harness.state().isLandingAtTail, true, 'the open starts behind the landing hold');
+
+    // Reading back while the open is still holding paint ends the hold: a pane
+    // that keeps following a hidden tail scrolls itself blank, and the button
+    // beside it then reads as dead because there is nothing to look at.
+    scrollTop = 150;
+    await act(async () => {
+      pane.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp' }));
+      await harness.state().handleScroll();
+    });
+    assert.equal(harness.state().isLandingAtTail, false, 'the transcript is revealed');
+    assert.equal(harness.state().isUserScrolledUp, true, 'jump-to-latest is offered');
+
+    act(() => harness.state().scrollToBottomAndReset());
+    assert.equal(scrollTop, 900, 'the button lands on the newest row');
+    assert.equal(harness.state().isUserScrolledUp, false, 'and following resumes');
+  } finally {
+    harness.close();
+  }
+});
+
 test('a layout scroll during an open does not park the transcript at its top', async () => {
   const harness = await setup();
   try {
