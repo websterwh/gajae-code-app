@@ -96,7 +96,11 @@ export default function PackagesSettingsTab() {
   const load = useCallback(async (): Promise<PackageRow[]> => {
     try {
       const next = await request<PackageRow[]>('/api/packages');
-      setRows(next);
+      // While an install polls, most reads answer with exactly what is already
+      // on screen. Handing React a fresh array re-rendered every row two
+      // seconds apart, which is what made the page feel like it was catching
+      // up while the reader scrolled.
+      setRows((current) => (JSON.stringify(current) === JSON.stringify(next) ? current : next));
       setError('');
       return next;
     } catch (loadError) {
@@ -382,7 +386,12 @@ export default function PackagesSettingsTab() {
             const versionControl = Boolean(row.version);
             const version = row.pin ?? row.version;
             return (
-              <div key={key} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
+              // Off-screen rows stay out of layout and paint, so a long list
+              // scrolls without laying out the whole page each frame.
+              <div
+                key={key}
+                className="flex flex-col gap-3 p-4 [contain-intrinsic-size:auto_6rem] [content-visibility:auto] sm:flex-row sm:items-center"
+              >
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="truncate text-sm font-medium text-foreground">{row.name}</span>
