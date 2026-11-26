@@ -1930,12 +1930,40 @@ export class GjcBunSdkAdapter implements GjcWorkerRuntime {
             // and every completed tool call in place.
             if (activeRun.abortState === 'idle') {
               this.#assertHealthy();
+              // The runtime's retry removes exactly one failed assistant row.
+              // A turn that exhausted its provider retries persists one row per
+              // attempt, so a usage limit that failed four times leaves four
+              // assistant errors: dropping one leaves an assistant tail,
+              // `agent.continue()` refuses it from inside the scheduled
+              // continuation ("Cannot continue from message role: assistant"),
+              // and the run ended at once with no answer. Drop every
+              // undeliverable assistant row first so the continuation sees the
+              // user or tool-result turn it needs.
+              const messages = result.session.agent.state.messages;
+              const trimmed = trimUndeliverableAssistantTail(messages);
+              if (trimmed.length !== messages.length) {
+                result.session.agent.replaceMessages(trimmed, {
+                  historyRewrite: { reason: 'retry', preserveSeededPrefix: true },
+                });
+              }
               if (!(await result.session.retry())) {
                 throw Object.assign(new Error('There is no failed or interrupted turn to retry.'), {
                   code: 'nothing_to_retry',
                 });
               }
               await result.session.waitForIdle();
+              // A retry the runtime could not start appends nothing, and an
+              // empty finished turn reads as "retried, then immediately done".
+              // Report it instead so the transcript says what happened and
+              // offers Retry again.
+              if (result.session.agent.state.messages.length <= trimmed.length) {
+                // The generic terminal error would say only "GJC run failed.",
+                // and the reason is the whole point: nothing was retried.
+                const reason = 'The retry did not start: this turn could not be continued. Send a new message instead.';
+                writer.send({ kind: 'error', content: reason });
+                activeRun.state.finalError = true;
+                throw Object.assign(new Error(reason), { code: 'retry_not_started' });
+              }
             }
           } else if (promptMessage !== null) {
             this.#assertHealthy();
@@ -1975,6 +2003,31 @@ export class GjcBunSdkAdapter implements GjcWorkerRuntime {
       }
     }
   }
+}
+
+/**
+ * Assistant rows the runtime's own retry can discard before it continues.
+ *
+ * Mirrors the SDK's rule (error, aborted, or a tool call with no result yet) and
+ * extends it to the whole contiguous tail: the runtime drops only the last row,
+ * and one error row per provider attempt leaves several of them stacked.
+ */
+function isUndeliverableAssistantTail(message: unknown): boolean {
+  if (message === null || typeof message !== 'object') return false;
+  const candidate = message as { role?: unknown; stopReason?: unknown; content?: unknown };
+  if (candidate.role !== 'assistant') return false;
+  if (candidate.stopReason === 'error' || candidate.stopReason === 'aborted') return true;
+  return candidate.stopReason === 'toolUse'
+    && Array.isArray(candidate.content)
+    && candidate.content.some((part) => part !== null && typeof part === 'object'
+      && (part as { type?: unknown }).type === 'toolCall');
+}
+
+/** The transcript with every undeliverable assistant row removed from its end. */
+function trimUndeliverableAssistantTail<T>(messages: readonly T[]): T[] {
+  let end = messages.length;
+  while (end > 0 && isUndeliverableAssistantTail(messages[end - 1])) end -= 1;
+  return messages.slice(0, end);
 }
 
 /**

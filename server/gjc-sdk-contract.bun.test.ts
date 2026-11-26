@@ -185,6 +185,13 @@ class FakeAgentSession {
   retryCalls = 0;
   waitForIdleCalls = 0;
   retrySucceeds = true;
+  /** A retry the runtime accepts but cannot start leaves the transcript alone. */
+  retryStartsNothing = false;
+  /** Transcript the adapter's retry reads and rewrites, as the SDK exposes it. */
+  readonly agent = {
+    state: { messages: [] as Array<Record<string, unknown>> },
+    replaceMessages: (next: Array<Record<string, unknown>>) => { this.agent.state.messages = next.slice(); },
+  };
   /** Messages that arrived while a turn was already running. */
   readonly steeredMessages: string[] = [];
   /** Which queue each of those messages asked for. */
@@ -233,6 +240,9 @@ class FakeAgentSession {
   }
   async retry(): Promise<boolean> {
     this.retryCalls += 1;
+    if (this.retrySucceeds && !this.retryStartsNothing) {
+      this.agent.state.messages.push({ role: 'assistant', stopReason: 'stop', content: [{ type: 'text', text: 'retried' }] });
+    }
     return this.retrySucceeds;
   }
   async waitForIdle(): Promise<void> {
@@ -270,6 +280,11 @@ class FakeAgentSession {
   complete(): void { this.#prompt.resolve(); }
   fail(error = new Error('fake failure')): void { this.#prompt.reject(error); }
 }
+
+/** Transcript a fixture-created session starts with, for retry-tail tests. */
+let pendingSessionMessages: Array<Record<string, unknown>> = [];
+/** Fixture-created retries accept but start no turn, as a refused continuation does. */
+let pendingSessionRetryStartsNothing = false;
 
 const request = (method: string, id: string, payload: Record<string, unknown> = {}, sessionId = 'contract-scope') => ({
   protocolVersion: GJC_WORKER_PROTOCOL_VERSION,
@@ -357,6 +372,8 @@ async function fixture(
   const factory = (async (input: Record<string, unknown>) => {
     factoryOptions.push(input);
     const session = new FakeAgentSession();
+    if (pendingSessionMessages.length > 0) session.agent.state.messages = pendingSessionMessages.slice();
+    session.retryStartsNothing = pendingSessionRetryStartsNothing;
     sessions.push(session);
     return { session, setToolUIContext: session.setToolUIContext.bind(session) };
   }) as unknown as GjcAgentSessionFactory;
@@ -547,6 +564,66 @@ test('retry asks the SDK to retry the existing turn instead of prompting again',
     assert.deepEqual(session.promptTexts, []);
     assert.equal((response(f.frames, 'retry-existing-turn').payload as { ok: boolean }).ok, true);
   } finally { await f.close(); }
+});
+
+test('retry drops every stacked provider failure before continuing the turn', async () => {
+  // A turn that exhausts its provider retries persists one error message per
+  // attempt. The runtime's own retry removes only the last of them, which left
+  // an assistant tail, `agent.continue()` refused it inside a scheduled task,
+  // and the run finished at once with no answer.
+  pendingSessionMessages = [
+    { role: 'user', content: 'read BATCH.md' },
+    { role: 'toolResult', content: [{ type: 'text', text: 'board' }] },
+    ...Array.from({ length: 4 }, () => ({
+      role: 'assistant', stopReason: 'error', content: [],
+      errorMessage: 'The usage limit has been reached',
+    })),
+  ];
+  const f = await fixture();
+  try {
+    const run = f.host.handle(request('session.start', 'retry-stacked', {
+      message: '',
+      options: { ...f.options, retryLastTurn: true },
+    }));
+    const session = await firstSession(f.sessions);
+    await run;
+
+    assert.equal(session.retryCalls, 1);
+    // The user turn and its tool result survive; only the failures are dropped.
+    assert.deepEqual(session.agent.state.messages.map((message) => message.role), ['user', 'toolResult', 'assistant']);
+    assert.equal((response(f.frames, 'retry-stacked').payload as { ok: boolean }).ok, true);
+  } finally {
+    pendingSessionMessages = [];
+    await f.close();
+  }
+});
+
+test('a retry the runtime cannot start is reported instead of finishing silently', async () => {
+  pendingSessionMessages = [
+    { role: 'user', content: 'read BATCH.md' },
+    { role: 'assistant', stopReason: 'error', content: [], errorMessage: 'The usage limit has been reached' },
+  ];
+  pendingSessionRetryStartsNothing = true;
+  const f = await fixture();
+  try {
+    // Accepted, then no turn: the failure the user clicked Retry on must not
+    // read as a finished answer with no output.
+    const run = f.host.handle(request('session.start', 'retry-noop', {
+      message: '',
+      options: { ...f.options, retryLastTurn: true },
+    }));
+    await firstSession(f.sessions);
+    await run;
+
+    assert.ok(f.frames.some((frame) => frame.kind === 'event'
+      && ((frame.payload as { message?: { kind?: string; content?: string } }).message?.kind === 'error')
+      && /did not start/u.test((frame.payload as { message: { content: string } }).message.content)));
+    assert.equal((response(f.frames, 'retry-noop').payload as { ok: boolean }).ok, false);
+  } finally {
+    pendingSessionMessages = [];
+    pendingSessionRetryStartsNothing = false;
+    await f.close();
+  }
 });
 
 test('streaming tool metadata and errors survive the app worker protocol', async () => {

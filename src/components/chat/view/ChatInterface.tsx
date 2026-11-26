@@ -358,7 +358,18 @@ function ChatInterface({
     })
     : null;
 
-  const endsInFailure = session.chatMessages[session.chatMessages.length - 1]?.type === 'error';
+  // The retry control follows the turn's failure, so notices the app appended
+  // after it - "Retrying the last turn.", or a run's own completion note - must
+  // not hide it. The first row that is not a notice is what the control reads,
+  // and an empty or retried-out run still leaves the failure it came from.
+  let lastOutcome: (typeof session.chatMessages)[number] | undefined;
+  for (let index = session.chatMessages.length - 1; index >= 0; index -= 1) {
+    const message = session.chatMessages[index];
+    if (!message || message.isSystemNotice === true) continue;
+    lastOutcome = message;
+    break;
+  }
+  const endsInFailure = lastOutcome?.type === 'error';
 
   // A stopped turn has no failure row, but /retry still applies to it: the
   // tail offers the same control a failed turn shows, and both run
