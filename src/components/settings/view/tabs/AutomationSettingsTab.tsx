@@ -904,10 +904,13 @@ export default function AutomationSettingsTab() {
                   </SettingsRow>
                   <SettingsRow label={t('automation.hostControl.sshPrivateKey')}>
                     <div className="flex w-full flex-col gap-2 sm:w-80">
+                      {/* A key is pasted, never read back here, so the box only
+                          has to hold enough text to see the paste landed; two
+                          rows keep it level with the fields above it. */}
                       <textarea
                         aria-label={t('automation.hostControl.sshPrivateKey')}
                         value={sshKeyDraft}
-                        rows={3}
+                        rows={2}
                         spellCheck={false}
                         placeholder={t('automation.hostControl.sshPrivateKeyPlaceholder')}
                         onChange={(event) => setSshKeyDraft(event.target.value)}
