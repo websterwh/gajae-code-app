@@ -260,7 +260,12 @@
       "sshIncomplete": "SSH の準備ができていません: 接続にはアドレス、ホストの公開鍵、秘密鍵がすべて必要です。",
       "sshHostPlaceholder": "192.168.1.10",
       "sshHostKeyPlaceholder": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5...",
-      "sshPrivateKeyPlaceholder": "-----BEGIN OPENSSH PRIVATE KEY-----"
+      "sshPrivateKeyPlaceholder": "-----BEGIN OPENSSH PRIVATE KEY-----",
+      "sshHostKeyRead": "ホストから読み取る",
+      "sshHostKeyReading": "読み取り中…",
+      "sshHostKeyReadFailed": "ホストキーを読み取れませんでした。アドレスを確認して再試行してください。",
+      "sshGenerateKeyPair": "キーペアを生成",
+      "sshKeyPairReplaced": "新しいキーペアが保存済みの秘密鍵を置き換えました。以前の鍵を使っていたすべてのマシンに新しい公開鍵を登録してください。"
     }
   },
   "notifications": {

@@ -260,7 +260,12 @@
       "sshIncomplete": "SSH не готов: для подключения нужны адрес, публичный ключ хоста и закрытый ключ.",
       "sshHostPlaceholder": "192.168.1.10",
       "sshHostKeyPlaceholder": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5...",
-      "sshPrivateKeyPlaceholder": "-----BEGIN OPENSSH PRIVATE KEY-----"
+      "sshPrivateKeyPlaceholder": "-----BEGIN OPENSSH PRIVATE KEY-----",
+      "sshHostKeyRead": "Прочитать с хоста",
+      "sshHostKeyReading": "Чтение…",
+      "sshHostKeyReadFailed": "Не удалось прочитать ключ хоста. Проверьте адрес и повторите попытку.",
+      "sshGenerateKeyPair": "Создать пару ключей",
+      "sshKeyPairReplaced": "Новая пара ключей заменила сохранённый закрытый ключ. Добавьте новый открытый ключ на каждой машине, где использовался старый."
     }
   },
   "notifications": {

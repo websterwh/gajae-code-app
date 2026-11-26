@@ -260,7 +260,12 @@
       "sshIncomplete": "SSH가 준비되지 않았습니다. 연결하려면 주소, 호스트 공개 키, 개인 키가 모두 필요합니다.",
       "sshHostPlaceholder": "192.168.1.10",
       "sshHostKeyPlaceholder": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5...",
-      "sshPrivateKeyPlaceholder": "-----BEGIN OPENSSH PRIVATE KEY-----"
+      "sshPrivateKeyPlaceholder": "-----BEGIN OPENSSH PRIVATE KEY-----",
+      "sshHostKeyRead": "호스트에서 읽기",
+      "sshHostKeyReading": "읽는 중…",
+      "sshHostKeyReadFailed": "호스트 키를 읽지 못했습니다. 주소를 확인한 뒤 다시 시도하세요.",
+      "sshGenerateKeyPair": "키 쌍 생성",
+      "sshKeyPairReplaced": "새 키 쌍이 저장된 개인 키를 대체했습니다. 이전 키를 쓰던 모든 머신에 새 공개 키를 등록하세요."
     }
   },
   "notifications": {

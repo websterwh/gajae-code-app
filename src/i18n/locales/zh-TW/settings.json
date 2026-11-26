@@ -260,7 +260,12 @@
       "sshIncomplete": "SSH 尚未就緒：連線前需要位址、主機公開金鑰與私密金鑰。",
       "sshHostPlaceholder": "192.168.1.10",
       "sshHostKeyPlaceholder": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5...",
-      "sshPrivateKeyPlaceholder": "-----BEGIN OPENSSH PRIVATE KEY-----"
+      "sshPrivateKeyPlaceholder": "-----BEGIN OPENSSH PRIVATE KEY-----",
+      "sshHostKeyRead": "從主機讀取",
+      "sshHostKeyReading": "讀取中…",
+      "sshHostKeyReadFailed": "無法讀取主機金鑰。請檢查位址後重試。",
+      "sshGenerateKeyPair": "產生金鑰對",
+      "sshKeyPairReplaced": "新的金鑰對已取代儲存的私鑰。請在所有使用舊金鑰的機器上加入新的公開金鑰。"
     }
   },
   "notifications": {

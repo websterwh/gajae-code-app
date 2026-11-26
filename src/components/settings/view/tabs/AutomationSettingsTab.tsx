@@ -167,6 +167,8 @@ export default function AutomationSettingsTab() {
   const [generatedSshPublicKey, setGeneratedSshPublicKey] = useState<string | null>(null);
   const [generatingSshKeys, setGeneratingSshKeys] = useState(false);
   const [sshGenerateError, setSshGenerateError] = useState<string | null>(null);
+  const [readingSshHostKey, setReadingSshHostKey] = useState(false);
+  const [sshHostKeyError, setSshHostKeyError] = useState<string | null>(null);
   const [sshPublicKeyCopied, setSshPublicKeyCopied] = useState(false);
   const [detectedOs, setDetectedOs] = useState<string | null>(null);
   const [detectingHost, setDetectingHost] = useState(false);
@@ -308,12 +310,11 @@ export default function AutomationSettingsTab() {
     applyHostControl(await response.json() as HostControl);
   };
 
-  // One button for the two halves it can fill: a fresh client key pair, and the
-  // destination's host key read with ssh-keyscan. The host key belongs to the
-  // machine being reached, so it cannot be generated here - scanning it is the
-  // only honest way to fill that box. The current drafts travel with the
-  // request because they save on blur, which races a click.
-  const generateSshKeys = async () => {
+  // A new key pair is the app's own identity, so it replaces the stored private
+  // key: every machine that trusted the previous public key will refuse this
+  // one until its authorized_keys is updated. Nothing else is touched - the
+  // pinned host key belongs to the destination, not to this pair.
+  const generateSshKeyPair = async () => {
     setGeneratingSshKeys(true);
     setSshGenerateError(null);
     setGeneratedSshPublicKey(null);
@@ -322,30 +323,58 @@ export default function AutomationSettingsTab() {
       const response = await fetch('/api/host/ssh/keys', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          host: sshDraft.host.trim(),
-          port: Number.parseInt(sshDraft.port, 10) || 22,
-          user: sshDraft.user.trim() || 'root',
-        }),
+        body: JSON.stringify({}),
       });
-      const payload = await response.json().catch(() => ({})) as {
-        publicKey?: string;
-        hostKeyError?: string;
-        detail?: string;
-        error?: string;
-      };
+      const payload = await response.json().catch(() => ({})) as { publicKey?: string; detail?: string; error?: string };
       if (!response.ok) {
         setSshGenerateError(payload.detail || payload.error || t('automation.hostControl.sshGenerateFailed'));
         return;
       }
       if (payload.publicKey) setGeneratedSshPublicKey(payload.publicKey);
-      if (payload.hostKeyError) setSshGenerateError(payload.hostKeyError);
+      setSshKeyDraft('');
       const statusResponse = await fetch('/api/host/status');
       if (statusResponse.ok) applyHostControl(await statusResponse.json() as HostControl);
     } catch {
       setSshGenerateError(t('automation.hostControl.sshGenerateFailed'));
     } finally {
       setGeneratingSshKeys(false);
+    }
+  };
+
+  // The destination's host key, read with ssh-keyscan. Its own action because
+  // adding a machine must pin that machine's key without rotating the client
+  // key every other machine already trusts. The current drafts travel with the
+  // request because they save on blur, which races a click.
+  const readSshHostKey = async () => {
+    setReadingSshHostKey(true);
+    setSshHostKeyError(null);
+    try {
+      const response = await fetch('/api/host/ssh/host-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          host: sshDraft.host.trim(),
+          port: Number.parseInt(sshDraft.port, 10) || 22,
+        }),
+      });
+      const payload = await response.json().catch(() => ({})) as {
+        hostKey?: string;
+        hostKeyError?: string;
+        detail?: string;
+        error?: string;
+      };
+      if (!response.ok) {
+        setSshHostKeyError(payload.detail || payload.error || t('automation.hostControl.sshHostKeyReadFailed'));
+        return;
+      }
+      if (payload.hostKey) setSshDraft((current) => ({ ...current, hostKey: payload.hostKey! }));
+      if (payload.hostKeyError) setSshHostKeyError(payload.hostKeyError);
+      const statusResponse = await fetch('/api/host/status');
+      if (statusResponse.ok) applyHostControl(await statusResponse.json() as HostControl);
+    } catch {
+      setSshHostKeyError(t('automation.hostControl.sshHostKeyReadFailed'));
+    } finally {
+      setReadingSshHostKey(false);
     }
   };
 
@@ -849,31 +878,92 @@ export default function AutomationSettingsTab() {
                     </div>
                   </SettingsRow>
                   <SettingsRow label={t('automation.hostControl.sshHostKey')}>
-                    <input
-                      aria-label={t('automation.hostControl.sshHostKey')}
-                      value={sshDraft.hostKey}
-                      placeholder={t('automation.hostControl.sshHostKeyPlaceholder')}
-                      onChange={(event) => setSshDraft((current) => ({ ...current, hostKey: event.target.value }))}
-                      onBlur={() => {
-                        const next = sshDraft.hostKey.trim();
-                        if (next !== (hostControl.ssh?.hostKey ?? '')) void saveHostControl({ sshHostKey: next });
-                      }}
-                      className={`${selectClass} sm:w-72`}
-                    />
-                  </SettingsRow>
-                  <SettingsRow label={t('automation.hostControl.sshGenerateTitle')}>
                     <div className="flex w-full flex-col gap-2 sm:w-80">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                        <input
+                          aria-label={t('automation.hostControl.sshHostKey')}
+                          value={sshDraft.hostKey}
+                          placeholder={t('automation.hostControl.sshHostKeyPlaceholder')}
+                          onChange={(event) => setSshDraft((current) => ({ ...current, hostKey: event.target.value }))}
+                          onBlur={() => {
+                            const next = sshDraft.hostKey.trim();
+                            if (next !== (hostControl.ssh?.hostKey ?? '')) void saveHostControl({ sshHostKey: next });
+                          }}
+                          className={`${selectClass} min-w-0 flex-1 font-mono text-xs`}
+                        />
+                        {/* Reading another machine's key is how a second host
+                            is added; it never touches this app's own key pair. */}
+                        <button
+                          type="button"
+                          disabled={readingSshHostKey || sshDraft.host.trim().length === 0}
+                          onClick={() => void readSshHostKey()}
+                          className="rounded-lg border border-input px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {readingSshHostKey
+                            ? t('automation.hostControl.sshHostKeyReading')
+                            : t('automation.hostControl.sshHostKeyRead')}
+                        </button>
+                      </div>
+                      {sshHostKeyError ? <p role="alert" className="text-xs text-destructive">{sshHostKeyError}</p> : null}
+                    </div>
+                  </SettingsRow>
+                  <SettingsRow label={t('automation.hostControl.sshPrivateKey')}>
+                    <div className="flex w-full flex-col gap-2 sm:w-80">
+                      {/* A key is pasted, never read back here, so the box only
+                          has to hold enough text to see the paste landed; two
+                          rows keep it level with the fields above it. */}
+                      <textarea
+                        aria-label={t('automation.hostControl.sshPrivateKey')}
+                        value={sshKeyDraft}
+                        rows={2}
+                        spellCheck={false}
+                        placeholder={t('automation.hostControl.sshPrivateKeyPlaceholder')}
+                        onChange={(event) => setSshKeyDraft(event.target.value)}
+                        className={`${selectClass} font-mono text-xs`}
+                      />
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        {/* Generating here replaces the stored pair outright,
+                            including the public key shown below. */}
                         <button
                           type="button"
                           disabled={generatingSshKeys}
-                          onClick={() => void generateSshKeys()}
+                          onClick={() => void generateSshKeyPair()}
+                          title={t('automation.hostControl.sshGenerateDescription')}
                           className="rounded-lg border border-input px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {generatingSshKeys
                             ? t('automation.hostControl.sshGenerating')
-                            : t('automation.hostControl.sshGenerate')}
+                            : t('automation.hostControl.sshGenerateKeyPair')}
                         </button>
+                        <button
+                          type="button"
+                          disabled={sshKeyDraft.trim().length === 0}
+                          onClick={() => {
+                            // A pasted key replaces the pair the shown public key
+                            // belonged to, so that copy must not outlive it.
+                            setGeneratedSshPublicKey(null);
+                            void saveHostControl({ sshPrivateKey: sshKeyDraft }).then(() => setSshKeyDraft(''));
+                          }}
+                          className="rounded-lg border border-input px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {t('automation.hostControl.sshPrivateKeySave')}
+                        </button>
+                        {hostControl.ssh?.keyPresent === true ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              // Forgetting the private key drops the pair it
+                              // belonged to, so a public key on screen that no
+                              // longer has a matching private half goes too.
+                              setGeneratedSshPublicKey(null);
+                              setSshGenerateError(null);
+                              void saveHostControl({ sshPrivateKey: '' });
+                            }}
+                            className="rounded-lg border border-destructive px-3 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/10"
+                          >
+                            {t('automation.hostControl.sshPrivateKeyClear')}
+                          </button>
+                        ) : null}
                       </div>
                       {generatedSshPublicKey ? (
                         <>
@@ -897,44 +987,10 @@ export default function AutomationSettingsTab() {
                                 : t('automation.hostControl.sshCopyPublicKey')}
                             </button>
                           </div>
+                          <p className="text-xs text-muted-foreground">{t('automation.hostControl.sshKeyPairReplaced')}</p>
                         </>
                       ) : null}
                       {sshGenerateError ? <p role="alert" className="text-xs text-destructive">{sshGenerateError}</p> : null}
-                    </div>
-                  </SettingsRow>
-                  <SettingsRow label={t('automation.hostControl.sshPrivateKey')}>
-                    <div className="flex w-full flex-col gap-2 sm:w-80">
-                      {/* A key is pasted, never read back here, so the box only
-                          has to hold enough text to see the paste landed; two
-                          rows keep it level with the fields above it. */}
-                      <textarea
-                        aria-label={t('automation.hostControl.sshPrivateKey')}
-                        value={sshKeyDraft}
-                        rows={2}
-                        spellCheck={false}
-                        placeholder={t('automation.hostControl.sshPrivateKeyPlaceholder')}
-                        onChange={(event) => setSshKeyDraft(event.target.value)}
-                        className={`${selectClass} font-mono text-xs`}
-                      />
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          type="button"
-                          disabled={sshKeyDraft.trim().length === 0}
-                          onClick={() => { void saveHostControl({ sshPrivateKey: sshKeyDraft }).then(() => setSshKeyDraft('')); }}
-                          className="rounded-lg border border-input px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {t('automation.hostControl.sshPrivateKeySave')}
-                        </button>
-                        {hostControl.ssh?.keyPresent === true ? (
-                          <button
-                            type="button"
-                            onClick={() => void saveHostControl({ sshPrivateKey: '' })}
-                            className="rounded-lg border border-destructive px-3 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/10"
-                          >
-                            {t('automation.hostControl.sshPrivateKeyClear')}
-                          </button>
-                        ) : null}
-                      </div>
                     </div>
                   </SettingsRow>
                   <SettingsRow label={t('automation.hostControl.hostRead')}>

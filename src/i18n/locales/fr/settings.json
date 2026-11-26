@@ -260,7 +260,12 @@
       "sshIncomplete": "SSH n'est pas prêt : une adresse, la clé publique de l'hôte et une clé privée sont toutes nécessaires avant la connexion.",
       "sshHostPlaceholder": "192.168.1.10",
       "sshHostKeyPlaceholder": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5...",
-      "sshPrivateKeyPlaceholder": "-----BEGIN OPENSSH PRIVATE KEY-----"
+      "sshPrivateKeyPlaceholder": "-----BEGIN OPENSSH PRIVATE KEY-----",
+      "sshHostKeyRead": "Lire depuis l’hôte",
+      "sshHostKeyReading": "Lecture…",
+      "sshHostKeyReadFailed": "La clé de l’hôte n’a pas pu être lue. Vérifiez l’adresse et réessayez.",
+      "sshGenerateKeyPair": "Générer une paire de clés",
+      "sshKeyPairReplaced": "Une nouvelle paire de clés a remplacé la clé privée enregistrée. Ajoutez la nouvelle clé publique sur chaque machine qui utilisait l’ancienne."
     }
   },
   "notifications": {

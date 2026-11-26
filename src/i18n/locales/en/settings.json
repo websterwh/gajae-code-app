@@ -250,7 +250,12 @@
       "hostWriteDescription": "Run a command on the host over SSH, or run one fixed restart. Each call shows what it will do and asks for approval, unless pre-authorized below.",
       "sshPreauthorized": "Pre-authorize host changes",
       "sshPreauthorizedDescription": "Skip the per-call approval for commands and restarts. Off means every host change asks first, even in a trusted run.",
-      "sshIncomplete": "SSH is not ready: an address, the host's public key and a private key are all required before it connects."
+      "sshIncomplete": "SSH is not ready: an address, the host's public key and a private key are all required before it connects.",
+      "sshHostKeyRead": "Read from host",
+      "sshHostKeyReading": "Reading…",
+      "sshHostKeyReadFailed": "The host key could not be read. Check the address and try again.",
+      "sshGenerateKeyPair": "Generate key pair",
+      "sshKeyPairReplaced": "A new key pair replaced the stored private key. Trust the new public key on every machine that used the old one."
     },
     "notInstalled": "Unavailable",
     "installGuide": "Setup instructions",

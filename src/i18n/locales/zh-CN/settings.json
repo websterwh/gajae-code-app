@@ -260,7 +260,12 @@
       "sshIncomplete": "SSH 尚未就绪：连接前需要地址、主机公钥和私钥。",
       "sshHostPlaceholder": "192.168.1.10",
       "sshHostKeyPlaceholder": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5...",
-      "sshPrivateKeyPlaceholder": "-----BEGIN OPENSSH PRIVATE KEY-----"
+      "sshPrivateKeyPlaceholder": "-----BEGIN OPENSSH PRIVATE KEY-----",
+      "sshHostKeyRead": "从主机读取",
+      "sshHostKeyReading": "读取中…",
+      "sshHostKeyReadFailed": "无法读取主机密钥。请检查地址后重试。",
+      "sshGenerateKeyPair": "生成密钥对",
+      "sshKeyPairReplaced": "新的密钥对已替换保存的私钥。请在所有使用旧密钥的机器上添加新的公钥。"
     }
   },
   "notifications": {

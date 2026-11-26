@@ -308,17 +308,44 @@ export function createHostControlRouter({
   }));
 
   /**
-   * The one action that fills both halves of the SSH connection it can fill:
-   * a fresh client key pair, and — when the address answers — the destination's
-   * host key read by `ssh-keyscan`. The host key is not generated here because
-   * it belongs to the machine being reached; pinning a locally made key would
-   * make every connection fail its host-key check.
+   * A fresh client key pair for this app to sign in with.
    *
-   * An existing pinned host key is never silently replaced: if the scan
+   * Separate from the destination's host key on purpose: this is the app's own
+   * identity, replacing it invalidates every machine that trusted the previous
+   * public key. Nothing here touches the pinned host key, and nothing scans the
+   * destination - an address change must not silently rotate the client key.
+   */
+  router.post('/ssh/keys', asyncHandler(async (_request, response) => {
+    if (!hostControlAvailable(env)) {
+      return refuse(response, 409, 'HOST_CONTROL_DISABLED', 'Host control is not enabled for this deployment.');
+    }
+    let generated;
+    try {
+      generated = await generateSshKeyPair();
+    } catch (error) {
+      return refuse(
+        response,
+        503,
+        'SSH_KEYGEN_UNAVAILABLE',
+        error instanceof Error ? error.message : 'A key pair could not be generated.',
+      );
+    }
+    secrets.write(generated.privateKey);
+    return response.json({ publicKey: generated.publicKey });
+  }));
+
+  /**
+   * The destination's host key, read the only way it can be read: from the
+   * destination. A host key generated here would belong to this process and
+   * could never match the machine being reached.
+   *
+   * This never regenerates the client key pair. Adding a second machine pins
+   * its host key while every machine already trusting this app's public key
+   * keeps working. An existing pin is never silently replaced: if the scan
    * disagrees, the pin is kept and the caller is told, so a changed host is a
    * decision rather than a race with a button.
    */
-  router.post('/ssh/keys', asyncHandler(async (request, response) => {
+  router.post('/ssh/host-key', asyncHandler(async (request, response) => {
     if (!hostControlAvailable(env)) {
       return refuse(response, 409, 'HOST_CONTROL_DISABLED', 'Host control is not enabled for this deployment.');
     }
@@ -345,38 +372,33 @@ export function createHostControlRouter({
       patch.sshUser = body.user;
     }
     const settings = Object.keys(patch).length > 0 ? store.write(patch) : store.read();
-    let generated;
+    if (!settings.sshHost) {
+      return refuse(response, 400, 'HOST_SETTINGS_INVALID', 'Set the SSH address before reading its host key.');
+    }
+    let scannedHostKey: string;
     try {
-      generated = await generateSshKeyPair();
+      scannedHostKey = await scanSshHostKey(settings.sshHost, settings.sshPort);
     } catch (error) {
       return refuse(
         response,
         503,
-        'SSH_KEYGEN_UNAVAILABLE',
-        error instanceof Error ? error.message : 'A key pair could not be generated.',
+        'SSH_HOST_KEY_UNAVAILABLE',
+        error instanceof Error ? error.message : 'The host key could not be read.',
       );
     }
-    secrets.write(generated.privateKey);
-
-    let hostKey = settings.sshHostKey;
-    let scannedHostKey: string | undefined;
-    let hostKeyError: string | undefined;
-    if (!settings.sshHost) {
-      hostKeyError = 'The key pair was generated. Set the SSH address, then generate again to pin its host key.';
-    } else {
-      try {
-        scannedHostKey = await scanSshHostKey(settings.sshHost, settings.sshPort);
-        if (!hostKey) {
-          store.write({ sshHostKey: scannedHostKey });
-          hostKey = scannedHostKey;
-        } else if (hostKey !== scannedHostKey) {
-          hostKeyError = 'The host presented a different key than the pinned one; the pinned key was kept.';
-        }
-      } catch {
-        hostKeyError = 'The host key could not be read with ssh-keyscan. Check the address and paste it manually.';
-      }
+    const pinned = settings.sshHostKey;
+    if (!pinned) {
+      store.write({ sshHostKey: scannedHostKey });
+      return response.json({ hostKey: scannedHostKey, scannedHostKey });
     }
-    return response.json({ publicKey: generated.publicKey, hostKey, scannedHostKey, hostKeyError });
+    if (pinned !== scannedHostKey) {
+      return response.json({
+        hostKey: pinned,
+        scannedHostKey,
+        hostKeyError: 'The host presented a different key than the pinned one; the pinned key was kept.',
+      });
+    }
+    return response.json({ hostKey: pinned, scannedHostKey });
   }));
 
   return router;

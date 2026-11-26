@@ -26,6 +26,14 @@ type ApiOptions = {
     enabled: boolean;
     capabilities: Record<string, boolean>;
     host: { os: string; kernelVersion: string; platform: { id: string; label: string } | null; detectedAt: number } | null;
+    ssh?: {
+      host: string;
+      port: number;
+      user: string;
+      hostKey: string;
+      keyPresent: boolean;
+      writePreauthorized: boolean;
+    };
   };
 };
 
@@ -56,6 +64,7 @@ function fakeApi(options: ApiOptions = {}) {
     capabilities: hostControl?.capabilities ?? {},
     targets: [],
     host: hostControl?.host ?? null,
+    ...(hostControl?.ssh ? { ssh: hostControl.ssh } : {}),
   });
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const path = typeof input === 'string' ? input : input instanceof URL ? input.pathname : input.url;
@@ -124,6 +133,23 @@ function fakeApi(options: ApiOptions = {}) {
         };
       }
       return new Response(JSON.stringify(hostStatus()));
+    }
+    if (hostControl && path === '/api/host/ssh/keys' && method === 'POST') {
+      hostControl.ssh = { ...(hostControl.ssh ?? { host: '', port: 22, user: 'root', hostKey: '', writePreauthorized: false }), keyPresent: true };
+      return new Response(JSON.stringify({ publicKey: 'ssh-ed25519 AAAAgenerated gajae-host-control' }));
+    }
+    if (hostControl && path === '/api/host/ssh/host-key' && method === 'POST') {
+      const target = body as { host?: string; port?: number };
+      // The route saves the address it scanned and pins the key when none was.
+      hostControl.ssh = {
+        host: target.host ?? hostControl.ssh?.host ?? '',
+        port: target.port ?? hostControl.ssh?.port ?? 22,
+        user: hostControl.ssh?.user ?? 'root',
+        hostKey: 'ssh-ed25519 AAAAscanned destination',
+        keyPresent: hostControl.ssh?.keyPresent ?? false,
+        writePreauthorized: hostControl.ssh?.writePreauthorized ?? false,
+      };
+      return new Response(JSON.stringify({ hostKey: hostControl.ssh.hostKey, scannedHostKey: hostControl.ssh.hostKey }));
     }
     if (hostControl && path === '/api/host/discovery') {
       const detectedAt = 1;
@@ -475,6 +501,42 @@ test('the docker group hides its rows while it is off and sets all of them at on
 
   fireEvent.click(screen.getByRole('switch', { name: hostControl.dockerGroup! }));
   await waitFor(() => assert.equal(screen.queryByRole('switch', { name: hostControl.containers! }) === null, true));
+});
+
+/*
+ * The two halves of an SSH connection are two decisions: reading another
+ * machine's host key must never rotate the client key pair, because every
+ * machine already trusting the old public key would stop accepting it.
+ */
+test('the host key and the client key pair each have their own button and never replace each other', async () => {
+  const calls = fakeApi({
+    hostControl: {
+      enabled: true,
+      capabilities: { facts: false, discovery: false, containers: false, restart: false, docker: false, shell: false, files: false },
+      host: null,
+      ssh: { host: '192.168.1.10', port: 22, user: 'root', hostKey: '', keyPresent: false, writePreauthorized: false },
+    },
+  });
+  await mount();
+  const hostControl = english.automation.hostControl as Record<string, string>;
+
+  const readHostKey = await screen.findByRole('button', { name: hostControl.sshHostKeyRead! });
+  fireEvent.click(readHostKey);
+  await waitFor(() => assert.ok(calls.some((call) => call.path === '/api/host/ssh/host-key' && call.method === 'POST')));
+  assert.equal(calls.some((call) => call.path === '/api/host/ssh/keys'), false, 'adding a machine must not replace the app key pair');
+  await waitFor(() => assert.equal(
+    (screen.getByRole('textbox', { name: hostControl.sshHostKey! }) as HTMLInputElement).value,
+    'ssh-ed25519 AAAAscanned destination',
+  ));
+
+  fireEvent.click(screen.getByRole('button', { name: hostControl.sshGenerateKeyPair! }));
+  await waitFor(() => assert.ok(calls.some((call) => call.path === '/api/host/ssh/keys' && call.method === 'POST')));
+  await waitFor(() => assert.equal(
+    (screen.getByRole('textbox', { name: hostControl.sshPublicKey! }) as HTMLTextAreaElement).value,
+    'ssh-ed25519 AAAAgenerated gajae-host-control',
+  ));
+  assert.equal(calls.filter((call) => call.path === '/api/host/ssh/host-key').length, 1, 'generating a pair never scans the destination');
+  assert.ok(screen.getByText(hostControl.sshKeyPairReplaced!));
 });
 
 /* A saved detection is shown on load, without running one again. */

@@ -260,7 +260,12 @@
       "sshIncomplete": "SSH hazır değil: bağlanmadan önce bir adres, sunucu genel anahtarı ve bir özel anahtar gerekir.",
       "sshHostPlaceholder": "192.168.1.10",
       "sshHostKeyPlaceholder": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5...",
-      "sshPrivateKeyPlaceholder": "-----BEGIN OPENSSH PRIVATE KEY-----"
+      "sshPrivateKeyPlaceholder": "-----BEGIN OPENSSH PRIVATE KEY-----",
+      "sshHostKeyRead": "Sunucudan oku",
+      "sshHostKeyReading": "Okunuyor…",
+      "sshHostKeyReadFailed": "Sunucu anahtarı okunamadı. Adresi kontrol edip yeniden deneyin.",
+      "sshGenerateKeyPair": "Anahtar çifti oluştur",
+      "sshKeyPairReplaced": "Yeni anahtar çifti kayıtlı özel anahtarın yerini aldı. Eski anahtarı kullanan her makinede yeni ortak anahtarı ekleyin."
     }
   },
   "notifications": {

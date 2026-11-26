@@ -260,7 +260,12 @@
       "sshIncomplete": "SSH non è pronto: servono un indirizzo, la chiave pubblica dell'host e una chiave privata prima che si connetta.",
       "sshHostPlaceholder": "192.168.1.10",
       "sshHostKeyPlaceholder": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5...",
-      "sshPrivateKeyPlaceholder": "-----BEGIN OPENSSH PRIVATE KEY-----"
+      "sshPrivateKeyPlaceholder": "-----BEGIN OPENSSH PRIVATE KEY-----",
+      "sshHostKeyRead": "Leggi dall’host",
+      "sshHostKeyReading": "Lettura…",
+      "sshHostKeyReadFailed": "Non è stato possibile leggere la chiave dell’host. Controlla l’indirizzo e riprova.",
+      "sshGenerateKeyPair": "Genera coppia di chiavi",
+      "sshKeyPairReplaced": "Una nuova coppia di chiavi ha sostituito la chiave privata salvata. Aggiungi la nuova chiave pubblica su ogni macchina che usava la precedente."
     }
   },
   "notifications": {

@@ -260,7 +260,12 @@
       "sshIncomplete": "SSH ist nicht bereit: Adresse, öffentlicher Hostschlüssel und privater Schlüssel sind alle erforderlich, bevor die Verbindung steht.",
       "sshHostPlaceholder": "192.168.1.10",
       "sshHostKeyPlaceholder": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5...",
-      "sshPrivateKeyPlaceholder": "-----BEGIN OPENSSH PRIVATE KEY-----"
+      "sshPrivateKeyPlaceholder": "-----BEGIN OPENSSH PRIVATE KEY-----",
+      "sshHostKeyRead": "Vom Host lesen",
+      "sshHostKeyReading": "Wird gelesen…",
+      "sshHostKeyReadFailed": "Der Hostschlüssel konnte nicht gelesen werden. Prüfen Sie die Adresse und versuchen Sie es erneut.",
+      "sshGenerateKeyPair": "Schlüsselpaar erzeugen",
+      "sshKeyPairReplaced": "Ein neues Schlüsselpaar hat den gespeicherten privaten Schlüssel ersetzt. Hinterlegen Sie den neuen öffentlichen Schlüssel auf jedem Rechner, der den alten genutzt hat."
     }
   },
   "notifications": {
