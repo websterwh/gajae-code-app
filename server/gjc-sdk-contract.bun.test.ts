@@ -598,6 +598,38 @@ test('retry drops every stacked provider failure before continuing the turn', as
   }
 });
 
+test('a retry with a completed tail says nothing was retried instead of failing the run', async () => {
+  // Switching models after a turn that eventually answered, then pressing
+  // /retry, leaves the runtime nothing to re-run. Failing the request for that
+  // reached the chat as the generic worker-failure text on a healthy worker.
+  pendingSessionMessages = [
+    { role: 'user', content: 'is the dry run configured?' },
+    { role: 'assistant', stopReason: 'stop', content: [{ type: 'text', text: 'Yes - confirmed.' }] },
+  ];
+  const f = await fixture();
+  try {
+    const run = f.host.handle(request('session.start', 'retry-completed', {
+      message: '',
+      options: { ...f.options, retryLastTurn: true },
+    }));
+    const session = await firstSession(f.sessions);
+    await run;
+
+    assert.equal(session.retryCalls, 0);
+    assert.equal(session.promptCalls, 0);
+    const notice = f.frames.find((frame) => frame.kind === 'event'
+      && ((frame.payload as Record<string, unknown>).message as { kind?: string } | undefined)?.kind === 'system_notice');
+    assert.ok(notice, 'the chat is told why nothing happened');
+    const message = (notice.payload as Record<string, unknown>).message as { content?: string; level?: string };
+    assert.match(String(message.content), /Nothing to retry/u);
+    assert.equal(message.level, 'info');
+    assert.equal((response(f.frames, 'retry-completed').payload as { ok: boolean }).ok, true);
+  } finally {
+    pendingSessionMessages = [];
+    await f.close();
+  }
+});
+
 test('a retry the runtime cannot start is reported instead of finishing silently', async () => {
   pendingSessionMessages = [
     { role: 'user', content: 'read BATCH.md' },

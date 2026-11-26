@@ -1941,28 +1941,36 @@ export class GjcBunSdkAdapter implements GjcWorkerRuntime {
               // user or tool-result turn it needs.
               const messages = result.session.agent.state.messages;
               const trimmed = trimUndeliverableAssistantTail(messages);
-              if (trimmed.length !== messages.length) {
-                result.session.agent.replaceMessages(trimmed, {
-                  historyRewrite: { reason: 'retry', preserveSeededPrefix: true },
-                });
-              }
-              if (!(await result.session.retry())) {
-                throw Object.assign(new Error('There is no failed or interrupted turn to retry.'), {
-                  code: 'nothing_to_retry',
-                });
-              }
-              await result.session.waitForIdle();
-              // A retry the runtime could not start appends nothing, and an
-              // empty finished turn reads as "retried, then immediately done".
-              // Report it instead so the transcript says what happened and
-              // offers Retry again.
-              if (result.session.agent.state.messages.length <= trimmed.length) {
-                // The generic terminal error would say only "GJC run failed.",
-                // and the reason is the whole point: nothing was retried.
+              const failRetryNotStarted = (): never => {
                 const reason = 'The retry did not start: this turn could not be continued. Send a new message instead.';
                 writer.send({ kind: 'error', content: reason });
                 activeRun.state.finalError = true;
                 throw Object.assign(new Error(reason), { code: 'retry_not_started' });
+              };
+              // A completed answer is neither a failed nor an interrupted turn,
+              // so the runtime's retry returns false without doing anything.
+              // Failing the request for that reached the chat as the generic
+              // worker-failure text on a healthy worker; say what happened
+              // instead and leave the completed answer as the transcript's tail.
+              if (isCompletedAssistantTail(trimmed[trimmed.length - 1])) {
+                writer.send({
+                  kind: 'system_notice',
+                  level: 'info',
+                  content: 'Nothing to retry: the last turn already completed. Send a new message to continue.',
+                });
+              } else {
+                if (trimmed.length !== messages.length) {
+                  result.session.agent.replaceMessages(trimmed, {
+                    historyRewrite: { reason: 'retry', preserveSeededPrefix: true },
+                  });
+                }
+                if (!(await result.session.retry())) failRetryNotStarted();
+                await result.session.waitForIdle();
+                // A retry the runtime could not start appends nothing, and an
+                // empty finished turn reads as "retried, then immediately done".
+                // Report it instead so the transcript says what happened and
+                // offers Retry again.
+                if (result.session.agent.state.messages.length <= trimmed.length) failRetryNotStarted();
               }
             }
           } else if (promptMessage !== null) {
@@ -2028,6 +2036,12 @@ function trimUndeliverableAssistantTail<T>(messages: readonly T[]): T[] {
   let end = messages.length;
   while (end > 0 && isUndeliverableAssistantTail(messages[end - 1])) end -= 1;
   return messages.slice(0, end);
+}
+
+/** An assistant row the runtime treats as a finished answer, not a failure. */
+function isCompletedAssistantTail(message: unknown): boolean {
+  if (message === null || typeof message !== 'object') return false;
+  return (message as { role?: unknown }).role === 'assistant' && !isUndeliverableAssistantTail(message);
 }
 
 /**
