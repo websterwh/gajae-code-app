@@ -513,6 +513,7 @@
     "scope": "범위",
     "scopeGlobal": "Global",
     "scopeProject": "프로젝트",
+    "scopeAll": "모두",
     "moveToProject": "프로젝트로 이동",
     "moveToGlobal": "전역으로 이동",
     "moveNeedsProject": "먼저 위에서 프로젝트를 선택하세요.",

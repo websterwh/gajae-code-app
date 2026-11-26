@@ -480,6 +480,67 @@ export class McpService {
     return sorted;
   }
 
+  /**
+   * Makes one server exist in several configs at once, which is what the
+   * per-row scope menu writes when more than one box is ticked.
+   *
+   * `move` only ever had one destination, so using the same server in the
+   * global config and two projects meant adding it three times - and the add
+   * path then reported the name as taken in the scope it had just left. This
+   * copies the stored entry verbatim, so env values and headers survive
+   * without travelling through the browser, and only unticks the source once
+   * every destination has been written.
+   */
+  async setScopes(
+    scope: McpScope,
+    name: string,
+    targets: Array<{ scope: McpScope; projectPath?: string }>,
+    projectPath?: string,
+  ): Promise<McpServerView[]> {
+    const sourceProject = scope === 'project' ? this.requireProject(projectPath) : undefined;
+    const unique = new Map<string, { scope: McpScope; projectPath?: string }>();
+    for (const target of targets) {
+      const targetProject = target.scope === 'project' ? this.requireProject(target.projectPath) : undefined;
+      unique.set(`${target.scope}:${targetProject ?? ''}`, { scope: target.scope, projectPath: targetProject });
+    }
+    if (unique.size === 0) throw new Error('Select at least one scope for this server.');
+
+    const sourceFile = await this.read(scope, sourceProject);
+    const entry = sourceFile.mcpServers[name];
+    if (!entry) throw new Error('MCP server was not found.');
+    const denylisted = (sourceFile.disabledServers ?? []).includes(name);
+    const ledger = await this.allLedgerEntries();
+    const views: McpServerView[] = [];
+
+    for (const target of unique.values()) {
+      const isSource = target.scope === scope && target.projectPath === sourceProject;
+      const file = isSource ? sourceFile : await this.read(target.scope, target.projectPath);
+      // A destination that already carries the name keeps its own copy: it may
+      // have been configured there on purpose, and silently replacing it would
+      // lose that config.
+      if (!file.mcpServers[name]) {
+        file.mcpServers[name] = {
+          ...entry,
+          ...(entry.args ? { args: [...entry.args] } : {}),
+          ...(entry.env ? { env: { ...entry.env } } : {}),
+          ...(entry.headers ? { headers: { ...entry.headers } } : {}),
+        };
+        if (denylisted) file.disabledServers = [...new Set([...(file.disabledServers ?? []), name])];
+        await this.write(target.scope, target.projectPath, file);
+      }
+      views.push(this.view(name, entry, target.scope, ledger, new Set(file.disabledServers ?? [])));
+    }
+
+    if (!unique.has(`${scope}:${sourceProject ?? ''}`)) {
+      delete sourceFile.mcpServers[name];
+      if (denylisted) {
+        sourceFile.disabledServers = (sourceFile.disabledServers ?? []).filter((server) => server !== name);
+      }
+      await this.write(scope, sourceProject, sourceFile);
+    }
+    return views;
+  }
+
   async get(scope: McpScope, name: string, projectPath?: string): Promise<McpServerView | null> {
     const file = await this.read(scope, scope === 'project' ? this.requireProject(projectPath) : undefined);
     const entry = file.mcpServers[name];

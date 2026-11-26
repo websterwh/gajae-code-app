@@ -513,6 +513,7 @@
     "scope": "Область",
     "scopeGlobal": "Global",
     "scopeProject": "Проект",
+    "scopeAll": "Все",
     "moveToProject": "Переместить в проект",
     "moveToGlobal": "Переместить в глобальные",
     "moveNeedsProject": "Сначала выберите проект выше.",

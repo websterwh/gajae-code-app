@@ -513,6 +513,7 @@
     "scope": "Ambito",
     "scopeGlobal": "Global",
     "scopeProject": "Progetto",
+    "scopeAll": "Tutti",
     "moveToProject": "Sposta nel progetto",
     "moveToGlobal": "Sposta in globale",
     "moveNeedsProject": "Scegli prima un progetto qui sopra.",

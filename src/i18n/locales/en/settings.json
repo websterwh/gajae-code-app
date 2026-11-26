@@ -513,6 +513,7 @@
     "scope": "Scope",
     "scopeGlobal": "Global",
     "scopeProject": "Project",
+    "scopeAll": "All",
     "moveToProject": "Move to project",
     "moveToGlobal": "Move to global",
     "moveNeedsProject": "Pick a project above first.",

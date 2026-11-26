@@ -513,6 +513,7 @@
     "scope": "范围",
     "scopeGlobal": "Global",
     "scopeProject": "项目",
+    "scopeAll": "全部",
     "moveToProject": "移动到项目",
     "moveToGlobal": "移动到全局",
     "moveNeedsProject": "请先在上方选择项目。",

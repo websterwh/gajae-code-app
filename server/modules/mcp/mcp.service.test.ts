@@ -400,3 +400,53 @@ test('a server moves between global and project scope instead of being duplicate
   await service.add({ name: 'mover', transport: 'http', url: 'https://other.example/mcp' });
   await assert.rejects(() => service.move('global', 'mover', 'project', undefined, project), /already exists/u);
 });
+
+// The scope menu sends a set, not a destination. A server used by two projects
+// and the global config is three stored entries with one shared definition, and
+// unticking the global one leaves the projects alone.
+test('one server is written to every selected scope and only leaves the ones unticked', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'mcp-scopes-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const shipping = join(root, 'shipping');
+  const billing = join(root, 'billing');
+  for (const project of [shipping, billing]) await mkdir(join(project, '.gjc'), { recursive: true });
+  const service = new McpService({ agentDir: root, runCli: fakeCli(root, []) });
+
+  await service.add({
+    name: 'shared',
+    transport: 'stdio',
+    command: 'npx',
+    args: ['-y', 'shared-mcp'],
+    env: { SHARED_TOKEN: 'secret-value' },
+  });
+  const written = await service.setScopes('global', 'shared', [
+    { scope: 'global' },
+    { scope: 'project', projectPath: shipping },
+    { scope: 'project', projectPath: billing },
+  ]);
+  assert.deepEqual(written.map((server) => server.scope), ['global', 'project', 'project']);
+
+  const globalFile = JSON.parse(await readFile(join(root, 'mcp.json'), 'utf8')) as StoredFile;
+  const shippingFile = JSON.parse(await readFile(join(shipping, '.gjc', 'mcp.json'), 'utf8')) as StoredFile;
+  const billingFile = JSON.parse(await readFile(join(billing, '.gjc', 'mcp.json'), 'utf8')) as StoredFile;
+  assert.ok(globalFile.mcpServers.shared, 'the source stays while it is still ticked');
+  // Copied from the stored entry: a secret never has to travel through the
+  // page, so the copies keep the value the source has.
+  assert.deepEqual((shippingFile.mcpServers.shared as Record<string, unknown>).env, { SHARED_TOKEN: 'secret-value' });
+  assert.ok(billingFile.mcpServers.shared);
+
+  await service.setScopes('global', 'shared', [
+    { scope: 'project', projectPath: shipping },
+    { scope: 'project', projectPath: billing },
+  ]);
+  const afterUntick = JSON.parse(await readFile(join(root, 'mcp.json'), 'utf8')) as StoredFile;
+  assert.equal(afterUntick.mcpServers.shared, undefined, 'the unticked source is removed');
+  assert.ok((JSON.parse(await readFile(join(shipping, '.gjc', 'mcp.json'), 'utf8')) as StoredFile).mcpServers.shared);
+
+  // A set with nothing ticked has no config to write, so it is refused rather
+  // than deleting the only copy through the menu.
+  await assert.rejects(
+    () => service.setScopes('project', 'shared', [], shipping),
+    /at least one scope/u,
+  );
+});

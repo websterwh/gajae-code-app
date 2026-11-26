@@ -9,10 +9,13 @@ import SettingsCard from '../SettingsCard';
 import SettingsSection from '../SettingsSection';
 import SettingsToggle from '../SettingsToggle';
 
+import McpScopeMenu, { type McpScopeTarget } from './McpScopeMenu';
 import { formatMcpBlock, parseMcpBlock } from './mcpBlock';
 
 type McpTransport = 'stdio' | 'http' | 'sse';
 type McpScope = 'global' | 'project';
+/** The page filter can also show the global config and one project together. */
+type McpPageScope = McpScope | 'all';
 
 type InstallState = {
   version: string | null;
@@ -126,7 +129,7 @@ export default function McpSettingsTab() {
   const [catalogDefaults, setCatalogDefaults] = useState<Record<string, CatalogDefaults>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [scope, setScope] = useState<McpScope>('global');
+  const [scope, setScope] = useState<McpPageScope>('global');
   const [projectPath, setProjectPath] = useState('');
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(false);
@@ -149,13 +152,18 @@ export default function McpSettingsTab() {
   const [copyNote, setCopyNote] = useState<string | null>(null);
   const [recentlyAdded, setRecentlyAdded] = useState<string | null>(null);
 
-  const projectQuery = scope === 'project' && projectPath ? `&projectPath=${encodeURIComponent(projectPath)}` : '';
+  // "All" lists the global config plus the selected project's, so it carries
+  // the same path the project filter does.
+  const projectQuery = scope !== 'global' && projectPath ? `&projectPath=${encodeURIComponent(projectPath)}` : '';
   // One scope at a time. Listing both scopes together made the scope select
   // look broken: switching to a project showed the same server names, because
   // it was also showing the global ones.
   const listPath = `/api/mcp/servers?scope=${scope}${projectQuery}`;
   const statusPath = `/api/mcp/status${projectQuery ? `?${projectQuery.slice(1)}` : ''}`;
   const projectReady = scope !== 'project' || Boolean(projectPath);
+  // A new server needs one file to land in. Under "all", the selected project
+  // is that file; with none selected it goes to the global config.
+  const installScope: McpScope = scope === 'project' || (scope === 'all' && Boolean(projectPath)) ? 'project' : 'global';
 
   const rememberCatalog = useCallback((entries: CatalogEntry[]) => {
     setCatalogDefaults((current) => {
@@ -206,7 +214,13 @@ export default function McpSettingsTab() {
   useEffect(() => {
     if (!status?.inFlight) return;
     const timer = window.setInterval(() => {
-      void request<StatusData>(statusPath).then((next) => setStatus(next)).catch(() => undefined);
+      // Replacing an unchanged snapshot re-rendered every row, including the
+    // catalog, every four seconds - a stutter that showed up mid-scroll.
+    void request<StatusData>(statusPath)
+      .then((next) => setStatus((current) => (
+        JSON.stringify(current) === JSON.stringify(next) ? current : next
+      )))
+      .catch(() => undefined);
     }, 4000);
     return () => window.clearInterval(timer);
   }, [status?.inFlight, statusPath]);
@@ -440,8 +454,8 @@ export default function McpSettingsTab() {
           ...(entry.command ? { command: entry.command } : {}),
           ...(entry.args ? { args: entry.args } : {}),
           ...(entry.url ? { url: entry.url } : {}),
-          scope,
-          ...(scope === 'project' ? { projectPath } : {}),
+          scope: installScope,
+          ...(installScope === 'project' ? { projectPath } : {}),
         }),
       });
       rememberCatalog([entry]);
@@ -465,28 +479,23 @@ export default function McpSettingsTab() {
   };
 
   /**
-   * Moves a server between the global config and a project's config.
-   *
-   * The scope was fixed at install time before this: the only way to change it
-   * was to add the server again somewhere else, and the add path then reported
-   * the name as already taken. This writes it to the target file and removes
-   * it from the source, so the same name lives in exactly one place.
+   * Writes the scope menu's tick set: every ticked config gets a copy, and the
+   * source is dropped once it is no longer one of them. The copies are made
+   * server-side from the stored entry, so env values and headers survive
+   * without being sent through the page.
    */
-  const moveServer = async (server: McpServer, target: string) => {
-    const targetScope: McpScope = target === 'global' ? 'global' : 'project';
-    const targetProjectPath = targetScope === 'project' ? target.slice('project:'.length) : '';
-    if (targetScope === server.scope && (targetScope === 'global' || targetProjectPath === projectPath)) return;
-    setBusy(`move:${server.name}`);
+  const setServerScopes = async (server: McpServer, targets: McpScopeTarget[]) => {
+    if (targets.length === 0) return;
+    setBusy(`scopes:${server.name}`);
     setError('');
     try {
-      await request(`/api/mcp/servers/${encodeURIComponent(server.name)}/scope`, {
+      await request(`/api/mcp/servers/${encodeURIComponent(server.name)}/scopes`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           scope: server.scope,
           ...(server.scope === 'project' ? { projectPath } : {}),
-          targetScope,
-          ...(targetScope === 'project' ? { targetProjectPath } : {}),
+          targets,
         }),
       });
       await reload();
@@ -496,6 +505,20 @@ export default function McpSettingsTab() {
       setBusy(null);
     }
   };
+
+  /** Every loaded row for a name is one config it already lives in. */
+  const targetsFor = (server: McpServer): McpScopeTarget[] => servers
+    .filter((entry) => entry.name === server.name)
+    .map((entry) => (entry.scope === 'project'
+      ? { scope: 'project' as const, projectPath }
+      : { scope: 'global' as const }));
+
+  /** The page's own project has to be selectable even when the list lacks it. */
+  const projectsFor = (server: McpServer): ProjectSummary[] => (
+    server.scope === 'project' && projectPath && !projects.some((project) => project.path === projectPath)
+      ? [...projects, { projectId: `page:${projectPath}`, path: projectPath, displayName: projectPath.split('/').filter(Boolean).at(-1) ?? projectPath }]
+      : projects
+  );
 
   const copy = async (value: string) => {
     try {
@@ -591,17 +614,18 @@ export default function McpSettingsTab() {
                 aria-label={t('mcp.scope')}
                 value={scope}
                 onChange={(event) => {
-                  const next = event.target.value === 'project' ? 'project' : 'global';
-                  setScope(next);
+                  const next = event.target.value;
+                  setScope(next === 'project' || next === 'all' ? next : 'global');
                   if (next === 'global') setProjectPath('');
                 }}
                 className={`mt-1 ${inputClass}`}
               >
                 <option value="global">{t('mcp.scopeGlobal')}</option>
                 <option value="project">{t('mcp.scopeProject')}</option>
+                <option value="all">{t('mcp.scopeAll')}</option>
               </select>
             </label>
-            {scope === 'project' && (
+            {scope !== 'global' && (
               <label className="min-w-48 flex-1 text-xs font-medium text-muted-foreground">
                 {t('mcp.projectPath')}
                 <select
@@ -622,7 +646,7 @@ export default function McpSettingsTab() {
           {/* The path sits under the row, not inside the label: a longer line
               inside the second box pushed its select out of line with the
               scope select beside it. */}
-          {scope === 'project' && (selectedProject || (!projectsLoading && projects.length === 0)) && (
+          {scope !== 'global' && (selectedProject || (!projectsLoading && projects.length === 0)) && (
             <p className="truncate px-4 pb-3 font-mono text-[11px] text-muted-foreground">
               {selectedProject ? selectedProject.path : `${t('mcp.noProjects')} ${t('mcp.noProjectsHint')}`}
             </p>
@@ -650,7 +674,13 @@ export default function McpSettingsTab() {
             const knownVars = catalogFor(server)?.env ?? [];
             const missingRequired = knownVars.filter((variable) => variable.required && !server.envIsSet[variable.name]);
             return (
-              <div key={`${server.scope}:${server.name}`} className={`p-4 ${recentlyAdded === server.name ? 'bg-primary/5' : ''}`}>
+              // content-visibility keeps the rows below the fold out of layout
+              // and paint, which is what made a long installed list lurch while
+              // scrolling instead of tracking the wheel.
+              <div
+                key={`${server.scope}:${server.name}`}
+                className={`p-4 [contain-intrinsic-size:auto_7rem] [content-visibility:auto] ${recentlyAdded === server.name ? 'bg-primary/5' : ''}`}
+              >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   {/* The switch opens the row on every server. Trailing the
                       buttons put it wherever that row's controls ended, so a
@@ -696,24 +726,16 @@ export default function McpSettingsTab() {
                     {/* Scope belongs to the server, not to the page filter:
                         this is how one moves between the global config and a
                         project's instead of having to be added again. */}
-                    <select
-                      aria-label={`${t('mcp.scope')} ${server.name}`}
-                      title={t('mcp.scope')}
-                      className="rounded-lg border border-input bg-card px-2 py-1 text-xs text-foreground disabled:opacity-50"
-                      value={server.scope === 'project' ? `project:${projectPath}` : 'global'}
+                    <McpScopeMenu
+                      name={server.name}
+                      ariaLabel={t('mcp.scope')}
+                      selected={targetsFor(server)}
+                      projects={projectsFor(server)}
+                      globalLabel={t('mcp.scopeGlobal')}
+                      projectLabel={t('mcp.scopeProject')}
                       disabled={busy !== null}
-                      onChange={(event) => void moveServer(server, event.target.value)}
-                    >
-                      <option value="global">{t('mcp.scopeGlobal')}</option>
-                      {server.scope === 'project' && !projects.some((project) => project.path === projectPath) && (
-                        <option value={`project:${projectPath}`}>
-                          {projectPath.split('/').filter(Boolean).at(-1) ?? projectPath}
-                        </option>
-                      )}
-                      {projects.map((project) => (
-                        <option key={project.projectId} value={`project:${project.path}`}>{project.displayName}</option>
-                      ))}
-                    </select>
+                      onChange={(targets) => void setServerScopes(server, targets)}
+                    />
                     {/* The label stays put while the handshake runs: swapping it
                         for the longer text made the whole bar jump. */}
                     <button type="button" className={verifyButtonClass} aria-busy={verifying === server.name}
@@ -901,7 +923,7 @@ export default function McpSettingsTab() {
             const isBusy = busy === `install:${entry.name}`;
             return (
               <div key={`${entry.source}:${entry.name}`}
-                className={`border-t border-border p-4 ${recentlyAdded === entry.name ? 'bg-primary/5' : ''}`}>
+                className={`border-t border-border p-4 [contain-intrinsic-size:auto_7rem] [content-visibility:auto] ${recentlyAdded === entry.name ? 'bg-primary/5' : ''}`}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <p className="flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">

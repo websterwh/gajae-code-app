@@ -513,6 +513,7 @@
     "scope": "スコープ",
     "scopeGlobal": "Global",
     "scopeProject": "プロジェクト",
+    "scopeAll": "すべて",
     "moveToProject": "プロジェクトへ移動",
     "moveToGlobal": "グローバルへ移動",
     "moveNeedsProject": "先に上でプロジェクトを選択してください。",

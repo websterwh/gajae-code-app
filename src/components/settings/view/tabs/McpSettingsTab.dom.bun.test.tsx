@@ -83,6 +83,15 @@ function fakeApi(seed: Array<Record<string, unknown>> = [], statusSeed: { inFlig
     if (path.startsWith('/api/mcp/servers?') && method === 'GET') {
       return new Response(JSON.stringify({ success: true, data: installed }));
     }
+    if (path.startsWith('/api/projects?')) {
+      return new Response(JSON.stringify({
+        success: true,
+        data: { projects: [{ projectId: 'p1', path: '/workspace/shipping', displayName: 'shipping' }] },
+      }));
+    }
+    if (path.includes('/scopes') && method === 'POST') {
+      return new Response(JSON.stringify({ success: true, data: installed }));
+    }
     if (path === '/api/mcp/status') {
       return new Response(JSON.stringify({
         success: true,
@@ -270,6 +279,62 @@ test('project scope refuses to install until a project is selected', async () =>
   assert.ok(screen.getByText(english.mcp.projectRequired));
 });
 
+test('the page scope can show the global config and one project together', async () => {
+  const calls = fakeApi([installedServer()]);
+  await mount();
+
+  await act(async () => {
+    fireEvent.change(screen.getByLabelText(english.mcp.scope), { target: { value: 'all' } });
+  });
+  await waitFor(() => assert.ok(calls.some((call) => call.path.includes('scope=all'))));
+
+  const project = await screen.findByLabelText(english.mcp.projectPath);
+  await act(async () => {
+    fireEvent.change(project, { target: { value: '/workspace/shipping' } });
+  });
+  await waitFor(() => assert.ok(calls.some((call) => (
+    call.path.includes('scope=all') && call.path.includes('projectPath=%2Fworkspace%2Fshipping')
+  )), 'the all view carries the project it also lists'));
+  // The catalog has its own debounce, so the install button is awaited rather
+  // than assumed present in the same tick as the scope change.
+  assert.ok(
+    await screen.findByRole('button', { name: english.mcp.install }),
+    'a new server is still installable from the all view',
+  );
+});
+
+// The old control was a single-choice select: a server could live in the
+// global config or one project, never both. The menu ticks every config the
+// server is stored in and posts that set.
+test('the row scope menu ticks every config the server lives in and writes the set', async () => {
+  const calls = fakeApi([installedServer(), installedServer({ scope: 'project' })]);
+  await mount();
+
+  await act(async () => {
+    fireEvent.change(screen.getByLabelText(english.mcp.scope), { target: { value: 'project' } });
+  });
+  const project = await screen.findByLabelText(english.mcp.projectPath);
+  await act(async () => {
+    fireEvent.change(project, { target: { value: '/workspace/shipping' } });
+  });
+  await waitFor(() => assert.ok(calls.some((call) => call.path.includes('projectPath=%2Fworkspace%2Fshipping'))));
+
+  const triggers = await screen.findAllByRole('button', { name: `${english.mcp.scope} context7` });
+  assert.equal(triggers.length, 2, 'each config has a row');
+  await act(async () => { fireEvent.click(triggers[0]); });
+
+  const options = screen.getAllByRole('menuitemcheckbox');
+  assert.equal(options.length, 2, 'the global config and the project are both offered');
+  assert.equal(options[0]?.getAttribute('aria-checked'), 'true');
+  assert.equal(options[1]?.getAttribute('aria-checked'), 'true', 'the project copy is ticked too');
+
+  await act(async () => { fireEvent.click(options[1] as HTMLElement); });
+  await waitFor(() => {
+    const post = calls.find((call) => call.path.includes('/scopes'));
+    assert.deepEqual(post?.body?.targets, [{ scope: 'global' }], 'unticking the project leaves only the global config');
+  });
+});
+
 test('a server version is text until clicked, and confirming a typed version pins it', async () => {
   const calls = fakeApi([installedServer()]);
   await mount();
@@ -389,11 +454,12 @@ test('every row keeps the same action bar, with remove anchored to the right edg
     assert.ok(bar?.className.includes('w-full'), 'the bar is its own full-width line on every row');
     // The per-server scope control leads the bar on every row; the pin
     // controls a package row adds sit after it, so the bar's start is fixed.
-    assert.equal(bar?.firstElementChild?.tagName, 'SELECT', 'every bar starts with the scope control');
+    const leading = bar?.firstElementChild?.querySelector('button');
     assert.ok(
-      (bar?.firstElementChild?.getAttribute('aria-label') ?? '').startsWith(`${english.mcp.scope} `),
+      (leading?.getAttribute('aria-label') ?? '').startsWith(`${english.mcp.scope} `),
       'the leading control is the server scope',
     );
+    assert.equal(leading?.getAttribute('aria-haspopup'), 'menu', 'the scope control is the tick menu');
     const remove = bar?.lastElementChild as HTMLElement | null;
     assert.ok(remove?.className.includes('ml-auto'), 'the remove control is pushed to the right edge');
     assert.equal(remove?.textContent, english.mcp.remove);

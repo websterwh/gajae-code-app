@@ -513,6 +513,7 @@
     "scope": "Portée",
     "scopeGlobal": "Global",
     "scopeProject": "Projet",
+    "scopeAll": "Tous",
     "moveToProject": "Déplacer vers le projet",
     "moveToGlobal": "Déplacer vers global",
     "moveNeedsProject": "Choisissez d'abord un projet ci-dessus.",

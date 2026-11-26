@@ -101,6 +101,32 @@ export function createMcpRouter(service: McpService = mcpService): Router {
     }
   }));
 
+  // The multi-select form of the move above: the body lists every scope the
+  // server should live in, and the service adds the missing copies and drops
+  // the source only when it is no longer one of them.
+  router.post('/servers/:name/scopes', asyncHandler(async (request, response) => {
+    try {
+      const scope = scopeFrom(request.query.scope ?? request.body?.scope);
+      if (!scope || scope === 'all') return response.status(400).json({ success: false, error: { message: 'scope must be global or project.' } });
+      const targets = (request.body as { targets?: unknown } | undefined)?.targets;
+      if (!Array.isArray(targets)) return response.status(400).json({ success: false, error: { message: 'targets must be a list of scopes.' } });
+      const parsed: Array<{ scope: McpScope; projectPath?: string }> = [];
+      for (const target of targets) {
+        const value = (target ?? {}) as Record<string, unknown>;
+        const targetScope = scopeFrom(value.scope, 'global');
+        if (!targetScope || targetScope === 'all') return response.status(400).json({ success: false, error: { message: 'every target must be global or project.' } });
+        const targetProjectPath = typeof value.projectPath === 'string' ? value.projectPath : undefined;
+        parsed.push({ scope: targetScope, ...(targetProjectPath ? { projectPath: targetProjectPath } : {}) });
+      }
+      response.json({
+        success: true,
+        data: await service.setScopes(scope, routeParam(request.params.name), parsed, projectPath(request)),
+      });
+    } catch (error) {
+      fail(response, error);
+    }
+  }));
+
   router.post('/servers/:name/verify', asyncHandler(async (request, response) => {
     try {
       const scope = scopeFrom(request.query.scope ?? request.body?.scope);

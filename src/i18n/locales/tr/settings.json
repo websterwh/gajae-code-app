@@ -513,6 +513,7 @@
     "scope": "Kapsam",
     "scopeGlobal": "Global",
     "scopeProject": "Proje",
+    "scopeAll": "Tümü",
     "moveToProject": "Projeye taşı",
     "moveToGlobal": "Genel'e taşı",
     "moveNeedsProject": "Önce yukarıdan bir proje seçin.",
