@@ -150,7 +150,9 @@ test('an old load-all response cannot finish a new load-all request after switch
 test('an old pagination request cannot change a new session or block its own pagination', async () => {
   const view = mount();
   await view.resolvePage(0, page(100, true));
-  view.result.current.scrollContainerRef.current = document.createElement('div');
+  const pane = document.createElement('div');
+  mockPaneAtTop(pane);
+  view.result.current.scrollContainerRef.current = pane;
   let first: Promise<void>;
   act(() => { first = view.result.current.handleScroll(); });
   view.rerender({ id: 'b' });
@@ -260,6 +262,19 @@ const message = (id: string, seconds: number, content = id): NormalizedMessage =
   provider: 'gjc', kind: 'text', role: 'assistant', content,
 });
 
+/**
+ * A pane tall enough to scroll, parked at its top: the position the pagination
+ * tests act from. An unstyled DOM node reports 0 for every metric, which reads
+ * as "at the bottom" and would make a page request a tail bounce instead.
+ */
+function mockPaneAtTop(node: HTMLDivElement) {
+  Object.defineProperties(node, {
+    scrollTop: { configurable: true, get: () => 0, set: () => {} },
+    scrollHeight: { configurable: true, get: () => 900 },
+    clientHeight: { configurable: true, get: () => 400 },
+  });
+}
+
 async function setup(options: { pane?: boolean; density?: 'compact' | 'balanced' | 'detailed' } = {}) {
   let pane = options.pane ?? true;
   const originalFetch = globalThis.fetch;
@@ -297,6 +312,8 @@ async function setup(options: { pane?: boolean; density?: 'compact' | 'balanced'
   }
   const view = render(<Harness />);
   await act(async () => {});
+  const paneNode = state!.scrollContainerRef.current;
+  if (paneNode) mockPaneAtTop(paneNode);
   act(() => state!.setIsUserScrolledUp(true));
   const update = (next: NormalizedMessage[]) => {
     rows = next;
@@ -312,6 +329,7 @@ async function setup(options: { pane?: boolean; density?: 'compact' | 'balanced'
       act(() => { view.rerender(<Harness />); });
       const node = state!.scrollContainerRef.current;
       assert.ok(node, 'the attached pane is published to the session state');
+      mockPaneAtTop(node);
       return node;
     },
     async page(next: NormalizedMessage[], beforeResolve?: () => void, hasMore = false) {
@@ -463,6 +481,24 @@ test('reaching the top reveals already cached older rows without clicking a coun
     await act(async () => { await harness.state().handleScroll(); });
     assert.equal(harness.state().visibleMessages.length, 130);
     assert.equal(harness.pageRequests(), 0);
+  } finally { harness.close(); }
+});
+
+test('a folded transcript at its tail does not page history or stop following', async () => {
+  const harness = await setup({ density: 'compact' });
+  try {
+    // Compact and balanced fold the turn into a few rows, so the transcript
+    // fits the viewport and sits at scrollTop 0 while it is also at its tail.
+    const pane = harness.state().scrollContainerRef.current!;
+    Object.defineProperties(pane, {
+      scrollTop: { configurable: true, get: () => 0, set: () => {} },
+      scrollHeight: { configurable: true, get: () => 300 },
+      clientHeight: { configurable: true, get: () => 400 },
+    });
+    act(() => harness.state().setIsUserScrolledUp(false));
+    await act(async () => { await harness.state().handleScroll(); });
+    assert.equal(harness.pageRequests(), 0, 'the tail is not a request for older history');
+    assert.equal(harness.state().isUserScrolledUp, false, 'and it does not turn following off');
   } finally { harness.close(); }
 });
 

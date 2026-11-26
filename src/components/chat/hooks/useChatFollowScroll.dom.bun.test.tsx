@@ -107,6 +107,15 @@ test('wheel-up intent stops following future growth', () => {
   assert.equal(container().scrollTop, 30);
 });
 
+test('a wheel-up with nowhere to scroll keeps following', () => {
+  const { container, grow } = setup();
+  // A bounce, an overscroll or a short transcript reports the same negative
+  // delta while scrollTop is already 0; that is not the reader leaving the tail.
+  fireEvent.wheel(container(), { deltaY: -100 });
+  grow();
+  assertAtBottom(container());
+});
+
 test('scrolling to the bottom resumes following', () => {
   const { container, grow } = setup();
   fireEvent.wheel(container(), { deltaY: -100 });
@@ -187,8 +196,10 @@ test('returning to the tab lands the tail after growth it never observed', async
 
 test('returning to the tab leaves a reader who left the tail in place', async () => {
   const { container, getByText } = setup();
-  fireEvent.wheel(container(), { deltaY: -100 });
+  // A reader who left the tail is scrolled up first; the wheel then confirms
+  // the intent at that position.
   container().scrollTop = 30;
+  fireEvent.wheel(container(), { deltaY: -100 });
   act(() => fireEvent.click(getByText('grow')));
   await resumeVisibility();
   assert.equal(container().scrollTop, 30);

@@ -41,7 +41,10 @@ export function useChatFollowScroll({ container, enabled }: UseChatFollowScrollA
 
     const stopFollowing = () => setFollowing(false);
     const onWheel = (event: WheelEvent) => {
-      if (event.deltaY < 0) stopFollowing();
+      // With no scrolled distance there is nothing above to leave for: a
+      // bounce, an overscroll or a short transcript reports the same negative
+      // delta, and stopping there parked the pane on content it never left.
+      if (event.deltaY < 0 && node.scrollTop > 0) stopFollowing();
     };
     let touchStartY: number | null = null;
     const onTouchStart = (event: TouchEvent) => {

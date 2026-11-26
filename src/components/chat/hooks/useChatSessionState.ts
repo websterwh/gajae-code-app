@@ -429,12 +429,18 @@ export function useChatSessionState({
     const node = scrollContainerRef.current;
     if (!node) return;
     const bottom = isNearBottom();
-    if (!bottom) {
-      initialScrollRef.current = false;
-      openingSessionRef.current = false;
-      endLandingAtTail();
+    if (bottom) {
+      setHasNewMessagesBelow(false);
+      // At the tail there is nothing above to fetch, and a folded transcript
+      // (compact and balanced) can sit at scrollTop 0 while it is also at the
+      // bottom: the fold leaves too little height to scroll. Paging from there
+      // loaded history nobody asked for, turned following off, and parked the
+      // pane while the turn kept appending below it.
+      return;
     }
-    if (bottom) setHasNewMessagesBelow(false);
+    initialScrollRef.current = false;
+    openingSessionRef.current = false;
+    endLandingAtTail();
     // The in-flight request guard is enough. Requiring a trip away from the
     // top after every page forces a second gesture before history can continue.
     if (node.scrollTop >= 100) return;
