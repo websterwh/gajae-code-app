@@ -117,6 +117,7 @@ scope is fixed by this specification, and a frame that gets it wrong is rejected
 | `session.resume` | scoped | Attach to a conversation that already exists. |
 | `session.fork` | scoped | Copy a persisted conversation at its recorded leaf into a new session, without sharing its transcript, and return the successor session id. |
 | `session.branch` | scoped | Branch a persisted conversation at a chosen entry, the headless form of `/tree`, and return the successor session id. |
+| `session.move` | scoped | Move a persisted conversation's transcript and artifacts to a new working directory and repoint the provider session without starting a turn, so the next turn resumes under the new root. |
 | `turn.start` | scoped | Run a turn in an existing conversation. |
 | `turn.abort` | scoped | Stop the running turn. |
 | `turn.steer` | scoped | Inject input into the running turn without ending it. |
