@@ -165,6 +165,12 @@ declared in the compose file.
 | `SSH_DEFAULT_COMMAND`| *(empty)* | Optional command to run on SSH login (leave empty to land directly in standard bash shell). |
 | `INSTALL_GJC_CLI` | `true` | Create standalone launcher at `/data/bin/gjc`. |
 
+The image ships no syslog, so sshd writes its connection, authentication and
+disconnect lines to `/data/logs/sshd.log` with `-E`. The file is truncated on
+every boot and holds the connections made since that container start, which is
+what to read when a login hangs. Optional package installs run in the
+background at the lowest CPU and I/O priority, so they do not delay a login.
+
 ---
 
 ## Security Notes

@@ -550,8 +550,15 @@ EOF
     # ~/.bashrc and ~/.bash_profile are seeded on /data and linked into /root
     # before this runs (see Persistent Shell Profile). They are deliberately
     # not rewritten here: the profiles belong to the user once they exist.
+    #
+    # The image has no syslog, so without -E sshd's connection, auth and
+    # disconnect lines are discarded and a login that stalls leaves nothing to
+    # read afterwards. The file is truncated per boot, so it describes the
+    # connections made since this container started and cannot grow unbounded.
+    mkdir -p /data/logs
+    : > /data/logs/sshd.log
     # Start sshd in background
-    /usr/sbin/sshd
+    /usr/sbin/sshd -E /data/logs/sshd.log -o LogLevel=VERBOSE
     echo "==> [SSH] SSH daemon running on port ${SSH_PORT}."
 }
 
@@ -564,6 +571,13 @@ EOF
 if [ "$#" -gt 0 ] && [ "$1" = "start" ]; then
     echo "==> [Provisioning] Optional packages continue in the background."
     (
+        # Package installs are background work, but they share this container's
+        # CPU and the mounted /data volume with an interactive SSH shell. A
+        # dpkg unpack or a download at normal priority can leave a login, or a
+        # command inside one, waiting behind it; at the lowest CPU and I/O
+        # priority the interactive session wins instead.
+        renice -n 19 -p "${BASHPID}" >/dev/null 2>&1 || true
+        ionice -c 3 -p "${BASHPID}" >/dev/null 2>&1 || true
         provision_apt
         provision_packages
         provision_gjc_cli
