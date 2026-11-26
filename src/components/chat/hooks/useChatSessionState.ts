@@ -167,6 +167,14 @@ export function useChatSessionState({
   // already at the bottom.
   const [isLandingAtTail, setIsLandingAtTail] = useState(true);
   const landingAtTailRef = useRef(true);
+  // The landing's frame budget belongs to the open, not to one run of the
+  // effect below. That effect re-runs on every message-count change - a replay
+  // burst, a live turn's thinking and tool rows - and per-run counters
+  // restarted the countdown for each arrival: on a session opened while it was
+  // running, the landing never settled, so the transcript stayed hidden (blank
+  // but still taking layout) and pinned to a bottom that kept moving. It read
+  // as a pane scrolling itself over empty space until a gesture revealed it.
+  const landingProgressRef = useRef({ frames: 0, unchanged: 0, height: 0, armedAt: 0 });
   const endLandingAtTail = useCallback(() => {
     if (!landingAtTailRef.current) return;
     landingAtTailRef.current = false;
@@ -175,6 +183,7 @@ export function useChatSessionState({
   const beginLandingAtTail = useCallback(() => {
     if (landingAtTailRef.current) return;
     landingAtTailRef.current = true;
+    landingProgressRef.current = { frames: 0, unchanged: 0, height: 0, armedAt: 0 };
     setIsLandingAtTail(true);
   }, []);
 
@@ -465,28 +474,30 @@ export function useChatSessionState({
     if (sessionMessagesPending || !scrollContainer) return;
     if (!chatMessages.length || searchInProgressRef.current) return;
     const node = scrollContainer;
-    let frames = 0;
-    let unchanged = 0;
-    let height = 0;
+    const progress = landingProgressRef.current;
     let frameId = 0;
     const settle = () => {
       if (!initialScrollRef.current || !scrollContainerRef.current) return;
       // The refetch for this open started between frames: wait for its page.
       // It lands the open again when the page arrives.
       if (sessionMessagesPendingRef.current) return;
+      if (!progress.armedAt) progress.armedAt = Date.now();
       node.scrollTop = node.scrollHeight;
-      if (node.scrollHeight === height) unchanged += 1;
+      if (node.scrollHeight === progress.height) progress.unchanged += 1;
       else {
-        height = node.scrollHeight;
-        unchanged = 0;
+        progress.height = node.scrollHeight;
+        progress.unchanged = 0;
       }
-      frames += 1;
+      progress.frames += 1;
       // A live session's transcript keeps growing while it streams, so waiting
       // for the height to stop moving could keep the pane hidden for a full
       // second. Two still frames are enough to have landed; follow-scroll keeps
-      // pinning the pane afterwards, so a later growth does not park it.
-      if (unchanged < 2 && frames < 12) frameId = requestAnimationFrame(settle);
-      else {
+      // pinning the pane afterwards, so a later growth does not park it. The
+      // count is shared across re-runs and wall-clock capped, so neither a
+      // growing transcript nor a steady stream of arrivals can hold it.
+      if (progress.unchanged < 2 && progress.frames < 12 && Date.now() - progress.armedAt < 800) {
+        frameId = requestAnimationFrame(settle);
+      } else {
         initialScrollRef.current = false;
         openingSessionRef.current = false;
         endLandingAtTail();

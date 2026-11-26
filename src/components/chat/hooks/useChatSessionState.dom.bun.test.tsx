@@ -543,6 +543,40 @@ test('a layout scroll during an open does not park the transcript at its top', a
   } finally { harness.close(); }
 });
 
+test('arrivals that keep re-running the landing do not leave the open blank', async () => {
+  const harness = await setup();
+  // Frames are driven by hand: an arrival lands between each pair, which is how
+  // a running turn re-runs the landing effect and replaces the frame it queued.
+  const raf = globalThis.requestAnimationFrame;
+  const cancelRaf = globalThis.cancelAnimationFrame;
+  const queued = new Map<number, FrameRequestCallback>();
+  let nextFrame = 0;
+  globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => { queued.set(++nextFrame, callback); return nextFrame; }) as typeof requestAnimationFrame;
+  globalThis.cancelAnimationFrame = ((frame: number) => { queued.delete(frame); }) as typeof cancelAnimationFrame;
+  try {
+    const pane = harness.state().scrollContainerRef.current!;
+    let scrollTop = 0;
+    let height = 900;
+    Object.defineProperty(pane, 'scrollTop', { configurable: true, get: () => scrollTop, set: (value: number) => { scrollTop = value; } });
+    Object.defineProperty(pane, 'scrollHeight', { configurable: true, get: () => height });
+    await harness.switchSession();
+    assert.equal(harness.state().isLandingAtTail, true, 'the open hides the backlog it lands past');
+    for (let arrival = 0; arrival < 40 && harness.state().isLandingAtTail; arrival += 1) {
+      height += 40;
+      act(() => harness.update([...harness.rows(), message(`arrival-${arrival}`, 40)]));
+      const frame = [...queued.values()];
+      queued.clear();
+      for (const callback of frame) act(() => { callback(performance.now()); });
+    }
+    assert.equal(harness.state().isLandingAtTail, false, 'the open reveals inside its frame budget');
+    assert.equal(scrollTop, height, 'and it reveals already pinned to the newest row');
+  } finally {
+    globalThis.requestAnimationFrame = raf;
+    globalThis.cancelAnimationFrame = cancelRaf;
+    harness.close();
+  }
+});
+
 test('an open waits for its own page instead of landing on the cached window', async () => {
   const harness = await setup();
   try {
