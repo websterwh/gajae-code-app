@@ -116,11 +116,33 @@ function formatCompactArchivedAge(dateString: string | null): string {
  * Archive only — nothing leaves the disk, and every result stays restorable
  * from this same screen.
  */
+export const KEEP_LATEST_STORAGE_KEY = 'archiveIdleKeepLatest';
+
+/** Off unless the user turned it on before: the first run archives everything. */
+export const readKeepLatestPreference = (storage?: Pick<Storage, 'getItem'>): boolean => {
+  try {
+    const store = storage ?? (typeof localStorage === 'undefined' ? null : localStorage);
+    return store?.getItem(KEEP_LATEST_STORAGE_KEY) === 'true';
+  } catch {
+    // Storage is optional in embedded browser contexts.
+    return false;
+  }
+};
+
+export const writeKeepLatestPreference = (value: boolean, storage?: Pick<Storage, 'setItem'>): void => {
+  try {
+    const store = storage ?? (typeof localStorage === 'undefined' ? null : localStorage);
+    store?.setItem(KEEP_LATEST_STORAGE_KEY, String(value));
+  } catch {
+    // A blocked storage quota must not break the control.
+  }
+};
+
 function ArchiveIdleSessionsControl({ onArchived, t }: { onArchived: () => void; t: TFunction }) {
   const [days, setDays] = useState(30);
-  // Opt-in, and deliberately not persisted: the last session survives one run,
-  // and the next run starts from the safe default again.
-  const [keepLatest, setKeepLatest] = useState(false);
+  // Opt-in and remembered after the first choice, so a user who wants to keep
+  // one session per project does not have to re-check this every cleanup.
+  const [keepLatest, setKeepLatest] = useState(readKeepLatestPreference);
   const [preview, setPreview] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -181,7 +203,12 @@ function ArchiveIdleSessionsControl({ onArchived, t }: { onArchived: () => void;
           type="checkbox"
           checked={keepLatest}
           disabled={busy}
-          onChange={(event) => { setKeepLatest(event.target.checked); setPreview(null); }}
+          onChange={(event) => {
+            const next = event.target.checked;
+            setKeepLatest(next);
+            writeKeepLatestPreference(next);
+            setPreview(null);
+          }}
           className="size-3.5 shrink-0 rounded border-border accent-primary"
         />
         {t('archived.bulkKeepLatest', 'Keep the last session in each project')}

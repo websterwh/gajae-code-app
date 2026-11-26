@@ -5,7 +5,10 @@ import { createElement, type ComponentProps } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createInstance, type TFunction } from 'i18next';
 
-import SidebarArchiveContent from '../view/SidebarArchiveContent';
+import SidebarArchiveContent, {
+  readKeepLatestPreference,
+  writeKeepLatestPreference,
+} from '../view/SidebarArchiveContent';
 
 /*
  * Bulk archiving from the archive screen.
@@ -108,6 +111,39 @@ test('keeping the last session is offered and is off by default', async () => {
   assert.match(html, /Keep the last session in each project/);
   assert.match(html, /type="checkbox"/);
   assert.doesNotMatch(html, /<input[^>]*type="checkbox"[^>]*checked/);
+});
+
+test('the keep-latest choice survives the next visit once the user makes it', async () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  const stored = new Map<string, string>();
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => stored.get(key) ?? null,
+      setItem: (key: string, value: string) => { stored.set(key, String(value)); },
+      removeItem: (key: string) => { stored.delete(key); },
+    },
+  });
+
+  try {
+    const t = await makeT();
+
+    // A browser that has never seen the control starts from the safe default.
+    assert.doesNotMatch(render(t), /<input[^>]*type="checkbox"[^>]*checked/);
+
+    writeKeepLatestPreference(true);
+
+    // The next mount reads the saved choice back, so the user does not have to
+    // re-check it every cleanup.
+    assert.match(render(t), /<input[^>]*type="checkbox"[^>]*checked/);
+    assert.equal(readKeepLatestPreference(), true);
+
+    writeKeepLatestPreference(false);
+    assert.doesNotMatch(render(t), /<input[^>]*type="checkbox"[^>]*checked/);
+  } finally {
+    if (previous) Object.defineProperty(globalThis, 'localStorage', previous);
+    else delete (globalThis as { localStorage?: unknown }).localStorage;
+  }
 });
 
 test('the default window is 30 days, not the shortest one', async () => {
