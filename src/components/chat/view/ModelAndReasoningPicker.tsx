@@ -476,7 +476,9 @@ export default function ModelAndReasoningPicker({
                       data-available={available}
                       onClick={() => setActiveProvider(group)}
                       className={cn(
-                        'flex w-full items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-left text-xs hover:bg-accent',
+                        // A provider list is short, but a model list is not:
+                        // rows below the fold skip layout until scrolled to.
+                        'flex w-full items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-left text-xs [contain-intrinsic-size:auto_2rem] [content-visibility:auto] hover:bg-accent',
                         isShown && 'bg-accent/70',
                         !available && 'text-muted-foreground/60',
                       )}
@@ -510,7 +512,7 @@ export default function ModelAndReasoningPicker({
                       disabled={!model.available}
                       onClick={() => { void chooseModel(model.value); }}
                       className={cn(
-                        'flex w-full items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-left text-xs',
+                        'flex w-full items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-left text-xs [contain-intrinsic-size:auto_2.5rem] [content-visibility:auto]',
                         model.available ? 'hover:bg-accent' : 'cursor-not-allowed text-muted-foreground/50',
                         isSelected && 'bg-accent/70',
                       )}

@@ -290,8 +290,10 @@ export default function SidebarArchiveContent({
           archivedSessionsCount === 1 ? 'archived item' : 'archived items',
         )}`}
       </p>
+      {/* The archive is the one list here that grows without a page limit:
+          cards below the fold stay out of layout until they are scrolled to. */}
       {archivedProjects.map((project) => (
-        <div key={project.projectId} className="overflow-hidden rounded-xl border border-border/70 bg-card/60 shadow-xs">
+        <div key={project.projectId} className="overflow-hidden rounded-xl border border-border/70 bg-card/60 shadow-xs [contain-intrinsic-size:auto_6rem] [content-visibility:auto]">
           <div className="flex items-start justify-between gap-3 border-b border-border/60 px-3 py-2.5">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
@@ -315,7 +317,7 @@ export default function SidebarArchiveContent({
         </div>
       ))}
       {groupedArchivedSessions.map((group) => (
-        <div key={group.key} className="overflow-hidden rounded-xl border border-border/70 bg-card/60 shadow-xs">
+        <div key={group.key} className="overflow-hidden rounded-xl border border-border/70 bg-card/60 shadow-xs [contain-intrinsic-size:auto_12rem] [content-visibility:auto]">
           <div className="flex items-start justify-between gap-3 border-b border-border/60 px-3 py-2.5">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
